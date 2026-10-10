@@ -14,6 +14,7 @@ it is what production did for both callers until 2026-09-20 — worth saying
 out loud, because a log-only alarm is indistinguishable from no alarm. The
 health report names the delivery mode for exactly that reason.
 """
+import html as _html
 import json
 import os
 import urllib.error
@@ -26,7 +27,7 @@ def configured():
                 and (os.environ.get("RESEND_FROM") or "").strip())
 
 
-def send(to_address, subject, text, html=None, timeout=10):
+def send(to_address, subject, text, html=None, timeout=10, reply_to=None):
     """Send one message. Returns 'sent' or 'logged'; raises on a real failure.
 
     A caller that must tell a human whether delivery worked (accounts.py owes
@@ -42,6 +43,8 @@ def send(to_address, subject, text, html=None, timeout=10):
     body = {"from": sender, "to": [to_address], "subject": subject, "text": text}
     if html:
         body["html"] = html
+    if reply_to:
+        body["reply_to"] = reply_to
     request = urllib.request.Request(
         "https://api.resend.com/emails",
         data=json.dumps(body).encode("utf-8"),
@@ -59,3 +62,25 @@ def send(to_address, subject, text, html=None, timeout=10):
     except Exception as exc:                                 # network, DNS, timeout
         print("[mail] resend failed: %r" % (exc,), flush=True)
         raise
+
+
+def send_link(to_address, subject, paragraphs, link, button, after=(), reply_to=None):
+    """An email whose point is one link: an invitation, a sign-in, a password
+    setup. ``paragraphs`` come before the link and ``after`` below it, as
+    plain text (escaped here for the HTML part).
+
+    Returns True only when a real mailbox accepted it. False means the caller
+    must hand the link over some other way: no mailbox is configured (the
+    message went to the log) or the provider refused it (already logged).
+    Never raises, so an invitation is never lost to a mail outage.
+    """
+    text = "\n\n".join(list(paragraphs) + [button + ": " + link] + list(after))
+    para = lambda t: "<p>" + _html.escape(t) + "</p>"
+    html = ("".join(para(t) for t in paragraphs) +
+            '<p><a href="' + _html.escape(link, quote=True) + '">' + _html.escape(button) + "</a></p>" +
+            "".join('<p style="color:#64748b;font-size:13px">' + _html.escape(t) + "</p>"
+                    for t in after))
+    try:
+        return send(to_address, subject, text + "\n", html=html, reply_to=reply_to) == "sent"
+    except Exception:                                        # noqa: BLE001
+        return False

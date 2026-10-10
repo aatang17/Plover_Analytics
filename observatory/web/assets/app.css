@@ -83,6 +83,8 @@ html { scroll-padding-top: 66px; }
 
 .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .header-asof { font-size: 12px; color: var(--obs-header-muted); white-space: nowrap; }
+/* An empty slot is still a flex item and would add a second gap beside it. */
+.header-asof:empty { display: none; }
 
 
 .theme-toggle {
@@ -2327,15 +2329,12 @@ table.data tr.row-total td { font-weight: 600; color: var(--obs-ink); background
   color: var(--obs-primary); cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
 }
 
-/* The header's account slot. Text, never an avatar in a circle; the width is
-   reserved so the bar does not jump when the answer arrives. */
-.header-account { display: inline-flex; align-items: center; min-width: 54px; justify-content: flex-end; }
-/* ...but hold back nothing when there is nothing to hold it for. On a
-   deployment without accounts the slot never fills, and 54px reserved for good
-   was enough on its own to wrap the brand on /holdings.html, whose as-of is the
-   longest on the platform. Empty means "no answer to show", so it takes no
-   room; the reservation still applies the moment there is one. */
-.header-account:empty { min-width: 0; }
+/* The header's account slot. Text, never an avatar in a circle. No reserved
+   width: the slot starts empty either way, so a reservation never stopped the
+   bar moving; it only left a blank before a short "Sign in", which then sat
+   visibly further from Docs than from Dark Mode. Empty, it takes no room. */
+.header-account { display: inline-flex; align-items: center; }
+.header-account:empty { display: none; }
 .header-account a, .header-account button {
   background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
   color: var(--obs-header-text); cursor: pointer; text-decoration: none; white-space: nowrap;
@@ -2578,10 +2577,7 @@ details.readable .source-line a { color: var(--obs-primary); }
   .site-nav { font-size: 18px; gap: 30px; }
   .nav-dd-docs .nav-dd-menu { top: calc(100% + 22px); }
   .header-link { font-size: 16px; }
-  /* Account sits beside Docs and reads at the same size; the reserved width
-     grows with it so the bar still does not jump when the answer arrives. */
-  .header-account { min-width: 80px; }
-  .header-account:empty { min-width: 0; }
+  /* Account sits beside Docs and reads at the same size. */
   .header-account a, .header-account button { font-size: 16px; }
   .header-account button { display: inline-flex; align-items: center; gap: 6px; }
   .header-account .chev { width: 16px; height: 16px; }

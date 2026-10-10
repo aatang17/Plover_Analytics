@@ -129,10 +129,11 @@ def create_publication(body: NewPublication, request: Request):
         raise HTTPException(400, str(exc))
     research.set_member(pub["id"], owner_email, "owner", actor)
     link = None if owner_email == person["email"] else writers.signin_link(request, owner_email)
+    emailed = writers.email_link(request, "owner", owner_email, link, pub, "owner", person)
     _audit(request, person, "publication_created", "%s (%s), owner %s"
            % (pub["base"], pub["name"], owner_email))
-    return {"publication": _pub_view(pub, writers.role(person, pub["id"])), "link": link,
-            "owner_email": owner_email}
+    return {"publication": _pub_view(pub, writers.role(person, pub["id"])),
+            "link": None if emailed else link, "emailed": emailed, "owner_email": owner_email}
 
 
 class PublicationBody(BaseModel):
@@ -179,9 +180,10 @@ def invite(publication_id: int, body: InviteBody, request: Request):
     pub = _need(person, publication_id, "owner")
     row, link = writers.invite(request, publication_id, body.email, body.name, body.role,
                                staff.actor_label(person))
-    _audit(request, person, "member_invited", "%s to %s as %s" % (row["email"], pub["base"],
-                                                                  row["role"]))
-    return {"member": row, "link": link}
+    emailed = writers.email_link(request, "invite", row["email"], link, pub, row["role"], person)
+    _audit(request, person, "member_invited", "%s to %s as %s%s" % (
+        row["email"], pub["base"], row["role"], ", emailed" if emailed else ""))
+    return {"member": row, "link": None if emailed else link, "emailed": emailed}
 
 
 class RoleBody(BaseModel):
@@ -222,8 +224,10 @@ def fresh_link(publication_id: int, body: LinkBody, request: Request):
     link = writers.signin_link(request, email)
     if link is None:
         raise HTTPException(400, "Email sign-in is switched off on this server.")
-    _audit(request, person, "member_link", "%s in %s" % (email, pub["base"]))
-    return {"link": link, "email": email}
+    emailed = writers.email_link(request, "link", email, link, pub, None, person)
+    _audit(request, person, "member_link", "%s in %s%s" % (email, pub["base"],
+                                                         ", emailed" if emailed else ""))
+    return {"link": None if emailed else link, "emailed": emailed, "email": email}
 
 
 # ---------------------------------------------------- assistant settings

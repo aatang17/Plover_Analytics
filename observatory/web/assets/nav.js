@@ -445,20 +445,26 @@ var NAV_SECTIONS = [
       .then(function (r) {
         if (r.status === 404) return null;               // feature off
         // on, nobody signed in; while sign-in is invite-only the public
-        // header offers nothing (the invited use signin.html directly)
+        // header offers nothing, except the research pages' way in for
+        // invited writers (the Writer Desk emails them a sign-in link)
         if (r.status === 401) return r.json().catch(function () { return {}; })
-          .then(function (b) { return b && b.invite_only ? null : { email: null }; });
+          .then(function (b) {
+            if (!(b && b.invite_only)) return { email: null };
+            return onResearch ? { email: null, writers: true } : null;
+          });
         if (!r.ok) return null;
         return r.json();
       })
       .then(function (me) {
         if (!me) return;
         var here = location.pathname.replace(/^\//, "") + location.search;
+        var signIn = me.writers
+          ? '<a href="write.html">Sign in</a>'
+          : '<a href="signin.html?returnTo=' + encodeURIComponent(here) + '">Sign in</a>';
+        var desk = onResearch ? '<a href="write.html">Writer Desk</a>' : "";
         var mslot = document.getElementById("mnav-account");
         if (mslot) {
-          mslot.innerHTML = me.email
-            ? '<a href="#" data-do="signout">Sign out</a>'
-            : '<a href="signin.html?returnTo=' + encodeURIComponent(here) + '">Sign in</a>';
+          mslot.innerHTML = me.email ? desk + '<a href="#" data-do="signout">Sign out</a>' : signIn;
           mslot.addEventListener("click", function (e) {
             if (!e.target.closest("[data-do='signout']")) return;
             e.preventDefault();
@@ -468,8 +474,7 @@ var NAV_SECTIONS = [
           });
         }
         if (!me.email) {
-          slot.innerHTML = '<a href="signin.html?returnTo=' + encodeURIComponent(here) +
-            '">Sign in</a>';
+          slot.innerHTML = signIn;
           return;
         }
         // A fixed-width "Account" control, not the address: an email is as
@@ -479,7 +484,7 @@ var NAV_SECTIONS = [
           '<button type="button" aria-expanded="false" title="Signed in as ' +
           esc(me.email) + '">Account' + NAV_CHEVRON + "</button>" +
           '<span class="acct-pop" hidden>' +
-          '<span class="acct-who">' + esc(me.email) + "</span>" +
+          '<span class="acct-who">' + esc(me.email) + "</span>" + desk +
           '<a href="#" data-do="signout">Sign out</a></span></span>';
         var btn = slot.querySelector("button");
         var pop = slot.querySelector(".acct-pop");

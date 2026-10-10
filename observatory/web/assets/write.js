@@ -347,6 +347,13 @@
 
   /* ---- members ---- */
 
+  /* Invitations are emailed when the server has a mailbox; otherwise, or
+     when an email fails, the link comes back for the owner to hand over. */
+  const mailOn = () => !!(ME && ME.sign_in && ME.sign_in.email_delivery);
+  const handOver = () => mailOn()
+    ? "The email could not be sent, so send them this sign-in link yourself, by email or chat."
+    : "Send them this sign-in link yourself, by email or chat.";
+
   function linkBox(intro, link) {
     return `<div class="notice wd-linkbox" role="status"><p>${intro}</p>
       <div class="wd-copyrow"><input type="text" readonly value="${esc(link)}" aria-label="Sign-in link">
@@ -373,7 +380,7 @@
     return `<li><span class="av">${esc(initials(m.name))}</span>
       <div><b>${esc(m.name)}</b><small>${esc(m.email)} · ${esc(seen)}${fixed ? " · Writing permission on the admin Team page" : ""}</small></div>
       <span class="wd-acts">${role}` +
-      (manage && !fixed ? `<button class="btn sm" type="button" data-link="${esc(m.email)}">New Sign-In Link</button>
+      (manage && !fixed ? `<button class="btn sm" type="button" data-link="${esc(m.email)}">${mailOn() ? "Email Sign-In Link" : "New Sign-In Link"}</button>
         <button class="btn sm danger" type="button" data-remove="${esc(m.email)}">Remove</button>` : "") +
       "</span></li>";
   }
@@ -392,7 +399,7 @@
             <dt><label for="wd-iname">Name</label></dt><dd><input id="wd-iname" required maxlength="80" autocomplete="off"></dd>
             <dt><label for="wd-iemail">Email</label></dt><dd><input id="wd-iemail" type="email" required maxlength="254" autocomplete="off"></dd>
             <dt><label for="wd-irole">Role</label></dt><dd><select id="wd-irole">${Object.keys(ROLE).map(k => `<option value="${k}"${k === "writer" ? " selected" : ""}>${ROLE[k]}</option>`).join("")}</select></dd>
-            <dt></dt><dd><button class="btn primary" type="submit">Invite</button></dd></dl></form>
+            <dt></dt><dd><button class="btn primary" type="submit">${mailOn() ? "Email Invitation" : "Invite"}</button></dd></dl></form>
             <div id="wd-iout"></div>` : "") + band("Roles") + roleHelp;
       const out = $("#wd-mout");
       if (flash) {
@@ -407,9 +414,11 @@
           .catch(err => { toast(err.message); membersTab(pub, body); });
       }));
       $$("[data-link]", body).forEach(b => b.addEventListener("click", () => {
-        busy(b, "Making…", () => send("POST", `/write/publications/${pub.id}/members/link`, { email: b.dataset.link }))
+        busy(b, mailOn() ? "Sending…" : "Making…", () => send("POST", `/write/publications/${pub.id}/members/link`, { email: b.dataset.link }))
           .then(res => {
-            out.innerHTML = linkBox(`A new sign-in link for <b>${esc(res.email)}</b>. Send it to them yourself, by email or chat. It works once, for 72 hours, and cancels their earlier link.`, res.link);
+            out.innerHTML = res.emailed
+              ? `<div class="notice" role="status">A new sign-in link is on its way to <b>${esc(res.email)}</b>. It works once, for 72 hours, and cancels their earlier link.</div>`
+              : linkBox(`A new sign-in link for <b>${esc(res.email)}</b>. ${handOver()} It works once, for 72 hours, and cancels their earlier link.`, res.link);
             wireCopy(out);
           }).catch(err => toast(err.message));
       }));
@@ -426,8 +435,11 @@
         const name = $("#wd-iname").value.trim(), email = $("#wd-iemail").value.trim();
         busy($("button", form), "Inviting…", () => send("POST", `/write/publications/${pub.id}/members`,
           { name: name, email: email, role: $("#wd-irole").value })).then(res => {
-          membersTab(pub, body, res.link
-            ? linkBox(`<b>${esc(res.member.name)}</b> is now ${res.member.role === "writer" ? "a" : "an"} ${esc(ROLE[res.member.role].toLowerCase())} here. Send them this sign-in link yourself, by email or chat. It works once, for 72 hours, and opens this Writer Desk.`, res.link)
+          const now = `<b>${esc(res.member.name)}</b> is now ${res.member.role === "writer" ? "a" : "an"} ${esc(ROLE[res.member.role].toLowerCase())} here.`;
+          membersTab(pub, body, res.emailed
+            ? `<div class="notice" role="status">${now} We emailed an invitation to <b>${esc(res.member.email)}</b>. Its link works once, for 72 hours, and opens this Writer Desk. After that they sign in at ${esc(location.host)}/write.html with their email.</div>`
+            : res.link
+            ? linkBox(`${now} ${handOver()} It works once, for 72 hours, and opens this Writer Desk.`, res.link)
             : `<div class="notice">${esc(res.member.name)} is now a member, but email sign-in is switched off on this server, so no link could be made.</div>`);
         }).catch(err => { $("#wd-iout").innerHTML = `<p class="err" role="alert">${esc(err.message)}</p>`; });
       });
@@ -802,8 +814,10 @@
         const pub = res.publication;
         if (!forOthers) { toast(pub.name + " is open. It is yours to run."); go("p/" + pub.id); return; }
         const out = $("#wd-oout");
-        out.innerHTML = (res.link
-          ? linkBox(`<b>${esc(pub.name)}</b> is open at <a href="${esc(pub.base)}" target="_blank" rel="noopener">${esc(pub.base)}</a>. Send its owner, ${esc(res.owner_email)}, this sign-in link yourself. It works once, for 72 hours.`, res.link)
+        out.innerHTML = (res.emailed
+          ? `<div class="notice" role="status"><b>${esc(pub.name)}</b> is open at <a href="${esc(pub.base)}" target="_blank" rel="noopener">${esc(pub.base)}</a>. We emailed its owner, ${esc(res.owner_email)}, a sign-in link. It works once, for 72 hours.</div>`
+          : res.link
+          ? linkBox(`<b>${esc(pub.name)}</b> is open at <a href="${esc(pub.base)}" target="_blank" rel="noopener">${esc(pub.base)}</a>. ${mailOn() ? "The email to its owner could not be sent, so send" : "Send"} ${esc(res.owner_email)} this sign-in link yourself. It works once, for 72 hours.`, res.link)
           : `<div class="notice" role="status"><b>${esc(pub.name)}</b> is open at <a href="${esc(pub.base)}" target="_blank" rel="noopener">${esc(pub.base)}</a>. ` +
             (pub.role ? `<a href="#/p/${pub.id}">Go to it</a>.` : "") + "</div>");
         wireCopy(out);

@@ -42,10 +42,19 @@ var PERM_HELP = {
 };
 
 /* The link box shown once after adding someone or issuing a new link. */
-function setupLinkBox(person, url, hours) {
+/* The server emails the setup link when it can (res.emailed) and hands it
+   back only when it could not, for the owner to send by hand. */
+function setupLinkBox(person, res, delivery) {
+  var hours = res.expires_hours, url = res.setup_url;
+  if (res.emailed) {
+    return '<div class="admin-alert" role="status"><span class="head">Setup link emailed to ' +
+      escapeHtml(person.email) + ".</span> It works once, for " + hours +
+      " hours, and lets " + escapeHtml(person.name) + " choose their own password.</div>";
+  }
   return '<div class="admin-alert setup-link" role="status">' +
     '<span class="head">Setup link for ' + escapeHtml(person.name) + ".</span> " +
-    "Send it to " + escapeHtml(person.email) + " yourself. It works once, for " + hours +
+    (delivery ? "The email could not be sent, so send" : "Send") + " it to " +
+    escapeHtml(person.email) + " yourself. It works once, for " + hours +
     " hours, and lets them choose their own password." +
     '<div class="setup-link-row"><input type="text" readonly value="' + escapeHtml(url) +
     '" aria-label="Setup link"><button type="button" class="btn" data-copy>Copy Link</button></div>' +
@@ -137,7 +146,7 @@ function viewTeam(target, flash) {
         email: document.getElementById("np-email").value,
         permissions: checkedValues(target, "np-perm"),
       }).then(function (res) {
-        viewTeam(target, setupLinkBox(res.person, res.setup_url, res.expires_hours));
+        viewTeam(target, setupLinkBox(res.person, res, data.email_delivery));
       }).catch(function (err) {
         btn.disabled = false;
         document.getElementById("add-alert").innerHTML =
@@ -150,7 +159,7 @@ function viewTeam(target, flash) {
       edits[i].addEventListener("click", function (e) {
         var id = Number(e.target.getAttribute("data-edit"));
         var person = data.people.filter(function (p) { return p.id === id; })[0];
-        openEdit(target, person, data.permissions);
+        openEdit(target, person, data.permissions, data.email_delivery);
       });
     }
   }).catch(function (err) {
@@ -158,7 +167,7 @@ function viewTeam(target, flash) {
   });
 }
 
-function openEdit(target, person, all) {
+function openEdit(target, person, all, delivery) {
   var row = document.getElementById("edit-" + person.id);
   if (!row.hidden) { row.hidden = true; return; }
   var cell = row.firstChild;
@@ -176,7 +185,7 @@ function openEdit(target, person, all) {
     permChecks("ep-perm-" + person.id, all, person.permissions) + "</div></div>" +
     '<div class="edit-alert"></div>' +
     '<div class="edit-acts"><button type="button" class="btn btn-primary" data-save>Save Changes</button>' +
-    '<button type="button" class="btn" data-link>New Setup Link</button>' +
+    '<button type="button" class="btn" data-link>' + (delivery ? "Email New Setup Link" : "New Setup Link") + "</button>" +
     '<span class="hint">A new setup link replaces their password when they use it, and ' +
     "signs them out everywhere.</span></div></div>";
   row.hidden = false;
@@ -200,7 +209,7 @@ function openEdit(target, person, all) {
   });
   cell.querySelector("[data-link]").addEventListener("click", function () {
     post("/team/" + person.id + "/setup-link").then(function (res) {
-      viewTeam(target, setupLinkBox(person, res.setup_url, res.expires_hours));
+      viewTeam(target, setupLinkBox(person, res, delivery));
     }).catch(fail);
   });
 }

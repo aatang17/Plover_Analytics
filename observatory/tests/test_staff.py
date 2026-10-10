@@ -80,6 +80,35 @@ class StaffTest(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         return c, made["person"]
 
+    def test_setup_link_is_emailed_when_a_mailbox_is_configured(self):
+        from app import mailer
+        sent = []
+        old = (mailer.send, os.environ.get("RESEND_API_KEY"), os.environ.get("RESEND_FROM"))
+
+        def restore():
+            mailer.send = old[0]
+            for key, val in (("RESEND_API_KEY", old[1]), ("RESEND_FROM", old[2])):
+                if val is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = val
+        self.addCleanup(restore)
+        mailer.send = lambda to, subject, text, html=None, timeout=10, reply_to=None: (
+            sent.append((to, subject, text, reply_to)) or "sent")
+        os.environ["RESEND_API_KEY"] = "test"
+        os.environ["RESEND_FROM"] = "Plover <noreply@example.com>"
+        c = self.shared_client()
+        self.assertTrue(c.get("/admin/api/team").json()["email_delivery"])
+        made = self.add_person(c, "new@example.com", ["writing"], "New Person")
+        self.assertEqual((made["emailed"], made["setup_url"]), (True, None))
+        to, subject, text, reply_to = sent[-1]
+        self.assertEqual(to, "new@example.com")
+        self.assertIsNone(reply_to)                                   # the shared password is nobody
+        self.assertIn("/admin.html and use this email address", text)
+        url = [w for w in text.split() if "#setup=" in w][0]
+        r = app_client().post("/admin/api/setup", json={"token": setup_token(url), "password": GOOD})
+        self.assertEqual(r.status_code, 200, r.text)
+
     def test_off_without_password_or_accounts(self):
         c = app_client()
         self.assertEqual(c.get("/admin/api/session").json(), {"enabled": False, "authenticated": False})

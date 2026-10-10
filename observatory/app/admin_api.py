@@ -31,7 +31,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import db, filer_labels, parties, registry, seo, staff, vintages, visits
+from . import db, filer_labels, mailer, parties, registry, seo, staff, vintages, visits
 from .api import ADAPTERS, health
 from .equity_api import DB_PATH as EQUITY_DB_PATH
 
@@ -374,11 +374,36 @@ def _setup_url(request, token):
     return base + "/admin.html#setup=" + token
 
 
+def _email_setup(request, person, url, sender, new):
+    """Email a setup link to the person it is for. True when sent; False
+    means the Team page shows the link to pass on by hand."""
+    who = (sender or {}).get("name") or "The Plover team"
+    if new:
+        subject = "%s added you to Plover Analytics" % who
+        first = ("%s has given you an account on the Plover Analytics admin console. "
+                 "Choose your password to start." % who)
+    else:
+        subject = "Set your Plover Analytics password"
+        first = ("%s sent you a link to set a new password for the Plover Analytics admin "
+                 "console. Using it signs you out everywhere else." % who)
+    base = url.split("/admin.html")[0]
+    after = ["To sign in later, go to %s/admin.html and use this email address and your "
+             "password." % base]
+    reply_to = (sender or {}).get("email")
+    if reply_to:
+        after.append("Reply to this email to reach %s." % who)
+    return mailer.send_link(person["email"], subject,
+                            [first, "The link works once, within %d hours."
+                             % (staff.SETUP_TTL_SECONDS // 3600)],
+                            url, "Choose Your Password", after, reply_to=reply_to)
+
+
 @router.get("/team")
 def team_list(request: Request):
     _require_admin(request, "team")
     return {"people": staff.list_all(),
             "shared_password": _password() is not None,
+            "email_delivery": mailer.configured(),
             "permissions": [{"key": k, "label": v} for k, v in staff.PERMISSIONS]}
 
 
@@ -399,7 +424,9 @@ def team_add(body: NewPerson, request: Request):
     audit("staff_added", "%s (%s): %s" % (person["name"], person["email"],
                                           ", ".join(person["permissions"]) or "no permissions"),
           _client_ip(request), by=staff.actor_label(actor))
-    return {"person": person, "setup_url": _setup_url(request, token),
+    url = _setup_url(request, token)
+    emailed = _email_setup(request, person, url, None if actor.get("shared") else actor, True)
+    return {"person": person, "setup_url": None if emailed else url, "emailed": emailed,
             "expires_hours": staff.SETUP_TTL_SECONDS // 3600}
 
 
@@ -432,9 +459,11 @@ def team_setup_link(staff_id: int, request: Request):
     if person["status"] != "active":
         raise HTTPException(400, "Enable the account before issuing a setup link")
     token = staff.issue_setup(staff_id, staff.actor_label(actor))
-    audit("setup_link_issued", person["email"], _client_ip(request),
-          by=staff.actor_label(actor))
-    return {"setup_url": _setup_url(request, token),
+    url = _setup_url(request, token)
+    emailed = _email_setup(request, person, url, None if actor.get("shared") else actor, False)
+    audit("setup_link_issued", person["email"] + (", emailed" if emailed else ""),
+          _client_ip(request), by=staff.actor_label(actor))
+    return {"setup_url": None if emailed else url, "emailed": emailed,
             "expires_hours": staff.SETUP_TTL_SECONDS // 3600}
 
 

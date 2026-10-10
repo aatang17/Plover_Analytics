@@ -280,5 +280,84 @@ class PublicationTest(PubBase):
         self.assertTrue(accounts._allowed("w@example.com"))           # PloverResearch via the Team page
 
 
+class EmailedInviteTest(PubBase):
+    """With a mailbox configured, invitations go by email and the owner never
+    handles the link; the writer later signs in from the site with their
+    address alone."""
+
+    def setUp(self):
+        PubBase.setUp(self)
+        from app import mailer
+        self.sent = []
+        old = (mailer.send, os.environ.get("RESEND_API_KEY"), os.environ.get("RESEND_FROM"))
+
+        def fake(to, subject, text, html=None, timeout=10, reply_to=None):
+            self.sent.append({"to": to, "subject": subject, "text": text, "html": html,
+                              "reply_to": reply_to})
+            return "sent"
+
+        def restore():
+            mailer.send = old[0]
+            for key, val in (("RESEND_API_KEY", old[1]), ("RESEND_FROM", old[2])):
+                if val is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = val
+        self.addCleanup(restore)
+        mailer.send = fake
+        os.environ["RESEND_API_KEY"] = "test"
+        os.environ["RESEND_FROM"] = "Plover <noreply@example.com>"
+
+    def link_in(self, mail):
+        return [w for w in mail["text"].split() if "signin.html?token=" in w][0]
+
+    def test_invitation_is_emailed_and_the_writer_signs_in_again_from_the_site(self):
+        made = self.open_pub()
+        self.assertTrue(made["emailed"])
+        self.assertIsNone(made["link"])                               # not shown to the opener
+        self.assertEqual(self.sent[0]["to"], "olive@example.com")
+        olive = self.sign_in(self.link_in(self.sent[0]))
+        self.assertEqual(olive.get("/admin/api/write/me").json()["sign_in"]["email_delivery"], True)
+
+        pub = made["publication"]
+        inv = olive.post("/admin/api/write/publications/%d/members" % pub["id"],
+                         json={"email": "wendy@example.com", "name": "Wendy Writer", "role": "writer"})
+        self.assertEqual(inv.status_code, 200, inv.text)
+        self.assertEqual((inv.json()["emailed"], inv.json()["link"]), (True, None))
+        mail = self.sent[-1]
+        self.assertEqual(mail["to"], "wendy@example.com")
+        self.assertEqual(mail["reply_to"], "olive@example.com")      # replies reach the inviter
+        self.assertIn("Olive Owner invited you to write for Asia Notes", mail["subject"])
+        self.assertIn("as a writer", mail["text"])
+        self.assertIn("write.html and enter this email address", mail["text"])
+        self.assertIn('<a href="http://testserver/signin.html?token=', mail["html"])
+        wendy = self.sign_in(self.link_in(mail))
+        self.assertTrue(wendy.get("/admin/api/write/me").json()["writer"])
+
+        # later, from the site: the Writer Desk's "Email Me a Sign-In Link"
+        r = TestClient(self.app).post("/api/v1/account/signin-link",
+                                      json={"email": "wendy@example.com", "returnTo": "write.html"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.sent[-1]["to"], "wendy@example.com")
+        self.assertTrue(self.sign_in(self.link_in(self.sent[-1]))
+                        .get("/admin/api/write/me").json()["writer"])
+
+        # a fresh link from the Members page is emailed too
+        again = olive.post("/admin/api/write/publications/%d/members/link" % pub["id"],
+                           json={"email": "wendy@example.com"})
+        self.assertEqual((again.json()["emailed"], again.json()["link"]), (True, None))
+        self.assertEqual(self.sent[-1]["subject"], "Your sign-in link for Asia Notes")
+
+    def test_a_failed_email_hands_the_link_back(self):
+        from app import mailer
+
+        def down(*a, **k):
+            raise OSError("provider down")
+        mailer.send = down
+        made = self.open_pub()
+        self.assertFalse(made["emailed"])
+        self.sign_in(made["link"])                                    # the owner can still pass it on
+
+
 if __name__ == "__main__":
     unittest.main()

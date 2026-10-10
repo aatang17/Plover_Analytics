@@ -192,22 +192,66 @@ if may_sign_in not in accounts.EXTRA_ALLOWED:
     accounts.EXTRA_ALLOWED.append(may_sign_in)
 
 
-def signin_link(request, email):
-    """A sign-in link for an owner to send by hand, or None when email
-    sign-in is switched off on this server."""
-    if not accounts.enabled():
-        return None
-    # behind the platform's proxy the request reads http and an inside host;
-    # the link must carry the public https address (as the setup links do)
+def _public_base(request):
+    """The site's address, ending in '/'. Behind the platform's proxy the
+    request reads http and an inside host; links must carry the public https
+    address (as the setup links do)."""
     import os
     from . import seo
     if os.environ.get("PUBLIC_BASE_URL"):
-        base = accounts.base_url(request)
-    elif seo.is_https(request):
-        base = seo.SITE_BASE_URL + "/"
+        return accounts.base_url(request)
+    if seo.is_https(request):
+        return seo.SITE_BASE_URL + "/"
+    return str(request.base_url)
+
+
+def signin_link(request, email):
+    """A single-use 72-hour sign-in link, or None when email sign-in is
+    switched off on this server."""
+    if not accounts.enabled():
+        return None
+    return accounts.issue_link(email, WRITE_PAGE, _public_base(request))
+
+
+_A_ROLE = {"owner": "an owner", "editor": "an editor", "writer": "a writer"}
+
+
+def email_link(request, kind, email, link, pub, role, sender):
+    """Email a sign-in link made by ``signin_link``. ``kind`` is ``invite``
+    (a new member), ``owner`` (a publication opened for them) or ``link`` (a
+    fresh link for a member). ``sender`` is the person sending it; replies go
+    to them, since the site's own address has no mailbox.
+
+    True when it was emailed. False means the caller shows the link so the
+    sender can pass it on by hand: no link, no mailbox configured, or the
+    provider refused it.
+    """
+    from . import mailer
+    if not link or not mailer.configured():
+        return False
+    who = (sender or {}).get("name") or (sender or {}).get("email") or "The Plover team"
+    name = pub["name"]
+    where = name if pub.get("home") else name + " on PloverResearch"
+    if kind == "link":
+        subject = "Your sign-in link for %s" % name
+        paras = ["%s sent you a new sign-in link for %s." % (who, where),
+                 "It works once, within 72 hours, and replaces any earlier link."]
+    elif kind == "owner":
+        subject = "%s opened %s for you" % (who, name)
+        paras = ["%s has opened %s for you. You are its owner: you publish its articles, "
+                 "run its settings and invite its writers." % (who, where),
+                 "This link signs you in and opens the Writer Desk. It works once, within 72 hours."]
     else:
-        base = str(request.base_url)
-    return accounts.issue_link(email, WRITE_PAGE, base)
+        subject = "%s invited you to write for %s" % (who, name)
+        paras = ["%s has invited you to write for %s, as %s." % (who, where, _A_ROLE[role]),
+                 "This link signs you in and opens the Writer Desk. It works once, within 72 hours."]
+    after = ["To sign in again later, go to %s%s and enter this email address. We email you a "
+             "new link each time; there is no password." % (_public_base(request), WRITE_PAGE)]
+    reply_to = (sender or {}).get("email")
+    if reply_to:
+        after.append("Reply to this email to reach %s." % who)
+    return mailer.send_link(email, subject, paras, link, "Open the Writer Desk", after,
+                            reply_to=reply_to)
 
 
 # ---------------------------------------------------------------- members
