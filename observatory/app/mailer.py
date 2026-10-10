@@ -48,8 +48,12 @@ def send(to_address, subject, text, html=None, timeout=10, reply_to=None):
     request = urllib.request.Request(
         "https://api.resend.com/emails",
         data=json.dumps(body).encode("utf-8"),
+        # Resend sits behind Cloudflare, which refuses urllib's default
+        # "Python-urllib/3.x" with a 403 "error code: 1010" — every email
+        # failed that way until 2026-10-11. Name ourselves instead.
         headers={"Authorization": "Bearer " + key,
-                 "Content-Type": "application/json"},
+                 "Content-Type": "application/json",
+                 "User-Agent": "PloverAnalytics/1.0 (+https://ploveranalytics.com)"},
         method="POST")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
