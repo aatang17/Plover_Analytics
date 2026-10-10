@@ -444,13 +444,13 @@ var NAV_SECTIONS = [
     fetch("/api/v1/account/me", { headers: { Accept: "application/json" } })
       .then(function (r) {
         if (r.status === 404) return null;               // feature off
-        // on, nobody signed in; while sign-in is invite-only the public
-        // header offers nothing, except the research pages' way in for
-        // invited writers (the Writer Desk emails them a sign-in link)
+        // on, nobody signed in; while sign-in is invite-only, "Sign in"
+        // opens the Writer Desk, which emails invited people a link and
+        // tells anyone else they need an invitation
         if (r.status === 401) return r.json().catch(function () { return {}; })
           .then(function (b) {
             if (!(b && b.invite_only)) return { email: null };
-            return onResearch ? { email: null, writers: true } : null;
+            return { email: null, writers: true };
           });
         if (!r.ok) return null;
         return r.json();
@@ -461,7 +461,7 @@ var NAV_SECTIONS = [
         var signIn = me.writers
           ? '<a href="write.html">Sign in</a>'
           : '<a href="signin.html?returnTo=' + encodeURIComponent(here) + '">Sign in</a>';
-        var desk = onResearch ? '<a href="write.html">Writer Desk</a>' : "";
+        var desk = '<a href="write.html">Writer Desk</a>';
         var mslot = document.getElementById("mnav-account");
         if (mslot) {
           mslot.innerHTML = me.email ? desk + '<a href="#" data-do="signout">Sign out</a>' : signIn;
