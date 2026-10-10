@@ -80,14 +80,20 @@ def workbook(month, as_of, rows, header=HEADER):
     ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
     rel = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
     buf = io.BytesIO()
+    # A fixed timestamp on every entry: zip records the current time (to two
+    # seconds), so two builds of the same list straddling a two-second tick
+    # came out different, and test_the_same_bytes_are_stored_once failed on
+    # GitHub's slower machines on and off (2026-10-10).
+    def entry(name):
+        return zipfile.ZipInfo(name, date_time=(2026, 9, 1, 0, 0, 0))
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("xl/workbook.xml", '<workbook %s %s><sheets><sheet name="List" '
+        z.writestr(entry("xl/workbook.xml"), '<workbook %s %s><sheets><sheet name="List" '
                    'sheetId="1" r:id="rId1"/></sheets></workbook>' % (ns, rel))
-        z.writestr("xl/_rels/workbook.xml.rels",
+        z.writestr(entry("xl/_rels/workbook.xml.rels"),
                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/'
                    '2006/relationships"><Relationship Id="rId1" Target="worksheets/'
                    'sheet1.xml"/></Relationships>')
-        z.writestr("xl/worksheets/sheet1.xml",
+        z.writestr(entry("xl/worksheets/sheet1.xml"),
                    '<worksheet %s><sheetData>%s</sheetData></worksheet>' % (ns, body))
     return buf.getvalue()
 
