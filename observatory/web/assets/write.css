@@ -107,3 +107,6 @@
 .wd-cvhits > li { padding: 8px 12px; }
 .wd-cvt td.mono { font-variant-numeric: tabular-nums; }
 .wd-btnrow[hidden] { display: none; }
+.wd-h3 { margin: 20px 0 8px; font-size: 13.5px; font-weight: 600; color: var(--obs-ink); }
+.wd-h3 .muted { font-weight: 400; margin-left: 6px; }
+.wd-pick { height: 32px; max-width: 100%; padding: 0 8px; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); color: var(--obs-ink); font: inherit; }

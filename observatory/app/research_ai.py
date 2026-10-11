@@ -13,7 +13,11 @@ core CPI", "check every number"). The model works on that one draft only:
 * read_page, the desk's guarded page reader — or the writer's own copy of a
   page they sent from their browser (research_clips.py), which is how a paid
   article reaches the run; Codex and Claude Code may also search the web with
-  their own built-in search.
+  their own built-in search;
+* search_past_articles and read_past_article (app/article_search.py), so a
+  run can link to and keep to what was published before;
+* calculate (app/calc.py), so every change, ratio or share it writes is
+  worked out by code with its formula, not in the model's head.
 
 A run may carry one picture the writer pasted — a screenshot of another
 publisher's chart — which the model sees with the instruction. The desk uses
@@ -34,7 +38,10 @@ reply: "Plan This" on a brainstormed angle, "Draft It" under a plan.
 
 Each writer picks a length once (Short, Standard, Detailed); every run, the
 one-click next steps included, is told it, and a plan over its word limit is
-sent back to the AI to shorten before it reaches the draft.
+sent back to the AI to shorten before it reaches the draft. A writer may also
+keep a writing style of their own — a description and samples of their
+writing (app/writing_style.py) — which every run they start follows for
+voice, under the publication's house style for format.
 
 Secrets — API keys, the Claude Code token, the Codex sign-in — are sealed with
 the assistant keychain (ASSISTANT_SECRET) and opened only for the length of a
@@ -56,8 +63,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import (connectors, market_history, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
-               research_web, skills, staff, staff_google, tools_v2, writers)
+from . import (article_search, calc, connectors, market_history, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
+               research_web, skills, staff, staff_google, tools_v2, writers,
+               writing_style)
 from .assistant import codex as codex_mod, gateway, keychain, market_data, store as ia_store
 
 PROVIDERS = [
@@ -122,6 +130,7 @@ def settings_view(person, publication_id=None):
         "publication_ai": pub_profile.ai(pid) if pid is not None else None,
         "publication_length": (pub_profile.defaults(pid)["length"] or None) if pid is not None else None,
         "default_skill": pub_profile.defaults(pid)["default_skill"] if pid is not None else None,
+        "style": writing_style.summary(person),
     }
 
 
@@ -541,7 +550,7 @@ def tool_list(ctx=None):
             for d in tools_v2.descriptors()]
     read_only = (ctx or {}).get("read_only")
     out = [t for t in ARTICLE_TOOLS if not (read_only and t["name"] in WRITE_TOOLS)]
-    out += [SKILL_TOOL, NEXT_TOOL] + data
+    out += [SKILL_TOOL, NEXT_TOOL] + data + article_search.TOOLS + [calc.TOOL]
     person = (ctx or {}).get("person")
     if person and staff_google.usable(person["id"]):
         out += DRIVE_TOOLS
@@ -664,6 +673,10 @@ def call_tool(ctx, name, args):
     if name in tools_v2.IMPLS:
         text, err = tools_v2.run_tool(name, args)
         return text[:TOOL_TEXT_MAX], err
+    if name in article_search.TOOL_NAMES:
+        return article_search.run_tool(person, _publication(ctx), name, args)
+    if name == calc.TOOL["name"]:
+        return calc.run_tool(args)
     if name == "read_skill":
         pid = _publication(ctx)
         sk = skills.get(str(args.get("name") or ""), pid) if pid is not None else None
@@ -727,6 +740,12 @@ def _system(article, person, skill=None, length=None):
     pid = article["publication_id"]
     menu = skills.list_skills(enabled_only=True, publication_id=pid)
     extra = "House style for everything you write in the draft:\n" + skills.house_style(pid) + "\n\n"
+    extra += writing_style.prompt(person)
+    extra += ("Arithmetic: work out every number you put in the draft that no tool returned as "
+              "is (a change, a growth rate, a ratio, a share, a difference) with calculate, never "
+              "in your head. Earlier articles: search_past_articles finds what this publication "
+              "or the writer published before; link to one by its address when it helps the "
+              "reader, and do not contradict it without saying what changed.\n\n")
     extra += pub_coverage.prompt_line(pid)
     ln = _length({"length": length})
     extra += ("Length: the writer chose %s — %s. This overrides any length a skill gives, except "
@@ -815,6 +834,13 @@ def _describe(name, args, failed=False):
         return "Searched Plover for \"%s\"" % (args.get("query") or "")
     if name in _PLAIN_STEPS:
         return _PLAIN_STEPS[name]
+    if name == "search_past_articles":
+        q = args.get("query") or ""
+        return ("Searched past articles for \"%s\"" % q) if q else "Listed recent articles"
+    if name == "read_past_article":
+        return "Read a past article"
+    if name == "calculate":
+        return "Calculated %s" % (args.get("expression") or "")
     if name == "read_skill":
         return "Opened the skill \"%s\"" % (args.get("name") or "")
     if name == "offer_next_step":

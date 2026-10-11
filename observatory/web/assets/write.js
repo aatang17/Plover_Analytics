@@ -923,11 +923,15 @@
         <button class="btn primary" id="wd-keymake" type="button">Create Key</button></div><div id="wd-keyout"></div>` +
       band("Data Sources") +
       '<p class="wd-para">Connect your own account with a market-data service. The writing assistant can then read its daily prices for you in every publication you write for, and so can your Investment Assistant desk. Read-only. Nobody else can use your key. Whether you may publish a vendor\'s prices is up to your agreement with them; the assistant names the vendor beside any price it uses.</p>' +
-      '<div id="wd-ds">' + loading("your data sources") + "</div>"));
+      '<div id="wd-ds">' + loading("your data sources") + "</div>" +
+      band("Writing Style") +
+      '<p class="wd-para">How you write. Describe it in a few lines and add up to five pieces you wrote. The writing assistant in the editor follows your voice in every publication you write for. Each publication\'s house style still decides numbers, units and headings. Only you can see this.</p>' +
+      '<div id="wd-mystyle">' + loading("your writing style") + "</div>"));
     $("#wd-signout").addEventListener("click", signOut);
     DS = { base: "/write/data-sources", whose: "your own account" };
     ds.connecting = ""; ds.tried = {};
     loadSources();
+    loadStyle();
     const loadKeys = () => api("/write/keys").then(res => {
       $("#wd-keys").innerHTML = res.keys.length
         ? `<ul class="rows wd-list">${res.keys.map(k => `<li><div><b>${esc(k.label)}</b><small>Created ${when(k.created_at)} · ${k.last_used_at ? "last used " + when(k.last_used_at) : "not used yet"}</small></div>
@@ -946,6 +950,93 @@
         loadKeys();
       }).catch(err => toast(err.message));
     });
+  }
+
+  /* ------------------------------------------------------------ writing style */
+  // The writer's own style (app/writing_style.py): a description and up to
+  // five samples. Adding or removing a sample saves at once; the description
+  // has its own Save button.
+
+  let STYLE = null;
+  const DAY = iso => iso ? fmtDay(iso.slice(0, 10)) : "";
+
+  function putStyle(text, samples) {
+    return send("PUT", "/write/style", { text: text, samples: samples.map(x =>
+      x.kind === "article" ? { article_id: x.article_id } : { title: x.title, text: x.text }) });
+  }
+
+  function loadStyle() {
+    return api("/write/style").then(d => { STYLE = d; drawStyle(); })
+      .catch(err => { const b = $("#wd-mystyle"); if (b) b.innerHTML = failed("your writing style", err); });
+  }
+
+  function drawStyle(pasting) {
+    const box = $("#wd-mystyle");
+    if (!box || !STYLE) return;
+    const d = STYLE, lim = d.limits, full = d.samples.length >= lim.samples;
+    const used = new Set(d.samples.filter(x => x.kind === "article").map(x => x.article_id));
+    const left = d.choices.filter(c => !used.has(c.article_id));
+    const row = (x, i) => {
+      const what = x.kind === "pasted" ? `Pasted · ${x.words.toLocaleString("en")} words`
+        : x.live ? `Published ${esc(DAY(x.published))}` : "No longer published, so not used";
+      const name = x.kind === "article" && x.live ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>` : esc(x.title);
+      return `<li><div><b>${name}</b><small>${what}</small></div><span class="wd-acts"><button class="btn sm" type="button" data-styledel="${i}">Remove</button></span></li>`;
+    };
+    box.innerHTML =
+      `<dl class="kv wd-kv">
+        <dt><label for="wd-mytext">Your style</label></dt><dd><textarea id="wd-mytext" class="wd-style" rows="5" maxlength="${lim.text}" placeholder="Short sentences. Lead with the number. No adverbs. British spelling.">${esc(d.text)}</textarea></dd>
+        <dt></dt><dd><button class="btn primary" type="button" id="wd-mysave">Save Style</button><span class="hint" id="wd-mymsg" role="status"></span></dd>
+      </dl>` +
+      `<h3 class="wd-h3">Samples <span class="muted small">${d.samples.length} of ${lim.samples}</span></h3>` +
+      (d.samples.length ? `<ul class="rows wd-list" id="wd-samples">${d.samples.map(row).join("")}</ul>`
+        : '<p class="empty wd-empty">No samples yet. Add an article you published here, or paste a piece you wrote elsewhere.</p>') +
+      (full ? `<p class="muted small">That is ${lim.samples} samples, the most. Remove one to add another.</p>` :
+        pasting ? `<div class="wd-edit wd-new"><dl class="kv wd-kv">
+            <dt><label for="wd-pastetitle">Title</label></dt><dd><input id="wd-pastetitle" maxlength="${lim.title}" placeholder="What the piece is called"></dd>
+            <dt><label for="wd-pastetext">Text</label></dt><dd><textarea id="wd-pastetext" class="wd-style" rows="10" maxlength="${lim.paste_max}" placeholder="Paste a few paragraphs you wrote, such as a Substack post."></textarea><span class="hint">At least ${lim.paste_min.toLocaleString("en")} characters, at most ${lim.paste_max.toLocaleString("en")}.</span></dd>
+            <dt></dt><dd><button class="btn primary" type="button" id="wd-pasteadd">Add Sample</button><button class="btn" type="button" id="wd-pastecancel">Cancel</button><span class="hint" id="wd-pastemsg" role="status"></span></dd></dl></div>` :
+        `<div class="wd-btnrow">` +
+          (left.length ? `<select id="wd-pickart" class="wd-pick" aria-label="Your published articles">${left.map(c => `<option value="${c.article_id}">${esc(c.title)} (${esc(DAY(c.published))})</option>`).join("")}</select><button class="btn" type="button" id="wd-addart">Add Article</button>` : "") +
+          `<button class="btn" type="button" id="wd-paste">Paste a Piece</button>` +
+          (!d.choices.length ? '<span class="hint">Articles you publish on Plover can be added here too.</span>' : "") +
+        `</div>`);
+    const fail = (el, err) => { el.classList.add("err"); el.textContent = err.message; };
+    $("#wd-mysave").addEventListener("click", e => {
+      const msg = $("#wd-mymsg"); msg.classList.remove("err"); msg.textContent = "";
+      busy(e.target, "Saving…", () => putStyle($("#wd-mytext").value, STYLE.samples))
+        .then(res => { STYLE = res; $("#wd-mymsg").textContent = "Saved."; toast("Your writing style is saved. The next run uses it."); })
+        .catch(err => fail(msg, err));
+    });
+    const keepText = () => { const t = $("#wd-mytext"); return t ? t.value : STYLE.text; };
+    const addArt = $("#wd-addart");
+    if (addArt) addArt.addEventListener("click", e => busy(e.target, "Adding…", () =>
+      putStyle(STYLE.text, STYLE.samples.concat([{ kind: "article", article_id: Number($("#wd-pickart").value) }])))
+      .then(res => { const t = keepText(); STYLE = res; drawStyle(); $("#wd-mytext").value = t; toast("Sample added"); })
+      .catch(err => toast(err.message)));
+    const paste = $("#wd-paste");
+    if (paste) paste.addEventListener("click", () => { const t = keepText(); drawStyle(true); $("#wd-mytext").value = t; $("#wd-pastetitle").focus(); });
+    const cancel = $("#wd-pastecancel");
+    if (cancel) cancel.addEventListener("click", () => { const t = keepText(); drawStyle(); $("#wd-mytext").value = t; });
+    const add = $("#wd-pasteadd");
+    if (add) add.addEventListener("click", e => {
+      const msg = $("#wd-pastemsg"); msg.classList.remove("err"); msg.textContent = "";
+      const piece = { kind: "pasted", title: $("#wd-pastetitle").value, text: $("#wd-pastetext").value };
+      busy(e.target, "Adding…", () => putStyle(STYLE.text, STYLE.samples.concat([piece])))
+        .then(res => { const t = keepText(); STYLE = res; drawStyle(); $("#wd-mytext").value = t; toast("Sample added"); })
+        .catch(err => fail(msg, err));
+    });
+    $$("[data-styledel]", box).forEach(b => b.addEventListener("click", () => {
+      const i = Number(b.dataset.styledel), x = STYLE.samples[i];
+      const go = btn => busy(btn, "Removing…", () => putStyle(STYLE.text, STYLE.samples.filter((_, j) => j !== i)))
+        .then(res => { const t = keepText(); STYLE = res; drawStyle(); $("#wd-mytext").value = t; toast("Sample removed"); })
+        .catch(err => toast(err.message));
+      if (x.kind !== "pasted") { go(b); return; }
+      // a pasted piece exists nowhere else: ask before it goes
+      const acts = b.parentElement;
+      acts.innerHTML = '<span class="muted small">Remove this pasted piece?</span><button class="btn sm danger" type="button" data-styleok>Remove</button><button class="btn sm" type="button" data-styleno>Cancel</button>';
+      $("[data-styleno]", acts).addEventListener("click", () => { const t = keepText(); drawStyle(); $("#wd-mytext").value = t; });
+      $("[data-styleok]", acts).addEventListener("click", e => go(e.target));
+    }));
   }
 
   /* ------------------------------------------------------------ data sources */

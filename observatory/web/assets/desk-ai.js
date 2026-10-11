@@ -59,6 +59,12 @@ function renderAIPane() {
   });
 }
 
+function styleLine(st) {
+  var link = ' <a href="write.html#/account" target="_blank" rel="noopener">' + (st && st.on ? "Change" : "Set It") + "</a>";
+  if (!st || !st.on) return "Writing style: not set, so the house style alone." + link;
+  return "Writing style: yours" + (st.samples ? ", from " + st.samples + (st.samples === 1 ? " sample" : " samples") : "") + "." + link;
+}
+
 function aiReady(s) {
   if (s && s.publication_ai) return true;  // the publication provides the AI for its articles
   return s && s.provider && s.providers.some(function (p) { return p.key === s.provider && p.ready; });
@@ -105,7 +111,8 @@ function drawAI() {
     '<p class="dk-ai-reach">Can use: ' + escapeHtml((s.reach || []).join(", ")) + "." +
     // each publication keeps its own skills and connections, in the Writer Desk
     (S.article && S.article.publication
-      ? ' <a href="write.html#/p/' + S.article.publication.id + '/assistant" target="_blank" rel="noopener">Assistant Settings</a>' : "") + "</p>" +
+      ? ' <a href="write.html#/p/' + S.article.publication.id + '/assistant" target="_blank" rel="noopener">Assistant Settings</a>' : "") +
+    '<br><span id="dk-ai-styleline">' + styleLine(s.style) + "</span></p>" +
     '<div id="dk-ai-job"></div>';
   if ($("#dk-ai-change")) $("#dk-ai-change").addEventListener("click", function () { AI.setup = true; drawAI(); });
   var pick = $("#dk-ai-skill");

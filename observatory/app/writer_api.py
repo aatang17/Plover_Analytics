@@ -27,6 +27,7 @@ publications rather than one article:
 ``GET  /companies?q=``                      find a listed company to add to a coverage list
 ``GET/POST/DELETE /keys``                   personal keys for the writer's own AI agent
 ``GET/POST/PATCH/DELETE /data-sources``      the writer's own market-data accounts (and ``/{id}/try``)
+``GET/PUT /style``                          the writer's own writing style: description and samples
 
 It sits under /admin/api only so that the Plover team's staff session cookie
 (scoped to /admin) reaches it; nothing here is part of the admin console.
@@ -36,7 +37,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import accounts, connectors, mailer, research, seo, skills, staff, writers
+from . import accounts, connectors, mailer, research, seo, skills, staff, writers, writing_style
 from . import pub_coverage, pub_profile
 from .assistant import market_data, store as ia_store
 from .admin_api import STAFF_COOKIE, _client_ip, audit
@@ -450,6 +451,38 @@ def drop_key(key_id: int, request: Request):
         raise HTTPException(404, str(exc))
     _audit(request, person, "key_revoked", "key %d" % key_id)
     return {"revoked": key_id}
+
+
+# ----------------------------------------------------------- writing style
+# How the writer writes (app/writing_style.py): theirs, in every publication.
+
+class StyleBody(BaseModel):
+    text: str = ""
+    samples: list = []
+
+
+def _style_person(request):
+    person = writers.require_writer(request)
+    if person.get("shared") or not person.get("id"):
+        raise HTTPException(403, "Sign in with your own account to set your writing style: "
+                                 "it is personal.")
+    return person
+
+
+@router.get("/style")
+def my_style(request: Request):
+    return writing_style.view(_style_person(request))
+
+
+@router.put("/style")
+def save_style(body: StyleBody, request: Request):
+    person = _style_person(request)
+    try:
+        out = writing_style.save(person, body.text, body.samples)
+    except writing_style.StyleError as exc:
+        raise HTTPException(400, str(exc))
+    _audit(request, person, "writing_style_saved", "%d samples" % len(out["samples"]))
+    return out
 
 
 # ----------------------------------------------------------- data sources
