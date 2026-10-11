@@ -697,6 +697,26 @@ a.src:hover { color: var(--obs-primary); border-color: var(--obs-primary); text-
 .srvtools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 16px; }
 .srvtools .chip { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; padding: 2px 8px; }
 .srv > footer { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-top: 1px solid var(--obs-border); background: var(--obs-surface-subtle); }
+.srvtry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 20px 12px; font-size: 13px; }
+.srvtry label { color: var(--obs-text-muted); }
+.srvtry input { width: 160px; height: 32px; padding: 0 10px; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); font: inherit; color: inherit; text-transform: uppercase; }
+.srvtry .btn { height: 32px; }
+.srvtry .hint { font-size: 12px; color: var(--obs-text-faint); }
+.srvout { padding: 0 20px; }
+.srvout:empty { display: none; }
+.srvout .srcline { margin: 8px 0 16px; }
+.srvout .err { margin: 0 0 16px; }
+.srvout .working { margin-bottom: 16px; }
+table.pricet td, table.pricet th { padding: 6px 10px; }
+.dslist > li.dsrow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.dslist > li.dsrow > div { flex: 1; min-width: 220px; }
+.dslist > li.dsrow > div.dsform { flex: 0 0 100%; min-width: 0; padding-top: 8px; }
+.dsform .kv { grid-template-columns: 160px minmax(0, 1fr); align-items: center; }
+.dsform .kv dd { flex-wrap: wrap; }
+.dsform input { height: 34px; min-width: 300px; max-width: 100%; padding: 0 10px; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); font: inherit; color: inherit; }
+.dsform .hint { flex-basis: 100%; font-size: 12px; color: var(--obs-text-faint); }
+.dsform .hint.err { color: var(--obs-trust-stale); }
+.dsform .hint a { color: var(--obs-primary); }
 .kvlist li b svg { width: 13px; height: 13px; }
 td small.muted { display: block; font-weight: 400; font-size: 12px; }
 @media (max-width: 760px) {
@@ -704,6 +724,9 @@ td small.muted { display: block; font-weight: 400; font-size: 12px; }
   .srv > header { flex-direction: column; gap: 8px; }
   .srvstate { text-align: left; }
   .srv > footer { flex-wrap: wrap; }
+  .dsform input { min-width: 0; width: 100%; }
+  .dsform .kv { grid-template-columns: 1fr; }
+  .srvtry input { flex: 1; width: auto; min-width: 0; }
 }
 
 /* ---------------------------------------------------------------- drive */

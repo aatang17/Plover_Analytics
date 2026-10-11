@@ -210,6 +210,20 @@ CREATE TABLE IF NOT EXISTS ia_charts (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ia_charts_run ON ia_charts (run_id);
+CREATE TABLE IF NOT EXISTS ia_data_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL,
+  provider TEXT NOT NULL,
+  ct TEXT NOT NULL,
+  last4 TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  checked_at INTEGER,
+  status TEXT,
+  detail TEXT,
+  last_used_at INTEGER,
+  UNIQUE (account_id, provider)
+);
 """
 
 APPROVAL_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -917,4 +931,70 @@ def mcp_servers(account_id, enabled_only=False):
 
 def delete_mcp_server(account_id, server_id):
     _write("DELETE FROM ia_mcp_servers WHERE id = ? AND account_id = ?", (server_id, account_id))
+    return True
+
+
+# ------------------------------------------------------------ data sources
+# A desk's own market-data accounts (market_data.py): one key per vendor,
+# sealed like every other key here and never returned by a read.
+
+_SOURCE_COLS = ("id, account_id, provider, last4, enabled, created_at, checked_at, "
+                "status, detail, last_used_at")
+
+
+def _shape_source(r):
+    if r is not None:
+        r["enabled"] = bool(r["enabled"])
+    return r
+
+
+def data_source(account_id, source_id):
+    return _shape_source(_row(conn().execute(
+        "SELECT " + _SOURCE_COLS + " FROM ia_data_sources WHERE id = ? AND account_id = ?",
+        (source_id, account_id))))
+
+
+def data_sources(account_id):
+    return [_shape_source(r) for r in _rows(conn().execute(
+        "SELECT " + _SOURCE_COLS + " FROM ia_data_sources WHERE account_id = ? ORDER BY id",
+        (account_id,)))]
+
+
+def save_data_source(account_id, provider, ct, last4, status, detail):
+    """Connect a vendor, or replace its key: one row per desk and vendor."""
+    t = now()
+    _write("INSERT INTO ia_data_sources (account_id, provider, ct, last4, enabled, created_at, "
+           "checked_at, status, detail) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?) "
+           "ON CONFLICT (account_id, provider) DO UPDATE SET ct = excluded.ct, "
+           "last4 = excluded.last4, checked_at = excluded.checked_at, "
+           "status = excluded.status, detail = excluded.detail",
+           (account_id, provider, ct, last4, t, t, status, detail))
+    r = _row(conn().execute("SELECT id FROM ia_data_sources WHERE account_id = ? AND provider = ?",
+                            (account_id, provider)))
+    return data_source(account_id, r["id"])
+
+
+def update_data_source(account_id, source_id, **fields):
+    allowed = ("enabled", "checked_at", "status", "detail")
+    sets = [k for k in fields if k in allowed]
+    if sets:
+        _write("UPDATE ia_data_sources SET " + ", ".join("%s = ?" % k for k in sets) +
+               " WHERE id = ? AND account_id = ?",
+               tuple(fields[k] for k in sets) + (source_id, account_id))
+    return data_source(account_id, source_id)
+
+
+def data_source_ct(account_id, source_id):
+    r = _row(conn().execute("SELECT ct FROM ia_data_sources WHERE id = ? AND account_id = ?",
+                            (source_id, account_id)))
+    return r["ct"] if r else None
+
+
+def touch_data_source(account_id, source_id):
+    _write("UPDATE ia_data_sources SET last_used_at = ? WHERE id = ? AND account_id = ?",
+           (now(), source_id, account_id))
+
+
+def delete_data_source(account_id, source_id):
+    _write("DELETE FROM ia_data_sources WHERE id = ? AND account_id = ?", (source_id, account_id))
     return True

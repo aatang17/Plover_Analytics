@@ -254,6 +254,7 @@
     coverage: I('<path d="M4 6h10M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M20.2 18.2L22 20"/>'),
     tools: I('<path d="M9 3v6M15 3v6M7.5 9h9v4a4.5 4.5 0 0 1-9 0z"/><path d="M12 17.5V21"/>'),
     keys: I('<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21M18 12v3M21 12v2.5"/>'),
+    data: I('<path d="M4 19h16"/><path d="M5 15l4-5 4 3 6-8"/>'),
     search: I('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>'),
     drive: I('<path d="M3.5 14l2.8-8.5h11.4L20.5 14v5h-17z"/><path d="M3.5 14h17M7 16.5h.01M10 16.5h.01"/>'),
     shared: I('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M17 11v6M14 14h6"/>'),
@@ -267,7 +268,7 @@
     upload: I('<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>')
   };
   const NAV = [['inbox', 'Inbox'], ['desk', 'Desk'], ['chat', 'Chat'], ['coverage', 'Coverage'], ['calendar', 'Calendar'], ['specialists', 'Specialists'], ['research', 'Research'], ['files', 'Files'], ['drive', 'Drive']];
-  const SYSTEM_NAV = [['tools', 'MCP tools'], ['keys', 'API keys'], ['audit', 'Audit'], ['settings', 'Settings']];
+  const SYSTEM_NAV = [['data', 'Data sources'], ['tools', 'MCP tools'], ['keys', 'API keys'], ['audit', 'Audit'], ['settings', 'Settings']];
 
   /* ------------------------------------------------------------ routing */
   function route() { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return { sec: p[0] || 'desk', id: p[1] ? decodeURIComponent(p[1]) : null, sub: p.slice(2).map(decodeURIComponent).join('/') || null }; }
@@ -325,7 +326,7 @@
       if (e.signin) return signinState();
       return errorState(e);
     }
-    const views = { tools: vTools, keys: vKeys, inbox: vInbox, desk: vDesk, coverage: vCoverage, calendar: vCalendar, specialists: r.id ? vSpecialist : vSpecialists, chat: vChat, research: r.id ? vThread : vResearch, files: vFiles, drive: vDrive, audit: vAudit, settings: vSettings };
+    const views = { data: vData, tools: vTools, keys: vKeys, inbox: vInbox, desk: vDesk, coverage: vCoverage, calendar: vCalendar, specialists: r.id ? vSpecialist : vSpecialists, chat: vChat, research: r.id ? vThread : vResearch, files: vFiles, drive: vDrive, audit: vAudit, settings: vSettings };
     shell(navHtml(r), '<div class="content"><div class="page">' + working('Loading') + '</div></div>');
     bindCommon();
     try { await (views[r.sec] || vDesk)(r); } catch (e) { if (e.signin) return signinState(); console.error(e); $('#main').innerHTML = topbar([['Error']]) + `<div class="content"><div class="page"><p class="err">${esc(e.detail || e.message || 'Could not load this page.')}</p></div></div>`; }
@@ -1232,6 +1233,85 @@
     });
   }
 
+  /* ---- System: data sources */
+  // The desk owner's own market-data accounts. A key is tried against the
+  // vendor before it is kept; "Show prices" proves the connection on a symbol.
+  let dataUi = { connecting: '', tried: {} };
+  async function vData() {
+    const d = await api('/data-sources');
+    const bySlug = {}; d.providers.forEach(p => { bySlug[p.slug] = p; });
+    const fmtDay = iso => { const x = new Date(iso + 'T00:00:00Z'); return x.getUTCDate() + ' ' + MON[x.getUTCMonth()] + ' ' + x.getUTCFullYear(); };
+    const dpOf = bars => { let dp = 0; bars.forEach(b => ['open', 'high', 'low', 'close', 'adj_close'].forEach(k => { const v = b[k]; if (v != null) { const t = String(v).split('.')[1]; dp = Math.max(dp, t ? Math.min(t.length, 4) : 0); } })); return dp; };
+    const priceTable = out => {
+      const rows = out.bars.slice(-10).reverse(), dp = dpOf(rows);
+      if (!rows.length) return `<p class="muted small">${esc(out.notes[0] || 'No prices in that range.')}</p>`;
+      return `<div class="calwrap"><table class="t pricet"><thead><tr><th>Date</th><th class="right">Open</th><th class="right">High</th><th class="right">Low</th><th class="right">Close</th><th class="right">Adj. close</th><th class="right">Volume</th></tr></thead><tbody>${rows.map(b => `<tr><td class="nowrap">${fmtDay(b.date)}</td>${['open', 'high', 'low', 'close', 'adj_close'].map(k => `<td class="right">${fmtNum(b[k], dp)}</td>`).join('')}<td class="right">${fmtNum(b.volume, 0)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="srcline">${esc(out.symbol)} · latest ${rows.length} of ${n(out.bars.length)} trading days from ${fmtDay(out.from)} to ${fmtDay(out.to)}. Source: ${esc(out.source)}. ${esc(out.licence)}${out.notes.length ? ' ' + out.notes.map(esc).join(' ') : ''}</p>`;
+    };
+    const okState = `<span class="ok">${ICONS.check}Connected</span>`, badState = '<span class="bad">Last try failed</span>';
+    const card = s => {
+      const p = bySlug[s.provider] || { name: s.provider, covers: '', example: '' };
+      const st = s.status === 'error' ? badState : okState;
+      const tried = dataUi.tried[s.id];
+      return `<article class="srv"><header><div><b>${esc(p.name)}</b><small>${esc(p.covers)}</small></div><div class="srvstate"><span id="dsst-${s.id}">${st}</span><small>Key ending ${esc(s.last4)}${s.last_used_at ? ' · last used ' + when(s.last_used_at) : ''}</small></div></header>
+        <div class="srvtry"><label for="try-${s.id}">Symbol</label><input id="try-${s.id}" data-trysym="${s.id}" value="${esc((tried && tried.symbol) || p.example)}" autocomplete="off" spellcheck="false" placeholder="${esc(p.example)}"><button class="btn" data-try="${s.id}">Show prices</button><span class="hint">${esc(p.symbol_hint ? 'Use ' + p.symbol_hint : '')}</span></div>
+        <div class="srvout" id="tryout-${s.id}">${tried && tried.out ? priceTable(tried.out) : tried && tried.error ? `<p class="err">${esc(tried.error)}</p>` : (s.status === 'error' && s.detail ? `<p class="err">${esc(s.detail)}</p>` : '')}</div>
+        <footer><label class="switch ${s.enabled ? 'on' : ''}" data-dsenable="${s.id}"><i></i>${s.enabled ? 'Specialists may use it' : 'Off'}</label>
+          <span class="grow"></span><button class="linkbtn" data-dsrekey="${s.provider}">Replace key</button><button class="linkbtn quiet" data-dsdel="${s.id}">Remove</button></footer></article>`;
+    };
+    const have = new Set(d.sources.map(s => s.provider));
+    const form = p => `<div class="dsform"><dl class="kv">
+        <dt>${esc(p.name)} key</dt><dd><input id="ds-key" type="password" autocomplete="off" placeholder="Paste the key from your ${esc(p.name)} account"><span class="hint">${esc(p.key_help)} <a href="${esc(p.signup_url)}" target="_blank" rel="noopener">Open ${esc(p.name)}</a></span></dd>
+        <dt></dt><dd><button class="btn primary" id="ds-save" data-provider="${p.slug}">${have.has(p.slug) ? 'Replace key' : 'Connect'}</button><button class="btn" id="ds-cancel">Cancel</button><span class="hint" id="ds-msg"></span></dd></dl></div>`;
+    const avail = d.providers.map(p => `<li class="dsrow"><div><b>${esc(p.name)}</b><small>${esc(p.covers)}. ${p.notes.map(esc).join(' ')}</small></div>${have.has(p.slug) ? '<span class="muted small">Connected</span>' : dataUi.connecting === p.slug ? '' : `<button class="btn primary sm" data-dsconnect="${p.slug}">Connect</button>`}${dataUi.connecting === p.slug && !have.has(p.slug) ? form(p) : ''}</li>`).join('');
+    const rekey = dataUi.connecting && have.has(dataUi.connecting) ? bySlug[dataUi.connecting] : null;
+    $('#main').innerHTML = topbar([['Data sources']]) + `<div class="content"><div class="page">
+      ${pageHead('Data sources', 'Price data from your own accounts with market-data services. Connect one and every specialist on this desk can read its daily prices. Read-only: nothing here can place or change an order.')}
+      ${d.keychain ? '' : '<div class="notice">This server has no <code>ASSISTANT_SECRET</code>, so keys cannot be stored yet and no source can be connected.</div>'}
+      <h2 class="band">Connected<span class="h2-note">${d.sources.length}</span></h2>
+      ${rekey ? `<section class="panel addsrv"><header>Replace the ${esc(rekey.name)} key</header><div class="body">${form(rekey)}</div></section>` : ''}
+      ${d.sources.length ? d.sources.map(card).join('') : '<div class="covempty"><b>No data sources connected.</b><span>Connect one below with a key from your account.</span></div>'}
+      <h2 class="band">Available</h2>
+      <ul class="rows dslist">${avail}</ul>
+      <p class="fine" style="margin-top:32px">Prices come from your account with each service, under your agreement with it, and stay on your desk. They are fetched when asked for, are not stored in Plover's databases, and are never shown to anyone else. Each result names the service as its source. A key is checked with the service before it is kept, then sealed with the server's secret and never shown again. Bloomberg, LSEG and Interactive Brokers need software on your own computer and are not available here yet.</p>
+    </div></div>`;
+    const setConnecting = v => { dataUi.connecting = v; vData().then(() => { bindCommon(); const k = $('#ds-key'); if (k) k.focus(); }); };
+    $$('[data-dsconnect]').forEach(b => b.onclick = () => setConnecting(b.dataset.dsconnect));
+    $$('[data-dsrekey]').forEach(b => b.onclick = () => setConnecting(b.dataset.dsrekey));
+    const cancel = $('#ds-cancel'); if (cancel) cancel.onclick = () => setConnecting('');
+    const save = $('#ds-save');
+    if (save) {
+      const submit = async () => {
+        const msg = $('#ds-msg'), name = (bySlug[save.dataset.provider] || {}).name || 'the service';
+        msg.classList.remove('err'); msg.textContent = 'Checking the key with ' + name;
+        try {
+          const src = await api('/data-sources', { method: 'POST', body: { provider: save.dataset.provider, key: $('#ds-key').value } });
+          dataUi.connecting = ''; delete dataUi.tried[src.id];
+          toast(name + ' connected'); render();
+        } catch (e) { msg.classList.add('err'); msg.textContent = e.detail || 'Could not connect'; }
+      };
+      save.onclick = submit;
+      $('#ds-key').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+    }
+    const tryOne = async id => {
+      const box = $('#tryout-' + id), sym = $('[data-trysym="' + id + '"]').value.trim();
+      box.innerHTML = working('Asking the service for ' + (sym || 'prices'));
+      try {
+        const out = await api('/data-sources/' + id + '/try', { method: 'POST', body: { symbol: sym } });
+        dataUi.tried[id] = { symbol: sym, out: out }; box.innerHTML = priceTable(out); $('#dsst-' + id).innerHTML = okState;
+      } catch (e) { dataUi.tried[id] = { symbol: sym, error: e.detail || 'Could not get prices' }; box.innerHTML = `<p class="err">${esc(dataUi.tried[id].error)}</p>`; $('#dsst-' + id).innerHTML = badState; }
+    };
+    $$('[data-try]').forEach(b => b.onclick = () => tryOne(b.dataset.try));
+    $$('[data-trysym]').forEach(i => i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const b = $('[data-try="' + i.dataset.trysym + '"]'); if (b && !b.disabled) b.click(); } });
+    $$('[data-dsenable]').forEach(l => l.onclick = async () => { const on = !l.classList.contains('on'); await api('/data-sources/' + l.dataset.dsenable, { method: 'PATCH', body: { enabled: on } }); toast(on ? 'Specialists may use it' : 'Switched off for specialists'); render(); });
+    $$('[data-dsdel]').forEach(b => b.onclick = () => {
+      const foot = b.parentElement;
+      foot.innerHTML = `<span class="muted small">Remove this source? Its key is deleted and specialists lose its prices.</span><span class="grow"></span><button class="btn sm danger" id="dd-ok">Remove</button><button class="btn sm" id="dd-no">Cancel</button>`;
+      $('#dd-no').onclick = () => render();
+      $('#dd-ok').onclick = async () => { await api('/data-sources/' + b.dataset.dsdel, { method: 'DELETE' }); delete dataUi.tried[b.dataset.dsdel]; toast('Data source removed'); render(); };
+    });
+  }
+
   /* ---- System: API keys */
   let keysUi = { adding: false, rotate: 0 };
   async function vKeys() {
@@ -1256,6 +1336,7 @@
       <div class="panel"><ul class="kvlist">
         <li><span>Model key${d.model_key.provider ? ' · ' + esc(d.model_key.provider) : ''}</span><b class="${d.model_key.set ? 'ok' : ''}">${d.model_key.set ? ICONS.check + '•••• ' + esc(d.model_key.last4) : 'Not set'}</b></li>
         <li><span>Slack webhook${d.slack.label ? ' · ' + esc(d.slack.label) : ''}</span><b class="${d.slack.set ? 'ok' : ''}">${d.slack.set ? ICONS.check + 'Stored' : 'Not set'}</b></li>
+        ${(d.data_sources || []).map(x => `<li><span>Data source · ${esc(x.name)}</span><b class="ok">${ICONS.check}•••• ${esc(x.last4)}</b></li>`).join('')}
       </ul><div class="body" style="border-top:1px solid var(--obs-border)"><a class="linkbtn" href="#/settings">Change these in Settings</a></div></div>
       <p class="fine" style="margin-top:32px">Sealed with the server's own secret before they are written, so a copy of the database cannot be read into working keys. Changing <code>ASSISTANT_SECRET</code> makes every stored key unreadable and they must be entered again.</p>
     </div></div>`;

@@ -18,7 +18,8 @@ import sys
 import time
 
 from .. import tools_v2
-from . import charts, codex, digest, drive, gateway, keychain, mcp_client, specialists, store
+from . import (charts, codex, digest, drive, gateway, keychain, market_data, mcp_client,
+               specialists, store)
 
 # Tokens are counted cumulatively: every turn re-sends the conversation so far,
 # so a run over five companies reads its early results five times. 60k (the
@@ -237,6 +238,9 @@ class Run(object):
         # The desk's Drive, likewise: the person put those files there (or
         # connected their Google Drive, read-only) for the desk to use.
         self.drive = set(drive.TOOL_NAMES) if drive.available(account_id) else set()
+        # The desk's own market-data accounts, likewise: offered only when one
+        # is connected and switched on.
+        self.market = market_data.tool_schemas(account_id)
         self.posts = []
         self.approvals = []
         self.files = []
@@ -306,7 +310,9 @@ class Run(object):
 
     def _call(self, name, args):
         """Dispatch one call through the allowlist. Returns (text, is_error)."""
-        if name not in self.allow and name not in self.ext and name not in self.drive:
+        market = set(t["name"] for t in self.market)
+        if name not in self.allow and name not in self.ext and name not in self.drive \
+                and name not in market:
             return _fail("'%s' is not in this specialist's tool list." % name), True
         if not isinstance(args, dict):
             return _fail("Arguments must be an object."), True
@@ -323,6 +329,9 @@ class Run(object):
             return _clip(text), is_err
         if name in self.drive:
             text, is_err = drive.run_tool(self.account_id, name, args)
+            return _clip(text), is_err
+        if name in market:
+            text, is_err = market_data.run_tool(self.account_id, args)
             return _clip(text), is_err
         if name in ACTION_BY_NAME:
             text = self._act(name, args)
@@ -385,7 +394,7 @@ class Run(object):
                 messages.append({"role": turn["role"], "content": turn["text"][:4000]})
         messages.append({"role": "user", "content": self.task})
         tools = (tool_schemas(self.spec["tools"]) + [e["schema"] for e in self.ext.values()]
-                 + [t for t in drive.TOOL_SCHEMAS if t["name"] in self.drive])
+                 + [t for t in drive.TOOL_SCHEMAS if t["name"] in self.drive] + self.market)
 
         # Codex on the desk's ChatGPT plan: the same prompt and history, its
         # tool calls served and audited by codex_mcp under this run.

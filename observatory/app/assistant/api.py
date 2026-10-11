@@ -19,7 +19,8 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from .. import accounts, tools_v2
-from . import codex, delivery, drive, gateway, keychain, mcp_client, runner, specialists, store
+from . import (codex, delivery, drive, gateway, keychain, market_data, mcp_client, runner,
+               specialists, store)
 
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
 
@@ -751,7 +752,9 @@ def secrets(request: Request):
             # the two keys Settings owns, shown here so one page lists them all
             "model_key": {"set": d["model_key_set"], "last4": d["model_key_last4"],
                           "provider": d["model_provider"]},
-            "slack": {"set": d["slack_set"], "label": d["slack_label"]}}
+            "slack": {"set": d["slack_set"], "label": d["slack_label"]},
+            "data_sources": [dict(s, name=market_data.PROVIDERS.get(s["provider"], {}).get("name", s["provider"]))
+                             for s in store.data_sources(aid)]}
 
 
 @router.post("/secrets")
@@ -879,6 +882,93 @@ def delete_mcp_server(server_id: int, request: Request):
         raise HTTPException(404, "No such server.")
     store.delete_mcp_server(aid, server_id)
     return {"deleted": server_id}
+
+
+# ----------------------------------------------------------- data sources
+# The desk owner's own market-data accounts (market_data.py). A key is tried
+# against the vendor before it is kept: a key the vendor refuses is not stored.
+
+
+class DataSourceRequest(BaseModel):
+    provider: str = ""
+    key: str = ""
+
+
+class DataSourceUpdate(BaseModel):
+    enabled: bool = True
+
+
+class TryRequest(BaseModel):
+    symbol: str = ""
+    start: str = ""
+    end: str = ""
+
+
+def _source_or_404(aid, source_id):
+    src = store.data_source(aid, source_id)
+    if src is None:
+        raise HTTPException(404, "No such data source.")
+    return src
+
+
+@router.get("/data-sources")
+def data_sources(request: Request):
+    aid = _account(request)["id"]
+    return {"providers": market_data.catalogue(), "sources": store.data_sources(aid),
+            "keychain": keychain.enabled()}
+
+
+@router.post("/data-sources")
+async def connect_data_source(payload: DataSourceRequest, request: Request):
+    aid = _account(request)["id"]
+    _need_keychain()
+    provider = (payload.provider or "").strip().lower()
+    if provider not in market_data.PROVIDERS:
+        raise HTTPException(400, "Unknown data source.")
+    key = (payload.key or "").strip()
+    if not key:
+        raise HTTPException(400, "Paste the key from your %s account."
+                            % market_data.PROVIDERS[provider]["name"])
+    problem = await run_in_threadpool(market_data.check, provider, key)
+    if problem:
+        raise HTTPException(400, problem)
+    return store.save_data_source(aid, provider, keychain.seal(key), keychain.last4(key),
+                                  "ok", None)
+
+
+@router.patch("/data-sources/{source_id}")
+def update_data_source(source_id: int, payload: DataSourceUpdate, request: Request):
+    aid = _account(request)["id"]
+    _source_or_404(aid, source_id)
+    return store.update_data_source(aid, source_id, enabled=1 if payload.enabled else 0)
+
+
+@router.post("/data-sources/{source_id}/try")
+async def try_data_source(source_id: int, payload: TryRequest, request: Request):
+    """Prices for one symbol, so a person sees the connection work."""
+    aid = _account(request)["id"]
+    src = _source_or_404(aid, source_id)
+    if not (payload.symbol or "").strip():
+        raise HTTPException(400, "Type a symbol, such as %s."
+                            % market_data.PROVIDERS[src["provider"]]["example"])
+    try:
+        out = await run_in_threadpool(market_data.fetch, aid, src, payload.symbol,
+                                      payload.start or None, payload.end or None)
+    except market_data.SourceError as exc:
+        store.update_data_source(aid, source_id, checked_at=store.now(), status="error",
+                                 detail=str(exc))
+        raise HTTPException(400, str(exc))
+    store.update_data_source(aid, source_id, checked_at=store.now(), status="ok", detail=None)
+    store.touch_data_source(aid, source_id)
+    return out
+
+
+@router.delete("/data-sources/{source_id}")
+def delete_data_source(source_id: int, request: Request):
+    aid = _account(request)["id"]
+    _source_or_404(aid, source_id)
+    store.delete_data_source(aid, source_id)
+    return {"deleted": source_id}
 
 
 # ------------------------------------------------------------------ drive

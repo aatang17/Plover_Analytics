@@ -37,6 +37,7 @@ class Context(object):
         self.run.run_id = run_id
         self.run.ext = {}           # the desk's outside MCP servers are not offered to Codex
         self.run.drive = set()
+        self.run.market = []
         self.run.allow = set(self.run.spec["tools"]) & ALLOWED
         self.tools = []
         for s in runner.tool_schemas([t for t in self.run.spec["tools"] if t in self.run.allow]):
