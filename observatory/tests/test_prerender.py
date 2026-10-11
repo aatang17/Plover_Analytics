@@ -6,6 +6,9 @@ Run from observatory/:  ./.venv/bin/python -m unittest tests.test_prerender
 import pathlib
 import re
 import unittest
+import tempfile
+import hashlib
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -175,6 +178,48 @@ class LockOnEveryPage(unittest.TestCase):
         finally:
             prerender._inject = real
         self.assertIn("lock.js", out)
+
+
+class AssetVersions(unittest.TestCase):
+    def test_changed_script_changes_url_and_unchanged_style_keeps_url(self):
+        with tempfile.TemporaryDirectory() as folder:
+            web = pathlib.Path(folder)
+            (web / "assets").mkdir()
+            script = web / "assets/desk.js"
+            script.write_text("old script")
+            (web / "assets/desk.css").write_text("same style")
+            html = '<script src="assets/desk.js"></script><link href="/assets/desk.css">'
+            with patch.object(prerender, "WEB_DIR", web):
+                before = prerender._versioned_assets(html)
+                script.write_text("new script with futures")
+                after = prerender._versioned_assets(html)
+            self.assertNotEqual(before, after)
+            self.assertEqual(before.split('<link')[1], after.split('<link')[1])
+            self.assertIn(hashlib.sha256(script.read_bytes()).hexdigest()[:16], after)
+
+    def test_parameters_fragments_external_and_missing_assets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            web = pathlib.Path(folder)
+            (web / "assets").mkdir()
+            (web / "assets/desk.js").write_text("script")
+            html = '<script src="assets/desk.js?mode=1&amp;v=old#end"></script>'
+            untouched = '<script src="https://example.com/assets/desk.js"></script><script src="assets/missing.js"></script>'
+            with patch.object(prerender, "WEB_DIR", web):
+                out = prerender._versioned_assets(html + untouched)
+                self.assertIn('?mode=1&amp;v=', out)
+                self.assertIn('#end', out)
+                self.assertNotIn('v=old', out)
+                self.assertIn(untouched, out)
+                self.assertEqual(prerender._versioned_assets(out), out)
+
+    def test_real_desk_and_failed_annotation_receive_versioned_scripts(self):
+        client = TestClient(app)
+        desk = client.get('/desk.html').text
+        self.assertRegex(desk, r'assets/desk-research\.js\?v=[0-9a-f]{16}')
+        with patch.object(prerender, '_inject', side_effect=ValueError('annotation unavailable')):
+            out = prerender.inject('<html><head><script src="assets/desk-research.js"></script></head></html>', 'desk.html')
+        self.assertRegex(out, r'assets/desk-research\.js\?v=[0-9a-f]{16}')
+        self.assertIn('/assets/lock.js?v=', out)
 
 
 if __name__ == "__main__":

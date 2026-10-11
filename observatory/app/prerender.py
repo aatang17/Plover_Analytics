@@ -39,10 +39,12 @@ than failing the request. A page that renders is worth more than a page that
 is perfectly annotated.
 """
 import datetime
+import hashlib
+from functools import lru_cache
 import json
 import re
 import threading
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlsplit, urlunsplit, urlencode
 
 WEB_DIR = None  # set by main, so this module imports without touching the disk
 
@@ -1053,14 +1055,53 @@ def SITE_BASE_URL_FOR_JSONLD():
 # injection
 # ---------------------------------------------------------------------------
 
+# An edge cache can replace no-cache with a browser lifetime (Cloudflare's
+# four-hour default did this to the Research scripts). Content hashes in the
+# asset URLs let a refreshed page always fetch its matching script/style.
+_ASSET_TAG = re.compile(
+    r"""(?i)(<(?:script|link)\b[^>]*?\b(?:src|href)=)([\"'])(/?assets/[^\"'\s]+)\2""")
+
+
+@lru_cache(maxsize=256)
+def _asset_digest(path, modified_ns, size):
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()[:16]
+
+
+def _versioned_assets(html):
+    """Only local JS/CSS URLs; preserve other parameters and fragments."""
+    if WEB_DIR is None:
+        return html
+    def replace(match):
+        url = urlsplit(match.group(3).replace("&amp;", "&"))
+        if not url.path.lower().endswith((".js", ".css")):
+            return match.group(0)
+        path = (WEB_DIR / url.path.lstrip("/")).resolve()
+        try:
+            path.relative_to(WEB_DIR.resolve())
+            stat = path.stat()
+            digest = _asset_digest(str(path), stat.st_mtime_ns, stat.st_size)
+        except (OSError, ValueError):
+            return match.group(0)
+        query = [(k, v) for k, v in parse_qsl(url.query, keep_blank_values=True) if k != "v"]
+        query.append(("v", digest))
+        versioned = urlunsplit(("", "", url.path, urlencode(query), url.fragment)).replace("&", "&amp;")
+        return match.group(1) + match.group(2) + versioned + match.group(2)
+    return _ASSET_TAG.sub(replace, html)
+
+
 def inject(html, page_name, canonical=None, query_string=""):
     """Serve-time additions for one HTML page. Never raises."""
     # Outside the try: whatever else fails, the page still gets its lock.
     if not _HAS_LOCK.search(html):
         html = _HEAD_START.sub(lambda m: m.group(0) + "\n" + LOCK_SCRIPT, html, count=1)
     try:
-        return _inject(html, page_name, canonical, query_string)
+        html = _inject(html, page_name, canonical, query_string)
     except Exception:  # noqa: BLE001 — a page that renders beats an annotated one
+        pass
+    try:
+        return _versioned_assets(html)
+    except Exception:  # noqa: BLE001 — a cache hint must not prevent serving a page
         return html
 
 
