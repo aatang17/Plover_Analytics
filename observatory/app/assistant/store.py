@@ -224,6 +224,20 @@ CREATE TABLE IF NOT EXISTS ia_data_sources (
   last_used_at INTEGER,
   UNIQUE (account_id, provider)
 );
+CREATE TABLE IF NOT EXISTS ia_pub_data_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  publication_id INTEGER NOT NULL,
+  provider TEXT NOT NULL,
+  ct TEXT NOT NULL,
+  last4 TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  checked_at INTEGER,
+  status TEXT,
+  detail TEXT,
+  last_used_at INTEGER,
+  UNIQUE (publication_id, provider)
+);
 """
 
 APPROVAL_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -935,66 +949,87 @@ def delete_mcp_server(account_id, server_id):
 
 
 # ------------------------------------------------------------ data sources
-# A desk's own market-data accounts (market_data.py): one key per vendor,
-# sealed like every other key here and never returned by a read.
+# Market-data accounts (market_data.py): one key per vendor, sealed like every
+# other key here and never returned by a read. An owner is a person (their
+# sign-in account id, an int) or a publication (("pub", id)): each keeps its
+# own in its own table, and one never reaches the other's.
 
-_SOURCE_COLS = ("id, account_id, provider, last4, enabled, created_at, checked_at, "
+_SOURCE_COLS = ("id, %s, provider, last4, enabled, created_at, checked_at, "
                 "status, detail, last_used_at")
+
+
+def pub_owner(publication_id):
+    return ("pub", int(publication_id))
+
+
+def _src(owner):
+    """(table, owner column, owner id) for a person or a publication."""
+    if isinstance(owner, tuple) and owner and owner[0] == "pub":
+        return "ia_pub_data_sources", "publication_id", int(owner[1])
+    return "ia_data_sources", "account_id", int(owner)
 
 
 def _shape_source(r):
     if r is not None:
         r["enabled"] = bool(r["enabled"])
+        r.pop("publication_id", None)
     return r
 
 
-def data_source(account_id, source_id):
+def data_source(owner, source_id):
+    table, col, oid = _src(owner)
     return _shape_source(_row(conn().execute(
-        "SELECT " + _SOURCE_COLS + " FROM ia_data_sources WHERE id = ? AND account_id = ?",
-        (source_id, account_id))))
+        "SELECT " + _SOURCE_COLS % col + " FROM " + table + " WHERE id = ? AND " + col + " = ?",
+        (source_id, oid))))
 
 
-def data_sources(account_id):
+def data_sources(owner):
+    table, col, oid = _src(owner)
     return [_shape_source(r) for r in _rows(conn().execute(
-        "SELECT " + _SOURCE_COLS + " FROM ia_data_sources WHERE account_id = ? ORDER BY id",
-        (account_id,)))]
+        "SELECT " + _SOURCE_COLS % col + " FROM " + table + " WHERE " + col + " = ? ORDER BY id",
+        (oid,)))]
 
 
-def save_data_source(account_id, provider, ct, last4, status, detail):
-    """Connect a vendor, or replace its key: one row per desk and vendor."""
+def save_data_source(owner, provider, ct, last4, status, detail):
+    """Connect a vendor, or replace its key: one row per owner and vendor."""
+    table, col, oid = _src(owner)
     t = now()
-    _write("INSERT INTO ia_data_sources (account_id, provider, ct, last4, enabled, created_at, "
+    _write("INSERT INTO " + table + " (" + col + ", provider, ct, last4, enabled, created_at, "
            "checked_at, status, detail) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?) "
-           "ON CONFLICT (account_id, provider) DO UPDATE SET ct = excluded.ct, "
+           "ON CONFLICT (" + col + ", provider) DO UPDATE SET ct = excluded.ct, "
            "last4 = excluded.last4, checked_at = excluded.checked_at, "
            "status = excluded.status, detail = excluded.detail",
-           (account_id, provider, ct, last4, t, t, status, detail))
-    r = _row(conn().execute("SELECT id FROM ia_data_sources WHERE account_id = ? AND provider = ?",
-                            (account_id, provider)))
-    return data_source(account_id, r["id"])
+           (oid, provider, ct, last4, t, t, status, detail))
+    r = _row(conn().execute("SELECT id FROM " + table + " WHERE " + col + " = ? AND provider = ?",
+                            (oid, provider)))
+    return data_source(owner, r["id"])
 
 
-def update_data_source(account_id, source_id, **fields):
+def update_data_source(owner, source_id, **fields):
+    table, col, oid = _src(owner)
     allowed = ("enabled", "checked_at", "status", "detail")
     sets = [k for k in fields if k in allowed]
     if sets:
-        _write("UPDATE ia_data_sources SET " + ", ".join("%s = ?" % k for k in sets) +
-               " WHERE id = ? AND account_id = ?",
-               tuple(fields[k] for k in sets) + (source_id, account_id))
-    return data_source(account_id, source_id)
+        _write("UPDATE " + table + " SET " + ", ".join("%s = ?" % k for k in sets) +
+               " WHERE id = ? AND " + col + " = ?",
+               tuple(fields[k] for k in sets) + (source_id, oid))
+    return data_source(owner, source_id)
 
 
-def data_source_ct(account_id, source_id):
-    r = _row(conn().execute("SELECT ct FROM ia_data_sources WHERE id = ? AND account_id = ?",
-                            (source_id, account_id)))
+def data_source_ct(owner, source_id):
+    table, col, oid = _src(owner)
+    r = _row(conn().execute("SELECT ct FROM " + table + " WHERE id = ? AND " + col + " = ?",
+                            (source_id, oid)))
     return r["ct"] if r else None
 
 
-def touch_data_source(account_id, source_id):
-    _write("UPDATE ia_data_sources SET last_used_at = ? WHERE id = ? AND account_id = ?",
-           (now(), source_id, account_id))
+def touch_data_source(owner, source_id):
+    table, col, oid = _src(owner)
+    _write("UPDATE " + table + " SET last_used_at = ? WHERE id = ? AND " + col + " = ?",
+           (now(), source_id, oid))
 
 
-def delete_data_source(account_id, source_id):
-    _write("DELETE FROM ia_data_sources WHERE id = ? AND account_id = ?", (source_id, account_id))
+def delete_data_source(owner, source_id):
+    table, col, oid = _src(owner)
+    _write("DELETE FROM " + table + " WHERE id = ? AND " + col + " = ?", (source_id, oid))
     return True

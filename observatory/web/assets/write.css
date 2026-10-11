@@ -88,3 +88,22 @@
 .wd-tools li { padding: 4px 0; font-size: 13px; }
 .wd-tooldesc { color: var(--obs-text-muted); }
 .wd-list small.mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+
+/* ---- the publication's profile: AI account, defaults, look (pub_profile) */
+.wd-kv .wd-style { max-width: 520px; }
+.wd-kv dd .hint.err, .wd-kv dd .hint[role=status]:not(:empty) { flex-basis: auto; }
+.wd-kv dd .hint.err { color: var(--obs-trust-stale); }
+.wd-logo img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); }
+.wd-accents { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.wd-accent { display: inline-flex; align-items: center; gap: 6px; color: var(--obs-ink); font-size: 13px; cursor: pointer; }
+.wd-kv .wd-accent input { min-width: 0; width: auto; height: auto; margin: 0; }
+.wd-swatch { display: inline-block; width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--obs-border); }
+
+/* ---- coverage */
+.wd-cvadd { position: relative; max-width: 520px; margin: 0 0 16px; }
+.wd-cvadd input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); font: inherit; color: inherit; }
+.wd-cvhits { margin-top: 4px; }
+.wd-cvhits[hidden] { display: none; }
+.wd-cvhits > li { padding: 8px 12px; }
+.wd-cvt td.mono { font-variant-numeric: tabular-nums; }
+.wd-btnrow[hidden] { display: none; }

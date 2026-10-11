@@ -18,7 +18,15 @@ publications rather than one article:
 ``POST/PUT/DELETE .../assistant/skills``    its skills (editor)
 ``PUT  .../assistant/house-style``          its house style (editor)
 ``POST/PUT/DELETE .../assistant/connectors`` its connectors, their check and tools (owner)
+``GET  /publications/{id}/profile``         its own AI key, article defaults and look (any member)
+``PUT/DELETE .../profile/ai``               its AI key (owner)
+``PUT  .../profile/defaults``               length, starting text, default skill (editor)
+``PUT  .../profile/look``                   logo and accent colour (owner)
+``GET/POST/PATCH/DELETE .../data-sources``  its own market-data keys, and ``/{sid}/try`` (owner)
+``GET/POST/DELETE .../coverage``           its coverage list (any member reads; editors change)
+``GET  /companies?q=``                      find a listed company to add to a coverage list
 ``GET/POST/DELETE /keys``                   personal keys for the writer's own AI agent
+``GET/POST/PATCH/DELETE /data-sources``      the writer's own market-data accounts (and ``/{id}/try``)
 
 It sits under /admin/api only so that the Plover team's staff session cookie
 (scoped to /admin) reaches it; nothing here is part of the admin console.
@@ -29,6 +37,8 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from . import accounts, connectors, mailer, research, seo, skills, staff, writers
+from . import pub_coverage, pub_profile
+from .assistant import market_data, store as ia_store
 from .admin_api import STAFF_COOKIE, _client_ip, audit
 
 router = APIRouter(prefix="/admin/api/write", include_in_schema=False)
@@ -440,3 +450,266 @@ def drop_key(key_id: int, request: Request):
         raise HTTPException(404, str(exc))
     _audit(request, person, "key_revoked", "key %d" % key_id)
     return {"revoked": key_id}
+
+
+# ----------------------------------------------------------- data sources
+# The writer's own market-data accounts (app/assistant/market_data.py). They
+# belong to the person's sign-in account, so the same connection shows on
+# their Investment Assistant desk, and only their own runs can use it.
+
+def _own_person(request):
+    person = writers.require_writer(request)
+    if person.get("shared") or not person.get("email"):
+        raise HTTPException(403, "Sign in with your own account to connect a data source: "
+                                 "its key is personal.")
+    return person
+
+
+class SourceBody(BaseModel):
+    provider: str = ""
+    key: str = ""
+
+
+class SourceUpdate(BaseModel):
+    enabled: bool = True
+
+
+class SourceTry(BaseModel):
+    symbol: str = ""
+    start: str = ""
+    end: str = ""
+
+
+def _source(request, source_id):
+    person = _own_person(request)
+    aid = market_data.account_for(person["email"])
+    src = ia_store.data_source(aid, source_id) if aid else None
+    if src is None:
+        raise HTTPException(404, "No such data source.")
+    return person, aid, src
+
+
+@router.get("/data-sources")
+def my_sources(request: Request):
+    person = _own_person(request)
+    return market_data.view(market_data.account_for(person["email"]))
+
+
+@router.post("/data-sources")
+def connect_source(body: SourceBody, request: Request):
+    person = _own_person(request)
+    aid = market_data.account_for(person["email"], create=True)
+    try:
+        src = market_data.connect(aid, (body.provider or "").strip().lower(), body.key)
+    except market_data.SourceError as exc:
+        raise HTTPException(503 if "ASSISTANT_SECRET" in str(exc) else 400, str(exc))
+    _audit(request, person, "data_source_connected", src["provider"])
+    return src
+
+
+@router.patch("/data-sources/{source_id}")
+def switch_source(source_id: int, body: SourceUpdate, request: Request):
+    person, aid, src = _source(request, source_id)
+    return ia_store.update_data_source(aid, source_id, enabled=1 if body.enabled else 0)
+
+
+@router.post("/data-sources/{source_id}/try")
+def try_source(source_id: int, body: SourceTry, request: Request):
+    person, aid, src = _source(request, source_id)
+    try:
+        return market_data.try_source(aid, src, body.symbol, body.start, body.end)
+    except market_data.SourceError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.delete("/data-sources/{source_id}")
+def drop_source(source_id: int, request: Request):
+    person, aid, src = _source(request, source_id)
+    ia_store.delete_data_source(aid, source_id)
+    _audit(request, person, "data_source_removed", src["provider"])
+    return {"ok": True}
+
+
+# ------------------------------------------------------ publication profile
+# What makes a publication its own workspace (app/pub_profile.py): its AI key,
+# article defaults, look and market-data keys. Members see it; owners change
+# it, except article defaults, which editors set like the house style.
+
+def _profile(pid, person):
+    out = pub_profile.view(pid)
+    out["data"] = market_data.view(ia_store.pub_owner(pid))
+    out["role"] = writers.role(person, pid)
+    from .research_ai import LENGTHS
+    out["lengths"] = [{"key": x["key"], "label": x["label"], "hint": x["hint"]} for x in LENGTHS]
+    out["skills"] = [{"id": k["id"], "name": k["name"]} for k in skills.list_skills(True, pid)]
+    return out
+
+
+def _profile_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except pub_profile.ProfileError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.get("/publications/{publication_id}/profile")
+def get_profile(publication_id: int, request: Request):
+    person = writers.require_writer(request)
+    _need(person, publication_id, "writer")
+    return _profile(publication_id, person)
+
+
+class ProfileAI(BaseModel):
+    provider: str = ""
+    model: str = ""
+    key: str = ""
+
+
+@router.put("/publications/{publication_id}/profile/ai")
+def set_profile_ai(publication_id: int, body: ProfileAI, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "owner")
+    _profile_call(pub_profile.set_ai, publication_id, body.provider, body.model, body.key)
+    _audit(request, person, "publication_ai_set", "%s in %s" % (body.provider, pub["base"]))
+    return _profile(publication_id, person)
+
+
+@router.delete("/publications/{publication_id}/profile/ai")
+def clear_profile_ai(publication_id: int, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "owner")
+    pub_profile.clear_ai(publication_id)
+    _audit(request, person, "publication_ai_removed", pub["base"])
+    return _profile(publication_id, person)
+
+
+class ProfileDefaults(BaseModel):
+    length: str = ""
+    template: str = ""
+    default_skill: Optional[int] = None
+
+
+@router.put("/publications/{publication_id}/profile/defaults")
+def set_profile_defaults(publication_id: int, body: ProfileDefaults, request: Request):
+    person = writers.require_writer(request)
+    _need(person, publication_id, "editor")
+    from .research_ai import LENGTHS
+    _profile_call(pub_profile.set_defaults, publication_id, body.length, body.template,
+                  body.default_skill, lengths=[x["key"] for x in LENGTHS])
+    return _profile(publication_id, person)
+
+
+class ProfileLook(BaseModel):
+    accent: str = "navy"
+    logo: str = ""
+
+
+@router.put("/publications/{publication_id}/profile/look")
+def set_profile_look(publication_id: int, body: ProfileLook, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "owner")
+    _profile_call(pub_profile.set_look, publication_id, body.accent, body.logo)
+    _audit(request, person, "publication_look_set", pub["base"])
+    return _profile(publication_id, person)
+
+
+def _pub_source(request, publication_id, source_id):
+    person = writers.require_writer(request)
+    _need(person, publication_id, "owner")
+    owner = ia_store.pub_owner(publication_id)
+    src = ia_store.data_source(owner, source_id)
+    if src is None:
+        raise HTTPException(404, "No such data source.")
+    return person, owner, src
+
+
+@router.get("/publications/{publication_id}/data-sources")
+def pub_sources(publication_id: int, request: Request):
+    person = writers.require_writer(request)
+    _need(person, publication_id, "writer")
+    out = market_data.view(ia_store.pub_owner(publication_id))
+    out["can_manage"] = writers.at_least(person, publication_id, "owner")
+    return out
+
+
+@router.post("/publications/{publication_id}/data-sources")
+def connect_pub_source(publication_id: int, body: SourceBody, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "owner")
+    try:
+        src = market_data.connect(ia_store.pub_owner(publication_id),
+                                  (body.provider or "").strip().lower(), body.key)
+    except market_data.SourceError as exc:
+        raise HTTPException(503 if "ASSISTANT_SECRET" in str(exc) else 400, str(exc))
+    _audit(request, person, "data_source_connected", "%s for %s" % (src["provider"], pub["base"]))
+    return src
+
+
+@router.patch("/publications/{publication_id}/data-sources/{source_id}")
+def switch_pub_source(publication_id: int, source_id: int, body: SourceUpdate, request: Request):
+    person, owner, src = _pub_source(request, publication_id, source_id)
+    return ia_store.update_data_source(owner, source_id, enabled=1 if body.enabled else 0)
+
+
+@router.post("/publications/{publication_id}/data-sources/{source_id}/try")
+def try_pub_source(publication_id: int, source_id: int, body: SourceTry, request: Request):
+    person, owner, src = _pub_source(request, publication_id, source_id)
+    try:
+        return market_data.try_source(owner, src, body.symbol, body.start, body.end)
+    except market_data.SourceError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.delete("/publications/{publication_id}/data-sources/{source_id}")
+def drop_pub_source(publication_id: int, source_id: int, request: Request):
+    person, owner, src = _pub_source(request, publication_id, source_id)
+    ia_store.delete_data_source(owner, source_id)
+    _audit(request, person, "data_source_removed", "%s for publication %d" % (src["provider"], publication_id))
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------- coverage
+# The publication's coverage list (app/pub_coverage.py).
+
+@router.get("/companies")
+def find_companies(request: Request, q: str = ""):
+    writers.require_writer(request)
+    from .assistant.api import find_companies as find
+    return {"companies": find(q, limit=8)}
+
+
+@router.get("/publications/{publication_id}/coverage")
+def get_coverage(publication_id: int, request: Request):
+    person = writers.require_writer(request)
+    _need(person, publication_id, "writer")
+    out = pub_coverage.view(publication_id)
+    out["can_edit"] = writers.at_least(person, publication_id, "editor")
+    return out
+
+
+class CoverageBody(BaseModel):
+    code: str = ""
+
+
+@router.post("/publications/{publication_id}/coverage")
+def add_coverage(publication_id: int, body: CoverageBody, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "editor")
+    from .assistant.api import _company
+    code = (body.code or "").strip().upper()
+    name = _company(code)[0] if code else None
+    try:
+        pub_coverage.add(publication_id, code, name)
+    except pub_coverage.CoverageError as exc:
+        raise HTTPException(400, str(exc))
+    _audit(request, person, "coverage_added", "%s in %s" % (code, pub["base"]))
+    return get_coverage(publication_id, request)
+
+
+@router.delete("/publications/{publication_id}/coverage/{code}")
+def remove_coverage(publication_id: int, code: str, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "editor")
+    pub_coverage.remove(publication_id, code)
+    _audit(request, person, "coverage_removed", "%s in %s" % (code.upper(), pub["base"]))
+    return get_coverage(publication_id, request)

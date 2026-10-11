@@ -38,6 +38,7 @@
     {"key": "us-companies.html#cn-q", "url": "/us-companies.html?t=DIS", "input": "#cn-q", "area": "#cn-table", "hits": "#cn-table tbody tr", "ready": "#cn-table tbody tr", "extra": ["revenue"]}
   ],
   "elsewhere": {
+    "write.js#wd-cvq": "The coverage search on a publication's Coverage tab, inside the signed-in Writer Desk. tests/test_search_examples.py types the box's own examples and the obvious company queries into the same search.",
     "desk-research.js#class=dk-rs-q": "Inside the signed-in research desk, on every Research data tab. Its examples and the obvious queries run against the same search in tests/test_search_examples.py.",
     "desk.js#data-f=q": "The search box on a chart in the signed-in desk. An empty chart runs the desk's data search, and tests/test_search_examples.py types the box's own examples into it."
   },

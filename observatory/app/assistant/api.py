@@ -885,8 +885,8 @@ def delete_mcp_server(server_id: int, request: Request):
 
 
 # ----------------------------------------------------------- data sources
-# The desk owner's own market-data accounts (market_data.py). A key is tried
-# against the vendor before it is kept: a key the vendor refuses is not stored.
+# The person's own market-data accounts (market_data.py), the same ones the
+# Writer Desk shows: they belong to the sign-in account, not to this desk.
 
 
 class DataSourceRequest(BaseModel):
@@ -913,27 +913,17 @@ def _source_or_404(aid, source_id):
 
 @router.get("/data-sources")
 def data_sources(request: Request):
-    aid = _account(request)["id"]
-    return {"providers": market_data.catalogue(), "sources": store.data_sources(aid),
-            "keychain": keychain.enabled()}
+    return market_data.view(_account(request)["id"])
 
 
 @router.post("/data-sources")
 async def connect_data_source(payload: DataSourceRequest, request: Request):
     aid = _account(request)["id"]
-    _need_keychain()
-    provider = (payload.provider or "").strip().lower()
-    if provider not in market_data.PROVIDERS:
-        raise HTTPException(400, "Unknown data source.")
-    key = (payload.key or "").strip()
-    if not key:
-        raise HTTPException(400, "Paste the key from your %s account."
-                            % market_data.PROVIDERS[provider]["name"])
-    problem = await run_in_threadpool(market_data.check, provider, key)
-    if problem:
-        raise HTTPException(400, problem)
-    return store.save_data_source(aid, provider, keychain.seal(key), keychain.last4(key),
-                                  "ok", None)
+    try:
+        return await run_in_threadpool(market_data.connect, aid, (payload.provider or "").strip().lower(),
+                                       payload.key)
+    except market_data.SourceError as exc:
+        raise HTTPException(503 if "ASSISTANT_SECRET" in str(exc) else 400, str(exc))
 
 
 @router.patch("/data-sources/{source_id}")
@@ -948,19 +938,11 @@ async def try_data_source(source_id: int, payload: TryRequest, request: Request)
     """Prices for one symbol, so a person sees the connection work."""
     aid = _account(request)["id"]
     src = _source_or_404(aid, source_id)
-    if not (payload.symbol or "").strip():
-        raise HTTPException(400, "Type a symbol, such as %s."
-                            % market_data.PROVIDERS[src["provider"]]["example"])
     try:
-        out = await run_in_threadpool(market_data.fetch, aid, src, payload.symbol,
-                                      payload.start or None, payload.end or None)
+        return await run_in_threadpool(market_data.try_source, aid, src, payload.symbol,
+                                       payload.start, payload.end)
     except market_data.SourceError as exc:
-        store.update_data_source(aid, source_id, checked_at=store.now(), status="error",
-                                 detail=str(exc))
         raise HTTPException(400, str(exc))
-    store.update_data_source(aid, source_id, checked_at=store.now(), status="ok", detail=None)
-    store.touch_data_source(aid, source_id)
-    return out
 
 
 @router.delete("/data-sources/{source_id}")

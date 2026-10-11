@@ -41,7 +41,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
                                RedirectResponse, Response)
 
-from . import research, research_doc as rd, seo
+from . import pub_profile, research, research_doc as rd, seo
 
 log = logging.getLogger(__name__)
 
@@ -140,9 +140,14 @@ def _home():
 def page(title, description, canonical, main, data=None, robots=None, ld=None,
          extra_head="", preview=False, wide=False, pub=None):
     pub = pub or _home()
+    look = pub_profile.look(pub["id"])
+    # the publication's accent (pub_profile.ACCENTS, tokens.css) on its header and bands
+    accent = "" if look["accent"] == "navy" else (
+        ' style="--obs-band-bg: var(--obs-pub-%s); --obs-header-bg: var(--obs-pub-%s)"'
+        % (look["accent"], look["accent"]))
     head = [
         "<!DOCTYPE html>",
-        '<html lang="en">',
+        '<html lang="en"%s>' % accent,
         "<head>",
         '<meta charset="utf-8">',
         '<script src="/assets/lock.js"></script>',  # one click, one request: see prerender.LOCK_SCRIPT
@@ -209,9 +214,14 @@ def citation(authors, title, version, published_at, url, brand=BRAND):
         who, year, title.rstrip("."), brand, version, _date_long(published_at), url)
 
 
+def _logo(pub, cls):
+    url = pub_profile.logo_url(pub["id"])
+    return ('<img class="%s" src="%s" alt="" width="40" height="40">' % (cls, esc(url))) if url else ""
+
+
 def _trail(pub):
-    return '<nav class="rs-trail" aria-label="Breadcrumb"><a href="%s">%s</a></nav>' % (
-        esc(pub["base"]), esc(pub["name"]))
+    return '<nav class="rs-trail" aria-label="Breadcrumb"><a href="%s">%s%s</a></nav>' % (
+        esc(pub["base"]), _logo(pub, "rs-trail-logo"), esc(pub["name"]))
 
 
 def _own_views(pub):
@@ -587,9 +597,9 @@ def render_home(pub=None):
                 '<a class="btn" href="/research/feed.xml">RSS</a>' % esc(SUBSTACK_URL))
     else:
         acts = '<a class="btn" href="%s/feed.xml">RSS</a>' % esc(pub["base"])
-    parts = ['<header class="rh-mast"><div><h1>%s</h1>%s%s</div>'
+    parts = ['<header class="rh-mast">%s<div><h1>%s</h1>%s%s</div>'
              '<div class="rh-mast-acts">%s</div></header>'
-             % (esc(pub["name"]),
+             % (_logo(pub, "rh-logo"), esc(pub["name"]),
                 ('<p class="rh-strap">%s</p>' % esc(pub["tagline"])) if pub["tagline"] else "",
                 ('<p class="rh-about">%s</p>' % esc(pub["about"])) if pub["about"] and not pub["home"]
                 else "", acts)]
@@ -730,6 +740,10 @@ def _feed(pub):
                "Research notes from Plover Analytics." if pub["home"]
                else (pub["tagline"] or "Research notes published in %s." % pub["name"])),
            "<language>en</language>"]
+    logo = pub_profile.logo_url(pub["id"])
+    if logo:
+        out.append("<image><url>%s%s</url><title>%s</title><link>%s%s</link></image>" % (
+            esc(seo.SITE_BASE_URL), esc(logo), esc(pub["name"]), esc(seo.SITE_BASE_URL), esc(pub["base"])))
     for a in items:
         url = "%s%s/%s" % (seo.SITE_BASE_URL, pub["base"], a["slug"])
         when = datetime.datetime.fromisoformat(a["first_published_at"].rstrip("Z"))

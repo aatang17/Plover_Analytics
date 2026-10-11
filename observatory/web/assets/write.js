@@ -202,9 +202,9 @@
     const pub = pubOf(r.id) || ME.publications[0];
     if (!r.id || !pubOf(r.id)) { history.replaceState(null, "", "#/p/" + pub.id); r.id = pub.id; }
     const owner = pub.role === "owner";
-    const known = ["articles", "members", "assistant"].concat(owner && !pub.home ? ["settings"] : []);
+    const known = ["articles", "coverage", "members", "assistant"].concat(owner && !pub.home ? ["settings"] : []);
     const tab = known.indexOf(r.tab) === -1 ? "articles" : r.tab;
-    const tabs = [["articles", "Articles"], ["members", "Members"], ["assistant", "Assistant Settings"]]
+    const tabs = [["articles", "Articles"], ["coverage", "Coverage"], ["members", "Members"], ["assistant", "Assistant Settings"]]
       .concat(owner && !pub.home ? [["settings", "Settings"]] : []);
     const actions = tab === "articles"
       ? `<button class="btn" id="wd-import" type="button">Import Markdown</button>
@@ -217,6 +217,7 @@
     shell(r, topbar([[pub.name, tab === "articles" ? null : "p/" + pub.id]].concat(tab === "articles" ? [] : [[tabs.find(t => t[0] === tab)[1]]])) + page(head));
     const body = $("#wd-body");
     if (tab === "members") return membersTab(pub, body);
+    if (tab === "coverage") return coverageTab(pub, body);
     if (tab === "settings") return settingsTab(pub, body);
     if (tab === "assistant") return assistantTab(pub, body);
     articlesTab(pub, body);
@@ -463,7 +464,7 @@
         : " Only the publication's owners and editors change these.";
       body.innerHTML =
         `<p class="wd-para">What the assistant in the editor uses on this publication's articles: the skills a writer can pick, ` +
-        `the house style sent with every run, and the outside tools it may call. Each person connects their own AI account in the editor's AI tab.${esc(who)}</p>` +
+        `the house style sent with every run, its article defaults, the AI account and market data it uses, and the outside tools it may call.${esc(who)}</p>` +
         band("Skills", d.skills.length.toLocaleString()) + '<div id="wd-skalert"></div>' +
         (d.skills.length ? `<ul class="rows wd-list" id="wd-skills">${d.skills.map(k => skillRow(k, d.can_edit)).join("")}</ul>`
           : '<p class="empty wd-empty">No skills. Add one to give writers a playbook they can pick in the AI tab.</p>') +
@@ -473,6 +474,10 @@
         `<textarea id="wd-style" class="wd-style" rows="14" maxlength="8000" aria-label="House style"${d.can_edit ? "" : " readonly"}>${esc(d.house_style)}</textarea>` +
         (d.can_edit ? '<div class="wd-btnrow"><button class="btn primary" type="button" id="wd-stsave">Save House Style</button>' +
           '<button class="btn" type="button" id="wd-streset">Reset to Default</button><span class="hint" id="wd-stmsg" role="status"></span></div>' : "") +
+        '<div id="wd-profile"></div>' +
+        band("Data Sources") +
+        '<p class="wd-para">Market-data accounts this publication pays for. The assistant uses them on its articles; for a service the publication has not connected, a writer\'s own key (My Account) is used. Whether you may publish a vendor\'s prices is up to your agreement with them.</p>' +
+        '<div id="wd-ds">' + loading("the data sources") + "</div>" +
         band("Connectors", d.connectors.length.toLocaleString()) + '<div id="wd-cnalert"></div>' +
         '<p class="wd-para">Outside tool servers (MCP) the assistant may call: a research database, a notes service, an internal tool. ' +
         "They use this publication's keys and serve its articles only. Each call is listed in the AI tab's steps.</p>" +
@@ -480,6 +485,10 @@
           : '<p class="empty wd-empty">No connectors.</p>') +
         (d.can_manage ? '<div class="wd-btnrow"><button class="btn" type="button" id="wd-cnadd">Add Connector</button></div><div class="wd-edit wd-new" id="wd-cnnew" hidden></div>' : "");
       wireAssistant(pub, body, d, base);
+      profileSections(pub);
+      DS = { base: "/write/publications/" + pub.id + "/data-sources", whose: "the publication's account" };
+      ds.connecting = ""; ds.tried = {};
+      loadSources();
       if (reopen) {
         const c = d.connectors.find(x => x.id === reopen);
         const box = $("#wd-conn-" + reopen);
@@ -733,6 +742,155 @@
         .then(() => refreshMe()).then(() => { toast("Saved. The public pages show it now."); render(); })
         .catch(err => toast(err.message));
     });
+    body.insertAdjacentHTML("beforeend", band("Look") + '<div id="wd-look">' + loading("the look") + "</div>");
+    lookSection(pub);
+  }
+
+  /* ---- the publication's own profile (app/pub_profile.py) ---- */
+
+  function profileSections(pub) {
+    const box = $("#wd-profile");
+    if (!box) return;
+    box.innerHTML = loading("the publication's AI and defaults");
+    api("/write/publications/" + pub.id + "/profile").then(d => {
+      if (!$("#wd-profile")) return;
+      const owner = d.role === "owner", editor = owner || d.role === "editor";
+      const ai = d.ai;
+      const aiLine = ai
+        ? `<p class="wd-para">This publication provides the AI for its articles: <b>${esc(ai.label)}</b>, model <span class="mono">${esc(ai.model || ai.default_model)}</span>, key ending ${esc(ai.key_last4)}. Writers here do not need their own.</p>`
+        : '<p class="wd-para">Each writer uses their own AI account, connected in the editor\'s AI tab. Provide one here and every run on this publication\'s articles uses it instead, billed to the publication.</p>';
+      const aiForm = `<div class="wd-edit" id="wd-aiform" hidden><dl class="kv wd-kv">
+          <dt><label for="wd-aiprov">Provider</label></dt><dd><select id="wd-aiprov">${d.ai_providers.map(p => `<option value="${p.key}"${ai && ai.provider === p.key ? " selected" : ""}>${esc(p.label)}</option>`).join("")}</select><span class="hint">An API key only: a Claude or ChatGPT plan belongs to one person.</span></dd>
+          <dt><label for="wd-aimodel">Model</label></dt><dd><input id="wd-aimodel" maxlength="80" autocomplete="off" value="${esc(ai ? ai.model : "")}" placeholder="Leave empty for the default"></dd>
+          <dt><label for="wd-aikey">Key</label></dt><dd><input id="wd-aikey" type="password" autocomplete="off" placeholder="${ai ? "Leave empty to keep the key ending " + esc(ai.key_last4) : "Paste the publication's API key"}"></dd>
+          <dt></dt><dd><button class="btn primary" type="button" id="wd-aisave">Save AI Account</button><button class="btn" type="button" id="wd-aicancel">Cancel</button><span class="hint" id="wd-aimsg" role="status"></span></dd></dl></div>`;
+      const df = d.defaults;
+      box.innerHTML = band("AI Account") + aiLine +
+        (owner ? `<div class="wd-btnrow" id="wd-aibtns"><button class="btn" type="button" id="wd-aiopen">${ai ? "Change" : "Provide One"}</button>${ai ? '<button class="btn" type="button" id="wd-aioff">Stop Providing</button>' : ""}<span class="hint" id="wd-aioffmsg" role="status"></span></div>` + aiForm : "") +
+        band("Article Defaults") +
+        '<p class="wd-para">Set for everyone writing here. A length set here replaces each writer\'s own choice on this publication\'s articles.</p>' +
+        `<dl class="kv wd-kv">
+          <dt><label for="wd-dflen">Length</label></dt><dd><select id="wd-dflen"${editor ? "" : " disabled"}><option value="">Each writer's choice</option>${d.lengths.map(x => `<option value="${x.key}"${df.length === x.key ? " selected" : ""}>${esc(x.label)} (${esc(x.hint)})</option>`).join("")}</select></dd>
+          <dt><label for="wd-dfskill">Skill the AI tab opens on</label></dt><dd><select id="wd-dfskill"${editor ? "" : " disabled"}><option value="">None</option>${d.skills.map(k => `<option value="${k.id}"${df.default_skill === k.id ? " selected" : ""}>${esc(k.name)}</option>`).join("")}</select></dd>
+          <dt><label for="wd-dftpl">Starting text</label></dt><dd><textarea id="wd-dftpl" class="wd-style" rows="8" maxlength="6000"${editor ? "" : " readonly"} placeholder="Empty: a new article starts blank. Markdown, such as ## Summary on its own line for a heading.">${esc(df.template)}</textarea><span class="hint">Every new article in this publication starts with this text.</span></dd>
+          ${editor ? '<dt></dt><dd><button class="btn primary" type="button" id="wd-dfsave">Save Defaults</button><span class="hint" id="wd-dfmsg" role="status"></span></dd>' : ""}
+        </dl>`;
+      if (owner) {
+        $("#wd-aiopen").addEventListener("click", () => { $("#wd-aiform").hidden = false; $("#wd-aibtns").hidden = true; const k = $("#wd-aikey"); if (k) k.focus(); });
+        $("#wd-aicancel").addEventListener("click", () => { $("#wd-aiform").hidden = true; $("#wd-aibtns").hidden = false; });
+        $("#wd-aisave").addEventListener("click", e => {
+          const msg = $("#wd-aimsg"); msg.classList.remove("err"); msg.textContent = "";
+          busy(e.target, "Checking the key…", () => send("PUT", "/write/publications/" + pub.id + "/profile/ai",
+            { provider: $("#wd-aiprov").value, model: $("#wd-aimodel").value, key: $("#wd-aikey").value }))
+            .then(() => { toast("The publication's AI account is saved."); profileSections(pub); })
+            .catch(err => { msg.classList.add("err"); msg.textContent = err.message; });
+        });
+        const off = $("#wd-aioff");
+        if (off) off.addEventListener("click", () => {
+          const row = $("#wd-aibtns");
+          row.innerHTML = '<span class="muted small">Stop providing the AI? Writers then need their own account to run the assistant here.</span><button class="btn danger" type="button" id="wd-aioffok">Stop Providing</button><button class="btn" type="button" id="wd-aioffno">Cancel</button>';
+          $("#wd-aioffno").addEventListener("click", () => profileSections(pub));
+          $("#wd-aioffok").addEventListener("click", e => busy(e.target, "Stopping…", () => api("/write/publications/" + pub.id + "/profile/ai", { method: "DELETE" }))
+            .then(() => { toast("Writers now use their own AI account here."); profileSections(pub); }).catch(err => toast(err.message)));
+        });
+      }
+      const save = $("#wd-dfsave");
+      if (save) save.addEventListener("click", e => {
+        const msg = $("#wd-dfmsg"); msg.classList.remove("err"); msg.textContent = "";
+        busy(e.target, "Saving…", () => send("PUT", "/write/publications/" + pub.id + "/profile/defaults",
+          { length: $("#wd-dflen").value, template: $("#wd-dftpl").value, default_skill: $("#wd-dfskill").value ? Number($("#wd-dfskill").value) : null }))
+          .then(() => { msg.textContent = "Saved."; toast("Defaults saved. New articles and runs use them now."); })
+          .catch(err => { msg.classList.add("err"); msg.textContent = err.message; });
+      });
+    }).catch(err => { const b = $("#wd-profile"); if (b) b.innerHTML = failed("the publication's AI and defaults", err); });
+  }
+
+  function lookSection(pub) {
+    const box = $("#wd-look");
+    api("/write/publications/" + pub.id + "/profile").then(d => {
+      const look = d.look;
+      let logo = look.logo;
+      const draw = () => {
+        box.innerHTML = '<p class="wd-para">How this publication\'s pages and feed look. The accent colours its header and section bands, in light and dark.</p>' +
+          `<dl class="kv wd-kv">
+            <dt>Logo</dt><dd class="wd-logo">${logo ? `<img src="/research/media/${esc(logo)}" alt="Logo" width="56" height="56">` : '<span class="muted">No logo</span>'}
+              <button class="btn" type="button" id="wd-logoup">${logo ? "Replace Logo" : "Upload Logo"}</button>${logo ? '<button class="btn" type="button" id="wd-logooff">Remove</button>' : ""}
+              <input type="file" id="wd-logofile" accept="image/png,image/jpeg,image/webp" hidden><span class="hint">PNG, JPEG or WebP; square works best.</span></dd>
+            <dt>Accent</dt><dd><div class="wd-accents" role="radiogroup" aria-label="Accent colour">${d.accents.map(a => `<label class="wd-accent"><input type="radio" name="wd-acc" value="${a.key}"${look.accent === a.key ? " checked" : ""}><span class="wd-swatch" style="background: var(--obs-pub-${a.key})"></span>${esc(a.label)}</label>`).join("")}</div></dd>
+            <dt></dt><dd><button class="btn primary" type="button" id="wd-looksave">Save Look</button><a href="${esc(pub.base)}" target="_blank" rel="noopener">See the public page</a><span class="hint" id="wd-lookmsg" role="status"></span></dd>
+          </dl>`;
+        $("#wd-logoup").addEventListener("click", () => $("#wd-logofile").click());
+        const offBtn = $("#wd-logooff"); if (offBtn) offBtn.addEventListener("click", () => { logo = ""; draw(); toast("Logo removed. Save Look to keep the change."); });
+        $("#wd-logofile").addEventListener("change", e => {
+          const f = e.target.files[0];
+          if (!f) return;
+          busy($("#wd-logoup"), "Uploading…", () => fetch("/admin/api/research/media", { method: "POST", credentials: "same-origin",
+            headers: { "X-File-Name": f.name, "Content-Type": f.type || "application/octet-stream" }, body: f })
+            .then(r => r.json().then(j => { if (!r.ok) throw new Error(j.detail || "The upload failed. Try again."); return j; })))
+            .then(j => { logo = j.media + "." + j.ext; draw(); toast("Logo uploaded. Save Look to put it on the pages."); })
+            .catch(err => toast(err.message));
+        });
+        $("#wd-looksave").addEventListener("click", e => {
+          const acc = (box.querySelector('input[name="wd-acc"]:checked') || {}).value || "navy";
+          const msg = $("#wd-lookmsg"); msg.classList.remove("err"); msg.textContent = "";
+          busy(e.target, "Saving…", () => send("PUT", "/write/publications/" + pub.id + "/profile/look", { accent: acc, logo: logo }))
+            .then(() => { msg.textContent = "Saved."; toast("Saved. The public pages show it now."); })
+            .catch(err => { msg.classList.add("err"); msg.textContent = err.message; });
+        });
+      };
+      draw();
+    }).catch(err => { box.innerHTML = failed("the look", err); });
+  }
+
+  /* ---- coverage (app/pub_coverage.py) ---- */
+
+  function coverageTab(pub, body) {
+    body.innerHTML = loading("the coverage list");
+    const base = "/write/publications/" + pub.id + "/coverage";
+    const day = iso => iso ? fmtDay(iso) : "—";
+    const draw = d => {
+      const rows = d.companies;
+      body.innerHTML =
+        '<p class="wd-para">The companies this publication follows. The assistant is told this list on every article here. Next and latest results come from the JPX earnings schedule and TDnet.</p>' +
+        band("Coverage", rows.length.toLocaleString()) +
+        (d.can_edit ? `<div class="wd-cvadd"><input id="wd-cvq" autocomplete="off" spellcheck="false" placeholder="Name or code, e.g. Toyota, 7203" aria-label="Find a company to add"><ul class="rows wd-cvhits" id="wd-cvhits" hidden></ul></div>` : "") +
+        (rows.length ? `<div class="calwrap"><table class="t wd-cvt"><thead><tr><th>Code</th><th>Company</th><th>Next Results</th><th>Latest Results</th>${d.can_edit ? "<th></th>" : ""}</tr></thead><tbody>${rows.map(r => `<tr>
+            <td class="mono">${esc(r.code)}</td><td><a href="/company.html?code=${encodeURIComponent(r.code)}" target="_blank" rel="noopener">${esc(r.name)}</a></td>
+            <td class="nowrap" data-sort="${esc(r.next_results ? r.next_results.date : "")}">${day(r.next_results && r.next_results.date)}</td>
+            <td class="nowrap" data-sort="${esc(r.latest_results ? r.latest_results.date : "")}"${r.latest_results ? ` title="${esc(r.latest_results.title)}"` : ""}>${day(r.latest_results && r.latest_results.date)}</td>
+            ${d.can_edit ? `<td class="right"><button class="linkbtn quiet" type="button" data-cvdel="${esc(r.code)}">Remove</button></td>` : ""}</tr>`).join("")}</tbody></table></div>`
+          : `<p class="empty wd-empty">${d.can_edit ? "No companies yet. Find one above by name or code." : "No companies yet. An editor adds them."}</p>`) +
+        `<p class="srcline">Next results: ${esc(d.sources.next_results)}, which JPX publishes a few weeks ahead. Latest results: ${esc(d.sources.latest_results)}. — means none on file yet.</p>`;
+      const q = $("#wd-cvq"), hits = $("#wd-cvhits");
+      if (q) {
+        let t = null, seq = 0;
+        const add = code => busy(q, "", () => send("POST", base, { code: code }))
+          .then(res => { toast(code + " added"); draw(res); const nq = $("#wd-cvq"); if (nq) nq.focus(); })
+          .catch(err => toast(err.message));
+        q.addEventListener("input", () => {
+          clearTimeout(t);
+          const v = q.value.trim();
+          if (!v) { hits.hidden = true; hits.innerHTML = ""; return; }
+          t = setTimeout(() => {
+            const mine = ++seq;
+            api("/write/companies?q=" + encodeURIComponent(v)).then(res => {
+              if (mine !== seq) return;
+              const have = new Set(rows.map(r => r.code));
+              hits.innerHTML = res.companies.length ? res.companies.map(c => `<li><div><b>${esc(c.name_en || c.name_ja || c.code)}</b><small>${esc(c.code)}${c.name_en && c.name_ja ? " · " + esc(c.name_ja) : ""}</small></div>` +
+                (have.has(c.code) ? '<span class="muted small">Covered</span>' : `<button class="btn sm" type="button" data-cvadd="${esc(c.code)}">Add</button>`) + "</li>").join("")
+                : `<li><div><small>No listed company matches “${esc(v)}”. Try the four-character code.</small></div></li>`;
+              hits.hidden = false;
+              $$("[data-cvadd]", hits).forEach(b => b.addEventListener("click", () => add(b.dataset.cvadd)));
+            }).catch(err => { hits.innerHTML = `<li><div><small>${esc(err.message)}</small></div></li>`; hits.hidden = false; });
+          }, 200);
+        });
+        q.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); const b = hits.querySelector("[data-cvadd]"); if (b) b.click(); } });
+      }
+      $$("[data-cvdel]").forEach(b => b.addEventListener("click", () =>
+        busy(b, "Removing…", () => api(base + "/" + encodeURIComponent(b.dataset.cvdel), { method: "DELETE" }))
+          .then(res => { toast(b.dataset.cvdel + " removed"); draw(res); }).catch(err => toast(err.message))));
+    };
+    api(base).then(draw).catch(err => { body.innerHTML = failed("the coverage list", err); });
   }
 
   /* ------------------------------------------------------------ account */
@@ -762,8 +920,14 @@
       '<p class="wd-para">Connect your own Claude Code or Codex. It can read your articles, start and edit drafts and insert Plover charts, as you, in the publications you write for. It cannot publish.</p>' +
       '<div id="wd-keys">' + loading("your keys") + "</div>" +
       `<div class="wd-keynew"><select id="wd-kind" aria-label="Client"><option>Claude Code</option><option>Codex</option><option>Other MCP client</option></select>
-        <button class="btn primary" id="wd-keymake" type="button">Create Key</button></div><div id="wd-keyout"></div>`));
+        <button class="btn primary" id="wd-keymake" type="button">Create Key</button></div><div id="wd-keyout"></div>` +
+      band("Data Sources") +
+      '<p class="wd-para">Connect your own account with a market-data service. The writing assistant can then read its daily prices for you in every publication you write for, and so can your Investment Assistant desk. Read-only. Nobody else can use your key. Whether you may publish a vendor\'s prices is up to your agreement with them; the assistant names the vendor beside any price it uses.</p>' +
+      '<div id="wd-ds">' + loading("your data sources") + "</div>"));
     $("#wd-signout").addEventListener("click", signOut);
+    DS = { base: "/write/data-sources", whose: "your own account" };
+    ds.connecting = ""; ds.tried = {};
+    loadSources();
     const loadKeys = () => api("/write/keys").then(res => {
       $("#wd-keys").innerHTML = res.keys.length
         ? `<ul class="rows wd-list">${res.keys.map(k => `<li><div><b>${esc(k.label)}</b><small>Created ${when(k.created_at)} · ${k.last_used_at ? "last used " + when(k.last_used_at) : "not used yet"}</small></div>
@@ -782,6 +946,96 @@
         loadKeys();
       }).catch(err => toast(err.message));
     });
+  }
+
+  /* ------------------------------------------------------------ data sources */
+  // The writer's own market-data accounts (app/assistant/market_data.py): one
+  // key per vendor, checked with the vendor before it is kept, personal.
+
+  const ds = { connecting: "", tried: {} };
+  // whose keys the section shows: the writer's own (My Account) or a publication's
+  let DS = { base: "/write/data-sources", whose: "your own account" };
+  const MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const fmtDay = iso => { const x = new Date(iso + "T00:00:00Z"); return x.getUTCDate() + " " + MON3[x.getUTCMonth()] + " " + x.getUTCFullYear(); };
+  const PRICE_KEYS = ["open", "high", "low", "close", "adj_close"];
+
+  function priceTable(out) {
+    const rows = out.bars.slice(-10).reverse();
+    if (!rows.length) return `<p class="muted small">${esc(out.notes[0] || "No prices in that range.")}</p>`;
+    let dp = 0;
+    rows.forEach(b => PRICE_KEYS.forEach(k => { if (b[k] != null) { const t = String(b[k]).split(".")[1]; dp = Math.max(dp, t ? Math.min(t.length, 4) : 0); } }));
+    return `<div class="calwrap"><table class="t pricet" data-no-enhance><thead><tr><th>Date</th><th class="right">Open</th><th class="right">High</th><th class="right">Low</th><th class="right">Close</th><th class="right">Adj. Close</th><th class="right">Volume</th></tr></thead><tbody>` +
+      rows.map(b => `<tr><td class="nowrap">${fmtDay(b.date)}</td>${PRICE_KEYS.map(k => `<td class="right">${fmtNum(b[k], dp)}</td>`).join("")}<td class="right">${fmtNum(b.volume, 0)}</td></tr>`).join("") +
+      `</tbody></table></div><p class="srcline">${esc(out.symbol)} · latest ${rows.length} of ${out.bars.length.toLocaleString("en")} trading days from ${fmtDay(out.from)} to ${fmtDay(out.to)}. Source: ${esc(out.source)}, through ${esc(DS.whose)}. Your agreement with the vendor governs its use; not Plover data.${out.notes.length ? " " + out.notes.map(esc).join(" ") : ""}</p>`;
+  }
+
+  function loadSources() {
+    const box = $("#wd-ds");
+    if (!box) return Promise.resolve();
+    return api(DS.base).then(d => {
+      if (!$("#wd-ds")) return;
+      const by = {}; d.providers.forEach(p => { by[p.slug] = p; });
+      const manage = d.can_manage !== false;
+      const have = new Set(d.sources.map(x => x.provider));
+      const okState = '<span class="ok">Connected</span>', badState = '<span class="bad">Last Try Failed</span>';
+      const form = p => `<div class="dsform"><dl class="kv">
+          <dt><label for="wd-dskey">${esc(p.name)} key</label></dt><dd><input id="wd-dskey" type="password" autocomplete="off" placeholder="Paste the key from your ${esc(p.name)} account"><span class="hint">${esc(p.key_help)} <a href="${esc(p.signup_url)}" target="_blank" rel="noopener">Open ${esc(p.name)}</a></span></dd>
+          <dt></dt><dd><button class="btn primary" id="wd-dssave" type="button" data-provider="${p.slug}">${have.has(p.slug) ? "Replace Key" : "Connect"}</button><button class="btn" id="wd-dscancel" type="button">Cancel</button><span class="hint" id="wd-dsmsg" role="status"></span></dd></dl></div>`;
+      const card = x => {
+        const p = by[x.provider] || { name: x.provider, covers: "", example: "", symbol_hint: "" };
+        const t = ds.tried[x.id];
+        const shown = t && t.out ? priceTable(t.out) : t && t.error ? `<p class="err">${esc(t.error)}</p>` : x.status === "error" && x.detail ? `<p class="err">${esc(x.detail)}</p>` : "";
+        return `<article class="srv"><header><div><b>${esc(p.name)}</b><small>${esc(p.covers)}</small></div><div class="srvstate"><span id="wd-dsst-${x.id}">${x.status === "error" ? badState : okState}</span><small>Key ending ${esc(x.last4)}${x.last_used_at ? " · last used " + esc(when(x.last_used_at)) : ""}</small></div></header>
+          ${manage ? `<div class="srvtry"><label for="wd-try-${x.id}">Symbol</label><input id="wd-try-${x.id}" data-trysym="${x.id}" value="${esc((t && t.symbol) || p.example)}" autocomplete="off" spellcheck="false" placeholder="${esc(p.example)}"><button class="btn" type="button" data-try="${x.id}">Show Prices</button><span class="hint">${esc(p.symbol_hint ? "Use " + p.symbol_hint : "")}</span></div>
+          <div class="srvout" id="wd-tryout-${x.id}">${shown}</div>` : ""}
+          ${manage ? `<footer><label class="switch ${x.enabled ? "on" : ""}" data-dsenable="${x.id}"><i></i>${x.enabled ? "The assistant may use it" : "Off"}</label><span class="grow"></span>
+            <button class="linkbtn" type="button" data-dsrekey="${x.provider}">Replace Key</button><button class="linkbtn quiet" type="button" data-dsdel="${x.id}">Remove</button></footer>` : ""}</article>`;
+      };
+      const rekey = ds.connecting && have.has(ds.connecting) ? by[ds.connecting] : null;
+      $("#wd-ds").innerHTML = (d.keychain ? "" : '<div class="notice">This server cannot store keys yet, so no data source can be connected.</div>') +
+        (rekey ? `<section class="panel addsrv"><header>Replace the ${esc(rekey.name)} key</header><div class="body">${form(rekey)}</div></section>` : "") +
+        d.sources.map(card).join("") +
+        `<ul class="rows dslist">${d.providers.map(p => `<li class="dsrow"><div><b>${esc(p.name)}</b><small>${esc(p.covers)}. ${p.notes.map(esc).join(" ")}</small></div>` +
+          (have.has(p.slug) ? '<span class="muted small">Connected</span>' : !manage ? '<span class="muted small">Not connected</span>' : ds.connecting === p.slug ? "" : `<button class="btn primary sm" type="button" data-dsconnect="${p.slug}">Connect</button>`) +
+          (ds.connecting === p.slug && !have.has(p.slug) ? form(p) : "") + "</li>").join("")}</ul>`;
+      const setConnecting = v => { ds.connecting = v; loadSources().then(() => { const k = $("#wd-dskey"); if (k) k.focus(); }); };
+      $$("[data-dsconnect]").forEach(b => b.addEventListener("click", () => setConnecting(b.dataset.dsconnect)));
+      $$("[data-dsrekey]").forEach(b => b.addEventListener("click", () => setConnecting(b.dataset.dsrekey)));
+      const cancel = $("#wd-dscancel"); if (cancel) cancel.addEventListener("click", () => setConnecting(""));
+      const save = $("#wd-dssave");
+      if (save) {
+        const submit = () => {
+          const msg = $("#wd-dsmsg"), name = (by[save.dataset.provider] || {}).name || "the service";
+          msg.classList.remove("err"); msg.textContent = "";
+          busy(save, "Checking with " + name + "…", () => send("POST", DS.base, { provider: save.dataset.provider, key: $("#wd-dskey").value }))
+            .then(x => { ds.connecting = ""; delete ds.tried[x.id]; toast(name + " connected"); loadSources(); })
+            .catch(err => { msg.classList.add("err"); msg.textContent = err.message; });
+        };
+        save.addEventListener("click", submit);
+        $("#wd-dskey").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+      }
+      $$("[data-try]").forEach(b => b.addEventListener("click", () => {
+        const id = b.dataset.try, sym = $(`[data-trysym="${id}"]`).value.trim(), out = $("#wd-tryout-" + id);
+        out.innerHTML = `<p class="muted wd-loading">Asking the service for ${esc(sym || "prices")}…</p>`;
+        busy(b, "Loading…", () => send("POST", DS.base + "/" + id + "/try", { symbol: sym }))
+          .then(res => { ds.tried[id] = { symbol: sym, out: res }; out.innerHTML = priceTable(res); $("#wd-dsst-" + id).innerHTML = okState; })
+          .catch(err => { ds.tried[id] = { symbol: sym, error: err.message }; out.innerHTML = `<p class="err" role="alert">${esc(err.message)}</p>`; $("#wd-dsst-" + id).innerHTML = badState; });
+      }));
+      $$("[data-trysym]").forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); const b = $(`[data-try="${i.dataset.trysym}"]`); if (b) b.click(); } }));
+      $$("[data-dsenable]").forEach(l => l.addEventListener("click", () => {
+        const on = !l.classList.contains("on");
+        send("PATCH", DS.base + "/" + l.dataset.dsenable, { enabled: on })
+          .then(() => { toast(on ? "The assistant may use it" : "Switched off for the assistant"); loadSources(); })
+          .catch(err => toast(err.message));
+      }));
+      $$("[data-dsdel]").forEach(b => b.addEventListener("click", () => {
+        const foot = b.parentElement;
+        foot.innerHTML = '<span class="muted small">Remove this source? Its key is deleted and the assistant loses its prices.</span><span class="grow"></span><button class="btn sm danger" type="button" id="wd-ddok">Remove</button><button class="btn sm" type="button" id="wd-ddno">Cancel</button>';
+        $("#wd-ddno").addEventListener("click", loadSources);
+        $("#wd-ddok").addEventListener("click", e => busy(e.target, "Removing…", () => api(DS.base + "/" + b.dataset.dsdel, { method: "DELETE" }))
+          .then(() => { delete ds.tried[b.dataset.dsdel]; toast("Data source removed"); loadSources(); }).catch(err => toast(err.message)));
+      }));
+    }).catch(err => { const b = $("#wd-ds"); if (b) b.innerHTML = failed("your data sources", err); });
   }
 
   /* ------------------------------------------------------------ open a publication */

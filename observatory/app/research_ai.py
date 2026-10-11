@@ -56,9 +56,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import (connectors, research, research_clips, research_doc as rd, research_mcp, research_web,
-               skills, staff, staff_google, tools_v2, writers)
-from .assistant import codex as codex_mod, gateway, keychain
+from . import (connectors, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
+               research_web, skills, staff, staff_google, tools_v2, writers)
+from .assistant import codex as codex_mod, gateway, keychain, market_data, store as ia_store
 
 PROVIDERS = [
     ("claude_code", "Claude plan (Claude Code)"),
@@ -118,6 +118,10 @@ def settings_view(person, publication_id=None):
         "reach": _reach(person, pid),
         "publication_id": pid,
         "can_edit_setup": writers.at_least(person, pid, "editor"),
+        # what the publication sets for everyone writing in it (pub_profile)
+        "publication_ai": pub_profile.ai(pid) if pid is not None else None,
+        "publication_length": (pub_profile.defaults(pid)["length"] or None) if pid is not None else None,
+        "default_skill": pub_profile.defaults(pid)["default_skill"] if pid is not None else None,
     }
 
 
@@ -126,6 +130,7 @@ def _reach(person, publication_id):
     out = ["Plover data", "Web pages"]
     if staff_google.usable(person["id"]):
         out.append("Google Drive")
+    out += [market_data.PROVIDERS[p]["name"] for p in market_data.merged(_data_owners(person, publication_id))]
     out += [c["label"] for c in connectors.list_connectors(enabled_only=True, publication_id=publication_id)
             if any(t["on"] for t in c["tools"])]
     return out
@@ -541,10 +546,42 @@ def tool_list(ctx=None):
     if person and staff_google.usable(person["id"]):
         out += DRIVE_TOOLS
     pid = _publication(ctx)
+    if person:
+        out += market_data.tool_schemas(_data_owners(person, pid))
     if pid is not None:
         out += [dict((k, t[k]) for k in ("name", "description", "parameters"))
                 for t in connectors.run_tools(pid)]
     return out
+
+
+def _account_id(person):
+    """The sign-in account the writer's own data sources are kept under
+    (by email; see market_data.account_for). None when there is none yet."""
+    return market_data.account_for(person.get("email")) if person and person.get("email") else None
+
+
+def _data_owners(person, publication_id):
+    """Whose market-data keys a run may use, first winning a vendor both
+    have: the publication's, then the writer's own."""
+    return [ia_store.pub_owner(publication_id) if publication_id is not None else None,
+            _account_id(person)]
+
+
+def run_settings(person, publication_id):
+    """The writer's AI settings as a run in this publication uses them: the
+    publication's own AI key and length win where its owner set them."""
+    s = dict(staff.ai_settings(person["id"]))
+    s["ai_from"] = "writer"
+    if publication_id is not None:
+        pub_ai = pub_profile.ai_for_run(publication_id)
+        if pub_ai:
+            s.update(provider=pub_ai["provider"], model=pub_ai["model"], key_ct=pub_ai["key_ct"],
+                     ai_from="publication")
+        length = pub_profile.defaults(publication_id)["length"]
+        if length:
+            s["length"] = length
+            s["length_from"] = "publication"
+    return s
 
 
 def _publication(ctx):
@@ -642,6 +679,10 @@ def call_tool(ctx, name, args):
                               ensure_ascii=False)[:TOOL_TEXT_MAX * 2], False
         except staff_google.GoogleError as exc:
             return json.dumps({"error": str(exc)}), True
+    if name == market_data.TOOL_NAME:
+        keys = (ctx.get("creds") or {}).get("data_source_keys")
+        text, err = market_data.run_tool(_data_owners(person, _publication(ctx)), args, keys=keys)
+        return text[:TOOL_TEXT_MAX], err
     pid = _publication(ctx)
     for t in (connectors.run_tools(pid) if pid is not None else []):
         if t["name"] == name:
@@ -683,6 +724,7 @@ def _system(article, person, skill=None, length=None):
     pid = article["publication_id"]
     menu = skills.list_skills(enabled_only=True, publication_id=pid)
     extra = "House style for everything you write in the draft:\n" + skills.house_style(pid) + "\n\n"
+    extra += pub_coverage.prompt_line(pid)
     ln = _length({"length": length})
     extra += ("Length: the writer chose %s — %s. This overrides any length a skill gives, except "
               "a fixed format such as Data Flash or Headlines. Shorter is better: no preamble, "
@@ -696,9 +738,17 @@ def _system(article, person, skill=None, length=None):
     lines = [c["label"] for c in connectors.list_connectors(enabled_only=True, publication_id=pid) if c["tools"]]
     if staff_google.usable(person["id"]):
         lines.insert(0, "the writer's Google Drive (drive_search, drive_read)")
+    own = [market_data.PROVIDERS[p]["name"] for p in market_data.merged(_data_owners(person, pid))]
+    if own:
+        lines.insert(0, "market data from %s (%s)" % (", ".join(own), market_data.TOOL_NAME))
     if lines:
         extra += ("Also connected: %s. Use them when the instruction needs them; say in your "
                   "reply which you used.\n\n" % ", ".join(lines))
+    if own:
+        extra += ("Prices from %s come from the publication's or the writer's own account, under "
+                  "their licence with the vendor, not from Plover. Wherever you put one in the draft, name the vendor "
+                  "as its source beside it, and never paste a table of them into the draft; for a "
+                  "chart, use Plover's own data.\n\n" % market_data.TOOL_NAME)
     head = ("You are the writing assistant inside the PloverResearch editor, working for %s on "
             "one draft: article %d, \"%s\". You cannot publish; the writer does.\n\n"
             % (person["name"], article["id"], d.get("title") or "Untitled"))
@@ -831,9 +881,9 @@ def start(person, article_id, instruction, skill_id=None, image=None):
         raise AIError("Keep the instruction under 8,000 characters.")
     if image:
         instruction += "\n\n" + PICTURE_RULES
-    s = staff.ai_settings(person["id"])
+    s = run_settings(person, article["publication_id"])
     provider = s["provider"]
-    if not provider or not _ready(provider, s):
+    if s["ai_from"] != "publication" and (not provider or not _ready(provider, s)):
         raise AIError("Choose and connect a provider first.")
     writes = not skill or skill["writes"]
     with _jobs_lock:
@@ -943,7 +993,9 @@ def _run_creds(person, publication_id):
     publication's connectors, without the keychain's master secret: an
     hour-long Google access token and each of those connectors' keys, in a
     0600 file deleted with the run. No other publication's key is in it."""
-    out = {"google_token": None, "connector_keys": {}}
+    out = {"google_token": None, "connector_keys": {},
+           # the writer's own market-data keys, opened here for the same reason
+           "data_source_keys": market_data.keys_for_run(_data_owners(person, publication_id))}
     if staff_google.usable(person["id"]):
         try:
             out["google_token"] = staff_google._token(person["id"])

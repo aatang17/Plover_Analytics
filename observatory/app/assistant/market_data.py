@@ -1,16 +1,24 @@
-"""Data sources: price data from a desk owner's own vendor accounts.
+"""Data sources: price data from a person's own vendor accounts.
 
 A person pastes the API key of a market-data service they already pay for (or
-use free), and the specialists on their desk can read daily prices through it.
+use free), and the AI working for them can read daily prices through it: the
+specialists on their Investment Assistant desk, and the writing assistant in
+the Writer Desk. The connection belongs to the person, not to a team or a
+publication: it is keyed by their sign-in account (one per email address), so
+it follows them wherever they sign in, and nobody else's run can use it.
 Read-only by construction: every provider here is asked for price history and
 nothing else. There is no order, account or position call anywhere in this
 module, and none is to be added (docs/plans/PLAN-PLATFORM-VISION.md §7).
 
-The data is the customer's, under the customer's licence with the vendor, so it
-stays on their desk: it is fetched per call, never written to the macro or
-equity databases, never cached across desks, and never shown on a public page.
-Every result names the vendor as its source; none of it carries the Official
-Statistic badge.
+The data is the person's, under their own licence with the vendor: it is
+fetched per call, never written to the macro or equity databases, never shared
+with another person, and never shown on a Plover data page. Every result names
+the vendor as its source; none of it carries the Official Statistic badge. A
+writer may quote it in their own article, as Substack writers quote prices:
+the writing assistant is told to name the vendor beside every such number and
+not to paste tables of it, and whether a vendor allows publishing is between
+the writer and the vendor (the Writer Desk says so where a source is
+connected).
 
 A provider is one entry in PROVIDERS: a name, what it covers, how to get a key,
 and two functions, `daily(key, symbol, start, end)` returning bars oldest
@@ -27,6 +35,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .. import accounts
 from . import keychain, store
 
 TIMEOUT_SECONDS = 20
@@ -266,15 +275,22 @@ def _dates(start, end):
     return s, e
 
 
-def fetch(account_id, source, symbol, start=None, end=None):
-    """Daily bars from one of this desk's sources, oldest first, with where
-    they came from. Raises SourceError with a readable message."""
-    p = PROVIDERS[source["provider"]]
+def _key(account_id, source):
     try:
-        key = keychain.open_(store.data_source_ct(account_id, source["id"]) or "")
+        return keychain.open_(store.data_source_ct(account_id, source["id"]) or "")
     except (ValueError, RuntimeError):
         raise SourceError("The key stored for %s could not be read. Replace it on the "
-                          "Data sources page." % p["name"])
+                          "Data sources page." % PROVIDERS[source["provider"]]["name"])
+
+
+def fetch(account_id, source, symbol, start=None, end=None, key=None):
+    """Daily bars from one of this person's sources, oldest first, with where
+    they came from. Raises SourceError with a readable message. `key` is the
+    opened key when the caller holds it already (a writing run's tool process
+    is handed its keys and cannot open the keychain itself)."""
+    p = PROVIDERS[source["provider"]]
+    if key is None:
+        key = _key(account_id, source)
     s, e = _dates(start, end)
     bars = p["daily"](key, symbol, s, e)
     bars.sort(key=lambda b: b["date"])
@@ -288,10 +304,72 @@ def fetch(account_id, source, symbol, start=None, end=None):
         notes.insert(0, "No prices for %s between %s and %s." % (symbol, s, e))
     return {"provider": source["provider"], "symbol": str(symbol).strip().upper(),
             "from": s, "to": e, "fields": list(BAR_FIELDS), "bars": bars,
-            "source": "%s, through this desk's own account" % p["vendor"],
-            "licence": ("Fetched with the desk owner's own key, under their agreement with "
-                        "the vendor. For use on this desk; not Plover data."),
+            "source": p["vendor"],
+            "licence": ("Fetched with the account holder's own key, under their agreement with "
+                        "the vendor; not Plover data."),
             "notes": notes}
+
+
+# ------------------------------------------------- the person's account
+
+def account_for(email, create=False):
+    """The sign-in account a person's sources are kept under, by email. A
+    writer who signed in with a staff password may have none yet; `create`
+    makes it (connecting a source), a read never does."""
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    db = accounts.conn()
+    row = db.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()
+    if row is None and create:
+        with accounts._lock:
+            db.execute("INSERT OR IGNORE INTO accounts (email, created_at) VALUES (?, ?)",
+                       (email, accounts._now()))
+            db.commit()
+        row = db.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()
+    return row["id"] if row else None
+
+
+def connect(account_id, provider, key):
+    """Check a key with the vendor and keep it, sealed. Raises SourceError
+    (worded for the person) for an unknown vendor, a missing key, a key the
+    vendor refuses, or a server that cannot seal keys; a refused key is never
+    stored."""
+    if provider not in PROVIDERS:
+        raise SourceError("Unknown data source.")
+    key = (key or "").strip()
+    if not key:
+        raise SourceError("Paste the key from your %s account." % PROVIDERS[provider]["name"])
+    if not keychain.enabled():
+        raise SourceError("This server cannot store keys yet: ASSISTANT_SECRET is not set.")
+    problem = check(provider, key)
+    if problem:
+        raise SourceError(problem)
+    return store.save_data_source(account_id, provider, keychain.seal(key), keychain.last4(key),
+                                  "ok", None)
+
+
+def try_source(account_id, source, symbol, start=None, end=None):
+    """Prices for one symbol, so a person sees the connection work. Records
+    the outcome on the source; raises SourceError."""
+    if not str(symbol or "").strip():
+        raise SourceError("Type a symbol, such as %s." % PROVIDERS[source["provider"]]["example"])
+    try:
+        out = fetch(account_id, source, symbol, start or None, end or None)
+    except SourceError as exc:
+        store.update_data_source(account_id, source["id"], checked_at=store.now(),
+                                 status="error", detail=str(exc))
+        raise
+    store.update_data_source(account_id, source["id"], checked_at=store.now(), status="ok", detail=None)
+    store.touch_data_source(account_id, source["id"])
+    return out
+
+
+def view(account_id):
+    """What the Data sources page shows: the vendors, and this person's own."""
+    return {"providers": catalogue(),
+            "sources": store.data_sources(account_id) if account_id else [],
+            "keychain": keychain.enabled()}
 
 
 # ------------------------------------------------------ for specialists
@@ -299,27 +377,64 @@ def fetch(account_id, source, symbol, start=None, end=None):
 TOOL_NAME = "vendor_prices"
 
 
-def connected(account_id):
-    return [s for s in store.data_sources(account_id) if s["enabled"]]
-
-
-def tool_schemas(account_id):
-    """The price tool, described for the sources this desk has switched on;
-    an empty list when it has none, so no specialist sees a dead tool."""
-    srcs = connected(account_id)
-    if not srcs:
+def connected(owner):
+    """The switched-on sources of one owner: a person (account id) or a
+    publication (store.pub_owner(id))."""
+    if not owner:
         return []
-    lines = ["%s (%s): %s; symbol is %s" % (s["provider"], PROVIDERS[s["provider"]]["name"],
-                                             PROVIDERS[s["provider"]]["covers"],
-                                             PROVIDERS[s["provider"]]["symbol_hint"])
-             for s in srcs if s["provider"] in PROVIDERS]
+    return [s for s in store.data_sources(owner) if s["enabled"]]
+
+
+def _many(owners):
+    """A single owner, or a list of them in order of precedence."""
+    return [o for o in (owners if isinstance(owners, list) else [owners]) if o]
+
+
+def merged(owners):
+    """{provider: (owner, source)} across owners, the first owner winning a
+    vendor both have: in a publication's run, the publication's key is used
+    for its vendors, and the writer's own fills in the rest."""
+    out = {}
+    for o in _many(owners):
+        for s in connected(o):
+            if s["provider"] in PROVIDERS and s["provider"] not in out:
+                out[s["provider"]] = (o, s)
+    return out
+
+
+def _whose(owner):
+    return "the publication's" if isinstance(owner, tuple) else "the person's own"
+
+
+def keys_for_run(owners):
+    """{provider: key} for a run's tool process, opened here so the process
+    never needs the keychain secret. Sources whose key cannot be opened are
+    left out; the tool then says the key could not be read."""
+    out = {}
+    for provider, (o, s) in merged(owners).items():
+        try:
+            out[provider] = _key(o, s)
+        except SourceError:
+            pass
+    return out
+
+
+def tool_schemas(owners):
+    """The price tool, described for the sources these owners have switched
+    on; an empty list when there are none, so no AI sees a dead tool."""
+    m = merged(owners)
+    if not m:
+        return []
+    lines = ["%s (%s, %s account): %s; symbol is %s" % (
+        p, PROVIDERS[p]["name"], _whose(o), PROVIDERS[p]["covers"], PROVIDERS[p]["symbol_hint"])
+        for p, (o, s) in m.items()]
     return [{"name": TOOL_NAME,
              "description": ("Daily prices (open, high, low, close, adjusted close, volume) from "
-                             "a market-data account the desk owner connected. Sources: "
+                             "a market-data account connected for this work. Sources: "
                              + "; ".join(lines) + ". Missing values are null, never zero. "
                              "Cite the vendor named in 'source'; these are not Plover data."),
              "parameters": {"type": "object", "properties": {
-                 "source": {"type": "string", "enum": [s["provider"] for s in srcs],
+                 "source": {"type": "string", "enum": list(m),
                             "description": "Which connected source to ask."},
                  "symbol": {"type": "string", "description": "The symbol in that source's form."},
                  "start": {"type": "string", "description": "First date, YYYY-MM-DD. Default: a year before end."},
@@ -327,17 +442,23 @@ def tool_schemas(account_id):
                  "required": ["source", "symbol"]}}]
 
 
-def run_tool(account_id, args):
-    """(text, is_error) for a specialist's call."""
+def run_tool(owners, args, keys=None):
+    """(text, is_error) for one call from the AI. `keys` ({provider: key}) is
+    set in a tool process that was handed them."""
     want = str(args.get("source") or "").strip().lower()
-    src = next((s for s in connected(account_id) if s["provider"] == want), None)
-    if src is None:
-        return json.dumps({"error": "'%s' is not a connected data source on this desk." % want}), True
+    hit = merged(owners).get(want)
+    if hit is None:
+        return json.dumps({"error": "'%s' is not a connected data source." % want}), True
+    owner, src = hit
+    if keys is not None and not keys.get(want):
+        return json.dumps({"error": "The key stored for %s could not be read. It can be replaced on "
+                                    "the Data Sources page." % PROVIDERS[want]["name"]}), True
     try:
-        out = fetch(account_id, src, args.get("symbol"), args.get("start"), args.get("end"))
+        out = fetch(owner, src, args.get("symbol"), args.get("start"), args.get("end"),
+                    key=None if keys is None else keys.get(want, ""))
     except SourceError as exc:
         return json.dumps({"error": str(exc)}), True
-    store.touch_data_source(account_id, src["id"])
+    store.touch_data_source(owner, src["id"])
     return json.dumps(compact(out), ensure_ascii=False), False
 
 

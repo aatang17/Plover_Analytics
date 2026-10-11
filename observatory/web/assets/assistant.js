@@ -1246,7 +1246,7 @@
       const rows = out.bars.slice(-10).reverse(), dp = dpOf(rows);
       if (!rows.length) return `<p class="muted small">${esc(out.notes[0] || 'No prices in that range.')}</p>`;
       return `<div class="calwrap"><table class="t pricet"><thead><tr><th>Date</th><th class="right">Open</th><th class="right">High</th><th class="right">Low</th><th class="right">Close</th><th class="right">Adj. close</th><th class="right">Volume</th></tr></thead><tbody>${rows.map(b => `<tr><td class="nowrap">${fmtDay(b.date)}</td>${['open', 'high', 'low', 'close', 'adj_close'].map(k => `<td class="right">${fmtNum(b[k], dp)}</td>`).join('')}<td class="right">${fmtNum(b.volume, 0)}</td></tr>`).join('')}</tbody></table></div>
-        <p class="srcline">${esc(out.symbol)} · latest ${rows.length} of ${n(out.bars.length)} trading days from ${fmtDay(out.from)} to ${fmtDay(out.to)}. Source: ${esc(out.source)}. ${esc(out.licence)}${out.notes.length ? ' ' + out.notes.map(esc).join(' ') : ''}</p>`;
+        <p class="srcline">${esc(out.symbol)} · latest ${rows.length} of ${n(out.bars.length)} trading days from ${fmtDay(out.from)} to ${fmtDay(out.to)}. Source: ${esc(out.source)}, through your own account. Your agreement with the vendor governs its use; not Plover data.${out.notes.length ? ' ' + out.notes.map(esc).join(' ') : ''}</p>`;
     };
     const okState = `<span class="ok">${ICONS.check}Connected</span>`, badState = '<span class="bad">Last try failed</span>';
     const card = s => {
@@ -1273,7 +1273,7 @@
       ${d.sources.length ? d.sources.map(card).join('') : '<div class="covempty"><b>No data sources connected.</b><span>Connect one below with a key from your account.</span></div>'}
       <h2 class="band">Available</h2>
       <ul class="rows dslist">${avail}</ul>
-      <p class="fine" style="margin-top:32px">Prices come from your account with each service, under your agreement with it, and stay on your desk. They are fetched when asked for, are not stored in Plover's databases, and are never shown to anyone else. Each result names the service as its source. A key is checked with the service before it is kept, then sealed with the server's secret and never shown again. Bloomberg, LSEG and Interactive Brokers need software on your own computer and are not available here yet.</p>
+      <p class="fine" style="margin-top:32px">These connections are yours: the same ones show under My Account in the Writer Desk, and nobody else can use them. Prices come from your account with each service, under your agreement with it. They are fetched when asked for and are not stored in Plover's databases. Each result names the service as its source. A key is checked with the service before it is kept, then sealed with the server's secret and never shown again. Bloomberg, LSEG and Interactive Brokers need software on your own computer and are not available here yet.</p>
     </div></div>`;
     const setConnecting = v => { dataUi.connecting = v; vData().then(() => { bindCommon(); const k = $('#ds-key'); if (k) k.focus(); }); };
     $$('[data-dsconnect]').forEach(b => b.onclick = () => setConnecting(b.dataset.dsconnect));

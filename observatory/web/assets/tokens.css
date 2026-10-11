@@ -39,6 +39,14 @@
   --obs-series-4: #a16207;
   --obs-series-5: #475569;
   --obs-series-6: #9d174d;
+  /* Publication accents (app/pub_profile.ACCENTS): a publication's own colour
+     for its header and section bands. Each is dark enough for white type. */
+  --obs-pub-navy: #1a4d8f;
+  --obs-pub-teal: #0f766e;
+  --obs-pub-forest: #166534;
+  --obs-pub-rust: #b4410c;
+  --obs-pub-plum: #9d174d;
+  --obs-pub-slate: #475569;
 
   /* diverging scale (cool = negative, warm = positive) */
   --obs-diverge-neg: #1a4d8f;
@@ -91,6 +99,12 @@
   --obs-series-4: #cfa348;
   --obs-series-5: #94a3b8;
   --obs-series-6: #d1648f;
+  --obs-pub-navy: #16406f;
+  --obs-pub-teal: #115e59;
+  --obs-pub-forest: #14532d;
+  --obs-pub-rust: #9a3412;
+  --obs-pub-plum: #831843;
+  --obs-pub-slate: #334155;
 
   --obs-diverge-neg: #5b9bd8;
   --obs-diverge-neg-soft: #3d6ea6;
@@ -138,6 +152,12 @@
     --obs-series-4: #cfa348;
     --obs-series-5: #94a3b8;
     --obs-series-6: #d1648f;
+    --obs-pub-navy: #16406f;
+    --obs-pub-teal: #115e59;
+    --obs-pub-forest: #14532d;
+    --obs-pub-rust: #9a3412;
+    --obs-pub-plum: #831843;
+    --obs-pub-slate: #334155;
 
     --obs-diverge-neg: #5b9bd8;
     --obs-diverge-neg-soft: #3d6ea6;

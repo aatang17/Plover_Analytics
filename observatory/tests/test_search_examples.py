@@ -173,3 +173,19 @@ class SearchBlocks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoverageSearchExamples(unittest.TestCase):
+    """The Writer Desk's Coverage tab finds companies with the desk's company
+    search (app/assistant/api.find_companies); its box says what to type."""
+
+    def test_the_box_shows_examples(self):
+        self.assertTrue(placeholder_examples("write.js", r'id="wd-cvq"[^>]*placeholder="([^"]*)"'))
+
+    @unittest.skipUnless(_data.EQUITY, _data.NO_EQUITY)
+    def test_every_example_and_obvious_company_finds_it(self):
+        from app.assistant.api import find_companies
+        examples = placeholder_examples("write.js", r'id="wd-cvq"[^>]*placeholder="([^"]*)"')
+        for q in examples + ["Toyota", "7203", "Sony", "MUFG"]:
+            with self.subTest(q=q):
+                self.assertTrue(find_companies(q), "the coverage search finds nothing for %r" % q)

@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import (research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
+from . import (pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
                writers)
 from .admin_api import _client_ip, audit
 
@@ -141,6 +141,13 @@ def create_article(request: Request, body: Optional[NewBody] = None):
     person = _writer(request)
     pid = _publication_for_new(person, body.publication_id if body else None)
     draft = rd.new_draft()
+    # the publication's starting text, when its owner set one (pub_profile)
+    template = pub_profile.defaults(pid)["template"]
+    if template:
+        try:
+            draft = rd.import_markdown(template)
+        except rd.DocError:
+            draft = rd.new_draft()
     draft["authors"] = [person["id"]]
     a = research.create(_who(person), draft, pid)
     _audit(request, person, "article_created", "article %d" % a["id"])

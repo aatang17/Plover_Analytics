@@ -63,6 +63,9 @@ class DriveTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # put the shared sign-in and desk stores back afterwards: later test
+        # files in the same process must not inherit a deleted temp file
+        cls._saved = (accounts.DB_PATH, store.DB_PATH)
         cls.tmp = tempfile.TemporaryDirectory()
         path = os.path.join(cls.tmp.name, "workspace.db")
         accounts.DB_PATH = type(accounts.DB_PATH)(path)
@@ -88,6 +91,9 @@ class DriveTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         drive._http = cls._http
+        accounts.DB_PATH = cls._saved[0]
+        accounts._conn = None
+        store.reset_for_tests(cls._saved[1])
         cls.tmp.cleanup()
 
     def setUp(self):

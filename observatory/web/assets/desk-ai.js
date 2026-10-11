@@ -42,6 +42,8 @@ function renderAIPane() {
   box.innerHTML = '<p class="muted">Loading…</p>';
   api(aiPath("/research/ai")).then(function (s) {
     AI.settings = s;
+    // the publication's default skill, until the writer picks another
+    if (!AI.skillTouched && s.default_skill) AI.skill = String(s.default_skill);
     var saved = null;
     try { saved = localStorage.getItem(aiKey()); } catch (e) { /* storage blocked */ }
     if (saved && !AI.job) {
@@ -58,6 +60,7 @@ function renderAIPane() {
 }
 
 function aiReady(s) {
+  if (s && s.publication_ai) return true;  // the publication provides the AI for its articles
   return s && s.provider && s.providers.some(function (p) { return p.key === s.provider && p.ready; });
 }
 
@@ -65,13 +68,17 @@ function drawAI() {
   var box = $("#dk-pane-ai");
   var s = AI.settings;
   if (!s) return;
-  if (AI.setup || !aiReady(s)) return drawSetup(box, s);
-  var label = (s.providers.filter(function (p) { return p.key === s.provider; })[0] || {}).label;
+  if ((AI.setup && !s.publication_ai) || !aiReady(s)) return drawSetup(box, s);
+  var pubAI = s.publication_ai;
+  var label = pubAI ? pubAI.label : (s.providers.filter(function (p) { return p.key === s.provider; })[0] || {}).label;
+  var model = pubAI ? (pubAI.model || pubAI.default_model) : s.model;
   var running = AI.job && AI.job.status === "running";
+  var length = s.publication_length || s.length;
   box.innerHTML =
     '<div class="dk-ai-using"><span>Using <strong>' + escapeHtml(label) + "</strong>" +
-    (s.model ? ' <span class="mono">' + escapeHtml(s.model) + "</span>" : "") + "</span>" +
-    '<button type="button" class="linkish" id="dk-ai-change"' + (running ? " disabled" : "") + ">Change</button></div>" +
+    (model ? ' <span class="mono">' + escapeHtml(model) + "</span>" : "") +
+    (pubAI ? " · the publication's" : "") + "</span>" +
+    (pubAI ? "" : '<button type="button" class="linkish" id="dk-ai-change"' + (running ? " disabled" : "") + ">Change</button>") + "</div>" +
     '<form id="dk-ai-form" class="dk-ai-form">' +
     (s.skills && s.skills.length
       ? '<label class="dk-flabel" for="dk-ai-skill">Skill</label>' +
@@ -85,8 +92,8 @@ function drawAI() {
       ? '<span class="dk-flabel" id="dk-ai-len-l">Length</span>' +
         '<div class="seg dk-ai-len" role="group" aria-labelledby="dk-ai-len-l">' +
         s.lengths.map(function (x) {
-          return '<button type="button" data-len="' + x.key + '" aria-pressed="' + (x.key === s.length) + '"' +
-            (running ? " disabled" : "") + ">" + escapeHtml(x.label) + "</button>";
+          return '<button type="button" data-len="' + x.key + '" aria-pressed="' + (x.key === length) + '"' +
+            (running || s.publication_length ? " disabled" : "") + ">" + escapeHtml(x.label) + "</button>";
         }).join("") + "</div>" +
         '<span class="hint" id="dk-ai-len-note"></span>'
       : "") +
@@ -100,7 +107,7 @@ function drawAI() {
     (S.article && S.article.publication
       ? ' <a href="write.html#/p/' + S.article.publication.id + '/assistant" target="_blank" rel="noopener">Assistant Settings</a>' : "") + "</p>" +
     '<div id="dk-ai-job"></div>';
-  $("#dk-ai-change").addEventListener("click", function () { AI.setup = true; drawAI(); });
+  if ($("#dk-ai-change")) $("#dk-ai-change").addEventListener("click", function () { AI.setup = true; drawAI(); });
   var pick = $("#dk-ai-skill");
   function skillNote() {
     if (!pick) return;
@@ -110,11 +117,14 @@ function drawAI() {
     $("#dk-ai-text").placeholder = k ? "Optional: the story, the question or anything to add"
       : "What should it do with this draft?";
   }
-  if (pick) { pick.addEventListener("change", skillNote); skillNote(); }
+  if (pick) { pick.addEventListener("change", function () { AI.skillTouched = true; skillNote(); }); skillNote(); }
   function lengthNote() {
-    var x = (s.lengths || []).filter(function (l) { return l.key === s.length; })[0];
-    if ($("#dk-ai-len-note")) $("#dk-ai-len-note").textContent = x ? x.hint + " Used for every run, until you change it." : "";
-    $all("[data-len]", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-len") === s.length)); });
+    var key = s.publication_length || s.length;
+    var x = (s.lengths || []).filter(function (l) { return l.key === key; })[0];
+    if ($("#dk-ai-len-note")) $("#dk-ai-len-note").textContent = !x ? ""
+      : s.publication_length ? x.hint + " Set by the publication for all its articles."
+      : x.hint + " Used for every run, until you change it.";
+    $all("[data-len]", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-len") === key)); });
   }
   $all("[data-len]", box).forEach(function (b) {
     b.addEventListener("click", function () {

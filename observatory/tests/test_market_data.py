@@ -82,6 +82,9 @@ class MarketDataTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # put the shared sign-in and desk stores back afterwards: later test
+        # files in the same process must not inherit a deleted temp file
+        cls._saved = (accounts.DB_PATH, store.DB_PATH)
         cls.tmp = tempfile.TemporaryDirectory()
         path = os.path.join(cls.tmp.name, "workspace.db")
         accounts.DB_PATH = type(accounts.DB_PATH)(path)
@@ -107,6 +110,9 @@ class MarketDataTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         market_data._http = cls._http
+        accounts.DB_PATH = cls._saved[0]
+        accounts._conn = None
+        store.reset_for_tests(cls._saved[1])
         cls.tmp.cleanup()
 
     def setUp(self):
@@ -245,3 +251,89 @@ class MarketDataTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------- Writer Desk
+# The same sources, reached as a writer on a publication: each person their own.
+
+from app import research_ai, staff, writer_api  # noqa: E402
+from tests.test_research_mcp import Base  # noqa: E402
+
+
+class WriterSourcesTest(Base):
+
+    def setUp(self):
+        self._saved = (accounts.DB_PATH, accounts._conn, store.DB_PATH)
+        super(WriterSourcesTest, self).setUp()
+        root = os.path.dirname(str(staff.DB_PATH))
+        accounts.DB_PATH = type(accounts.DB_PATH)(os.path.join(root, "workspace.db"))
+        accounts._conn = None
+        store.reset_for_tests(os.path.join(root, "workspace.db"))
+        self._secret = os.environ.get("ASSISTANT_SECRET")
+        os.environ["ASSISTANT_SECRET"] = "test-secret-not-for-production"
+        self.app.include_router(writer_api.router)
+        self.fake = FakeVendors()
+        self._http = market_data._http
+        market_data._http = self.fake
+        self.addCleanup(self._put_back)
+        self.w2, self.wid2 = self.person("w2@example.com", ["writing"])
+
+    def _put_back(self):
+        market_data._http = self._http
+        accounts.DB_PATH, accounts._conn = self._saved[0], None
+        store.reset_for_tests(self._saved[2])
+        if self._secret is None:
+            os.environ.pop("ASSISTANT_SECRET", None)
+        else:
+            os.environ["ASSISTANT_SECRET"] = self._secret
+
+    def connect(self, c=None, provider="jquants", key=JQ_GOOD):
+        return (c or self.w).post("/admin/api/write/data-sources", json={"provider": provider, "key": key})
+
+    def test_each_writer_has_their_own(self):
+        r = self.connect()
+        self.assertEqual(r.status_code, 200, r.text)
+        sid = r.json()["id"]
+        self.assertNotIn(JQ_GOOD, self.w.get("/admin/api/write/data-sources").text)
+        self.assertEqual(len(self.w.get("/admin/api/write/data-sources").json()["sources"]), 1)
+        # the other writer, on the same team, sees and reaches nothing
+        self.assertEqual(self.w2.get("/admin/api/write/data-sources").json()["sources"], [])
+        self.assertEqual(self.w2.post("/admin/api/write/data-sources/%d/try" % sid,
+                                      json={"symbol": "7203"}).status_code, 404)
+        self.assertEqual(self.w2.delete("/admin/api/write/data-sources/%d" % sid).status_code, 404)
+        out = self.w.post("/admin/api/write/data-sources/%d/try" % sid, json={"symbol": "7203"}).json()
+        self.assertEqual(len(out["bars"]), 3)
+
+    def test_refused_key_and_shared_password(self):
+        r = self.connect(key="wrong")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("refused the key", r.json()["detail"])
+        self.assertEqual(self.connect(c=self.admin).status_code, 403)   # the shared password is nobody
+
+    def test_follows_the_person_to_their_desk(self):
+        self.connect()
+        aid = market_data.account_for("w@example.com")
+        self.assertIsNotNone(aid)
+        self.assertEqual([s["provider"] for s in market_data.view(aid)["sources"]], ["jquants"])
+        self.assertIsNone(market_data.account_for("w2@example.com"))     # a read creates nothing
+
+    def test_writing_assistant_gets_the_tool(self):
+        person = staff.get(self.wid)
+        ctx = {"person": person, "client": "test", "article_id": None, "publication_id": None}
+        self.assertNotIn("vendor_prices", [t["name"] for t in research_ai.tool_list(ctx)])
+        self.connect()
+        self.assertIn("vendor_prices", [t["name"] for t in research_ai.tool_list(ctx)])
+        other = {"person": staff.get(self.wid2), "client": "test", "article_id": None, "publication_id": None}
+        self.assertNotIn("vendor_prices", [t["name"] for t in research_ai.tool_list(other)])
+        # an API run opens the key itself; a CLI run's tool process is handed it
+        text, err = research_ai.call_tool(ctx, "vendor_prices", {"source": "jquants", "symbol": "7203"})
+        self.assertFalse(err, text)
+        creds = research_ai._run_creds(person, None)
+        self.assertEqual(creds["data_source_keys"], {"jquants": JQ_GOOD})
+        ctx["creds"] = {"data_source_keys": creds["data_source_keys"]}
+        text, err = research_ai.call_tool(ctx, "vendor_prices", {"source": "jquants", "symbol": "7203"})
+        self.assertFalse(err, text)
+        ctx["creds"] = {"data_source_keys": {}}
+        text, err = research_ai.call_tool(ctx, "vendor_prices", {"source": "jquants", "symbol": "7203"})
+        self.assertTrue(err)
+        self.assertIn("could not be read", text)
