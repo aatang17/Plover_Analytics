@@ -98,6 +98,9 @@ var researchChart = (function () {
   function readDate(s, dmy) {
     var m;
     s = String(s || "").trim();
+    if ((m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)$/.exec(s)) && !isNaN(Date.parse(s))) {
+      return { p: "h", iso: m[1] };
+    }
     if ((m = /^(\d{4})$/.exec(s))) return { p: "y", label: m[1], sort: m[1] };
     if ((m = /^(\d{4})\s*-?\s*Q([1-4])$/i.exec(s)) || (m = /^Q([1-4])\s*-?\s*(\d{4})$/i.exec(s))) {
       var y = m[1].length === 4 ? m[1] : m[2], q = m[1].length === 4 ? m[2] : m[1];
@@ -136,7 +139,7 @@ var researchChart = (function () {
     out.forEach(function (d) {
       if (time) { d.sort = d.iso; d.label = d.iso; }
     });
-    return { list: out, time: time, daily: !!kinds.d };
+    return { list: out, time: time, daily: !!kinds.d, hourly: !!kinds.h };
   }
 
   /* The pasted cells as a chart: names, labels, values, dates and how many
@@ -173,7 +176,8 @@ var researchChart = (function () {
 
   function dataSource(block) {
     var src = (block.source || "").trim().replace(/\.$/, "");
-    return (src ? "Source: " + src + " · " : "") + "Values as entered by the author.";
+    return (src ? "Source: " + src + " · " : "") +
+      (block.origin === "database" ? "Values from saved Plover data." : "Values as entered by the author.");
   }
 
   /* {kind, cfg} for obsChart, or null when there is nothing to draw. Bars
@@ -201,6 +205,7 @@ var researchChart = (function () {
       }),
       unit: pct ? "%" : "",
       unitSuffix: pct ? "" : unit,
+      hourlyPeriods: t.dates.hourly,
       isoPeriods: t.dates.daily,
       xType: t.dates.time ? undefined : "category",
     }) };

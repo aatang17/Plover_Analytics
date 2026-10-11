@@ -18,11 +18,11 @@ import json
 import time
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import (pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
+from . import (market_history, pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
                writers)
 from .admin_api import _client_ip, audit
 
@@ -520,11 +520,13 @@ def page_hits(q, limit=6):
 
 
 @router.get("/data/search")
-def data_search(request: Request, q: str = ""):
+def data_search(request: Request, q: str = "", response: Response = None):
     """Plover series and companies matching q — the same search the public MCP
     server runs — with the page each hit lives on, plus the pages about q as
     a topic ("CEO compensation"), whose charts can be copied."""
-    _writer(request)
+    person = _writer(request)
+    if response is not None:
+        response.headers["Cache-Control"] = "private, no-store"
     from . import registry, tools_v2
     if not q.strip():
         return {"series": [], "companies": [], "pages": []}
@@ -550,7 +552,52 @@ def data_search(request: Request, q: str = ""):
                           "name_ja": c.get("name"),
                           "pages": [{"label": lab, "url": tpl % c["sec_code"]}
                                     for lab, tpl in COMPANY_PAGES]})
-    return {"series": series, "companies": companies, "pages": page_hits(q)}
+    return {"series": series, "companies": companies, "pages": page_hits(q),
+            "market": market_history.catalog(person, q)}
+
+
+# Private hourly data never enters the public macro catalog or its cache.
+@router.get("/market")
+def market_catalog(request: Request):
+    return JSONResponse({"market": market_history.catalog(_writer(request))},
+                        headers={"Cache-Control": "private, no-store"})
+
+
+# Private hourly data never enters the public macro catalog or its cache.
+@router.get("/market/{slug}/history")
+def market_rows(slug: str, request: Request, start: str = "", end: str = "",
+                publisher: Optional[int] = None, limit: int = 250, offset: int = 0,
+                revision: str = ""):
+    person = _writer(request)
+    try:
+        out = market_history.history(person, slug, start, end, publisher, limit, offset, revision)
+    except market_history.HistoryError as exc:
+        raise HTTPException(400, str(exc))
+    return JSONResponse(out, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/market/{slug}/chart")
+def market_chart(slug: str, request: Request, start: str = "", end: str = "",
+                 publisher: Optional[int] = None, field: str = "close", revision: str = ""):
+    person = _writer(request)
+    try:
+        out = market_history.chart(person, slug, start, end, publisher, field, revision)
+    except market_history.HistoryError as exc:
+        raise HTTPException(400, str(exc))
+    return JSONResponse({"block": out}, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/market/{slug}/csv")
+def market_csv(slug: str, request: Request, start: str = "", end: str = "",
+               publisher: Optional[int] = None, revision: str = ""):
+    person = _writer(request)
+    try:
+        data = market_history.export(person, slug, start, end, publisher, revision)
+    except market_history.HistoryError as exc:
+        raise HTTPException(400, str(exc))
+    return StreamingResponse(data, media_type="text/csv", headers={
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": 'attachment; filename="%s-hourly.csv"' % slug})
 
 
 class ReadBody(BaseModel):

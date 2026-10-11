@@ -683,3 +683,8 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
   .dk-atabs { padding: 6px 8px 0; gap: 6px; }
   .dk-at { max-width: 150px; }
 }
+
+.dk-market-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dk-market-controls label { display: flex; flex-direction: column; gap: 4px; }
+.dk-market-controls input { background: var(--obs-surface); color: var(--obs-ink); border: 1px solid var(--obs-border); font: inherit; }
+[data-theme="dark"] .dk-market-controls input { color-scheme: dark; }

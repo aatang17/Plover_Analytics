@@ -375,6 +375,7 @@ def _block(b):
         out["title"] = plain(b.get("title"), TITLE_MAX)
         out["note"] = plain(b.get("note"), TEXT_MAX)
         out["source"] = plain(b.get("source"), TEXT_MAX)
+        out["origin"] = "database" if b.get("origin") == "database" else "author"
     elif t == "image":
         sha = plain(b.get("media"), 64).lower()
         out["media"] = sha if _SHA.match(sha) else ""
@@ -878,7 +879,7 @@ def data_table(rows):
 
 def datachart_source_line(b):
     parts = [b["source"].strip().rstrip(".")] if b.get("source") else []
-    parts.append("Values as entered by the author")
+    parts.append("Values from saved Plover data" if b.get("origin") == "database" else "Values as entered by the author")
     return "Source: " + u" \u00b7 ".join(parts) + "." if b.get("source") else parts[-1] + "."
 
 

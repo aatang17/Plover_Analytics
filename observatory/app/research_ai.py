@@ -56,7 +56,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import (connectors, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
+from . import (connectors, market_history, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
                research_web, skills, staff, staff_google, tools_v2, writers)
 from .assistant import codex as codex_mod, gateway, keychain, market_data, store as ia_store
 
@@ -548,6 +548,7 @@ def tool_list(ctx=None):
     pid = _publication(ctx)
     if person:
         out += market_data.tool_schemas(_data_owners(person, pid))
+        out += market_history.tool_schemas(person)
     if pid is not None:
         out += [dict((k, t[k]) for k in ("name", "description", "parameters"))
                 for t in connectors.run_tools(pid)]
@@ -658,6 +659,8 @@ def call_tool(ctx, name, args):
             call_args.update(dict((k, v) for k, v in args.items()
                                   if k in ("markdown", "summary", "after_heading", "title", "dek")))
         return research_mcp.run(person, client, mapped, call_args)
+    if name in market_history.TOOL_NAMES:
+        return market_history.run_tool(person, name, args)
     if name in tools_v2.IMPLS:
         text, err = tools_v2.run_tool(name, args)
         return text[:TOOL_TEXT_MAX], err

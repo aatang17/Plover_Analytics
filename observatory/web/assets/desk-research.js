@@ -711,6 +711,13 @@ function newTab(t) {
         '<button type="button" class="dk-mini" data-reopen="' + i + '">Reopen</button></span></li>';
     }).join("") + "</ul>" : "") +
     '<div class="dk-rt-clips"></div>';
+  var saved = document.createElement("div");
+  $('[data-go="data"]', el).after(saved);
+  api("/research/market").then(function (r) {
+    if (!document.contains(saved)) return;
+    saved.innerHTML = marketList(r.market || []);
+    bindMarket(saved, r.market || []);
+  }).catch(function () { saved.innerHTML = '<p class="hint">Saved futures could not load. Reopen this tab to try again.</p>'; });
   $('[data-go="data"]', el).addEventListener("submit", function (e) {
     e.preventDefault();
     var q = $("input", e.target).value.trim();
@@ -849,7 +856,7 @@ function dataSearch(q, res, asked) {
     if (seq !== res._seq) return;
     res.removeAttribute("aria-busy");
     var pages = r.pages || [];
-    if (!r.series.length && !r.companies.length && !pages.length) {
+    if (!r.series.length && !r.companies.length && !pages.length && !(r.market || []).length) {
       var shorter = q.trim().split(/\s+/).slice(0, -1).join(" ");
       if (shorter) { dataSearch(shorter, res, asked || q); return; }
       res.innerHTML = '<p class="muted">Nothing matches “' + escapeHtml(asked || q) + '”. Try a shorter name, ' +
@@ -887,7 +894,8 @@ function dataSearch(q, res, asked) {
           '<button type="button" class="dk-mini" data-popen="' + i + '">Open</button></span></li>';
       }).join("") + "</ul>" : "");
     res.innerHTML = (asked ? '<p class="hint">Nothing for “' + escapeHtml(asked) + '”; showing “' +
-      escapeHtml(q) + "”.</p>" : "") + (firstCo ? companyHtml + seriesHtml : seriesHtml + companyHtml) + pageHtml;
+      escapeHtml(q) + "”.</p>" : "") + marketList(r.market || []) + (firstCo ? companyHtml + seriesHtml : seriesHtml + companyHtml) + pageHtml;
+    bindMarket(res, r.market || []);
     $all("[data-pcopy]", res).forEach(function (b) {
       b.addEventListener("click", function () { copyFromSearch(pages[Number(b.getAttribute("data-pcopy"))].url); });
     });
@@ -926,6 +934,56 @@ function dataSearch(q, res, asked) {
     if (seq !== res._seq) return;
     res.removeAttribute("aria-busy");
     res.innerHTML = '<p class="bad">' + escapeHtml(err.message) + "</p>";
+  });
+}
+
+/* Saved paid data is listed only when the server grants this account access.
+   The chart freezes the selected values in the draft; the full CSV is read
+   from the same saved version. A failed request leaves no empty chart. */
+function marketList(cards) {
+  if (!cards.length) return "";
+  return '<p class="dk-rs-h">Your Saved Futures</p><p class="muted">Databento · Hourly UTC · Saved history; updates are manual.</p>' +
+    cards.map(function (c, i) {
+      return '<div class="dk-rs-group" data-market="' + i + '"><ul class="dk-rs-list"><li>' +
+        '<span class="dk-rs-name">' + escapeHtml(c.name) + '</span><span class="dk-rs-acts">' +
+        '<button type="button" class="dk-mini" data-minsert>Insert Chart</button>' +
+        '<a class="dk-mini" data-mcsv href="/admin/api/research/market/' + encodeURIComponent(c.slug) + '/csv?revision=' + encodeURIComponent(c.revision) + '">Download CSV</a></span></li></ul>' +
+        '<p class="hint">' + escapeHtml(c.first_bar_utc.slice(0, 10) + " to " + c.last_bar_utc.slice(0, 10) + " · " + c.unit) + '</p>' +
+        '<details><summary>Chart Dates and Trade Feed</summary><div class="dk-market-controls">' +
+        '<label>Start <input type="date" data-mstart aria-label="Chart start date"></label>' +
+        '<label>End <input type="date" data-mend value="' + c.last_bar_utc.slice(0, 10) + '" aria-label="Chart end date"></label>' +
+        '<label>Measure <select data-mfield aria-label="Futures measure"><option value="close">Close</option><option value="open">Open</option>' +
+        '<option value="high">High</option><option value="low">Low</option><option value="volume">Volume</option></select></label>' +
+        '<label>Trade Feed <select data-mpub aria-label="Trade feed">' + Object.keys(c.publisher_rows).map(function (p) {
+          var names = { "1": "CME Globex", "57": "ICE Exchange Trades", "84": "ICE Off-Market Trades" };
+          return '<option value="' + p + '"' + (Number(p) === c.default_publisher ? " selected" : "") + '>' + escapeHtml(names[p] || p) + '</option>';
+        }).join("") + '</select></label></div><p class="hint">Blank start: last 30 days for charts, full history for CSV. Hourly charts show up to 120 days. Unadjusted prices; gaps at contract changes.</p></details></div>';
+    }).join("");
+}
+
+function bindMarket(el, cards) {
+  $all("[data-market]", el).forEach(function (row) {
+    var c = cards[Number(row.getAttribute("data-market"))];
+    function params() {
+      return "?revision=" + encodeURIComponent(c.revision) + "&publisher=" + encodeURIComponent($("[data-mpub]", row).value) +
+        "&start=" + encodeURIComponent($("[data-mstart]", row).value) + "&end=" + encodeURIComponent($("[data-mend]", row).value);
+    }
+    function csvLink() { $("[data-mcsv]", row).href = "/admin/api/research/market/" + encodeURIComponent(c.slug) + "/csv" + params(); }
+    row.addEventListener("change", csvLink);
+    csvLink();
+    var b = $("[data-minsert]", row);
+    b.addEventListener("click", function () {
+      if (b.disabled) return;
+      var article = ID;
+      b.disabled = true;
+      b.textContent = "Loading…";
+      api("/research/market/" + encodeURIComponent(c.slug) + "/chart" + params() + "&field=" + encodeURIComponent($("[data-mfield]", row).value)).then(function (r) {
+        if (ID !== article) { toast("The article changed while loading. Insert the chart again in the intended draft."); return; }
+        insertAfterCaretBlock(r.block);
+        toast("Hourly chart inserted from saved data.");
+      }).catch(function (err) { toast(err.message || "Could not load this range. Try again."); })
+        .then(function () { b.disabled = false; b.textContent = "Insert Chart"; });
+    });
   });
 }
 

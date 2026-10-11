@@ -599,6 +599,16 @@ def health():
                   "datasets": out,
                   "equity_extractors": equity,
                   "manifests": manifests}
+        # Only freshness metadata is public; prices and account grants stay
+        # behind Research's personal-account checks.
+        try:
+            from . import market_history
+            report["private_market_data"] = market_history.health()
+            if any(d["status"] == "attention" for d in report["private_market_data"]):
+                report["status"] = "attention"
+        except Exception:                                    # noqa: BLE001
+            report["private_market_data"] = [{"status": "attention", "reason": "Monitoring unavailable"}]
+            report["status"] = "attention"
         report.update(machine)
         # Whether an alarm raised here could actually reach anyone. Reported
         # because for six days in September 2026 the answer was no and

@@ -224,6 +224,7 @@ function lineOptions(cfg, pal, narrow, below) {
       textStyle: { color: pal.text, fontSize: 12 },
       formatter: params => {
         const date = isCat ? params[0].name
+          : cfg.hourlyPeriods ? new Date(params[0].value[0]).toISOString().slice(0, 16).replace("T", " ") + " UTC"
           : fmtPeriod(new Date(params[0].value[0]).toISOString());
         const rows = params.slice()
           .sort((a, b) => ((isCat ? b.value : b.value[1]) ?? -Infinity) -
@@ -962,7 +963,7 @@ function obsChart(el, kind, cfg) {
           return hit && hit[1] !== null ? hit[1] : "";
         });
         // daily series keep the full date; monthly series keep YYYY-MM
-        const label = cfg.isoPeriods ? period.slice(0, 10) : fmtPeriod(period);
+        const label = cfg.hourlyPeriods ? period : cfg.isoPeriods ? period.slice(0, 10) : fmtPeriod(period);
         csv += label + "," + row.join(",") + "\n";
       });
     } else if (kind === "rank") {

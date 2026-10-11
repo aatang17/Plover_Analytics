@@ -24,7 +24,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from . import research, research_doc as rd, research_pages as rp, seo, staff, tools_v2, writers
+from . import market_history, research, research_doc as rd, research_pages as rp, seo, staff, tools_v2, writers
 
 router = APIRouter(include_in_schema=False)
 
@@ -406,8 +406,10 @@ def run(person, client, name, args):
     return _fail("Unknown tool '%s'." % name), True
 
 
-def tools():
-    return TOOLS + tools_v2.descriptors()
+def tools(person=None):
+    private = [{"name": t["name"], "description": t["description"], "inputSchema": t["parameters"]}
+               for t in market_history.tool_schemas(person)]
+    return TOOLS + tools_v2.descriptors() + private
 
 
 def call(person, client, name, args):
@@ -415,6 +417,8 @@ def call(person, client, name, args):
         return _fail("Arguments must be an object."), True
     if name in TOOL_NAMES:
         return run(person, client, name, args)
+    if name in market_history.TOOL_NAMES:
+        return market_history.run_tool(person, name, args)
     if name in tools_v2.IMPLS:
         return tools_v2.run_tool(name, args)
     return _fail("Unknown tool '%s'." % name), True
@@ -447,7 +451,7 @@ def _handle_one(person, client, msg):
     if method == "ping":
         return _result(msg_id, {})
     if method == "tools/list":
-        return _result(msg_id, {"tools": tools()})
+        return _result(msg_id, {"tools": tools(person)})
     if method == "tools/call":
         text, is_err = call(person, client, params.get("name"), params.get("arguments") or {})
         return _result(msg_id, {"content": [{"type": "text", "text": text}], "isError": is_err})

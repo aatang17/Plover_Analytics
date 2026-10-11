@@ -362,7 +362,7 @@ function readBlock(el) {
   }
   if (t === "datachart") {
     return { id: id, type: t, rows: m.rows.map(function (r) { return r.slice(); }), kind: m.kind,
-             unit: m.unit, title: m.title, note: m.note, source: m.source };
+             unit: m.unit, title: m.title, note: m.note, source: m.source, origin: m.origin || "author" };
   }
   if (t === "image") {
     return { id: id, type: t, media: m.media, ext: m.ext, alt: m.alt, caption: m.caption,
@@ -996,6 +996,7 @@ function drawDataChart(c, b) {
 
 /* New cells from the box: kept as rows, at most six series. */
 function setCells(c, b, text) {
+  b.origin = "author";
   var rows = parseCells(text);
   var wide = rows.some(function (r) { return r.length > 7; });
   if (wide) {
