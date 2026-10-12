@@ -7,7 +7,8 @@ Claude" in the history), run the publish checklist, read a web page through
 the desk's guarded reader, and read the platform's data through the same
 functions that serve /api/v1. A run on an answer-only skill (spec read_only)
 is not offered the tools that change the draft. The spec file names the writer, the article and
-a call log the desk reads to show progress.
+a call log the desk reads to show progress; with memory on, it also names the writer's account,
+and the run may save notes to (or remove them from) that writer's memory.
 
 Every tool is annotated read-only: Codex in exec mode cancels any tool not so
 annotated because it cannot ask a person. The draft tools do write — to that
@@ -36,6 +37,9 @@ class Context(object):
         self.ctx = {"person": person, "client": spec["client"], "article_id": spec["article_id"],
                     "read_only": bool(spec.get("read_only")),
                     "plan_words": spec.get("plan_words"),
+                    # the writer's memory (remember / forget_memory), when it is on
+                    "account_id": spec.get("account_id"), "memory": bool(spec.get("memory")),
+                    "origin": spec.get("origin"),
                     "creds": {"connector_keys": creds.get("connector_keys") or {},
                               "data_source_keys": creds.get("data_source_keys") or {}}}
         self.log = spec.get("log")

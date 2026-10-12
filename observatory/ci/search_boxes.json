@@ -53,6 +53,7 @@
     "cohorts.html#p-company": "Highlights one company in a ranking; it does not search.",
     "desk-research.js#snap-": "A page address to copy a chart from.",
     "desk.js#data-f=source": "A source line for a table or chart.",
-    "desk.js#data-f=unit": "The unit printed on a chart of the writer's own numbers."
+    "desk.js#data-f=unit": "The unit printed on a chart of the writer's own numbers.",
+    "memory-panel.js#class=memp-new": "The text of a new memory note; it does not search."
   }
 }

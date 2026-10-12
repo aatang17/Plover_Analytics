@@ -19,7 +19,7 @@ import time
 
 from .. import tools_v2
 from . import (charts, codex, digest, drive, gateway, keychain, market_data, mcp_client,
-               specialists, store)
+               memory, specialists, store)
 
 # Tokens are counted cumulatively: every turn re-sends the conversation so far,
 # so a run over five companies reads its early results five times. 60k (the
@@ -220,7 +220,7 @@ def _fail(msg):
 class Run(object):
     """State for one run; `execute` drives it."""
 
-    def __init__(self, account_id, hire, trigger, task, history=None, mode="desk"):
+    def __init__(self, account_id, hire, trigger, task, history=None, mode="desk", remember=False):
         self.account_id = account_id
         self.hire = hire
         self.spec = specialists.get(hire["slug"])
@@ -230,6 +230,9 @@ class Run(object):
         self.task = task
         self.history = history or []
         self.mode = mode
+        # The person's own chat reads and adds to their memory (memory.py);
+        # scheduled runs and outside connections never do.
+        self.memory = bool(remember) and memory.enabled(account_id)
         self.allow = set(self.spec["tools"])
         # The desk's own MCP servers are offered to every specialist on it:
         # they were added by the person whose desk this is, for their agents
@@ -310,6 +313,9 @@ class Run(object):
 
     def _call(self, name, args):
         """Dispatch one call through the allowlist. Returns (text, is_error)."""
+        if name in memory.TOOL_NAMES and self.memory:
+            return memory.run_tool(self.account_id, name, args, "run:%s" % self.run_id,
+                                   memory.ASSISTANT)
         market = set(t["name"] for t in self.market)
         if name not in self.allow and name not in self.ext and name not in self.drive \
                 and name not in market:
@@ -387,14 +393,17 @@ class Run(object):
                     and r["summary"]:
                 last = r["summary"]
                 break
-        messages = [{"role": "system",
-                     "content": _system_prompt(self.spec, store.coverage(self.account_id, (self.hire.get("config") or {}).get("list_id")), last)}]
+        system = _system_prompt(self.spec, store.coverage(self.account_id, (self.hire.get("config") or {}).get("list_id")), last)
+        if self.memory:
+            system += "\n\n" + memory.prompt_text(self.account_id).strip()
+        messages = [{"role": "system", "content": system}]
         for turn in self.history[-MAX_HISTORY:]:
             if turn.get("role") in ("user", "assistant") and turn.get("text"):
                 messages.append({"role": turn["role"], "content": turn["text"][:4000]})
         messages.append({"role": "user", "content": self.task})
         tools = (tool_schemas(self.spec["tools"]) + [e["schema"] for e in self.ext.values()]
-                 + [t for t in drive.TOOL_SCHEMAS if t["name"] in self.drive] + self.market)
+                 + [t for t in drive.TOOL_SCHEMAS if t["name"] in self.drive] + self.market
+                 + (memory.TOOL_SCHEMAS if self.memory else []))
 
         # Codex on the desk's ChatGPT plan: the same prompt and history, its
         # tool calls served and audited by codex_mcp under this run.
@@ -558,8 +567,8 @@ class Run(object):
                 "calls": store.calls(self.run_id) if self.run_id else []}
 
 
-def run(account_id, hire, trigger, task, history=None, mode="desk"):
-    return Run(account_id, hire, trigger, task, history=history, mode=mode).execute()
+def run(account_id, hire, trigger, task, history=None, mode="desk", remember=False):
+    return Run(account_id, hire, trigger, task, history=history, mode=mode, remember=remember).execute()
 
 
 # --------------------------------------------------------------------- CLI

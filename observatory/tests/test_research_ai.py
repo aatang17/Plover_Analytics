@@ -13,13 +13,14 @@ them, and logs each call for the progress list.
 import io
 import json
 import os
+import tempfile
 import threading
 import time
 
 from fastapi.testclient import TestClient
 
-from app import research, research_ai, research_ai_mcp, staff
-from app.assistant import gateway
+from app import accounts, research, research_ai, research_ai_mcp, staff
+from app.assistant import gateway, store as ia_store
 
 from tests.test_research_mcp import Base
 
@@ -51,6 +52,20 @@ def say(text):
 class AIBase(Base):
     def setUp(self):
         super(AIBase, self).setUp()
+        # sign-in accounts, memory and conversations go to a file of the test's own
+        saved = (accounts.DB_PATH, ia_store.DB_PATH)
+        tmp = tempfile.TemporaryDirectory()
+        path = os.path.join(tmp.name, "workspace.db")
+        accounts.DB_PATH = type(accounts.DB_PATH)(path)
+        accounts._conn = None
+        ia_store.reset_for_tests(path)
+
+        def put_back():
+            accounts.DB_PATH = saved[0]
+            accounts._conn = None
+            ia_store.reset_for_tests(saved[1])
+            tmp.cleanup()
+        self.addCleanup(put_back)
         self.app.include_router(research_ai.router)
         self._secret = os.environ.get("ASSISTANT_SECRET")
         os.environ["ASSISTANT_SECRET"] = "test-secret-" + "x" * 32

@@ -36,6 +36,13 @@ draft-changing tools, and the writer keeps editing while it works. Any run
 can end by offering next steps (offer_next_step), shown as buttons under its
 reply: "Plan This" on a brainstormed angle, "Draft It" under a plan.
 
+The tab is a conversation (app/research_chat.py): each run joins one of the
+writer's conversations about the article and is sent its earlier exchanges,
+so "expand the third angle" means the third angle of the last reply. A run
+also gets the writer's memory (app/assistant/memory.py), the notes their
+assistant has saved about them across the desk and the Investment Assistant,
+and may save more on its own; each save shows under the reply with Undo.
+
 Each writer picks a length once (Short, Standard, Detailed); every run, the
 one-click next steps included, is told it, and a plan over its word limit is
 sent back to the AI to shorten before it reaches the draft. A writer may also
@@ -64,9 +71,9 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from . import (article_search, calc, connectors, market_history, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
-               research_web, skills, staff, staff_google, tools_v2, writers,
+               research_chat, research_web, skills, staff, staff_google, tools_v2, writers,
                writing_style)
-from .assistant import codex as codex_mod, gateway, keychain, market_data, store as ia_store
+from .assistant import codex as codex_mod, gateway, keychain, market_data, memory, store as ia_store
 
 PROVIDERS = [
     ("claude_code", "Claude plan (Claude Code)"),
@@ -130,8 +137,16 @@ def settings_view(person, publication_id=None):
         "publication_ai": pub_profile.ai(pid) if pid is not None else None,
         "publication_length": (pub_profile.defaults(pid)["length"] or None) if pid is not None else None,
         "default_skill": pub_profile.defaults(pid)["default_skill"] if pid is not None else None,
+        "memory": _memory_status(person),
         "style": writing_style.summary(person),
     }
+
+
+def _memory_status(person):
+    """Whether the writer's memory is on and how many notes it holds."""
+    aid = _account_id(person)
+    return {"enabled": memory.enabled(aid) if aid else True,
+            "notes": len(memory.notes(aid)) if aid else 0}
 
 
 def _reach(person, publication_id):
@@ -551,6 +566,8 @@ def tool_list(ctx=None):
     read_only = (ctx or {}).get("read_only")
     out = [t for t in ARTICLE_TOOLS if not (read_only and t["name"] in WRITE_TOOLS)]
     out += [SKILL_TOOL, NEXT_TOOL] + data + article_search.TOOLS + [calc.TOOL]
+    if (ctx or {}).get("memory"):
+        out += memory.TOOL_SCHEMAS
     person = (ctx or {}).get("person")
     if person and staff_google.usable(person["id"]):
         out += DRIVE_TOOLS
@@ -670,6 +687,9 @@ def call_tool(ctx, name, args):
         return research_mcp.run(person, client, mapped, call_args)
     if name in market_history.TOOL_NAMES:
         return market_history.run_tool(person, name, args)
+    if name in memory.TOOL_NAMES:
+        return memory.run_tool(ctx.get("account_id") if ctx.get("memory") else None, name, args,
+                               ctx.get("origin"), memory.DESK)
     if name in tools_v2.IMPLS:
         text, err = tools_v2.run_tool(name, args)
         return text[:TOOL_TEXT_MAX], err
@@ -734,7 +754,7 @@ def clean_offer(args, publication_id=research.HOME):
 # ---------------------------------------------------------------------------
 # jobs
 
-def _system(article, person, skill=None, length=None):
+def _system(article, person, skill=None, length=None, memory_text="", follow_up=False):
     d = article["draft"]
     read_only = bool(skill) and not skill["writes"]
     pid = article["publication_id"]
@@ -785,7 +805,13 @@ def _system(article, person, skill=None, length=None):
                  "another format): what you changed and anything they should check.\n\n"
                  "Call get_draft first. Change the draft only with replace_draft, append_to_draft and "
                  "set_details. Keep the writer's own text unless the instruction asks you to change "
-                 "it.\n\n")
+                 "it. If the writer asks a question or wants to talk something through rather "
+                 "than change the draft, answer in your reply and leave the draft alone.\n\n")
+    if follow_up:
+        head += ("This continues a conversation: the earlier exchanges come before the writer's "
+                 "new message. The draft may have changed since; read it again with get_draft "
+                 "before relying on it.\n\n")
+    head += memory_text
     head += ("offer_next_step puts a button under your reply that starts another run with the "
              "instruction (and skill) you give. Offer one when the skill says to, or when there is "
              "an obvious next step; never more than %d.\n\n" % NEXT_MAX)
@@ -845,6 +871,10 @@ def _describe(name, args, failed=False):
         return "Opened the skill \"%s\"" % (args.get("name") or "")
     if name == "offer_next_step":
         return "Offered a next step: %s" % (args.get("label") or "")
+    if name == "remember":
+        return "Saved to memory: %s" % (args.get("text") or "")
+    if name == "forget_memory":
+        return "Removed a note from memory"
     if name == "drive_search":
         return "Searched Google Drive for \"%s\"" % (args.get("query") or "")
     if name == "drive_read":
@@ -891,8 +921,9 @@ def _image_data(image):
         return base64.b64encode(f.read()).decode("ascii")
 
 
-def start(person, article_id, instruction, skill_id=None, image=None):
+def start(person, article_id, instruction, skill_id=None, image=None, chat_id=None):
     instruction = (instruction or "").strip()
+    typed = instruction
     image = _image(image) if image else None
     article = research.get(article_id)
     if article is None or not writers.can(person, "edit", article):
@@ -915,6 +946,13 @@ def start(person, article_id, instruction, skill_id=None, image=None):
     if s["ai_from"] != "publication" and (not provider or not _ready(provider, s)):
         raise AIError("Choose and connect a provider first.")
     writes = not skill or skill["writes"]
+    # the conversation this message joins (None: a new one), and the
+    # writer's memory: both kept under their sign-in account
+    account_id = market_data.account_for(person.get("email"), create=True)
+    chat = research_chat.chat(account_id, int(chat_id)) if chat_id and account_id else None
+    if chat_id and (chat is None or chat["article_id"] != article_id):
+        raise AIError("That conversation is no longer there; start a new one.")
+    hist = research_chat.history(chat)
     with _jobs_lock:
         busy = _running.get(person["id"])
         if busy and _jobs.get(busy, {}).get("status") == "running":
@@ -925,11 +963,25 @@ def start(person, article_id, instruction, skill_id=None, image=None):
                "provider": provider, "publication_id": article["publication_id"],
                "started": time.time(), "finished": None,
                "before_history_id": before, "revision_before": article["revision"],
-               "skill": skill["name"] if skill else None, "writes": writes, "next": []}
+               "skill": skill["name"] if skill else None, "writes": writes, "next": [],
+               "account_id": account_id}
+        if account_id:
+            if chat is None:
+                chat = research_chat.start_chat(account_id, article_id, typed or skill["name"])
+            research_chat.add_turn(chat["id"], "user", "done", typed,
+                                   {"skill": job["skill"], "picture": bool(image)})
+            job["chat_id"] = chat["id"]
+            job["turn_id"] = research_chat.add_turn(chat["id"], "assistant", "running", "",
+                                                    {"job_id": job["id"], "skill": job["skill"],
+                                                     "provider_label": PROVIDER_LABEL.get(provider),
+                                                     "writes": writes, "before_history_id": before})
         _jobs[job["id"]] = job
         _running[person["id"]] = job["id"]
+    remembers = bool(account_id) and memory.enabled(account_id)
     ctx = {"person": person, "client": CLIENT[provider], "article_id": article_id,
-           "publication_id": article["publication_id"], "read_only": not writes, "offers": job["next"], "plan_words": _length(s)["plan_words"]}
+           "publication_id": article["publication_id"], "read_only": not writes, "offers": job["next"], "plan_words": _length(s)["plan_words"],
+           "account_id": account_id, "memory": remembers, "origin": "desk:" + job["id"],
+           "history": hist}
     threading.Thread(target=_run, args=(job, ctx, s, instruction, article, skill, image),
                      daemon=True).start()
     return public(job)
@@ -946,20 +998,65 @@ def public(job):
             # an answer-only run changes nothing; the writer's own saves are theirs
             "changed": job.get("writes", True) and bool(a) and a["revision"] != job["revision_before"],
             "revision": a["revision"] if a else None,
-            "seconds": round((job["finished"] or time.time()) - job["started"])}
+            "seconds": round((job["finished"] or time.time()) - job["started"]),
+            "chat_id": job.get("chat_id"),
+            # the notes this run saved to the writer's memory, while kept
+            "memory": memory.saved_by(job.get("account_id"), "desk:" + job["id"])}
 
 
 def get_job(person, job_id):
     job = _jobs.get(job_id)
-    if job is None or job["staff_id"] != person["id"]:
+    if job is not None:
+        return public(job) if job["staff_id"] == person["id"] else None
+    # Not started by this copy of the app (a deploy swapped copies while it
+    # ran): the conversation keeps the run's reply, written by the copy that
+    # runs it, so the writer keeps waiting rather than being told it stopped.
+    aid = _account_id(person)
+    t = research_chat.turn_for_job(aid, job_id)
+    if t is None:
         return None
-    return public(job)
+    _settle_lost(t)
+    return _stored_public(t, aid, job_id)
+
+
+# A run stops itself after RUN_SECONDS; a reply still marked running well
+# after that belonged to a copy of the app that was stopped mid-run.
+LOST_AFTER = RUN_SECONDS + 180
+LOST_TEXT = ("The run was cut off before it finished (the site was restarted while it worked). "
+             "Whatever it had saved is in the draft; History has the copy from before it started. "
+             "Send your message again to rerun it.")
+
+
+def _settle_lost(t):
+    if t["status"] == "running" and time.time() - t["created_at"] > LOST_AFTER:
+        t["status"], t["text"] = "failed", LOST_TEXT
+        research_chat.finish_turn(t["id"], t["status"], t["text"], t["meta"])
+
+
+def _stored_public(t, account_id, job_id):
+    """A run as public() shows it, read from the reply the conversation keeps."""
+    m = t["meta"] or {}
+    a = research.get(t["article_id"])
+    done = t["status"] != "running"
+    return {"id": job_id, "status": t["status"], "steps": m.get("steps") or [],
+            "reply": t["text"] if t["status"] == "done" else "",
+            "error": t["text"] if t["status"] == "failed" else None,
+            "provider": None, "provider_label": m.get("provider_label"), "skill": m.get("skill"),
+            "before_history_id": m.get("before_history_id"), "revision_after": m.get("revision_after"),
+            "writes": m.get("writes", True), "next": m.get("next") or [],
+            "changed": bool(m.get("changed")) if done else False,
+            "revision": a["revision"] if a else None,
+            "seconds": m.get("seconds") if done and m.get("seconds") is not None
+            else round(time.time() - t["created_at"]),
+            "chat_id": t["chat_id"], "memory": memory.saved_by(account_id, "desk:" + job_id),
+            "elsewhere": True}
 
 
 def _run(job, ctx, s, instruction, article, skill=None, image=None):
     try:
         provider = s["provider"]
-        system = _system(article, ctx["person"], skill, s.get("length"))
+        mem = memory.prompt_text(ctx["account_id"], ctx["person"].get("name")) if ctx.get("memory") else ""
+        system = _system(article, ctx["person"], skill, s.get("length"), mem, bool(ctx.get("history")))
         if provider in ("openai", "anthropic"):
             reply = _run_api(job, ctx, provider, _open(s["key_ct"]),
                              s["model"] or DEFAULT_MODEL[provider], system, instruction, image)
@@ -979,6 +1076,23 @@ def _run(job, ctx, s, instruction, article, skill=None, image=None):
         a = research.get(job["article_id"])
         job["revision_after"] = a["revision"] if a else None
         job["finished"] = time.time()
+        _keep_turn(job)
+
+
+def _keep_turn(job):
+    """The reply, as the conversation keeps it: what a reload shows."""
+    if not job.get("turn_id"):
+        return
+    p = public(job)
+    meta = dict((k, p[k]) for k in ("job_id", "skill", "provider_label", "seconds", "next", "changed",
+                                    "before_history_id", "revision_after", "writes") if k in p)
+    meta["job_id"] = job["id"]
+    meta["steps"] = job["steps"][-60:]
+    try:
+        research_chat.finish_turn(job["turn_id"], job["status"],
+                                  job["reply"] if job["status"] == "done" else (job["error"] or ""), meta)
+    except Exception:  # noqa: BLE001 — the run's own result stands even if the copy fails
+        pass
 
 
 def _run_api(job, ctx, provider, key, model, system, instruction, image=None):
@@ -988,7 +1102,9 @@ def _run_api(job, ctx, provider, key, model, system, instruction, image=None):
     user = {"role": "user", "content": instruction}
     if image:
         user["images"] = [{"media_type": image["media_type"], "data": _image_data(image)}]
-    messages = [{"role": "system", "content": system}, user]
+    messages = [{"role": "system", "content": system}]
+    messages += [{"role": h["role"], "content": h["text"]} for h in ctx.get("history") or []]
+    messages.append(user)
     for _ in range(MAX_STEPS):
         out = gateway.complete(provider, key, model, messages, tools, max_tokens=8000)
         messages.append({"role": "assistant", "content": out["text"],
@@ -1013,6 +1129,8 @@ def _spec_file(job, ctx, work):
         json.dump({"staff_id": ctx["person"]["id"], "article_id": ctx["article_id"],
                    "client": ctx["client"], "log": log, "read_only": bool(ctx.get("read_only")),
                    "plan_words": ctx.get("plan_words"),
+                   "account_id": ctx.get("account_id"), "memory": bool(ctx.get("memory")),
+                   "origin": ctx.get("origin"),
                    "creds": _run_creds(ctx["person"], _publication(ctx))}, f)
     return path, log
 
@@ -1072,8 +1190,8 @@ def _follow(job, log_path, stop):
         stop.wait(0.7)
 
 
-def _prompt(system, instruction):
-    return system + "\n\nInstruction from the writer:\n" + instruction
+def _prompt(system, instruction, hist=None):
+    return system + "\n\n" + research_chat.transcript(hist) + "Instruction from the writer:\n" + instruction
 
 
 def _run_codex(job, ctx, s, system, instruction, image=None):
@@ -1120,7 +1238,7 @@ def _run_codex(job, ctx, s, system, instruction, image=None):
         follower.start()
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, env=codex_mod._env(home), cwd=work)
-        proc.stdin.write(_prompt(system, instruction))
+        proc.stdin.write(_prompt(system, instruction, ctx.get("history")))
         proc.stdin.close()
         errors = []
         deadline = time.time() + RUN_SECONDS
@@ -1212,11 +1330,13 @@ def _run_claude(job, ctx, s, system, instruction, image=None):
                                 env=_claude_env(home, token), cwd=work)
         if image:
             proc.stdin.write(json.dumps({"type": "user", "message": {"role": "user", "content": [
-                {"type": "text", "text": "Instruction from the writer:\n" + instruction},
+                {"type": "text", "text": research_chat.transcript(ctx.get("history")) +
+                 "Instruction from the writer:\n" + instruction},
                 {"type": "image", "source": {"type": "base64", "media_type": image["media_type"],
                                              "data": _image_data(image)}}]}}) + "\n")
         else:
-            proc.stdin.write("Instruction from the writer:\n" + instruction)
+            proc.stdin.write(research_chat.transcript(ctx.get("history")) +
+                             "Instruction from the writer:\n" + instruction)
         proc.stdin.close()
         result, errors = None, []
         deadline = time.time() + RUN_SECONDS
@@ -1300,6 +1420,7 @@ class RunBody(BaseModel):
     instruction: str = ""
     skill_id: Optional[int] = None
     image: Optional[str] = None     # "<sha256>.<ext>" of a picture uploaded to the desk
+    chat_id: Optional[int] = None   # the conversation this message continues; None starts one
 
 
 def _setup_of(person, article):
@@ -1378,7 +1499,7 @@ def ai_codex_status(request: Request):
 def ai_run(article_id: int, body: RunBody, request: Request):
     person = _person(request)
     try:
-        job = start(person, article_id, body.instruction, body.skill_id, body.image)
+        job = start(person, article_id, body.instruction, body.skill_id, body.image, body.chat_id)
     except AIError as exc:
         raise HTTPException(400, str(exc))
     _audit(request, person, "research_ai_run", "article %d via %s" % (
@@ -1392,3 +1513,60 @@ def ai_job(job_id: str, request: Request):
     if job is None:
         raise HTTPException(404, "No such run")
     return job
+
+
+# ---- conversations and memory, as the AI tab shows them
+
+def chats_view(person, article_id, chat_id=None):
+    """The writer's conversations about one article, newest first, and one of
+    them in full (the one asked for, else the newest): each reply with the
+    notes it saved to memory, and a reply whose run was lost to a restart
+    marked as stopped once it is past any run's time limit."""
+    a = research.get(article_id)
+    if a is None or not writers.can(person, "edit", a):
+        raise AIError("No such article.")
+    aid = _account_id(person)
+    if not aid:
+        return {"chats": [], "chat": None}
+    rows = research_chat.chats(aid, article_id)
+    pick = chat_id or (rows[0]["id"] if rows else None)
+    c = research_chat.chat(aid, pick) if pick else None
+    if c is not None and c["article_id"] != article_id:
+        c = None
+    for t in (c or {}).get("turns") or []:
+        if t["role"] != "assistant":
+            continue
+        job_id = (t["meta"] or {}).get("job_id")
+        if job_id not in _jobs:
+            _settle_lost(t)
+        t["memory"] = memory.saved_by(aid, "desk:" + job_id) if job_id else []
+    return {"chats": rows, "chat": c}
+
+
+@router.get("/articles/{article_id}/ai/chats")
+def ai_chats(article_id: int, request: Request, chat: Optional[int] = None):
+    try:
+        return chats_view(_person(request), article_id, chat)
+    except AIError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@router.delete("/ai/chats/{chat_id}")
+def ai_chat_delete(chat_id: int, request: Request):
+    person = _person(request)
+    aid = _account_id(person)
+    for j in list(_jobs.values()):
+        if j.get("chat_id") == chat_id and j["status"] == "running":
+            raise HTTPException(409, "The AI is still answering in this conversation; delete it when it finishes.")
+    if not aid or not research_chat.delete_chat(aid, chat_id):
+        raise HTTPException(404, "That conversation is already gone.")
+    return {"deleted": chat_id}
+
+
+@router.delete("/ai/memory/{note_id}")
+def ai_memory_forget(note_id: int, request: Request):
+    """Undo one note the AI saved: it is deleted from the writer's memory."""
+    aid = _account_id(_person(request))
+    if not aid or not memory.delete(aid, note_id):
+        raise HTTPException(404, "That note is already gone from memory.")
+    return {"deleted": note_id, "memory": _memory_status(_person(request))}

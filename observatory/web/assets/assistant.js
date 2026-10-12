@@ -255,6 +255,7 @@
     tools: I('<path d="M9 3v6M15 3v6M7.5 9h9v4a4.5 4.5 0 0 1-9 0z"/><path d="M12 17.5V21"/>'),
     keys: I('<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21M18 12v3M21 12v2.5"/>'),
     data: I('<path d="M4 19h16"/><path d="M5 15l4-5 4 3 6-8"/>'),
+    memory: I('<path d="M6 4h12v16l-6-4-6 4z"/>'),
     search: I('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>'),
     drive: I('<path d="M3.5 14l2.8-8.5h11.4L20.5 14v5h-17z"/><path d="M3.5 14h17M7 16.5h.01M10 16.5h.01"/>'),
     shared: I('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M17 11v6M14 14h6"/>'),
@@ -268,7 +269,7 @@
     upload: I('<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>')
   };
   const NAV = [['inbox', 'Inbox'], ['desk', 'Desk'], ['chat', 'Chat'], ['coverage', 'Coverage'], ['calendar', 'Calendar'], ['specialists', 'Specialists'], ['research', 'Research'], ['files', 'Files'], ['drive', 'Drive']];
-  const SYSTEM_NAV = [['data', 'Data sources'], ['tools', 'MCP tools'], ['keys', 'API keys'], ['audit', 'Audit'], ['settings', 'Settings']];
+  const SYSTEM_NAV = [['data', 'Data sources'], ['memory', 'Memory'], ['tools', 'MCP tools'], ['keys', 'API keys'], ['audit', 'Audit'], ['settings', 'Settings']];
 
   /* ------------------------------------------------------------ routing */
   function route() { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return { sec: p[0] || 'desk', id: p[1] ? decodeURIComponent(p[1]) : null, sub: p.slice(2).map(decodeURIComponent).join('/') || null }; }
@@ -326,7 +327,7 @@
       if (e.signin) return signinState();
       return errorState(e);
     }
-    const views = { data: vData, tools: vTools, keys: vKeys, inbox: vInbox, desk: vDesk, coverage: vCoverage, calendar: vCalendar, specialists: r.id ? vSpecialist : vSpecialists, chat: vChat, research: r.id ? vThread : vResearch, files: vFiles, drive: vDrive, audit: vAudit, settings: vSettings };
+    const views = { data: vData, memory: vMemory, tools: vTools, keys: vKeys, inbox: vInbox, desk: vDesk, coverage: vCoverage, calendar: vCalendar, specialists: r.id ? vSpecialist : vSpecialists, chat: vChat, research: r.id ? vThread : vResearch, files: vFiles, drive: vDrive, audit: vAudit, settings: vSettings };
     shell(navHtml(r), '<div class="content"><div class="page">' + working('Loading') + '</div></div>');
     bindCommon();
     try { await (views[r.sec] || vDesk)(r); } catch (e) { if (e.signin) return signinState(); console.error(e); $('#main').innerHTML = topbar([['Error']]) + `<div class="content"><div class="page"><p class="err">${esc(e.detail || e.message || 'Could not load this page.')}</p></div></div>`; }
@@ -832,8 +833,18 @@
   // the chat pop-up. `key` keeps chart and trail ids apart between them.
   function msgsHtml(t, sp, key) {
     return t.messages.map((m, i) => m.role === 'user' ? `<div class="msg"><span class="av me">${esc((me.email || 'A')[0].toUpperCase())}</span><div class="mbody"><header><b>You</b><time>${when(m.created_at)}</time></header><div class="txt">${esc(m.text)}</div></div></div>`
-      : `<div class="msg"><span class="av">${esc(sp.initials || '?')}</span><div class="mbody"><header><b>${esc(sp.name || '')}</b><time>${when(m.created_at)}</time></header><div class="txt">${md(m.text)}</div>${chartsHtml(m.charts, key + i)}${trailHtml(m.calls, key + i)}</div></div>`).join('');
+      : `<div class="msg"><span class="av">${esc(sp.initials || '?')}</span><div class="mbody"><header><b>${esc(sp.name || '')}</b><time>${when(m.created_at)}</time></header><div class="txt">${md(m.text)}</div>${savedHtml(m.memory)}${chartsHtml(m.charts, key + i)}${trailHtml(m.calls, key + i)}</div></div>`).join('');
   }
+  // Notes the reply saved to the person's memory, each with Undo.
+  const savedHtml = notes => (notes || []).map(n => `<p class="memsaved"><span>Saved to memory: ${esc(n.text)}</span><button class="linkbtn" data-memundo="${n.id}">Undo</button></p>`).join('');
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-memundo]');
+    if (!b) return;
+    b.disabled = true;
+    api('/memory/' + b.dataset.memundo, { method: 'DELETE' })
+      .then(() => { b.parentNode.innerHTML = '<span>Removed from memory.</span>'; })
+      .catch(err => { if (err.status === 404) { b.parentNode.innerHTML = '<span>Removed from memory.</span>'; return; } b.disabled = false; toast(err.detail || 'Could not remove the note'); });
+  });
   // The question just sent, shown at once while the answer is worked out.
   const pendingHtml = q => `<div class="msg"><span class="av me">${esc((me.email || 'A')[0].toUpperCase())}</span><div class="mbody"><header><b>You</b></header><div class="txt">${esc(q)}</div></div></div>` + working('Looking it up. This can take a minute.');
   const analystThreads = list => list.filter(t => desk.analyst && t.hire_id === desk.analyst.id);
@@ -1237,6 +1248,12 @@
   // The desk owner's own market-data accounts. A key is tried against the
   // vendor before it is kept; "Show prices" proves the connection on a symbol.
   let dataUi = { connecting: '', tried: {} };
+  /* ---- Memory: the notes the assistant keeps about this person (memory-panel.js) */
+  async function vMemory() {
+    $('#main').innerHTML = topbar([['Memory']]) + `<div class="content"><div class="page narrow">${pageHead('Memory', 'What your assistant has learned about you: what you cover, the views you hold, how you like things written. It saves a note on its own when you tell it something worth keeping, and shows each save under its reply with Undo. Chat starts with these notes, and so does the AI tab in the Writer Desk. Only you can see them. Notes are about you, never a source of figures.')}<div id="mem-box"></div></div></div>`;
+    await MemoryPanel.mount($('#mem-box'), { call: (method, path, body) => api(path, { method: method, body: body }), toast: toast });
+  }
+
   async function vData() {
     const d = await api('/data-sources');
     const bySlug = {}; d.providers.forEach(p => { bySlug[p.slug] = p; });

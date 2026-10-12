@@ -325,6 +325,23 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
 #dk-ai-skill-note:empty { display: none; }
 .dk-ai-reach { font-size: 12px; color: var(--obs-text-muted); margin: 12px 0 0; line-height: 1.5; }
 .dk-ai-reach a { color: var(--obs-primary); }
+/* the conversation: which one, its turns, the reply box under the latest */
+.dk-ai-chatbar { display: flex; flex-direction: column; gap: 6px; margin: 0 0 4px; }
+.dk-ai-chatbar select { width: 100%; }
+.dk-ai-chatacts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dk-ai-chatacts .btn { margin-top: 0; }
+.dk-ai-ask { font-size: 12.5px; color: var(--obs-ink); }
+.dk-ai-danger { color: var(--obs-trust-stale); border-color: var(--obs-trust-stale); }
+.dk-ai-you { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--obs-border); }
+.dk-ai-you p { margin: 6px 0 0; color: var(--obs-ink); line-height: 1.5; overflow-wrap: anywhere; }
+.dk-ai-ans .dk-ai-head { margin-top: 12px; padding-top: 0; border-top: 0; }
+.dk-ai-mem { display: flex; gap: 8px; align-items: baseline; margin: 0 0 8px; font-size: 12.5px;
+  color: var(--obs-text-muted); }
+.dk-ai-mem span { flex: 1; overflow-wrap: anywhere; }
+.dk-ai-thread + .dk-ai-form { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--obs-border); }
+.dk-ai-thread:empty + .dk-ai-form { margin-top: 0; padding-top: 0; border-top: 0; }
+.dk-ai-send { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#dk-pane-ai .dk-ai-send .hint { margin: 0; }
 .dk-ai-head { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px;
   padding-top: 12px; border-top: 1px solid var(--obs-border); }
 .dk-ai-head .num { font-size: 12px; font-variant-numeric: tabular-nums; }

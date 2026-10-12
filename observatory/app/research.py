@@ -400,13 +400,21 @@ def history(article_id):
 
 def mark(article_id, actor, label):
     """Copy the current draft into its history under a label, without saving a
-    new revision — the restore point before an AI run. Returns the history id."""
+    new revision — the restore point before an AI run. Returns the history id.
+    When the newest history entry is already this label over the same draft
+    (a conversation's next message, nothing changed since), that entry is the
+    restore point and no copy is added."""
     c = conn()
     with _lock:
         row = c.execute("SELECT revision, draft FROM articles WHERE id = ?",
                         (article_id,)).fetchone()
         if row is None:
             raise ResearchError("No such article.")
+        last = c.execute("SELECT id, revision, draft, label FROM draft_history WHERE article_id = ? "
+                         "ORDER BY id DESC LIMIT 1", (article_id,)).fetchone()
+        if last is not None and last["label"] == label and last["revision"] == row["revision"] \
+                and last["draft"] == row["draft"]:
+            return last["id"]
         cur = c.execute("INSERT INTO draft_history (article_id, revision, saved_at, saved_by, "
                         "draft, label) VALUES (?, ?, ?, ?, ?, ?)",
                         (article_id, row["revision"], _now(), actor, row["draft"], label))

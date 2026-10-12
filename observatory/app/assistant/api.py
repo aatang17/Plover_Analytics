@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from .. import accounts, tools_v2
-from . import (codex, delivery, drive, gateway, keychain, market_data, mcp_client, runner,
+from . import (codex, delivery, drive, gateway, keychain, market_data, mcp_client, memory, runner,
                specialists, store)
 
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
@@ -520,7 +520,7 @@ async def _ask(aid, h, thread_id, text):
     before = store.thread(aid, thread_id)
     history = [{"role": m["role"], "text": m["text"]} for m in before["messages"]]
     store.add_message(thread_id, "user", text)
-    result = await run_in_threadpool(runner.run, aid, h, "message", text, history, "thread")
+    result = await run_in_threadpool(runner.run, aid, h, "message", text, history, "thread", True)
     reply = result["text"] or ("I could not finish: %s" % (result["error"] or result["outcome"]))
     store.add_message(thread_id, "assistant", reply, run_id=result["run_id"])
     out = store.thread(aid, thread_id)
@@ -892,6 +892,10 @@ def delete_mcp_server(server_id: int, request: Request):
 class DataSourceRequest(BaseModel):
     provider: str = ""
     key: str = ""
+
+
+# what the person's assistant remembers about them (shared with the Writer Desk)
+memory.mount(router, lambda request: _account(request)["id"])
 
 
 class DataSourceUpdate(BaseModel):

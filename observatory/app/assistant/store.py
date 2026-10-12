@@ -11,7 +11,9 @@ What it holds, in the plan's words (docs/plans/ARCH-INVESTMENT-ASSISTANT-AGENT.m
 desks (per-account configuration and encrypted keys), hires (a specialist on
 a desk), coverage (the names a desk follows), runs and tool calls (the audit),
 posts (#desk), approvals (anything outward), threads and messages (research),
-files (the specialist's workspace).
+files (the specialist's workspace). Also kept per account: memory (what the
+assistant has learned about its person, app/assistant/memory.py) and the
+research desk AI tab's conversations (app/research_chat.py).
 
 Every function takes plain values and returns plain dicts, so the API and the
 runner — which runs as a separate process — share one code path and no ORM.
@@ -238,6 +240,41 @@ CREATE TABLE IF NOT EXISTS ia_pub_data_sources (
   last_used_at INTEGER,
   UNIQUE (publication_id, provider)
 );
+CREATE TABLE IF NOT EXISTS ia_memories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  place TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ia_memories_account ON ia_memories (account_id, id);
+CREATE TABLE IF NOT EXISTS ia_memory_prefs (
+  account_id INTEGER PRIMARY KEY,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ia_article_chats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL,
+  article_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ia_article_chats_owner ON ia_article_chats (account_id, article_id, updated_at);
+CREATE TABLE IF NOT EXISTS ia_article_turns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  status TEXT NOT NULL,
+  text TEXT NOT NULL,
+  meta_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ia_article_turns_chat ON ia_article_turns (chat_id, id);
 """
 
 APPROVAL_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -683,6 +720,10 @@ def thread(account_id, thread_id):
     for m in r["messages"]:
         m["calls"] = calls(m["run_id"]) if m["run_id"] else []
         m["charts"] = charts_for_run(m["run_id"]) if m["run_id"] else []
+        # the notes this reply's run saved to the person's memory, while kept
+        m["memory"] = _rows(conn().execute(
+            "SELECT id, text FROM ia_memories WHERE account_id = ? AND origin = ? ORDER BY id",
+            (account_id, "run:%s" % m["run_id"]))) if m["run_id"] and m["role"] == "assistant" else []
     return r
 
 

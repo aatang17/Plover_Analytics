@@ -16,11 +16,19 @@
    next-step buttons the AI offered ("Plan This", "Draft It"); one click
    starts that run.
 
+   The tab is a conversation, kept on the server per writer and article
+   (app/research_chat.py): messages and replies run down the pane with the
+   reply box under the latest, and each run is sent the earlier exchanges.
+   New Conversation starts afresh; the menu reopens an earlier one. A note
+   the AI saved to the writer's memory shows under its reply with Undo;
+   the notes themselves are managed under My Account in the Writer Desk.
+
    Loaded before desk.js; uses its helpers ($, S, api, send, renderDraft …)
    only inside functions, which run after both files have loaded. */
 "use strict";
 
-var AI = { settings: null, job: null, poll: null, codexPoll: null, setup: false, skill: "" };
+var AI = { settings: null, job: null, poll: null, codexPoll: null, setup: false, skill: "",
+           chat: null, chats: [], chatId: null, fresh: false, seq: 0 };
 
 var AI_HELP = {
   claude_code: "Uses your Claude subscription. On your own computer, in Terminal, run " +
@@ -44,25 +52,38 @@ function renderAIPane() {
     AI.settings = s;
     // the publication's default skill, until the writer picks another
     if (!AI.skillTouched && s.default_skill) AI.skill = String(s.default_skill);
-    var saved = null;
-    try { saved = localStorage.getItem(aiKey()); } catch (e) { /* storage blocked */ }
-    if (saved && !AI.job) {
-      return api("/research/ai/jobs/" + saved).then(function (j) {
-        AI.job = j;
-        if (j.status === "running") { if (j.writes !== false) pauseCanvas(true); followJob(); }
-        drawAI();
-      }).catch(function () { forgetJob(); drawAI(); });
-    }
+    forgetJob();
+    return loadChat(AI.fresh ? null : AI.chatId);
+  }).then(function () {
     drawAI();
   }).catch(function (err) {
     box.innerHTML = '<p class="bad">' + escapeHtml(err.message) + "</p>";
   });
 }
 
-function styleLine(st) {
-  var link = ' <a href="write.html#/account" target="_blank" rel="noopener">' + (st && st.on ? "Change" : "Set It") + "</a>";
-  if (!st || !st.on) return "Writing style: not set, so the house style alone." + link;
-  return "Writing style: yours" + (st.samples ? ", from " + st.samples + (st.samples === 1 ? " sample" : " samples") : "") + "." + link;
+/* The writer's conversations about this article, and one in full: the one
+   asked for, else the newest. A reply still being worked on picks up its run. */
+function loadChat(chatId) {
+  var seq = AI.seq;
+  return api("/research/articles/" + ID + "/ai/chats" + (chatId ? "?chat=" + chatId : "")).then(function (v) {
+    if (seq !== AI.seq) return;          // a run started meanwhile: what is on screen is newer
+    AI.chats = v.chats || [];
+    if (AI.fresh) { AI.chat = null; AI.chatId = null; return; }
+    AI.chat = v.chat;
+    AI.chatId = v.chat ? v.chat.id : null;
+    var last = lastTurn();
+    if (last && last.role === "assistant" && last.status === "running" && !(AI.job && AI.job.status === "running")) {
+      return api("/research/ai/jobs/" + last.meta.job_id).then(function (j) {
+        AI.job = j;
+        if (j.status === "running") { if (j.writes !== false) pauseCanvas(true); followJob(); }
+      }).catch(function () { /* the next look at the conversation shows it stopped */ });
+    }
+  });
+}
+
+function lastTurn() {
+  var t = AI.chat && AI.chat.turns;
+  return t && t.length ? t[t.length - 1] : null;
 }
 
 function aiReady(s) {
@@ -80,15 +101,19 @@ function drawAI() {
   var model = pubAI ? (pubAI.model || pubAI.default_model) : s.model;
   var running = AI.job && AI.job.status === "running";
   var length = s.publication_length || s.length;
+  var talking = !!(AI.chat && AI.chat.turns && AI.chat.turns.length);
+  var mem = s.memory || { enabled: true, notes: 0 };
   box.innerHTML =
     '<div class="dk-ai-using"><span>Using <strong>' + escapeHtml(label) + "</strong>" +
     (model ? ' <span class="mono">' + escapeHtml(model) + "</span>" : "") +
     (pubAI ? " · the publication's" : "") + "</span>" +
     (pubAI ? "" : '<button type="button" class="linkish" id="dk-ai-change"' + (running ? " disabled" : "") + ">Change</button>") + "</div>" +
+    chatBar(running) +
+    '<div id="dk-ai-thread" class="dk-ai-thread"></div>' +
     '<form id="dk-ai-form" class="dk-ai-form">' +
     (s.skills && s.skills.length
       ? '<label class="dk-flabel" for="dk-ai-skill">Skill</label>' +
-        '<select id="dk-ai-skill"' + (running ? " disabled" : "") + '><option value="">None (follow my instruction)</option>' +
+        '<select id="dk-ai-skill"' + (running ? " disabled" : "") + '><option value="">None (follow my message)</option>' +
         s.skills.map(function (k) {
           return '<option value="' + k.id + '"' + (String(k.id) === AI.skill ? " selected" : "") + ">" + escapeHtml(k.name) + "</option>";
         }).join("") + "</select>" +
@@ -103,18 +128,19 @@ function drawAI() {
         }).join("") + "</div>" +
         '<span class="hint" id="dk-ai-len-note"></span>'
       : "") +
-    '<label class="dk-flabel" for="dk-ai-text">Instruction</label>' +
-    '<textarea id="dk-ai-text" rows="5" maxlength="8000" placeholder="What should it do with this draft?"' +
+    '<label class="dk-flabel" for="dk-ai-text">' + (talking ? "Reply" : "Message") + "</label>" +
+    '<textarea id="dk-ai-text" rows="' + (talking ? 3 : 5) + '" maxlength="8000" placeholder="What should it do with this draft?"' +
     (running ? " disabled" : "") + "></textarea>" +
-    '<button type="submit" class="btn btn-primary" id="dk-ai-run"' + (running ? " disabled" : "") + ">" +
-    (running ? "Working…" : "Run") + "</button></form>" +
+    '<div class="dk-ai-send"><button type="submit" class="btn btn-primary" id="dk-ai-run"' + (running ? " disabled" : "") + ">" +
+    (running ? "Working…" : "Send") + '</button><span class="hint">Ctrl+Enter to send</span></div></form>' +
     '<p class="dk-ai-reach">Can use: ' + escapeHtml((s.reach || []).join(", ")) + "." +
     // each publication keeps its own skills and connections, in the Writer Desk
     (S.article && S.article.publication
       ? ' <a href="write.html#/p/' + S.article.publication.id + '/assistant" target="_blank" rel="noopener">Assistant Settings</a>' : "") +
-    '<br><span id="dk-ai-styleline">' + styleLine(s.style) + "</span></p>" +
-    '<div id="dk-ai-job"></div>';
+    '<br><span id="dk-ai-memline">' + memLine(mem) + "</span>" +
+    '<br><span id="dk-ai-styleline">' + styleLine(s.style) + "</span></p>";
   if ($("#dk-ai-change")) $("#dk-ai-change").addEventListener("click", function () { AI.setup = true; drawAI(); });
+  wireChatBar();
   var pick = $("#dk-ai-skill");
   function skillNote() {
     if (!pick) return;
@@ -122,9 +148,11 @@ function drawAI() {
     var k = s.skills.filter(function (x) { return String(x.id) === pick.value; })[0];
     $("#dk-ai-skill-note").textContent = k ? k.description + (k.writes ? "" : " Answers in this panel; your draft is not changed.") : "";
     $("#dk-ai-text").placeholder = k ? "Optional: the story, the question or anything to add"
+      : talking ? "Ask a follow-up, or say what to change in the draft"
       : "What should it do with this draft?";
   }
   if (pick) { pick.addEventListener("change", function () { AI.skillTouched = true; skillNote(); }); skillNote(); }
+  else if (talking) $("#dk-ai-text").placeholder = "Ask a follow-up, or say what to change in the draft";
   function lengthNote() {
     var key = s.publication_length || s.length;
     var x = (s.lengths || []).filter(function (l) { return l.key === key; })[0];
@@ -148,7 +176,99 @@ function drawAI() {
     e.preventDefault();
     runAI($("#dk-ai-text").value, pick ? pick.value : "");
   });
-  drawJob();
+  $("#dk-ai-text").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) {
+      e.preventDefault();
+      runAI($("#dk-ai-text").value, pick ? pick.value : "");
+    }
+  });
+  drawThread();
+  showLatest();
+}
+
+function styleLine(st) {
+  var link = ' <a href="write.html#/account" target="_blank" rel="noopener">' + (st && st.on ? "Change" : "Set It") + "</a>";
+  if (!st || !st.on) return "Writing style: not set, so the house style alone." + link;
+  return "Writing style: yours" + (st.samples ? ", from " + st.samples + (st.samples === 1 ? " sample" : " samples") : "") + "." + link;
+}
+
+function memLine(mem) {
+  var manage = ' <a href="write.html#/account" target="_blank" rel="noopener">' + (mem.enabled ? "Manage" : "Turn On") + "</a>";
+  if (!mem.enabled) return "Memory: off." + manage;
+  return "Memory: on, " + (mem.notes ? mem.notes + (mem.notes === 1 ? " note" : " notes") + " about you"
+    : "no notes yet") + "." + manage;
+}
+
+/* The conversation's own controls: which one is open, start a new one,
+   delete this one. */
+function chatBar(running) {
+  var list = AI.chats || [];
+  if (!list.length && !AI.chat) return "";
+  var opts = (AI.chat ? "" : '<option value="" selected>New conversation</option>') +
+    list.map(function (c) {
+      return '<option value="' + c.id + '"' + (AI.chat && AI.chat.id === c.id ? " selected" : "") + ">" +
+        escapeHtml(c.title) + " · " + escapeHtml(dayLabel(c.updated_at)) + "</option>";
+    }).join("");
+  return '<div class="dk-ai-chatbar" id="dk-ai-chatbar">' +
+    '<select id="dk-ai-chat" aria-label="Conversation"' + (running ? " disabled" : "") + ">" + opts + "</select>" +
+    '<div class="dk-ai-chatacts">' +
+    (AI.chat ? '<button type="button" class="btn" id="dk-ai-new"' + (running ? " disabled" : "") + ">New Conversation</button>" +
+      '<button type="button" class="btn" id="dk-ai-del"' + (running ? " disabled" : "") + ">Delete</button>" : "") +
+    "</div></div>";
+}
+
+function wireChatBar() {
+  var sel = $("#dk-ai-chat");
+  if (sel) sel.addEventListener("change", function () {
+    AI.fresh = !sel.value;
+    AI.job = null;
+    sel.disabled = true;
+    loadChat(sel.value ? Number(sel.value) : null).then(drawAI).catch(function (err) { sel.disabled = false; toast(err.message); });
+  });
+  var nb = $("#dk-ai-new");
+  if (nb) nb.addEventListener("click", function () {
+    AI.fresh = true;
+    AI.chat = null;
+    AI.chatId = null;
+    AI.job = null;
+    drawAI();
+    $("#dk-ai-text").focus();
+  });
+  var del = $("#dk-ai-del");
+  if (del) del.addEventListener("click", function () {
+    var bar = $("#dk-ai-chatbar");
+    var id = AI.chat.id;
+    bar.innerHTML = '<span class="dk-ai-ask">Delete this conversation? Your memory and the draft are not changed.</span>' +
+      '<div class="dk-ai-chatacts"><button type="button" class="btn dk-ai-danger" id="dk-ai-delok">Delete</button>' +
+      '<button type="button" class="btn" id="dk-ai-delno">Cancel</button></div>';
+    $("#dk-ai-delno").addEventListener("click", drawAI);
+    $("#dk-ai-delok").addEventListener("click", function () {
+      var b = $("#dk-ai-delok");
+      b.disabled = true;
+      b.textContent = "Deleting…";
+      api("/research/ai/chats/" + id, { method: "DELETE" }).then(function () {
+        AI.fresh = false;
+        AI.job = null;
+        return loadChat(null);
+      }).then(function () {
+        drawAI();
+        toast("Conversation deleted.");
+      }).catch(function (err) { b.disabled = false; b.textContent = "Delete"; toast(err.message); });
+    });
+  });
+}
+
+function dayLabel(ts) {
+  var d = new Date(ts * 1000);
+  var mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+  return d.getDate() + " " + mon;
+}
+
+/* Bring the newest turn into view once its reply arrives. */
+function showLatest() {
+  var turns = $all(".dk-ai-turn", $("#dk-ai-thread"));
+  var el = turns[turns.length - 1];
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
 }
 
 function drawSetup(box, s) {
@@ -368,17 +488,30 @@ function runAI(text, skillId, onFail, image) {
     if (S.seq !== S.savedSeq) throw new Error("Your latest changes are not saved yet; try again in a moment.");
     b.textContent = "Starting…";
     return send("POST", "/research/articles/" + ID + "/ai", { instruction: text, skill_id: skillId ? Number(skillId) : null,
-                                                            image: image || null });
+                                                            image: image || null, chat_id: AI.chatId || null });
   }).then(function (job) {
+    AI.seq += 1;
     AI.job = job;
     AI.lastInstruction = text;
-    try { localStorage.setItem(aiKey(), job.id); } catch (e) { /* storage blocked */ }
+    AI.fresh = false;
+    var skill = (AI.settings.skills || []).filter(function (k) { return String(k.id) === String(skillId); })[0];
+    // the message and its reply-to-come, shown at once
+    if (!AI.chat || AI.chat.id !== job.chat_id) {
+      AI.chat = { id: job.chat_id, title: text || (skill ? skill.name : ""), turns: [] };
+      if (job.chat_id) AI.chats = [{ id: job.chat_id, title: AI.chat.title, updated_at: Date.now() / 1000 }].concat(AI.chats || []);
+    }
+    AI.chatId = job.chat_id || null;
+    AI.chat.turns.push({ role: "user", status: "done", text: text, meta: { skill: skill ? skill.name : null, picture: !!image } });
+    AI.chat.turns.push({ role: "assistant", status: "running", text: "", meta: { job_id: job.id } });
+    // after a skill's run, a reply is a plain follow-up unless another skill is picked
+    AI.skill = "";
+    AI.skillTouched = true;
     if (job.writes !== false) pauseCanvas(true);
     drawAI();
     followJob();
   }).catch(function (err) {
     b.disabled = false;
-    b.textContent = "Run";
+    b.textContent = "Send";
     if (onFail) onFail();
     toast(err.message);
   });
@@ -433,7 +566,7 @@ function followJob() {
   AI.poll = setTimeout(function () {
     api("/research/ai/jobs/" + AI.job.id).then(function (j) {
       AI.job = j;
-      if (j.status === "running") { drawJob(); followJob(); return; }
+      if (j.status === "running") { drawThread(); followJob(); return; }
       finishJob(j);
     }).catch(function (err) {
       if (err.status === 404) {
@@ -448,8 +581,19 @@ function followJob() {
   }, 1500);
 }
 
+/* The run is over: the draft is reloaded if it changed, then the
+   conversation, which now keeps the reply. */
 function finishJob(j) {
-  var done = function () { pauseCanvas(false); drawAI(); };
+  var done = function () {
+    pauseCanvas(false);
+    loadChat(AI.chatId).catch(function () { /* the reply below is the run's own */ }).then(function () {
+      AI.job = null;
+      if (AI.settings && j.memory && j.memory.length) refreshMemoryCount();
+      drawAI();
+      var ta = $("#dk-ai-text");
+      if (ta && !ta.disabled) ta.focus({ preventScroll: true });
+    });
+  };
   if (!j.changed) return done();
   api("/research/articles/" + ID).then(function (a) {
     pushUndo("ai");
@@ -463,43 +607,93 @@ function finishJob(j) {
   }).catch(function (err) { toast(err.message); done(); });
 }
 
+function refreshMemoryCount() {
+  api(aiPath("/research/ai")).then(function (s) {
+    AI.settings.memory = s.memory;
+    var el = $("#dk-ai-memline");
+    if (el) el.innerHTML = memLine(s.memory);
+  }).catch(function () { /* the count catches up on the next visit */ });
+}
+
+/* Runs used to be remembered in this browser; the conversation now is. */
 function forgetJob() {
   try { localStorage.removeItem(aiKey()); } catch (e) { /* storage blocked */ }
 }
 
 var AI_STATUS = { running: "Working", done: "Finished", failed: "Stopped" };
 
-function drawJob() {
-  var el = $("#dk-ai-job");
-  var j = AI.job;
-  if (!el || !j) return;
-  var steps = j.steps || [];
+/* The conversation: each message and its reply. The reply being worked on
+   shows its steps as they happen; the last reply carries its next-step
+   buttons and Undo. */
+function drawThread() {
+  var el = $("#dk-ai-thread");
+  if (!el) return;
+  var turns = (AI.chat && AI.chat.turns) || [];
+  if (!turns.length) { el.innerHTML = ""; return; }
+  var lastAt = turns.length - 1;
+  el.innerHTML = turns.map(function (t, i) {
+    if (t.role === "user") {
+      var said = t.text ? escapeHtml(t.text).replace(/\n/g, "<br>")
+        : (t.meta && t.meta.skill ? "Run the skill." : "");
+      return '<div class="dk-ai-turn dk-ai-you"><span class="dk-flabel">You' +
+        (t.meta && t.meta.skill ? " · " + escapeHtml(t.meta.skill) : "") +
+        (t.meta && t.meta.picture ? " · with a picture" : "") + "</span>" +
+        "<p>" + said + "</p></div>";
+    }
+    return replyTurnHtml(t, i === lastAt, i);
+  }).join("");
+  wireThread(el, turns);
+}
+
+function replyTurnHtml(t, isLast, i) {
+  var live = t.status === "running" && AI.job && t.meta && AI.job.id === t.meta.job_id;
+  var j = live ? AI.job : null;
+  var m = t.meta || {};
+  var status = j ? j.status : t.status;
+  var steps = (j ? j.steps : m.steps) || [];
+  var reply = j ? j.reply : (t.status === "done" ? t.text : "");
+  var error = j ? j.error : (t.status === "failed" ? t.text : "");
+  var next = (j ? j.next : m.next) || [];
+  var secs = j ? j.seconds : m.seconds;
   var list = steps.length ? '<ol class="dk-ai-steps">' + steps.map(function (s) {
     return '<li class="' + (s.kind === "error" ? "bad" : "") + '">' + escapeHtml(s.text) + "</li>";
   }).join("") + "</ol>" : "";
+  var saved = (j ? j.memory : t.memory) || [];
   // while it works the steps are the news; once it is done the answer is
-  el.innerHTML =
-    '<div class="dk-ai-head"><span class="dk-flabel">' + escapeHtml(AI_STATUS[j.status] || "") +
-    (j.skill ? " · " + escapeHtml(j.skill) : "") +
-    (j.provider_label ? " · " + escapeHtml(j.provider_label) : "") + "</span>" +
-    (j.seconds !== undefined ? '<span class="num muted">' + fmtSecs(j.seconds) + "</span>" : "") + "</div>" +
-    (j.status === "running" ? (list || '<p class="muted">Reading the draft…</p>') : "") +
-    (j.reply ? '<div class="dk-ai-reply">' + replyHtml(j.reply) + "</div>" : "") +
-    (j.status === "done" && j.next && j.next.length
-      ? '<div class="dk-ai-next">' + j.next.map(function (o, i) {
-          return '<button type="button" class="btn" data-next="' + i + '" title="' +
+  return '<div class="dk-ai-turn dk-ai-ans" data-turn="' + i + '">' +
+    '<div class="dk-ai-head"><span class="dk-flabel">' + escapeHtml(AI_STATUS[status] || "") +
+    (m.skill ? " · " + escapeHtml(m.skill) : "") +
+    (m.provider_label ? " · " + escapeHtml(m.provider_label) : "") + "</span>" +
+    (secs !== undefined && secs !== null ? '<span class="num muted">' + fmtSecs(secs) + "</span>" : "") + "</div>" +
+    (status === "running" ? (j && j.elsewhere
+      ? '<p class="muted">Still working. The site was updated during this run; the reply appears here when it is done.</p>'
+      : list || '<p class="muted">Reading the draft…</p>') : "") +
+    (reply ? '<div class="dk-ai-reply">' + replyHtml(reply) + "</div>" : "") +
+    saved.map(function (n) {
+      return '<p class="dk-ai-mem" data-mem="' + n.id + '"><span>Saved to memory: ' + escapeHtml(n.text) + "</span>" +
+        '<button type="button" class="linkish" data-memundo="' + n.id + '">Undo</button></p>';
+    }).join("") +
+    (isLast && status === "done" && next.length
+      ? '<div class="dk-ai-next">' + next.map(function (o, k) {
+          return '<button type="button" class="btn" data-next="' + k + '" title="' +
             escapeHtml((o.skill ? o.skill + ": " : "") + o.instruction) + '">' + escapeHtml(o.label) + "</button>";
         }).join("") + "</div>"
       : "") +
-    (j.error ? '<p class="bad">' + escapeHtml(j.error) + "</p>" : "") +
-    (undoable(j) ? '<button type="button" class="btn" id="dk-ai-undo">Undo AI Changes</button>' : "") +
-    (j.status !== "running" && list
+    (error ? '<p class="bad">' + escapeHtml(error) + "</p>" : "") +
+    (isLast && undoable(j || m, status) ? '<button type="button" class="btn" id="dk-ai-undo">Undo AI Changes</button>' : "") +
+    (status !== "running" && list
       ? '<details class="dk-ai-trail"><summary>Show the ' + steps.length + (steps.length === 1 ? " step" : " steps") +
         " it took</summary>" + list + "</details>"
-      : "");
+      : "") + "</div>";
+}
+
+function wireThread(el, turns) {
+  var last = turns[turns.length - 1];
+  var lm = (last && last.meta) || {};
   $all("[data-next]", el).forEach(function (b) {
     b.addEventListener("click", function () {
-      var o = j.next[Number(b.getAttribute("data-next"))];
+      var o = (lm.next || [])[Number(b.getAttribute("data-next"))];
+      if (!o) return;
       AI.skill = o.skill_id ? String(o.skill_id) : "";
       $all("[data-next]", el).forEach(function (x) { x.disabled = true; });
       b.textContent = "Starting…";
@@ -509,24 +703,48 @@ function drawJob() {
       });
     });
   });
+  $all("[data-memundo]", el).forEach(function (b) {
+    b.addEventListener("click", function () {
+      var id = b.getAttribute("data-memundo");
+      b.disabled = true;
+      api("/research/ai/memory/" + id, { method: "DELETE" }).then(function (res) {
+        forgetSaved(Number(id));
+        b.parentNode.innerHTML = "<span>Removed from memory.</span>";
+        AI.settings.memory = res.memory;
+        var ml = $("#dk-ai-memline");
+        if (ml) ml.innerHTML = memLine(res.memory);
+      }).catch(function (err) {
+        b.disabled = false;
+        if (err.status === 404) { forgetSaved(Number(id)); b.parentNode.innerHTML = "<span>Removed from memory.</span>"; return; }
+        toast(err.message);
+      });
+    });
+  });
   var u = $("#dk-ai-undo");
   if (u) u.addEventListener("click", function () {
     u.disabled = true;
-    api("/research/articles/" + ID + "/history/" + j.before_history_id).then(function (res) {
+    api("/research/articles/" + ID + "/history/" + lm.before_history_id).then(function (res) {
       pushUndo("undo ai");
       renderDraft(res.draft);
       changed();
       u.remove();
-      forgetJob();
+      lm.undone = true;
       toast("Put back the draft from before the AI run. It saves as a new revision.", true);
     }).catch(function (err) { u.disabled = false; toast(err.message); });
   });
 }
 
+/* A note taken back out of memory is no longer shown as saved. */
+function forgetSaved(id) {
+  ((AI.chat && AI.chat.turns) || []).forEach(function (t) {
+    if (t.memory) t.memory = t.memory.filter(function (n) { return n.id !== id; });
+  });
+}
+
 /* Undo is offered while the draft is still as the run left it: once anyone
    has edited it, History is the place to go back (the "Before AI" copy). */
-function undoable(j) {
-  return j.status !== "running" && j.changed && j.before_history_id &&
+function undoable(j, status) {
+  return status !== "running" && !j.undone && j.changed && j.before_history_id &&
     (j.revision_after === undefined || j.revision_after === null || j.revision_after === S.base);
 }
 

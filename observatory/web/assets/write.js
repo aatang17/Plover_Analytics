@@ -926,8 +926,13 @@
       '<div id="wd-ds">' + loading("your data sources") + "</div>" +
       band("Writing Style") +
       '<p class="wd-para">How you write. Describe it in a few lines and add up to five pieces you wrote. The writing assistant in the editor follows your voice in every publication you write for. Each publication\'s house style still decides numbers, units and headings. Only you can see this.</p>' +
-      '<div id="wd-mystyle">' + loading("your writing style") + "</div>"));
+      '<div id="wd-mystyle">' + loading("your writing style") + "</div>" +
+      band("Memory") +
+      '<p class="wd-para">What your assistant has learned about you: what you cover, the views you hold, how you like things written. It saves a note on its own when you tell it something worth keeping, and shows each save under its reply with Undo. Every conversation starts with these notes, in the editor\'s AI tab and in your Investment Assistant. Only you can see them. Notes are about you, never a source of figures.</p>' +
+      '<div id="wd-mem"></div>'));
     $("#wd-signout").addEventListener("click", signOut);
+    MemoryPanel.mount($("#wd-mem"), { call: (method, path, body) => method === "GET" ? api("/write" + path)
+      : body ? send(method, "/write" + path, body) : api("/write" + path, { method: method }), toast: toast });
     DS = { base: "/write/data-sources", whose: "your own account" };
     ds.connecting = ""; ds.tried = {};
     loadSources();

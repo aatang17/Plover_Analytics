@@ -19,7 +19,7 @@ import argparse
 import json
 import sys
 
-from . import runner, specialists, store
+from . import memory, runner, specialists, store
 
 PROTOCOL = "2025-06-18"
 # What a Codex run may use, before the specialist's own allowlist narrows it.
@@ -29,7 +29,7 @@ ALLOWED = set(specialists.READ_TOOLS) | {"my_coverage", "draw_chart"}
 
 
 class Context(object):
-    def __init__(self, account_id, hire_id, run_id):
+    def __init__(self, account_id, hire_id, run_id, remember=False):
         hire = store.hire(account_id, hire_id)
         if hire is None:
             raise SystemExit("no such hire")
@@ -39,8 +39,11 @@ class Context(object):
         self.run.drive = set()
         self.run.market = []
         self.run.allow = set(self.run.spec["tools"]) & ALLOWED
+        # the person's own chat: their memory, as for the other providers
+        self.run.memory = bool(remember) and memory.enabled(account_id)
         self.tools = []
-        for s in runner.tool_schemas([t for t in self.run.spec["tools"] if t in self.run.allow]):
+        for s in runner.tool_schemas([t for t in self.run.spec["tools"] if t in self.run.allow]) \
+                + (memory.TOOL_SCHEMAS if self.run.memory else []):
             self.tools.append({"name": s["name"], "description": s["description"],
                                "inputSchema": s["parameters"],
                                "annotations": {"readOnlyHint": True, "openWorldHint": False}})
@@ -107,8 +110,9 @@ def main(argv):
     ap.add_argument("--account", type=int, required=True)
     ap.add_argument("--hire", type=int, required=True)
     ap.add_argument("--run", type=int, required=True)
+    ap.add_argument("--memory", action="store_true")
     a = ap.parse_args(argv)
-    serve(Context(a.account, a.hire, a.run), sys.stdin, sys.stdout)
+    serve(Context(a.account, a.hire, a.run, a.memory), sys.stdin, sys.stdout)
 
 
 if __name__ == "__main__":

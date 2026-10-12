@@ -39,7 +39,7 @@ from pydantic import BaseModel
 
 from . import accounts, connectors, mailer, research, seo, skills, staff, writers, writing_style
 from . import pub_coverage, pub_profile
-from .assistant import market_data, store as ia_store
+from .assistant import market_data, memory, store as ia_store
 from .admin_api import STAFF_COOKIE, _client_ip, audit
 
 router = APIRouter(prefix="/admin/api/write", include_in_schema=False)
@@ -453,6 +453,31 @@ def drop_key(key_id: int, request: Request):
     return {"revoked": key_id}
 
 
+# ----------------------------------------------------------- data sources
+# The writer's own market-data accounts (app/assistant/market_data.py). They
+# belong to the person's sign-in account, so the same connection shows on
+# their Investment Assistant desk, and only their own runs can use it.
+
+def _own_person(request):
+    person = writers.require_writer(request)
+    if person.get("shared") or not person.get("email"):
+        raise HTTPException(403, "Sign in with your own account to connect a data source: "
+                                 "its key is personal.")
+    return person
+
+
+def _own_account(request):
+    """The signed-in writer's own account (by email), made on first use."""
+    person = writers.require_writer(request)
+    if person.get("shared") or not person.get("email"):
+        raise HTTPException(403, "Sign in with your own account to see your memory: it is personal.")
+    return market_data.account_for(person["email"], create=True)
+
+
+# what the writer's assistant remembers about them (shared with the Investment Assistant)
+memory.mount(router, _own_account)
+
+
 # ----------------------------------------------------------- writing style
 # How the writer writes (app/writing_style.py): theirs, in every publication.
 
@@ -483,19 +508,6 @@ def save_style(body: StyleBody, request: Request):
         raise HTTPException(400, str(exc))
     _audit(request, person, "writing_style_saved", "%d samples" % len(out["samples"]))
     return out
-
-
-# ----------------------------------------------------------- data sources
-# The writer's own market-data accounts (app/assistant/market_data.py). They
-# belong to the person's sign-in account, so the same connection shows on
-# their Investment Assistant desk, and only their own runs can use it.
-
-def _own_person(request):
-    person = writers.require_writer(request)
-    if person.get("shared") or not person.get("email"):
-        raise HTTPException(403, "Sign in with your own account to connect a data source: "
-                                 "its key is personal.")
-    return person
 
 
 class SourceBody(BaseModel):

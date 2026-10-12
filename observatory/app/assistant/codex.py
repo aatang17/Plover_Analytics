@@ -221,7 +221,8 @@ def command(run, model, home, work, last_file):
             "-c", "mcp_servers.plover.command=" + _toml(sys.executable),
             "-c", "mcp_servers.plover.args=" + _toml(
                 ["-m", "app.assistant.codex_mcp", "--account", str(run.account_id),
-                 "--hire", str(run.hire["id"]), "--run", str(run.run_id)]),
+                 "--hire", str(run.hire["id"]), "--run", str(run.run_id)]
+                + (["--memory"] if getattr(run, "memory", False) else [])),
             "-c", "mcp_servers.plover.cwd=" + _toml(APP_ROOT),
             "-c", "mcp_servers.plover.env=" + env_table,
             "-c", "mcp_servers.plover.startup_timeout_sec=30",
