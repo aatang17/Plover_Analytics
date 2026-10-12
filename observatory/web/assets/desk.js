@@ -950,7 +950,10 @@ function renderDataChart(c, b) {
     setTimeout(function () { if (b.rows.length) showCells(c, false); }, 0);
   });
   showCells(c, !has);
-  drawDataChart(c, b);
+  // a block not yet on the page has no width, and a chart drawn into it
+  // stays blank (as after an AI run reloads the draft): draw once it is placed
+  if (c.isConnected) drawDataChart(c, b);
+  else setTimeout(function () { if (c.isConnected) drawDataChart(c, b); }, 0);
 }
 
 function showCells(c, open) {
