@@ -129,7 +129,8 @@ class Poll(unittest.TestCase):
         h = us_press.health()[0]
         self.assertEqual(h["dataset"], "us-press-releases")
         self.assertTrue(h["stale"])
-        self.assertIn("1 of 2 S&P 500 members have a news feed", h["shape_flags"][0])
+        self.assertIn("1 of 2 S&P 500 members have a news feed", h["notes"][0])
+        self.assertEqual(h["shape_flags"], [])
 
     def test_poll_keeps_releases_once_and_reads_capital_return(self):
         out = us_press.poll(log=lambda *a: None)
@@ -168,8 +169,9 @@ class Poll(unittest.TestCase):
             us_press._last_poll["at"] = 0
             with self.assertRaises(RuntimeError):
                 us_press.poll_if_due()
-            flags = us_press.health()[0]["shape_flags"]
-        self.assertTrue(any("last poll failed" in f and "feeds file unreadable" in f for f in flags), flags)
+            h = us_press.health()[0]
+        self.assertTrue(any("last poll failed" in f and "feeds file unreadable" in f for f in h["notes"]), h)
+        self.assertEqual(h["status"], "attention")
 
     def test_poll_if_due_waits_for_its_interval(self):
         with mock.patch.dict(os.environ, {"US_PRESS_POLL": "1"}), \

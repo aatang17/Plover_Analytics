@@ -209,6 +209,12 @@ def problems(report):
                                          row.get("days_behind"),
                                          row.get("stale_after_days"))))
         for flag in row.get("shape_flags") or []:
+            if not isinstance(flag, dict):
+                # a sentence, not a {table, column, detail} record: report it as
+                # written. Before 2026-10-19 one of these crashed every watch tick,
+                # which silently stopped alerts, study refreshes and the press poll.
+                found.append(("%s:flag:%s" % (name, str(flag)[:60]), "%s: %s" % (name, flag)))
+                continue
             found.append(("%s:shape:%s.%s" % (name, flag.get("table"), flag.get("column")),
                           "%s changed shape: %s.%s %s"
                           % (name, flag.get("table"), flag.get("column"),

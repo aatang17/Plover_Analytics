@@ -158,3 +158,17 @@ class ProblemsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShapeFlagSentences(unittest.TestCase):
+    """2026-10-19: a health entry with a sentence in shape_flags crashed every
+    watch tick, which stopped alerts, study refreshes and the press poll."""
+
+    def test_a_sentence_flag_is_reported_not_fatal(self):
+        report = {"equity_extractors": [{"dataset": "x", "shape_flags": [
+            "500 of 500 members not checked", {"table": "t", "column": "c", "detail": "gone"}]}]}
+        found = refresh.problems(report)
+        keys = [k for k, _ in found]
+        self.assertTrue(any(k.startswith("equity/x:flag:") for k in keys), keys)
+        self.assertIn("equity/x:shape:t.c", keys)
+

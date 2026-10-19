@@ -857,19 +857,22 @@ def health():
     feed_failed = [f for f in failed if not str(f).startswith("8-K:")]
     return [{
         "dataset": "us-press-releases",
-        "status": "attention" if stale else "ok",
+        "status": "attention" if (stale or status.get("error")) else "ok",
         "archive_read_through": newest,
         "days_behind": days,
         "stale_after_days": STALE_AFTER_DAYS,
         "stale": stale,
         "last_extracted_at": last,
-        "shape_flags": (["%d of %d S&P 500 members have a news feed" % (with_feed, len(feeds))]
-                        + (["%d news feeds failed in the last poll" % len(feed_failed)] if feed_failed else [])
-                        + (["%d 8-K filings could not be read in the last poll" % len(sec_failed)]
-                           if sec_failed else [])
-                        + (["a poll started at %s has not finished" % running] if running else [])
-                        + (["last poll failed at %s: %s" % (status["at"], status["error"])]
-                           if status.get("error") else [])),
+        # shape_flags is for {table, column, detail} records of a table changing
+        # shape (app/refresh.py reads it so); this entry's sentences are notes
+        "shape_flags": [],
+        "notes": (["%d of %d S&P 500 members have a news feed" % (with_feed, len(feeds))]
+                  + (["%d news feeds failed in the last poll" % len(feed_failed)] if feed_failed else [])
+                  + (["%d 8-K filings could not be read in the last poll" % len(sec_failed)]
+                     if sec_failed else [])
+                  + (["a poll started at %s has not finished" % running] if running else [])
+                  + (["last poll failed at %s: %s" % (status["at"], status["error"])]
+                     if status.get("error") else [])),
     }]
 
 
