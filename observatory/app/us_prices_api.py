@@ -3,7 +3,10 @@
 
 equity/us_prices_databento.py archives and loads EQUS.SUMMARY (one bar per
 symbol per trading day, every US exchange, from July 2024) into
-data/sec.duckdb. This module serves a symbol's daily series and gives the
+data/sec.duckdb, with older history from EQUS.MINI (every exchange, from
+28 March 2023) and, from 1 May 2018 to 27 March 2023, each stock's listing
+exchange (XNAS.ITCH for Nasdaq, XNYS.PILLAR for NYSE): close as that
+exchange's closing auction sets it, volume that exchange's alone. This module serves a symbol's daily series and gives the
 screener its latest closes.
 
 Trust contract: a bar is the vendor's figure as delivered, never adjusted
@@ -13,6 +16,7 @@ dataset card carries the licence note. Missing is missing — a day with no
 bar has no row.
 """
 import datetime
+import math
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -21,17 +25,24 @@ from . import sec_api
 router = APIRouter(prefix="/api/v1/us/prices", tags=["US prices"])
 
 STALE_AFTER_DAYS = 4        # a trading day's bar is posted the next morning; a long weekend is 3 days
-SPLIT_RULE = ("closes before a split day are divided by the split ratio; a split day is one where the "
-              "previous close ÷ the close lands within 6% of a whole number (2 to 100) or within 2% of its "
-              "reciprocal. The bars themselves stay as delivered.")
+SPLIT_RULE = ("closes before a split day are divided by the split ratio. A split day is one where the company's "
+              "own share count (its cover-page counts, filed each quarter) rose by about a whole number from 2 to "
+              "100 (within 25%), or fell by its reciprocal, and the previous close ÷ the close moved by about the "
+              "same (within 35%); the share count's ratio is used. A day whose share count barely moved is no "
+              "split, however far the price fell. Where no share count is on file, the price decides alone: the "
+              "previous close ÷ the close within 6% of a whole number or within 8% of its reciprocal. The bars "
+              "themselves stay as delivered.")
 
 PROVENANCE = {
     "trust": "official",
-    "note": ("Consolidated end-of-day bars exactly as Databento delivers them (dataset EQUS.SUMMARY, "
-             "Databento Equities Summary): open, high, low, close in US dollars, volume in shares, one "
-             "row per listed symbol per trading day. Not adjusted for splits or dividends. Licensed data: "
-             "shown with a one-day delay under Databento's redistribution terms."),
-    "credit": "Source: Databento (EQUS.SUMMARY). Market data provided by Databento.",
+    "note": ("End-of-day bars exactly as Databento delivers them: open, high, low, close in US dollars, "
+             "volume in shares, one row per listed symbol per trading day. From 28 March 2023, consolidated "
+             "across every exchange (EQUS.MINI, then EQUS.SUMMARY from 1 July 2024); from 1 May 2018 to "
+             "27 March 2023, the stock's listing exchange only (Nasdaq or NYSE), whose closing auction sets "
+             "the official close but whose volume is that exchange's share alone. The bars are as delivered; "
+             "charts and price changes use closes adjusted for splits (the rule is under calc), not for "
+             "dividends. Licensed data: shown with a one-day delay under Databento's redistribution terms."),
+    "credit": "Source: Databento (EQUS.SUMMARY, EQUS.MINI, XNAS.ITCH, XNYS.PILLAR). Market data provided by Databento.",
     "url": "https://databento.com/equities",
 }
 
@@ -83,6 +94,57 @@ def _nice(r):
     return None
 
 
+# ---- splits checked against the share count -----------------------------------
+# The price alone cannot tell a split from a crash: a 50% fall reads as a
+# 2-for-1 split, and a split day on which the stock also moved misses the band
+# (Tesla, 31 August 2020: 5-for-1, closing up 12.6%, a day ratio of 4.44). The
+# company's own share count settles it: the cover-page counts the SEC files
+# per quarter (sec_cover_shares, from 2018) jump by the split ratio across a
+# split and barely move across a crash.
+def _share_counts(cur):
+    """({symbol: cik}, {cik: [(count date, shares)]}) for the split check."""
+    from . import sec_shares
+    cik_of = {}
+    if sec_api._has(cur, "sec_companies"):
+        for cik, tickers in cur.execute("SELECT cik, tickers FROM sec_companies WHERE tickers IS NOT NULL").fetchall():
+            for t in tickers.split(","):
+                cik_of[t.strip().upper().replace("-", ".")] = cik
+    try:
+        totals = sec_shares._cover_totals(cur)
+    except Exception:  # noqa: BLE001 — no cover counts on this server: the price rule alone
+        totals = {}
+    return cik_of, totals
+
+
+def _share_ratio(totals, cik, day):
+    """The share count just after `day` ÷ the one just before, or None."""
+    counts = totals.get(cik) or [] if cik is not None else []
+    before = [n for d, n in counts if d < day]
+    after = [n for d, n in counts if d >= day]
+    if not before or not after or not before[-1]:
+        return None
+    return after[0] / before[-1]
+
+
+def _split_ratio(r, q):
+    """(split ratio or None, 'confirmed' | 'contradicted' | 'price') for a day
+    whose previous close ÷ close is r, given the share-count ratio q across it.
+    Confirmed: the count moved by about a split ratio (within 25%) and the
+    price by about the same (within 35%) — the count's ratio is used. A count
+    that barely moved (within 25%) says it was no split. With no count on
+    file, the price band alone decides, as before."""
+    if q is not None and q > 0 and r > 0:
+        fits = [n for k in NICE_RATIOS for n in (float(k), 1.0 / k)
+                if abs(q / n - 1) <= 0.25 and abs(r / n - 1) <= 0.35]
+        if fits:
+            # the ratio both the count and the price sit closest to (Nvidia,
+            # 10 June 2024: a count ratio of 9.9 is within 25% of 8 and of 10)
+            return min(fits, key=lambda n: abs(math.log(q / n)) + abs(math.log(r / n))), "confirmed"
+        if abs(q - 1) <= 0.25:
+            return None, "contradicted"
+    return _nice(r), "price"
+
+
 # ---- the clean series --------------------------------------------------------
 # The vendor's bars come by ticker, and a ticker is not a company. Three things
 # are repaired here, once, for every reader (charts, rankings, one-year change):
@@ -109,9 +171,10 @@ def _events(cur):
         WHERE prev IS NOT NULL AND (prev / close >= 1.8 OR prev / close <= 0.56)
         ORDER BY symbol, date""").fetchall()
     splits, breaks = {}, {}
+    cik_of, totals = _share_counts(cur)
     for sym, d, prev, close in rows:
         r = prev / close
-        ratio = _nice(r)
+        ratio, verdict = _split_ratio(r, _share_ratio(totals, cik_of.get(sym.replace("-", ".")), d))
         if ratio is not None:
             splits.setdefault(sym, []).append((d, ratio))
         elif r > 3 or r < 1.0 / 3:
@@ -343,7 +406,7 @@ def first_date(cur):
 def series(symbol: str,
            start: str = Query("", description="YYYY-MM-DD; default one year back"),
            end: str = Query("", description="YYYY-MM-DD; default latest"),
-           limit: int = Query(2000, ge=1, le=5000)):
+           limit: int = Query(3000, ge=1, le=5000)):
     """One symbol's daily bars, oldest first, with the latest close and the
     change over the window."""
     cur = _require()
@@ -442,14 +505,16 @@ MANIFEST = {
     "section": "us-reference",
     "name": {"en": "US daily stock prices (Databento)", "ja": "米国株式日次株価（Databento）"},
     "shape": "company",
-    "summary": ("One consolidated end-of-day bar per listed US symbol per trading day — open, high, "
-                "low, close and volume across every exchange — from July 2024, delivered the next "
-                "morning. The price layer under market value, P/E and yields in the US screener."),
+    "summary": ("One end-of-day bar per listed US symbol per trading day — open, high, low, close and "
+                "volume — from May 2018, delivered the next morning: across every exchange from March "
+                "2023, the listing exchange alone before. The price layer under market value, P/E and "
+                "yields in the US screener."),
     "source": {
         "publisher": "Databento",
-        "document": "EQUS.SUMMARY — Databento Equities Summary (ohlcv-1d)",
+        "document": ("EQUS.SUMMARY (from 2024-07-01), EQUS.MINI (2023-03-28 to 2024-06-30), XNAS.ITCH and "
+                     "XNYS.PILLAR (2018-05-01 to 2023-03-27) — Databento, ohlcv-1d"),
         "url": "https://databento.com/equities",
-        "credit": "Source: Databento (EQUS.SUMMARY). Market data provided by Databento.",
+        "credit": "Source: Databento (EQUS.SUMMARY, EQUS.MINI, XNAS.ITCH, XNYS.PILLAR). Market data provided by Databento.",
         "license_note": ("Licensed market data bought by the byte. Databento permits external "
                          "redistribution of its datasets after 24 hours; shown here with at least a "
                          "one-day delay. Not public-domain; the raw archive is never redistributed."),
@@ -457,7 +522,8 @@ MANIFEST = {
     "keys": ["symbol", "date"],
     "frequency": "daily",
     "vintage": {"unit": "filing", "as_of_basis": "filed_date", "as_of_supported": False,
-                "history_from": "2024-07-01 (the dataset's own start)", "stale_after_days": STALE_AFTER_DAYS},
+                "history_from": "2018-05-01 (listing exchange to 2023-03-27; every exchange from 2023-03-28)",
+                "stale_after_days": STALE_AFTER_DAYS},
     "measures": [
         {"id": "close", "label": "Close", "unit": "USD", "trust": "official"},
         {"id": "open", "label": "Open", "unit": "USD", "trust": "official"},

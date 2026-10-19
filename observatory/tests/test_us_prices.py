@@ -167,3 +167,40 @@ class ApiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SplitCheckedAgainstShares(unittest.TestCase):
+    """2026-10-19: a split is read against the company's own share count, so a
+    split day on which the stock also moved is caught (Tesla, 31 August 2020,
+    day ratio 4.44 for a 5-for-1), the nearest ratio wins (Nvidia, 10 June 2024,
+    count ratio 9.9: 10, not 8), and a crash whose share count did not move is
+    a real fall, not a 2-for-1 split (Diamondback, 9 March 2020)."""
+
+    def test_split_day_that_also_moved(self):
+        from app import us_prices_api as P
+        self.assertEqual(P._split_ratio(4.44, 5.1), (5.0, "confirmed"))
+
+    def test_nearest_ratio_wins(self):
+        from app import us_prices_api as P
+        self.assertEqual(P._split_ratio(10.1, 9.9), (10.0, "confirmed"))
+
+    def test_crash_is_not_a_split(self):
+        from app import us_prices_api as P
+        self.assertEqual(P._split_ratio(1.85, 1.01), (None, "contradicted"))
+
+    def test_reverse_split(self):
+        from app import us_prices_api as P
+        self.assertEqual(P._split_ratio(0.1, 0.1), (0.1, "confirmed"))
+
+    def test_no_count_on_file_falls_back_to_the_price(self):
+        from app import us_prices_api as P
+        self.assertEqual(P._split_ratio(20.3, None), (20.0, "price"))
+        self.assertEqual(P._split_ratio(1.6, None)[0], None)
+
+    def test_share_ratio_brackets_the_day(self):
+        import datetime as d
+        from app import us_prices_api as P
+        totals = {7: [(d.date(2020, 7, 1), 186e6), (d.date(2020, 10, 1), 948e6)]}
+        self.assertAlmostEqual(P._share_ratio(totals, 7, d.date(2020, 8, 31)), 948 / 186)
+        self.assertIsNone(P._share_ratio(totals, 7, d.date(2020, 6, 1)))
+        self.assertIsNone(P._share_ratio(totals, None, d.date(2020, 8, 31)))

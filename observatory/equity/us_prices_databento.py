@@ -64,6 +64,20 @@ PARSER_VERSION = "uspx-1"
 EXTRACTOR = "us-prices"
 FIRST_DAY = dt.date(2024, 7, 1)          # the dataset's own start
 
+# Older history (added 2026-10-19). Databento's combined feed EQUS.MINI starts
+# 28 March 2023; before that only single exchanges go back, to 1 May 2018. From
+# those, each stock's bar comes from its listing exchange (sec_companies.exchange,
+# the SEC's company_tickers_exchange): that exchange's closing auction sets the
+# official close, but its volume is that exchange's share only. The nightly
+# top-up stays on EQUS.SUMMARY.
+#   dataset -> (first day, listing exchange whose stocks are kept or None for all)
+DATASETS = {
+    "EQUS.SUMMARY": (dt.date(2024, 7, 1), None),
+    "EQUS.MINI": (dt.date(2023, 3, 28), None),
+    "XNAS.ITCH": (dt.date(2018, 5, 1), "Nasdaq"),
+    "XNYS.PILLAR": (dt.date(2018, 5, 1), "NYSE"),
+}
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS us_px_pulls (
     pull_id INTEGER PRIMARY KEY, requested_at TIMESTAMP, start_date DATE, end_date DATE,
@@ -257,9 +271,27 @@ def download(client, start, end, dest_gz, poll_seconds=10, max_wait=3600, job_id
     return rows, size, sha.hexdigest(), job_id
 
 
+def _listed_only(con, exchange):
+    """Keep in raw_px only the stocks listed on `exchange`. SEC tickers write a
+    share class with a hyphen (BRK-B) where the exchanges use a dot (BRK.B)."""
+    con.execute("""CREATE OR REPLACE TEMP TABLE listed AS
+        SELECT DISTINCT s AS symbol FROM (
+            SELECT ticker AS s FROM sec_companies WHERE exchange = ?
+            UNION ALL SELECT replace(ticker, '-', '.') FROM sec_companies WHERE exchange = ?
+        ) WHERE s IS NOT NULL""", [exchange, exchange])
+    con.execute("DELETE FROM raw_px WHERE symbol NOT IN (SELECT symbol FROM listed)")
+
+
 def load(con, gz_path, start, end, pull_id):
     con.execute("""CREATE OR REPLACE TEMP TABLE raw_px AS
         SELECT * FROM read_csv(?, header=true, all_varchar=true)""", [gz_path])
+    listing = DATASETS.get(DATASET, (None, None))[1]
+    if listing:
+        _listed_only(con, listing)
+    dupes = con.execute("""SELECT count(*) FROM (SELECT symbol, substr(ts_event, 1, 10) d FROM raw_px
+        GROUP BY 1, 2 HAVING count(*) > 1)""").fetchone()[0]
+    if dupes:
+        raise PriceError("%d symbol-days carry more than one bar in %s; nothing loaded" % (dupes, DATASET))
     bad = con.execute("""SELECT count(*) FROM raw_px
         WHERE try_cast(close AS DOUBLE) IS NULL OR try_cast(substr(ts_event, 1, 10) AS DATE) IS NULL""").fetchone()[0]
     total = con.execute("SELECT count(*) FROM raw_px").fetchone()[0]
@@ -267,7 +299,13 @@ def load(con, gz_path, start, end, pull_id):
         raise PriceError("%d of %d rows have no readable close or date" % (bad, total))
     con.execute("BEGIN TRANSACTION")
     try:
-        con.execute("DELETE FROM us_px_daily WHERE date >= ? AND date <= ?", [start, end])
+        if listing:
+            # replace only this exchange's stocks: the other exchange's file
+            # covers the same days
+            con.execute("DELETE FROM us_px_daily WHERE date >= ? AND date <= ? "
+                        "AND symbol IN (SELECT symbol FROM listed)", [start, end])
+        else:
+            con.execute("DELETE FROM us_px_daily WHERE date >= ? AND date <= ?", [start, end])
         con.execute("""
             INSERT INTO us_px_daily
             SELECT symbol, CAST(substr(ts_event, 1, 10) AS DATE), try_cast(open AS DOUBLE),
@@ -300,7 +338,13 @@ def main(argv=None):
     ap.add_argument("--quote", action="store_true", help="print the cost estimate and stop; bills nothing")
     ap.add_argument("--max-cost-usd", type=Decimal, help="download only if the estimate is at or under this")
     ap.add_argument("--job-id", help="download an existing Databento batch job instead of submitting one")
+    ap.add_argument("--dataset", default="EQUS.SUMMARY", choices=sorted(DATASETS),
+                    help="EQUS.SUMMARY (the nightly feed); the others are older history, with --start and --end")
     args = ap.parse_args(argv)
+    global DATASET, FIRST_DAY
+    DATASET, FIRST_DAY = args.dataset, DATASETS[args.dataset][0]
+    if DATASET != "EQUS.SUMMARY" and not (args.start and args.end):
+        ap.error("older history (--dataset %s) needs --start and --end" % DATASET)
     if not args.quote and args.max_cost_usd is None:
         ap.error("give --max-cost-usd to download, or --quote to only ask the price")
     if args.max_cost_usd is not None and (not args.max_cost_usd.is_finite() or args.max_cost_usd < 0):
@@ -337,13 +381,14 @@ def main(argv=None):
             print("ATTENTION us-prices: quote $%s exceeds the cap $%s; nothing downloaded" % (q, args.max_cost_usd))
             return 1
         day = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
-        dest = os.path.join(RAW_ROOT, day, "equs-summary_%s_%s_%s.csv.gz" % (
-            start.isoformat(), end.isoformat(), dt.datetime.now(dt.timezone.utc).strftime("%H%M%S")))
+        dest = os.path.join(RAW_ROOT, day, "%s_%s_%s_%s.csv.gz" % (
+            DATASET.lower().replace(".", "-"), start.isoformat(), end.isoformat(),
+            dt.datetime.now(dt.timezone.utc).strftime("%H%M%S")))
         t0 = time.time()
         rows, csv_bytes, sha, job_id = download(client, start, end, dest, job_id=args.job_id)
         n = load(con, dest, start, end, pull_id)
         record(con, pull_id, start, end, q, args.max_cost_usd, "ok", csv_bytes, rows, sha, dest,
-               detail="batch job %s" % job_id)
+               detail="%s, batch job %s" % (DATASET, job_id))
         print("us-prices: %d bars for %d symbols, %s..%s, %.1fMB CSV, %.0fs; quoted $%s"
               % (n[0], n[1], n[2], n[3], csv_bytes / 1e6, time.time() - t0, q))
         return 0

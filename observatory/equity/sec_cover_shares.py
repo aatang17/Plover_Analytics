@@ -141,9 +141,12 @@ def recent_frames(today=None, n=FRAMES_BACK):
 
 
 # ---- 1. the frames ---------------------------------------------------------------
-def load_frames(con, fetcher):
+def load_frames(con, fetcher, n=FRAMES_BACK):
+    """Read the newest n quarterly frames. A larger n backfills the history
+    (2026-10-19: 36 quarters, to 2017, so the price series can check old
+    splits against the share count — app/us_prices_api.py)."""
     added = 0
-    for frame in recent_frames():
+    for frame in recent_frames(n=n):
         url = FRAMES_URL % frame
         try:
             body = fetcher.get(url)
@@ -388,6 +391,8 @@ def main():
     ap.add_argument("--tickers", help="comma-separated tickers: read just these companies' covers")
     ap.add_argument("--workers", type=int, default=px.WORKERS)
     ap.add_argument("--skip-frames", action="store_true")
+    ap.add_argument("--frames-back", type=int, default=FRAMES_BACK,
+                    help="calendar quarters of frames to read (default %d; 36 backfills to 2017)" % FRAMES_BACK)
     args = ap.parse_args()
     ua = os.environ.get("EDGAR_USER_AGENT")
     if not ua:
@@ -398,7 +403,7 @@ def main():
     con.execute(SCHEMA_SQL)
     run_at, frames_new = _now(), 0
     if not args.skip_frames and not args.tickers:
-        frames_new = load_frames(con, fetcher)
+        frames_new = load_frames(con, fetcher, args.frames_back)
     targets = priced_targets(con, args.tickers.split(",") if args.tickers else None)
     if args.limit and not args.tickers:
         targets = targets[:args.limit]
