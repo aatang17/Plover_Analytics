@@ -60,6 +60,7 @@ from .us_prices_api import router as us_prices_router  # noqa: E402
 from .us_ask_api import router as us_ask_router  # noqa: E402
 from .us_press_api import router as us_press_router  # noqa: E402
 from .us_pay_api import router as us_pay_router  # noqa: E402
+from .sec_text_api import router as sec_text_router  # noqa: E402
 from .catalog_api import router as catalog_router  # noqa: E402
 from .nav_preview import router as nav_preview_router  # noqa: E402
 from .apportionment_api import router as representation_router  # noqa: E402
@@ -318,6 +319,7 @@ app.include_router(us_prices_router)
 app.include_router(us_ask_router)
 app.include_router(us_press_router)
 app.include_router(us_pay_router)
+app.include_router(sec_text_router)
 # The catalog of manifests ahead of the core router, so its literal
 # /api/v1/catalog/… paths can never be shadowed by /{dataset}/… catch-alls.
 # /api/v1/company/{code} ahead of the core router, so it beats the

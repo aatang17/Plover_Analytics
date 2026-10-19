@@ -580,6 +580,11 @@ def health():
         except Exception:                                    # noqa: BLE001
             pass
         try:
+            from . import sec_text_api
+            equity = equity + sec_text_api.health()
+        except Exception:                                    # noqa: BLE001
+            pass
+        try:
             from . import sec_shares
             equity = equity + sec_shares.health()
         except Exception:                                    # noqa: BLE001

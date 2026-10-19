@@ -256,6 +256,34 @@
     return out.slice(0, 5);
   }
 
+  /* ---- the annual report's own words ----------------------------------- */
+  // Passages are quoted exactly as filed, each with the section, form and
+  // year it comes from and a link to the document on EDGAR.
+  function citeHtml(cite, url) {
+    if (!cite) return "";
+    return "<p class='quote-cite'>" + (url ? "<a href='" + esc(url) + "' rel='noopener'>" + esc(cite) + " →</a>" : esc(cite)) + "</p>";
+  }
+  function quotesHtml(qs) {
+    if (!qs || !qs.length) return "";
+    return qs.map(function (q) {
+      return "<blockquote class='answer-quote'>" + (q.text || []).map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") +
+        citeHtml(q.cite, q.url) + "</blockquote>";
+    }).join("");
+  }
+  // A list of sentences (a company's risk headlines) under its own group
+  // headings: a list, not a table, since every entry is a sentence.
+  function listsHtml(l) {
+    if (!l || !l.groups || !l.groups.length) return "";
+    var n = 0, total = l.groups.reduce(function (s, g) { return s + g.items.length; }, 0);
+    var html = "<h2>" + esc(l.title || "List") + " <span class='h2-note'>" + count(total) + (l.unit ? " " + esc(l.unit) : "") + "</span></h2>";
+    l.groups.forEach(function (g) {
+      if (g.name) html += "<h3 class='list-group'>" + esc(g.name) + "</h3>";
+      html += "<ol class='answer-list' start='" + (n + 1) + "'>" + g.items.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol>";
+      n += g.items.length;
+    });
+    return html + citeHtml(l.note, l.url);
+  }
+
   /* ---- the answer ------------------------------------------------------ */
   function renderAnswer(a) {
     disposeCharts();
@@ -268,6 +296,7 @@
       "<p class='headline hit'>" + esc(a.headline) + "</p>" +
       (a.period && a.period.text ? "<p class='period-line'>" + esc(a.period.text) + "</p>" : "") +
       (a.answer ? "<p class='answer-text'>" + esc(a.answer) + "</p>" : "") +
+      quotesHtml(a.quotes) +
       (a.steps && a.steps.length ? "<ol class='steps'>" + a.steps.map(function (st) { return "<li>" + esc(st) + "</li>"; }).join("") + "</ol>" : "") +
       figuresHtml(a.figures) +
       (link ? "<p class='quiet' style='margin:6px 0 0'><a href='" + esc(link) + "'>Open " + esc(co ? co.name : "the company") + "'s page →</a></p>" : "");
@@ -277,6 +306,7 @@
         "<button type='button' class='btn' id='an-csv'>Download CSV</button></div>" +
         "<div class='chart-block'><div class='chart-el' id='an-chart'></div><div class='chart-foot'><span>" + esc(src) + "</span></div></div>";
     }
+    html += listsHtml(a.lists);
     if (a.table && a.table.rows && a.table.rows.length) {
       html += "<h2>Detail <span class='h2-note'>" + count(a.table.rows.length) + " rows" + (a.table.unit ? " · " + esc(a.table.unit) : "") + "</span></h2>" + tableHtml(a.table, "an-table");
     }

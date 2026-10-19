@@ -625,6 +625,64 @@ def refresh_us_pay(per_slice=100, max_slices=8):
     record_check("sec-proxy-pay", "failed", "cycle ended with members unchecked")
 
 
+LIVE_SEC_TEXT = pathlib.Path(os.environ.get("SEC_TEXT_DB_PATH") or str(DATA_DIR / "sec_text.duckdb"))
+
+
+def refresh_us_text(per_slice=400, max_slices=20):
+    """Read the written sections of each listed US company's latest annual report.
+
+    equity/sec_text_extract.py fetches the 10-K or 20-F of every company whose
+    latest report it has not read, cuts out Business, Risk Factors, Legal
+    Proceedings, MD&A and the rest, and archives the document. Most days only
+    the reports filed since yesterday are new; a fresh volume reads all ~6,000
+    in about an hour, a slice at a time. Each slice runs on a copy of
+    data/sec_text.duckdb that is swapped in, so a restart keeps what landed.
+    """
+    if not os.environ.get("EDGAR_USER_AGENT"):
+        log("ATTENTION no EDGAR_USER_AGENT; the SEC refuses undeclared clients, so "
+            "annual report text was not read")
+        record_check("sec-annual-text", "failed", "EDGAR_USER_AGENT not set")
+        return
+    if not LIVE_SEC.exists():
+        record_check("sec-annual-text", "failed", "no sec.duckdb to find the annual reports in")
+        return
+    work = DATA_DIR / "sec_text.work.duckdb"
+    script = ROOT / "equity" / "sec_text_extract.py"
+    for n in range(1, max_slices + 1):
+        if _stopping:
+            return
+        if LIVE_SEC_TEXT.exists():
+            if fresh_copy(LIVE_SEC_TEXT, work) is None:
+                record_check("sec-annual-text", "failed", "no working copy of sec_text.duckdb")
+                return
+        else:
+            _discard(work)
+        before = _table_count(work, "sec_text_checks") if work.exists() else 0
+        started = time.time()
+        rc = _run([sys.executable, str(script), "--db", str(work), "--sec-db", str(LIVE_SEC),
+                   "--limit", str(per_slice), "--workers", "6"], dict(os.environ), ROOT)
+        took = time.time() - started
+        after = _table_count(work, "sec_text_checks") if work.exists() and rc != -1 else before
+        if after <= before:
+            _discard(work)
+            if rc == 0:
+                log("US annual report text: nothing new to read (%.0fs)" % took)
+                record_check("sec-annual-text", "unchanged")
+            else:
+                log("US annual report text slice %d: nothing recorded (exit %s, %.0fs); served data untouched"
+                    % (n, rc, took))
+                record_check("sec-annual-text", "failed", "slice %d exited %s, nothing recorded" % (n, rc))
+            return
+        swap(work, LIVE_SEC_TEXT)
+        log("US annual report text slice %d landed (%.0fs, exit %s): %d reports checked"
+            % (n, took, rc, after - before))
+        if after - before < per_slice:
+            record_check("sec-annual-text", "published" if rc == 0 else "failed",
+                         None if rc == 0 else "some reports failed; the rest landed")
+            return
+    record_check("sec-annual-text", "failed", "cycle ended with reports still to read")
+
+
 def _table_count(path, table):
     """Rows in one table of a DuckDB file, 0 when the table is absent."""
     con = duckdb.connect(str(path), read_only=True)
@@ -878,6 +936,10 @@ def main():
     # sliced so a restart keeps what landed.
     if os.environ.get("BACKFILL_US_PAY", "1") not in ("", "0") and not _stopping:
         _phase("US pay", refresh_us_pay)
+    # The written parts of each company's latest annual report: what it does,
+    # its risks, its legal cases. Only new reports most days.
+    if os.environ.get("BACKFILL_US_TEXT", "1") not in ("", "0") and not _stopping:
+        _phase("US annual report text", refresh_us_text)
     # Tickers and industries for every filer, insider trades and 13F
     # holdings: current data from the SEC's structured sets, a few minutes.
     if os.environ.get("BACKFILL_US_HOLDINGS", "1") not in ("", "0") and not _stopping:

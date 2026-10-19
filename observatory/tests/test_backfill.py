@@ -430,13 +430,23 @@ class PhaseIsolationTest(unittest.TestCase):
         self._saved = {n: getattr(backfill, n) for n in (
             "backfill_macro", "stamp_cycle", "backfill_gdp_vintages",
             "backfill_equity", "backfill_sec", "refresh_us_companies", "refresh_us_pay",
-            "refresh_us_holdings", "refresh_us_prices", "refresh_us_shares", "refresh_us_listings")}
+            "refresh_us_holdings", "refresh_us_prices", "refresh_us_shares", "refresh_us_listings",
+            "refresh_us_text")}
         self.addCleanup(lambda: [setattr(backfill, n, f) for n, f in self._saved.items()])
+        # a phase added to main() without a stub here runs for real (2026-10-19:
+        # refresh_us_text swapped a half-copied data/sec_text.duckdb over the live one)
+        import inspect
+        import re
+        phases = set(re.findall(r"_phase\(\s*\"[^\"]+\",\s*(\w+)", inspect.getsource(backfill.main)))
+        missing = phases - set(self._saved)
+        if missing:
+            self.fail("backfill.main() runs phases this test does not stub: %s" % ", ".join(sorted(missing)))
         self.ran = []
         backfill.backfill_macro = lambda ds: self.ran.append("macro")
         backfill.stamp_cycle = lambda: self.ran.append("stamp")
         backfill.refresh_us_companies = lambda: self.ran.append("us")
         backfill.refresh_us_pay = lambda: self.ran.append("pay")
+        backfill.refresh_us_text = lambda: self.ran.append("text")
         backfill.refresh_us_holdings = lambda: self.ran.append("holdings")
         backfill.refresh_us_prices = lambda: self.ran.append("prices")
         backfill.refresh_us_shares = lambda: self.ran.append("shares")

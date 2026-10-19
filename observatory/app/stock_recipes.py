@@ -337,6 +337,9 @@ def r_company_business(cur, q, e):
     calc = {"share_of_revenue_pct": "segment revenue ÷ the company's total revenue in the same annual report × 100",
             "revenue_growth_pct": "(segment revenue ÷ the same segment's revenue the year before, as given in the same report − 1) × 100"}
     revenue = ((row or {}).get("size") or {}).get("revenue") if row and row.get("unit") == "USD" else None
+    words_q = _own_words(rec)
+    if words_q:
+        srcs = [_TEXT_SOURCE] + srcs
     if not segs:
         # no split read is not the same as no split filed: banks, insurers and
         # some large filers (Alphabet) tag segment revenue in ways not read here
@@ -345,10 +348,17 @@ def r_company_business(cur, q, e):
         bits = []
         if revenue is not None:
             bits.append("Revenue was %s in the year to %s." % (money(revenue), date_words(row["period_end"])))
-        bits.append("Its revenue split by product line, segment or region could not be read from its annual report, "
-                    "so what it sells is not shown here. The business section (Item 1) of that report, linked below, describes it.")
-        return pkg("company_business", q, headline, " ".join(b for b in bits if b), [], None, None, srcs, {},
-                   {"company": rec}, links)
+        if words_q:
+            headline = "What %s says it does, in its annual report." % name
+            bits.append("Its revenue split by product line, segment or region could not be read from the report.")
+        else:
+            bits.append("Its revenue split by product line, segment or region could not be read from its annual report, "
+                        "so what it sells is not shown here. The business section (Item 1) of that report, linked below, describes it.")
+        out = pkg("company_business", q, headline, " ".join(b for b in bits if b), [], None, None, srcs, {},
+                  {"company": rec}, links)
+        if words_q:
+            out["quotes"] = [words_q]
+        return out
     # product lines tell it best when they add up to the whole once a line's
     # parts are set aside; overlapping lines (Microsoft's) give way to the
     # reporting segments
@@ -412,7 +422,200 @@ def r_company_business(cur, q, e):
     notes = ["Lines of one kind can overlap or leave a remainder, so they need not add up to 100%."]
     if kinds["geography"]:
         notes.append("Regions are as each company defines them in its report (often where the customer is billed).")
-    return pkg("company_business", q, headline, " ".join(bits), figures, table, chart, srcs, calc, {"company": rec}, links, notes)
+    out = pkg("company_business", q, headline, " ".join(bits), figures, table, chart, srcs, calc, {"company": rec}, links, notes)
+    if words_q:
+        out["quotes"] = [words_q]
+    return out
+
+
+# ---- the annual report's own words (app/sec_text_api.py) ----------------------
+_TEXT_SOURCE = {"name": "Annual report text", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (annual reports).",
+                "note": "Quoted exactly as the company wrote it in its latest annual report."}
+_SECTION_ITEM = {"10-K": {"business": "Item 1", "risk_factors": "Item 1A", "cybersecurity": "Item 1C", "properties": "Item 2",
+                          "legal": "Item 3", "mdna": "Item 7", "market_risk": "Item 7A"},
+                 "20-F": {"business": "Item 4", "risk_factors": "Item 3.D", "cybersecurity": "Item 16K", "mdna": "Item 5",
+                          "market_risk": "Item 11"}}
+
+
+def _cite(f, key):
+    from . import sec_text_api
+    form = "10-K" if f["form"] in ("10-K", "10-KT") else f["form"]
+    item = _SECTION_ITEM.get(form, {}).get(key)
+    return "%s, %s%s, %s for the year to %s" % (
+        sec_text_api.SECTION_NAMES.get(key, key), (item + " of the ") if item else "", f["form"],
+        "filed " + date_words(f["filed"]), date_words(f["period"]))
+
+
+def _clip(text, n=900):
+    """A passage cut at a sentence end near n characters, marked when cut."""
+    if len(text) <= n:
+        return text
+    cut = max(text.rfind(". ", 0, n), text.rfind("; ", 0, n))
+    return (text[:cut + 1] if cut > n // 2 else text[:n].rsplit(" ", 1)[0]) + " […]"
+
+
+def _text_report(rec):
+    """(cursor, latest annual report read) for a company, or (None, None)."""
+    from . import sec_text_api
+    c = sec_text_api.cur()
+    if c is None or not rec:
+        return None, None
+    return c, sec_text_api.latest(c, rec["cik"])
+
+
+def _own_words(rec):
+    """{"text", "cite", "url"}: the opening of the company's Business section."""
+    from . import sec_text_api
+    c, f = _text_report(rec)
+    if not f:
+        return None
+    paras = sec_text_api.summary(c, f["adsh"])
+    if not paras:
+        return None
+    return {"text": [_clip(p, 700) for p in paras], "cite": _cite(f, "business"), "url": f["url"]}
+
+
+def r_company_risks(cur, q, e):
+    """The risks a company lists in its latest annual report, in its order and words."""
+    from . import sec_text_api
+    rec = _need(e["companies"][0] if e["companies"] else None, "company")
+    c, f = _text_report(rec)
+    if not f:
+        raise HTTPException(404, "%s's annual report has not been read yet, so its risk factors are not here." % rec["name"])
+    topic = _topic_of(q, rec)
+    if topic:
+        return _says(q, rec, c, f, topic, ["risk_factors"])
+    risks = sec_text_api.risk_list(c, f["adsh"])
+    links = {"company": company_link(rec), "filing": f["url"]}
+    year = date_words(f["period"])
+    if not risks:
+        note = f.get("note") or ""
+        if "smaller reporting company" in note:
+            headline = "%s lists no risk factors: as a smaller reporting company it is not required to." % rec["name"]
+        elif "by reference" in note:
+            headline = "%s's annual report refers to another filing for its risk factors." % rec["name"]
+        else:
+            headline = "%s's risk factors could not be split into single risks." % rec["name"]
+        got = sec_text_api.section(c, f["adsh"], "risk_factors")
+        out = pkg("company_risks", q, headline, "", [], None, None, [_TEXT_SOURCE], {}, {"company": rec}, links)
+        if got:
+            out["quotes"] = [{"text": [_clip(p, 700) for p in got[1][:2]], "cite": _cite(f, "risk_factors"), "url": f["url"]}]
+        return out
+    groups, order = {}, []
+    for r in risks:
+        g = r["category"] or "Risks"
+        if g not in groups:
+            groups[g] = []
+            order.append(g)
+        groups[g].append(r["headline"])
+    headline = "%s lists %d risks in its annual report for the year to %s." % (rec["name"], len(risks), year)
+    answer = ("They are in the company's own order and words, grouped under its own headings; the order is not a ranking."
+              if len(order) > 1 else "They are in the company's own order and words; the order is not a ranking.")
+    out = pkg("company_risks", q, headline, answer, [fig("Risks listed", len(risks), "count", _d(f["filed"]))], None, None,
+              [_TEXT_SOURCE], {}, {"company": rec}, links)
+    out["lists"] = {"title": "Risk Factors", "unit": "risks", "note": _cite(f, "risk_factors"), "url": f["url"],
+                    "groups": [{"name": g if len(order) > 1 else None, "items": groups[g]} for g in order]}
+    return out
+
+
+# a question's subject inside a company's report: "what does Apple say about tariffs"
+_SAYS = re.compile(r"(?i)\b(?:say|says|said|mention|mentions|discuss|discusses|disclose|discloses|write|writes|tell us|report)\b"
+                   r"\s+(?:anything\s+)?(?:about|on|regarding|concerning|of)?\s*(.+)$")
+_EXPOSED = re.compile(r"(?i)\b(?:exposure|exposed|exposes|risk|risks|threat|threats)\s+(?:to|from|of|about|around|related to|relating to)\s+(.+)$")
+_NOUNS = [(r"\bcompetitors?\b|\bcompetition\b|\bcompete\b|\brivals?\b", "competition", "compet"),
+          (r"\bcustomers?\b|\bclients?\b", "customers", "customer"),
+          (r"\bsuppliers?\b|\bsupply chain\b", "suppliers", "supplier"),
+          (r"\bemployees?\b|\bheadcount\b|\bworkforce\b|\bstaff\b", "employees", "employees"),
+          (r"\bpatents?\b|intellectual property", "intellectual property", "intellectual property"),
+          (r"\bregulat\w*", "regulation", "regulat")]
+_SECTION_WORDS = [(r"(?i)lawsuits?|litigation|legal (cases|proceedings|matters)|\bsued\b|\bcourts?\b|antitrust|investigations?", "legal"),
+                  (r"(?i)cyber|hack|data breach|security incident", "cybersecurity"),
+                  (r"(?i)\bproperties\b|offices|factories|plants|headquarters|where .* (based|located)", "properties"),
+                  (r"(?i)management|outlook|md&a|results of operations|how was (the|its) year", "mdna")]
+
+
+_EXACT = {"competition": "competitors", "customers": "customers", "suppliers": "suppliers"}
+
+
+def _topic_of(q, rec):
+    """The subject a question asks about inside the report, or None."""
+    text = re.sub(r"(?i)\b(in|from) (its|the|their) (latest |last |most recent )?(annual report|10-?k|20-?f|filing)s?\b", " ", q or "")
+    for pat in (_SAYS, _EXPOSED):
+        m = pat.search(text)
+        if m:
+            t = m.group(1)
+            names = [rec.get("name") or "", rec.get("ticker") or ""] + [re.sub(r"[^\w&-]", "", w) for w in (rec.get("name") or "").split()[:1]]
+            for w in sorted(names, key=len, reverse=True):
+                if len(w) > 2:
+                    t = re.sub(r"(?i)\b%s('s)?\b" % re.escape(w), " ", t)
+            t = re.sub(r"(?i)^\s*(?:(?:from|to|of|about|on|for|its|their|the|a|an)\s+)+", "", t.strip()).strip(" ?.!\"'“”")
+            if 3 <= len(t) <= 60:
+                return t
+    for pat, label, stem in _NOUNS:
+        if re.search(pat, q or "", re.I):
+            return label
+    return None
+
+
+def _says(q, rec, c, f, topic, sections=None):
+    from . import sec_text_api
+    # a named thing ("competitors") is looked for by its own word first, then by its family ("compet")
+    stems = {label: stem for _, label, stem in _NOUNS}
+    hits = []
+    for word in ([_EXACT.get(topic)] if _EXACT.get(topic) else []) + [stems.get(topic, topic)]:
+        hits = sec_text_api.mentions(c, f["adsh"], word, sections, limit=1000)
+        if hits:
+            break
+    links = {"company": company_link(rec), "filing": f["url"]}
+    where = " in its Risk Factors" if sections == ["risk_factors"] else ""
+    if not hits:
+        headline = "%s's latest annual report does not mention “%s”%s." % (rec["name"], topic, where)
+        return pkg("company_says", q, headline, "Checked: %s." % _cite(f, (sections or ["business"])[0]).split(",")[0] if sections
+                   else "Checked every section read from its %s for the year to %s: Business, Risk Factors, Legal "
+                        "Proceedings, Management's Discussion and Market Risk." % (f["form"], date_words(f["period"])),
+                   [], None, None, [_TEXT_SOURCE], {}, {"company": rec}, links)
+    by = {}
+    for k, _ in hits:
+        by[k] = by.get(k, 0) + 1
+    most = max(by, key=by.get)
+    headline = "%s's annual report mentions “%s” in %d passage%s%s, most in %s." % (
+        rec["name"], topic, len(hits), "" if len(hits) == 1 else "s", where, sec_text_api.SECTION_NAMES[most]) if len(by) > 1 else \
+        "%s's annual report mentions “%s” in %d passage%s, in %s." % (
+            rec["name"], topic, len(hits), "" if len(hits) == 1 else "s", sec_text_api.SECTION_NAMES[most])
+    out = pkg("company_says", q, headline, "The passages that mention it most, quoted from the report:", [], None, None,
+              [_TEXT_SOURCE], {}, {"company": rec}, links)
+    out["quotes"] = [{"text": [_clip(p, 900)], "cite": _cite(f, k), "url": f["url"]} for k, p in hits[:5]]
+    return out
+
+
+def r_company_says(cur, q, e):
+    """What a company's annual report says about a subject, or a section of it
+    (legal cases, cybersecurity, properties) when no subject is named."""
+    from . import sec_text_api
+    rec = _need(e["companies"][0] if e["companies"] else None, "company")
+    c, f = _text_report(rec)
+    if not f:
+        raise HTTPException(404, "%s's annual report has not been read yet." % rec["name"])
+    key = next((k for pat, k in _SECTION_WORDS if re.search(pat, q or "")), None)
+    topic = _topic_of(q, rec)
+    if topic and not (key and re.search(r"(?i)^(lawsuits?|litigation|legal|cyber|properties|offices)", topic)):
+        return _says(q, rec, c, f, topic)
+    if key is None:
+        raise HTTPException(422, "Say what to look for in %s's annual report, e.g. “what does %s say about tariffs”."
+                            % (rec["name"], rec["ticker"]))
+    got = sec_text_api.section(c, f["adsh"], key)
+    links = {"company": company_link(rec), "filing": f["url"]}
+    if not got:
+        return pkg("company_says", q, "%s's latest annual report has no %s section that could be read." % (
+            rec["name"], sec_text_api.SECTION_NAMES[key]), "", [], None, None, [_TEXT_SOURCE], {}, {"company": rec}, links)
+    _, paras, heads = got
+    body = [p for i, p in enumerate(paras) if i not in heads and len(p) >= 60][:3]
+    refers = bool(body) and len(" ".join(body)) < 400 and re.search(r"(?i)\b(see|refer to|described in|incorporated)\b", body[0])
+    headline = ("%s's %s section points elsewhere in the report." % (rec["name"], sec_text_api.SECTION_NAMES[key]) if refers
+                else "What %s's annual report says under %s." % (rec["name"], sec_text_api.SECTION_NAMES[key]))
+    out = pkg("company_says", q, headline, "", [], None, None, [_TEXT_SOURCE], {}, {"company": rec}, links)
+    out["quotes"] = [{"text": [_clip(p, 900) for p in body], "cite": _cite(f, key), "url": f["url"]}] if body else []
+    return out
 
 
 def r_company_growth_margin(cur, q, e):
@@ -2023,6 +2226,14 @@ RECIPES = [
      "patterns": [r"buyback", r"repurchas", r"dividend", r"return(ed)? to shareholders", r"yield"], "run": r_company_shareholder_return, "weight": 2},
     {"id": "company_price_performance", "label": "Share price performance", "needs": ["company"],
      "patterns": [r"stock (done|perform|price|fallen|risen)", r"share price", r"performance", r"(chart|graph|plot).*(stock|shares|share price)|(stock|share) (chart|price chart)", r"\bfell\b", r"\brose\b", r"up or down", r"over the past (year|month|week)", r"ytd", r"year to date", r"how has .* done", r"since 20\d\d"], "run": r_company_price_performance, "weight": 2},
+    {"id": "company_risks", "label": "A company's risk factors", "needs": ["company"],
+     "patterns": [r"\brisks?\b", r"risk factors", r"what could go wrong", r"\bthreats?\b", r"\bworr(y|ies|ied)\b", r"headwinds"],
+     "run": r_company_risks, "weight": 4},
+    {"id": "company_says", "label": "What a company's annual report says", "needs": ["company"],
+     "patterns": [r"\b(say|says|said|mention|mentions|discuss|discusses|disclose|discloses)\b", r"lawsuits?|litigation|legal (cases|proceedings)|\bsued\b|antitrust",
+                  r"\bcyber", r"\b10-?k\b", r"annual report", r"\b(competitors|rivals|compete with|suppliers)\b", r"who (are|is) .* (competitors|customers|suppliers)",
+                  r"\bheadquarters\b|where is .* (based|located)"],
+     "run": r_company_says, "weight": 4},
     {"id": "company_business", "label": "What a company does", "needs": ["company"],
      "patterns": [r"what does .* do\b", r"what (does|do) .* (sell|make|produce|offer)\b", r"what (business|kind of (company|business))",
                   r"\bbusiness (mix|lines?|model)\b", r"lines? of business", r"(make|makes|earn|earns|get|gets) (its|their|most of its) money",
@@ -2177,6 +2388,8 @@ SHAPE_HINTS = {
     "company_calendar": "when a company reports next and last filed",
     "company_shareholder_return": "a company's buybacks and dividends and the yield",
     "company_price_performance": "how one company's share price has done over a period",
+    "company_risks": "the risks a company lists in its annual report (its risk factors), or its risks from one thing ('risks to Apple from tariffs')",
+    "company_says": "what a company's annual report says about a subject ('what does Apple say about tariffs', 'who are Nvidia's competitors'), its lawsuits and legal cases, cybersecurity, or where its offices and plants are",
     "company_business": "what a company does or sells, its business, what it makes its money from, its revenue mix by product line, segment and region ('what does Nvidia do', 'tell me about Costco')",
     "company_growth_margin": "a company's revenue growth and margins",
     "company_value": "what a company is worth: market value, P/E, yields",
@@ -2466,7 +2679,9 @@ _NATIONALITY = re.compile(r"\b(chinese|china|israeli|israel|canadian|canada|brit
 
 # what each shape is doing, said to the reader while it runs (app/ask_progress.py)
 DOING = {
-    "company_business": "Reading {co}'s revenue split from its latest annual report",
+    "company_business": "Reading {co}'s business description and revenue split from its latest annual report",
+    "company_risks": "Reading the risk factors in {co}'s latest annual report",
+    "company_says": "Searching {co}'s latest annual report",
     "company_value": "Valuing {co} on its latest close and share count",
     "company_growth_margin": "Reading {co}'s revenue and profit from its latest annual report",
     "company_figure": "Finding the figure in {co}'s latest annual report",

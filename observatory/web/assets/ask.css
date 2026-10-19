@@ -46,6 +46,17 @@ pre.sql { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; line
 .followups a { display: inline-block; font-size: 13.5px; padding: 7px 12px; border: 1px solid var(--obs-text-faint); border-radius: 3px;
   color: var(--obs-ink); text-decoration: none; }
 .followups a:hover { border-color: var(--obs-primary); color: var(--obs-primary); }
+.answer-quote { margin: 4px 0 16px; padding: 2px 0 2px 16px; border-left: 3px solid var(--obs-border); max-width: 78ch; }
+.answer-quote p { margin: 0 0 10px; font-size: 15.5px; line-height: 1.6; color: var(--obs-text); text-wrap: pretty; }
+.quote-cite { margin: 0; font-size: 12.5px; color: var(--obs-text-muted); }
+.quote-cite a { color: var(--obs-primary); text-decoration: none; }
+.quote-cite a:hover { text-decoration: underline; }
+.answer-quote .quote-cite { margin-top: -2px; }
+.list-group { font-size: 14px; font-weight: 600; color: var(--obs-ink); margin: 18px 0 6px; }
+.answer-list { margin: 0 0 6px; padding-left: 28px; max-width: 86ch; }
+.answer-list li { font-size: 14.5px; line-height: 1.5; color: var(--obs-text); margin: 0 0 7px; padding-left: 4px; }
+.answer-list li::marker { color: var(--obs-text-muted); font-variant-numeric: tabular-nums; }
+.answer-list + .quote-cite { margin-top: 10px; }
 .sources li { font-size: 12.5px; color: var(--obs-text-muted); margin: 0 0 4px; }
 .state-empty, .state-error { font-size: 14px; color: var(--obs-text); margin: 18px 0; padding-left: 12px; border-left: 2px solid var(--obs-warn); }
 .state-wait { font-size: 14px; color: var(--obs-text-muted); margin: 18px 0; }
