@@ -8,6 +8,12 @@
 # Bypassable with `git push --no-verify`, deliberately: the gate that must not
 # be bypassable is Tier 1, and that one runs on GitHub where a push cannot
 # argue with it.
+#
+# Quick by default since 2026-10-11 (the user's call, to speed up deploys): a
+# push runs the guards and the registry check, a few seconds. The full data
+# suite and the browser checks took ~3 minutes before every push; they run
+# with PLOVER_FULL_PREPUSH=1 git push, and the done gate still runs the
+# browser checks for any page a Claude session changes.
 set -e
 cd "$(git rev-parse --show-toplevel)/observatory"
 
@@ -19,6 +25,11 @@ echo "pre-push: guards"
 
 echo "pre-push: registry"
 "$PY" -m app.registry --check >/dev/null || { "$PY" -m app.registry --check; exit 1; }
+
+if [ "${PLOVER_FULL_PREPUSH:-}" != "1" ]; then
+    echo "pre-push: quick checks passed (PLOVER_FULL_PREPUSH=1 git push runs the full data suite and browser checks)"
+    exit 0
+fi
 
 echo "pre-push: suite (full data)"
 "$PY" ci/suite.py --mode full

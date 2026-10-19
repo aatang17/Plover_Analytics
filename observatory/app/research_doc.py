@@ -627,12 +627,26 @@ def _period_text(p):
     return p[:7] if p and len(p) >= 7 else (p or "")
 
 
+def _credit_unless_repeated(credit, source_name):
+    """The credit, unless the source name already opens with the same agency:
+    "Source: Ministry of Finance, Japan" before "Ministry of Finance — Interest
+    Rate" says it twice. Only a plain "Source: …" credit is ever dropped; a
+    credit worded as an obligation (the Bank of Japan's) always stays."""
+    credit = (credit or "").strip()
+    if not credit.startswith("Source:") or not source_name:
+        return credit
+    agency = re.split(r",|;| \u2014 ", credit[len("Source:"):].strip().rstrip("."))[0].strip()
+    if agency and source_name.strip().lower().startswith(agency.lower()):
+        return ""
+    return credit
+
+
 def chart_source_line(snap):
     """One line: where the numbers came from, which release, as of when."""
     if not snap:
         return ""
     rel = snap.get("release") or {}
-    parts = [snap.get("credit") or ""]
+    parts = [_credit_unless_repeated(snap.get("credit"), rel.get("source_name"))]
     if rel.get("source_name"):
         parts.append(rel["source_name"])
     if rel.get("label"):

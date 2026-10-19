@@ -189,8 +189,8 @@ def summary_text(dataset):
 # characters, which is where search engines cut.
 DESCRIPTIONS = {
     "index.html":
-        "Japanese official statistics and company disclosures, free and citable: "
-        "consumer prices, the Bank of Japan balance sheet, trade, tourism and EDINET filings.",
+        "Ask about US stocks and the US economy: owners, earnings, buybacks, insider trades, "
+        "inflation, wages and Treasury yields, with the source of every number.",
     "cpi.html":
         "Japan's Consumer Price Index — headline, core and core-core inflation with "
         "contributions by expenditure group, monthly from 1970, as published by the Statistics Bureau.",

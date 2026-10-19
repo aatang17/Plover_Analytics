@@ -7,6 +7,9 @@
 # image it should move to (LAST_GOOD_IMAGE_TAG) and this waits for the state
 # file app/refresher.py writes to say "idle".
 set -euo pipefail
+# never during a deploy: deploy.sh holds this lock while it runs
+exec 8>/run/plover-deploy.plover.lock
+flock -n 8 || { echo "a deploy is running; trying again next time"; exit 0; }
 STATE=/opt/plover/deploy.env
 COMPOSE_FILE=/opt/plover/repo/observatory/deploy/docker-compose.yml
 get() { grep -E "^$1=" "$STATE" | tail -1 | cut -d= -f2- || true; }

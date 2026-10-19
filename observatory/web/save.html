@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<title>Save to Plover · Plover Analytics</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/my.css">
+</head>
+<body class="sv-body">
+
+<!-- Where the Plover browser extension and the Save to Plover bookmark land.
+     The article's text arrives in the #fragment, which no request carries to
+     a server; assets/save.js saves it to the signed-in person's reading
+     (app/assistant/reading.py) and offers a summary. -->
+
+<main class="sv-main">
+  <p class="sv-brand"><a href="my.html">Plover</a> · Save to Plover</p>
+  <div id="sv-status" class="sv-card" role="status" aria-live="polite">
+    <p>Reading the article…</p>
+  </div>
+</main>
+
+<script src="assets/format.js"></script>
+<script src="assets/save.js"></script>
+</body>
+</html>

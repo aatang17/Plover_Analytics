@@ -574,6 +574,27 @@ function renderRates() {
 
 /* ---- the selected bank's bond book, gains and rate risk ---- */
 
+/* A failed check in words. The extractors record a code for each check that
+   did not pass (equity/bank_extract.py, the Pillar 3 reader); a reader gets
+   what it means, never the code. Several are joined by ";". */
+const SHOCKS = { parallel_up: "parallel up", parallel_down: "parallel down", steepener: "steepener",
+  flattener: "flattener", short_up: "short-rate up", short_down: "short-rate down" };
+function checkWords(detail) {
+  return String(detail || "").split(";").filter(Boolean).map(code => {
+    if (code === "no_current_maturity_table") return "the report has no maturity table for this year";
+    if (code === "no_current_afs_table") return "the report has no table of available-for-sale securities for this year";
+    if (code === "maturity:no_total_row" || code === "afs:no_total_row") return "a table has no total row";
+    if (code === "maturity:no_securities_row") return "the maturity table has no securities line";
+    if (/^maturity:/.test(code)) return "the maturity table's lines do not add up to its total";
+    if (/^afs:/.test(code)) return "the available-for-sale table's lines do not add up to its totals";
+    if (/^mixed_units:/.test(code)) return "the tables are printed in different units";
+    if (code === "as_of_from_url") return "the as-of date comes from the file's address, not the table";
+    if (/^missing_/.test(code)) return "the table has no row for the " + (SHOCKS[code.slice(8)] || "one") + " shock";
+    if (/^max_mismatch:/.test(code)) return "the printed maximum differs from the largest of the six shocks";
+    return "an internal check did not pass";
+  }).join("; ");
+}
+
 function yenBn(v, dp) { return v === null || v === undefined ? MISSING : fmtNum(v / 1e9, dp === undefined ? 1 : dp); }
 function sortAttr(v) { return ' data-sort="' + (v === null || v === undefined ? "" : v) + '"'; }
 function pct(v, dp) { return v === null || v === undefined ? MISSING : fmtSigned(v, dp === undefined ? 1 : dp, "%"); }
@@ -630,7 +651,7 @@ function renderBook() {
   $("book-table").innerHTML = '<table class="data" data-no-enhance>' + head + "<tbody>" +
     rowsOf(cur, "Securities and loans by remaining term") + rowsOf(fund, "Deposits and funding by remaining term") +
     "</tbody></table>";
-  const warn = b.status === "partial" ? " A validation gate failed on this filing (" + b.detail + "); figures are as printed but the bank is left out of rankings." : "";
+  const warn = b.status === "partial" ? " A check on this filing did not pass (" + checkWords(b.detail) + "); figures are as printed but the bank is left out of rankings." : "";
   $("book-foot").textContent = "Principal amounts by remaining term as printed in the note (単位: " + (b.unit_label || "百万円") +
     "), shown in ¥bn. The total column adds the printed buckets; a bucket the note leaves blank is — and adds nothing. " +
     "Demand deposits sit in \u201cwithin 1 year\u201d by the note's own rule. Filed " + fmtPeriodLong(b.filed_date) + ", EDINET " + b.doc_id + "." + warn;
@@ -687,7 +708,7 @@ function renderBook() {
       fmtPeriodLong(t.as_of) + ", as printed in its Pillar 3 disclosure, page " + t.page + ". ") +
       '<a href="' + escapeHtml(t.source_url) + '" rel="noopener">Source PDF</a>' +
       escapeHtml(" (SHA-256 " + (t.pdf_sha256 || "").slice(0, 12) + "…). ΔEVE is the fall in economic value under the shock; ΔNII the fall in net interest income. " +
-        (t.status === "partial" ? "A check on this table did not pass (" + t.detail + "); figures are as printed." : ""));
+        (t.status === "partial" ? "A check on this table did not pass (" + checkWords(t.detail) + "); figures are as printed." : ""));
   } else {
     $("irr-table").innerHTML = '<p class="table-foot">No Basel III rate-risk table has been collected for this bank yet.</p>';
     $("irr-foot").textContent = "";
@@ -744,7 +765,7 @@ function renderIrrbb() {
     '<td class="num"' + sortAttr(r.tier1_yen) + ">" + yenBn(r.tier1_yen) + "</td>" +
     '<td class="num"' + sortAttr(r.delta_eve_to_tier1_pct) + ">" + (r.delta_eve_to_tier1_pct === null ? MISSING : fmtRate(r.delta_eve_to_tier1_pct, 1)) + "</td>" +
     '<td class="num"' + sortAttr(r.delta_nii_parallel_up_yen) + ">" + yenBn(r.delta_nii_parallel_up_yen) + "</td>" +
-    "<td>" + (r.basis === "consolidated" ? "Consolidated" : "Bank only") + (r.status === "partial" ? ' <span class="muted" title="' + escapeHtml(r.detail || "") + '">check failed</span>' : "") + "</td>" +
+    "<td>" + (r.basis === "consolidated" ? "Consolidated" : "Bank only") + (r.status === "partial" ? ' <span class="muted" title="' + escapeHtml(checkWords(r.detail)) + '">check failed</span>' : "") + "</td>" +
     '<td><a href="' + escapeHtml(r.source_url) + '" rel="noopener">PDF p.' + escapeHtml(String(r.page)) + "</a></td></tr>").join("");
   $("irrbb-table").innerHTML = '<table class="data">' + head + "<tbody>" + body + "</tbody></table>";
   const asOfs = rows.map(r => r.as_of).filter(Boolean).sort();

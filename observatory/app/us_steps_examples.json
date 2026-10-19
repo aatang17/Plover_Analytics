@@ -1,0 +1,754 @@
+[
+  {
+    "question": "How many companies outperformed the S&P 500?",
+    "steps": [
+      "'Outperformed' means a bigger price change than the index over the same days; no period is named, so this year.",
+      "The S&P 500 is named, even though only as the thing to beat, so the companies are its members: this is how broad the index's gain is.",
+      "Take the index's own change, from the fund that tracks it.",
+      "Count the members with a bigger change, out of the members that have one."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "headline": "{beat} of {members} S&P 500 members beat the index {period}, when the index changed {index_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "how many stocks beat the s&p this year",
+    "steps": [
+      "The S&P 500 is named, so the stocks are its members, measured against it.",
+      "This year: from the first close of the year.",
+      "Count the members whose change beats the S&P 500 fund's, out of those with a change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "headline": "{beat} of {members} S&P 500 members beat the index {period}, when it changed {index_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How many stocks lagged the Dow in 2026?",
+    "steps": [
+      "The Dow is named, so the stocks are its members, measured against it.",
+      "In 2026: from 2026-01-01; the year is not over, so up to the latest close.",
+      "Count the members whose change is below the Dow fund's, out of those with a change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'dow') SELECT count(*) FILTER (WHERE s.change_period_pct < idx.index_change_pct) AS lagged, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_dow",
+    "headline": "{lagged} of {members} Dow members lagged the Dow {period}, when it changed {index_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How many US stocks beat the market this year?",
+    "steps": [
+      "'US stocks' with 'the market' means every listed stock, not one index's members; the market is the S&P 500 fund.",
+      "Across all stocks, leave out companies under $2bn, and say so.",
+      "Count those beating the S&P 500 fund this year, out of those with a change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS companies, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.market_cap_usd >= 2e9",
+    "headline": "{beat} of {companies} US companies above $2bn beat the S&P 500 {period}, when it changed {index_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "What share of Dow stocks are up this year?",
+    "steps": [
+      "'Up this year' means a price change above zero since the first close of the year.",
+      "Only the Dow's members count.",
+      "Divide the members that rose by the members with a change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT count(*) FILTER (WHERE change_period_pct > 0) AS up, count(change_period_pct) AS members, 100.0 * count(*) FILTER (WHERE change_period_pct > 0) / count(change_period_pct) AS share_pct FROM stocks WHERE in_dow",
+    "headline": "{up} of {members} Dow stocks are up {period}, a share of {share_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How many S&P 500 stocks have fallen more than 20% this year?",
+    "steps": [
+      "Take the S&P 500 members' price change this year.",
+      "Count those below -20%, out of those with a change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT count(*) FILTER (WHERE change_period_pct < -20) AS fell, count(change_period_pct) AS members FROM stocks WHERE in_sp500",
+    "headline": "{fell} of {members} S&P 500 members are down more than 20% {period}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which tech stocks beat the S&P 500 this year and grew revenue more than 10%?",
+    "steps": [
+      "Tech is the Technology sector; no index is named for the stocks, so every listed company above $2bn.",
+      "Keep those whose price change this year beats the S&P 500 fund's.",
+      "Keep those whose latest annual revenue grew more than 10%.",
+      "List them by price change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.ticker, s.name, s.change_period_pct, s.change_period_pct - idx.index_change_pct AS vs_index_pp, s.revenue_growth_pct, s.market_cap_usd FROM stocks s CROSS JOIN idx WHERE s.sector = 'Technology' AND s.market_cap_usd >= 2e9 AND s.change_period_pct > idx.index_change_pct AND s.revenue_growth_pct > 10 ORDER BY s.change_period_pct DESC LIMIT 20",
+    "headline": "{name} leads the technology companies above $2bn that beat the S&P 500 {period} with revenue growth above 10%: {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "What is the median P/E of the S&P 500?",
+    "steps": [
+      "Take the S&P 500 members' P/E; members with a loss have none and are left out.",
+      "Take the median, and count how many it covers."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT median(pe_x) AS median_pe_x, count(pe_x) AS n, count(*) AS members FROM stocks WHERE in_sp500",
+    "headline": "The median S&P 500 member trades at {median_pe_x} earnings, across the {n} of {members} members with a P/E.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How many S&P 500 companies have negative free cash flow?",
+    "steps": [
+      "Negative free cash flow means it is below zero.",
+      "Count the members below zero, out of members with the figure."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT count(*) FILTER (WHERE fcf_usd < 0) AS negative, count(fcf_usd) AS members FROM stocks WHERE in_sp500",
+    "headline": "{negative} of {members} S&P 500 members had negative free cash flow in their latest annual report.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which sector did best in the S&P 500 this year?",
+    "steps": [
+      "Group the S&P 500 members by sector.",
+      "For each sector take the median price change this year and how many members it has.",
+      "Rank the sectors by that median."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT sector, median(change_period_pct) AS median_change_pct, count(change_period_pct) AS n FROM stocks WHERE in_sp500 AND sector IS NOT NULL GROUP BY sector ORDER BY median_change_pct DESC",
+    "headline": "{sector} did best among S&P 500 sectors {period}: its median member changed {median_change_pct}.",
+    "chart": {
+      "label": "sector",
+      "value": "median_change_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Did the average S&P 500 stock beat the index this year?",
+    "steps": [
+      "The average stock is the median member's price change this year.",
+      "The index is the S&P 500 fund's change.",
+      "The gap between them is in percentage points."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT median(s.change_period_pct) AS median_member_change_pct, any_value(idx.index_change_pct) AS index_change_pct, median(s.change_period_pct) - any_value(idx.index_change_pct) AS gap_pp FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "headline": "The median S&P 500 member changed {median_member_change_pct} {period}, against {index_change_pct} for the index: a gap of {gap_pp}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which Dow stocks are down this year?",
+    "steps": [
+      "Take the Dow's members.",
+      "Keep those with a price change below zero this year.",
+      "List them, worst first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, change_period_pct, dow_weight_pct FROM stocks WHERE in_dow AND change_period_pct < 0 ORDER BY change_period_pct",
+    "headline": "{name} is the Dow's worst stock {period}, {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which of the biggest companies are down this year?",
+    "steps": [
+      "The biggest companies: market value of $200bn or more.",
+      "Keep those down this year.",
+      "List them, worst first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, market_cap_usd, change_period_pct FROM stocks WHERE market_cap_usd >= 2e11 AND change_period_pct < 0 ORDER BY change_period_pct LIMIT 20",
+    "headline": "{name} has done worst {period} among the biggest companies, {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "How many stocks above $10bn have doubled this year?",
+    "steps": [
+      "Companies worth $10bn or more.",
+      "Doubled means a price change of 100% or more this year.",
+      "Count them, out of those with a change, and list them."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, change_period_pct, market_cap_usd, count(*) OVER () AS doubled FROM stocks WHERE market_cap_usd >= 1e10 AND change_period_pct >= 100 ORDER BY change_period_pct DESC LIMIT 50",
+    "headline": "{doubled} companies above $10bn have doubled {period}, led by {name} at {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which S&P 500 stocks were up last year but are down this year?",
+    "steps": [
+      "Two periods: last year and this year so far.",
+      "Keep S&P 500 members up in LAST_YEAR and down so far this year.",
+      "List them by this year's fall."
+    ],
+    "period": {
+      "from": "LAST_YEAR-01-01",
+      "to": "LAST_YEAR-12-31"
+    },
+    "sql": "SELECT ticker, name, change_period_pct AS last_year_change_pct, change_ytd_pct AS this_year_change_pct FROM stocks WHERE in_sp500 AND change_period_pct > 0 AND change_ytd_pct < 0 ORDER BY change_ytd_pct LIMIT 30",
+    "headline": "{name} rose {last_year_change_pct} in LAST_YEAR and has changed {this_year_change_pct} this year, the biggest turn among S&P 500 members.",
+    "chart": {
+      "label": "ticker",
+      "value": "this_year_change_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "What share of the S&P 500 is in its ten largest companies?",
+    "steps": [
+      "Use the members' index weights.",
+      "Add up the ten largest weights."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT sum(w) AS top_ten_weight_pct FROM (SELECT sp500_weight_pct AS w FROM stocks WHERE in_sp500 ORDER BY sp500_weight_pct DESC LIMIT 10)",
+    "headline": "The ten largest members make up {top_ten_weight_pct} of the S&P 500.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which industries have the most companies in the S&P 500?",
+    "steps": [
+      "Group the members by the SEC industry title.",
+      "Count each, largest first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT industry, count(*) AS n, sum(sp500_weight_pct) AS weight_pct FROM stocks WHERE in_sp500 GROUP BY industry ORDER BY n DESC LIMIT 15",
+    "headline": "{industry} has the most S&P 500 members: {n}.",
+    "chart": {
+      "label": "industry",
+      "value": "n"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which S&P 500 companies have net margins above 30% and revenue growth above 20%?",
+    "steps": [
+      "Take the S&P 500 members.",
+      "Keep net margin above 30% and revenue growth above 20%.",
+      "List them by net margin."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, net_margin_pct, revenue_growth_pct, market_cap_usd FROM stocks WHERE in_sp500 AND net_margin_pct > 30 AND revenue_growth_pct > 20 ORDER BY net_margin_pct DESC",
+    "headline": "{name} has the highest net margin, {net_margin_pct}, of the S&P 500 members with margins above 30% and revenue growth above 20%.",
+    "chart": {
+      "label": "ticker",
+      "value": "net_margin_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "How many large companies lost money last year?",
+    "steps": [
+      "Large means a market value of $10bn or more.",
+      "A loss is net income below zero in the latest annual report.",
+      "Count them, out of those with the figure."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT count(*) FILTER (WHERE net_income_usd < 0) AS lost_money, count(net_income_usd) AS companies FROM stocks WHERE market_cap_usd >= 1e10",
+    "headline": "{lost_money} of {companies} companies worth $10bn or more reported a net loss in their latest annual report.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Is tech or health care more profitable in the S&P 500?",
+    "steps": [
+      "Take S&P 500 members in the Technology and Health Care sectors.",
+      "For each, the median operating margin and how many members."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT sector, median(operating_margin_pct) AS median_operating_margin_pct, count(operating_margin_pct) AS n FROM stocks WHERE in_sp500 AND sector IN ('Technology', 'Health Care') GROUP BY sector ORDER BY median_operating_margin_pct DESC",
+    "headline": "{sector} is the more profitable: its median S&P 500 member earns an operating margin of {median_operating_margin_pct}.",
+    "chart": {
+      "label": "sector",
+      "value": "median_operating_margin_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which energy stocks beat the S&P 500 over the past year?",
+    "steps": [
+      "The past year: from ONE_YEAR_AGO.",
+      "Energy is the Energy sector, companies above $2bn as no index is named.",
+      "Keep those whose change beats the S&P 500 fund's over the same days.",
+      "List them."
+    ],
+    "period": {
+      "from": "ONE_YEAR_AGO",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.ticker, s.name, s.change_period_pct, s.change_period_pct - idx.index_change_pct AS vs_index_pp FROM stocks s CROSS JOIN idx WHERE s.sector = 'Energy' AND s.market_cap_usd >= 2e9 AND s.change_period_pct > idx.index_change_pct ORDER BY s.change_period_pct DESC LIMIT 30",
+    "headline": "{name} did best of the energy companies above $2bn that beat the S&P 500 {period}: {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "How did the sector funds do this year?",
+    "steps": [
+      "Take the S&P 500's sector funds.",
+      "Rank them by this year's price change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT name, fund_ticker, change_period_pct FROM benchmarks WHERE name ILIKE '%sector%' ORDER BY change_period_pct DESC",
+    "headline": "The {name} did best {period}, {change_period_pct}.",
+    "chart": {
+      "label": "fund_ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which S&P 500 stocks trade below 10 times earnings?",
+    "steps": [
+      "Take S&P 500 members with a P/E below 10 (loss-makers have none).",
+      "List them, cheapest first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, pe_x, sector, market_cap_usd FROM stocks WHERE in_sp500 AND pe_x < 10 ORDER BY pe_x",
+    "headline": "{name} is the cheapest S&P 500 member on earnings, at {pe_x}.",
+    "chart": {
+      "label": "ticker",
+      "value": "pe_x"
+    },
+    "cannot": null
+  },
+  {
+    "question": "How many Dow stocks beat the Dow since March?",
+    "steps": [
+      "Since March: from YEAR-03-01.",
+      "The Dow's own change is the DIA fund's.",
+      "Count the members with a bigger change, out of those with one."
+    ],
+    "period": {
+      "from": "YEAR-03-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'dow') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_dow",
+    "headline": "{beat} of {members} Dow stocks beat the Dow {period}, when it changed {index_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How many S&P 500 stocks beat the Nasdaq 100 this year?",
+    "steps": [
+      "The Nasdaq-100's own members are not held, but its fund (QQQ) is, so S&P 500 members can be compared with it.",
+      "Count the S&P 500 members with a bigger change than the fund."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'nasdaq100') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "headline": "{beat} of {members} S&P 500 members beat the Nasdaq-100 {period}, when its fund changed {index_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How many Nasdaq 100 stocks are up this year?",
+    "steps": [
+      "The Nasdaq-100 has no member list here, only its fund's price."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "",
+    "headline": "",
+    "chart": null,
+    "cannot": "I hold the member lists of the S&P 500 and the Dow, not of the Nasdaq-100, so I cannot count its stocks. I can compare a stock, or the S&P 500's members, with its fund (QQQ)."
+  },
+  {
+    "question": "What is the total market value of the S&P 500?",
+    "steps": [
+      "Add up the members' market values."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT sum(market_cap_usd) AS total_market_cap_usd, count(market_cap_usd) AS n FROM stocks WHERE in_sp500",
+    "headline": "The S&P 500's members are worth {total_market_cap_usd} together, across the {n} with a market value.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which companies worth over $100bn have done worst this year?",
+    "steps": [
+      "Companies worth $100bn or more.",
+      "Rank them by this year's price change, lowest first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, change_period_pct, market_cap_usd FROM stocks WHERE market_cap_usd >= 1e11 AND change_period_pct IS NOT NULL ORDER BY change_period_pct LIMIT 10",
+    "headline": "{name} has done worst {period} among companies worth over $100bn, {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which banks have a return on equity above 15%?",
+    "steps": [
+      "Banks: industry titles containing BANK.",
+      "Keep those with return on equity above 15%.",
+      "List them, highest first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, roe_pct, market_cap_usd FROM stocks WHERE industry ILIKE '%BANK%' AND roe_pct > 15 ORDER BY roe_pct DESC LIMIT 25",
+    "headline": "{name} has the highest return on equity among banks above 15%: {roe_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "roe_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Of the S&P 500 stocks that beat the index this year, how many are in each sector?",
+    "steps": [
+      "Find the members that beat the S&P 500 fund this year.",
+      "Count them by sector, against each sector's member count."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.sector, count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members FROM stocks s CROSS JOIN idx WHERE s.in_sp500 AND s.sector IS NOT NULL GROUP BY s.sector ORDER BY beat DESC",
+    "headline": "{sector} has the most S&P 500 members that beat the index {period}: {beat} of {members}.",
+    "chart": {
+      "label": "sector",
+      "value": "beat"
+    },
+    "cannot": null
+  },
+  {
+    "question": "What percentage of S&P 500 stocks are higher than a year ago?",
+    "steps": [
+      "A year ago: the past year's price change.",
+      "Share of members with a change above zero."
+    ],
+    "period": {
+      "from": "ONE_YEAR_AGO",
+      "to": null
+    },
+    "sql": "SELECT 100.0 * count(*) FILTER (WHERE change_period_pct > 0) / count(change_period_pct) AS share_pct, count(*) FILTER (WHERE change_period_pct > 0) AS up, count(change_period_pct) AS members FROM stocks WHERE in_sp500",
+    "headline": "{share_pct} of S&P 500 members are higher {period}: {up} of {members}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How much did Apple beat the S&P 500 by this year?",
+    "steps": [
+      "Apple is ticker AAPL.",
+      "Its change this year less the S&P 500 fund's, in percentage points."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.name, s.change_period_pct, idx.index_change_pct, s.change_period_pct - idx.index_change_pct AS gap_pp FROM stocks s CROSS JOIN idx WHERE s.ticker = 'AAPL'",
+    "headline": "{name} changed {change_period_pct} {period}, against {index_change_pct} for the S&P 500: a gap of {gap_pp}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which companies have the most employees?",
+    "steps": [
+      "Employee numbers are not in the tables."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "",
+    "headline": "",
+    "chart": null,
+    "cannot": "I don't hold employee numbers, so I cannot rank companies by them."
+  },
+  {
+    "question": "Why did Intel go up this year?",
+    "steps": [
+      "A why question."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "",
+    "headline": "",
+    "chart": null,
+    "cannot": "I don't explain why a price moved; I can show how far it moved and what the company reported."
+  },
+  {
+    "question": "What is the average dividend yield of S&P 500 utilities?",
+    "steps": [
+      "Utilities is the Utilities sector; only S&P 500 members.",
+      "The question asks for the average, so the mean, with the median beside it."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT avg(dividend_yield_pct) AS average_dividend_yield_pct, median(dividend_yield_pct) AS median_dividend_yield_pct, count(dividend_yield_pct) AS n FROM stocks WHERE in_sp500 AND sector = 'Utilities'",
+    "headline": "S&P 500 utilities yield {average_dividend_yield_pct} on average (median {median_dividend_yield_pct}), across {n} members.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "average operating margin of software companies",
+    "steps": [
+      "Software: industry titles with SOFTWARE or PROGRAMMING.",
+      "An average across companies is led by the median; the mean is shown beside it and is pulled by near-zero-revenue filers, so companies under $100mn of revenue are left out."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT median(operating_margin_pct) AS median_operating_margin_pct, avg(operating_margin_pct) AS mean_operating_margin_pct, count(operating_margin_pct) AS n FROM stocks WHERE (industry ILIKE '%SOFTWARE%' OR industry ILIKE '%PROGRAMMING%') AND revenue_usd >= 1e8",
+    "headline": "The median software company with revenue above $100mn earns an operating margin of {median_operating_margin_pct} (mean {mean_operating_margin_pct}), across {n} companies.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "which companies have more cash than debt and grew revenue over 20%",
+    "steps": [
+      "Debt is borrowings as filed; companies with no borrowings tagged are left out rather than treated as debt-free.",
+      "Cash above borrowings, and revenue growth above 20% from a base above $50mn.",
+      "List them by growth."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, cash_usd, borrowings_usd, revenue_growth_pct, revenue_usd FROM stocks WHERE cash_usd > borrowings_usd AND revenue_growth_pct > 20 AND revenue_prior_usd >= 5e7 AND market_cap_usd >= 2e9 ORDER BY revenue_growth_pct DESC LIMIT 25",
+    "headline": "{name} leads the companies above $2bn with more cash than borrowings and revenue growth above 20% from a base above $50mn: {revenue_growth_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "revenue_growth_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which Chinese stocks did best this year?",
+    "steps": [
+      "Chinese companies here are the ones listed in the US, by the country of their business address.",
+      "Rank them by this year's price change, companies above $2bn."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, change_period_pct, market_cap_usd FROM stocks WHERE country = 'CN' AND market_cap_usd >= 2e9 AND change_period_pct IS NOT NULL ORDER BY change_period_pct DESC LIMIT 10",
+    "headline": "{name} did best {period} among US-listed Chinese companies above $2bn, {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "change_period_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Who are the ten highest-paid CEOs?",
+    "steps": [
+      "CEO pay is held for S&P 500 members, from each company's latest proxy statement.",
+      "Take each CEO's total pay as reported, in the company's latest fiscal year.",
+      "Rank from highest and keep the top ten."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT p.ticker, s.name, p.ceo, p.ceo_total_pay_usd, p.fiscal_year_end FROM pay p JOIN stocks s USING (ticker) WHERE p.ceo_total_pay_usd IS NOT NULL ORDER BY p.ceo_total_pay_usd DESC LIMIT 10",
+    "headline": "{ceo} of {name} was the best-paid S&P 500 CEO in the company's latest fiscal year, at {ceo_total_pay_usd}.",
+    "chart": {
+      "label": "ticker",
+      "value": "ceo_total_pay_usd"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which CEOs were paid most while their shareholders did worst?",
+    "steps": [
+      "Take S&P 500 CEOs' total pay in each company's latest fiscal year.",
+      "Set it beside the shareholder return over the same table: what $100 invested became.",
+      "List the best-paid CEOs among companies where $100 became less than $100."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT p.ticker, s.name, p.ceo, p.ceo_total_pay_usd, p.tsr_value_of_100, p.tsr_since FROM pay p JOIN stocks s USING (ticker) WHERE p.tsr_value_of_100 < 100 AND p.ceo_total_pay_usd IS NOT NULL ORDER BY p.ceo_total_pay_usd DESC LIMIT 10",
+    "headline": "{ceo} of {name} was paid {ceo_total_pay_usd} while $100 in its shares since {tsr_since} became ${tsr_value_of_100}.",
+    "chart": {
+      "label": "ticker",
+      "value": "ceo_total_pay_usd"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which S&P 500 companies grew revenue fastest last quarter?",
+    "steps": [
+      "Take each S&P 500 member's most recent quarter on file.",
+      "Compare its revenue with the same quarter a year earlier, from a base above $50mn.",
+      "Rank by that growth and keep the top ten."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT q.ticker, s.name, q.quarter_end, q.revenue_usd, q.revenue_growth_yoy_pct FROM quarters q JOIN stocks s USING (ticker) WHERE s.in_sp500 AND q.is_latest AND q.revenue_year_ago_usd >= 5e7 AND q.revenue_growth_yoy_pct IS NOT NULL ORDER BY q.revenue_growth_yoy_pct DESC LIMIT 10",
+    "headline": "{name} grew revenue fastest among S&P 500 members in its latest quarter, to {quarter_end}: {revenue_growth_yoy_pct} on a year earlier, from a base above $50mn.",
+    "chart": {
+      "label": "ticker",
+      "value": "revenue_growth_yoy_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which companies get the most revenue from China?",
+    "steps": [
+      "China is a region: match it in each company's geographic segments and in its reporting segments, since some companies report by region (Apple's Greater China).",
+      "Keep one line per company, the larger where it reports China both ways.",
+      "Rank by revenue, and show what share of the company's total it is."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT g.ticker, s.name, g.kind, g.segment, g.revenue_usd, g.share_of_revenue_pct, g.fiscal_year_end FROM segments g JOIN stocks s USING (ticker) WHERE g.kind IN ('geography', 'business') AND g.segment ILIKE '%china%' QUALIFY row_number() OVER (PARTITION BY g.ticker ORDER BY g.revenue_usd DESC) = 1 ORDER BY g.revenue_usd DESC LIMIT 10",
+    "headline": "{name} reports the most revenue from China: {revenue_usd} in the year to {fiscal_year_end}, {share_of_revenue_pct} of its total.",
+    "chart": {
+      "label": "ticker",
+      "value": "revenue_usd"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Where have insiders bought the most stock in the past three months?",
+    "steps": [
+      "Take insiders' open-market purchases over the past three months.",
+      "Add up the dollars bought per company and count the insiders buying.",
+      "Rank by dollars bought and keep the top ten."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT i.ticker, s.name, sum(i.value_usd) AS bought_usd, count(DISTINCT i.insider) AS insiders, max(i.trade_date) AS last_trade FROM insider_trades i JOIN stocks s USING (ticker) WHERE i.side = 'buy' AND i.trade_date >= DATE 'TODAY' - INTERVAL 91 DAY GROUP BY i.ticker, s.name HAVING sum(i.value_usd) IS NOT NULL ORDER BY bought_usd DESC LIMIT 10",
+    "headline": "Insiders at {name} bought the most in the past three months: {bought_usd}, by {insiders} insiders.",
+    "chart": {
+      "label": "ticker",
+      "value": "bought_usd"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which S&P 500 stocks did funds add to most last quarter?",
+    "steps": [
+      "Take 13F holdings for S&P 500 members: all managers' shares in the latest quarter against the quarter before.",
+      "Leave out stocks with fewer than 20 holders.",
+      "Rank by the change in shares held and keep the top ten."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT f.ticker, s.name, f.quarter_end, f.shares_change_pct, f.holders, f.new_holders FROM fund_holdings f JOIN stocks s USING (ticker) WHERE s.in_sp500 AND f.holders >= 20 AND f.shares_change_pct IS NOT NULL ORDER BY f.shares_change_pct DESC LIMIT 10",
+    "headline": "Funds added most to {name} in the quarter to {quarter_end}: shares held changed {shares_change_pct}, with {new_holders} new holders.",
+    "chart": {
+      "label": "ticker",
+      "value": "shares_change_pct"
+    },
+    "cannot": null
+  }
+]

@@ -93,7 +93,8 @@ function renderSnapshotBlock(c, b) {
       '<p class="dk-snap-meta">From <a href="' + escapeHtml(b.url) + '" target="_blank" rel="noopener">' +
       escapeHtml(b.page_title || b.url) + "</a> · copied " + escapeHtml(dateLong(b.captured_at)) +
       ' · <button type="button" class="linkish" data-snap="capture">Copy Again</button>' +
-      ' · <button type="button" class="linkish" data-snap="choose">Choose Another Chart</button></p>' +
+      ' · <button type="button" class="linkish" data-snap="choose">Choose Another Chart</button>' +
+      ' · <button type="button" class="linkish" data-snap="save">Save Chart</button></p>' +
       '<div class="dk-chart-plot" style="height:' + snapshotHeight(b) + 'px"></div>' +
       '<p class="source-line">' + escapeHtml(b.source || "") + "</p>" +
       (b.calc ? '<details class="calc"><summary>Show calculation</summary><div class="calc-body">' +
@@ -137,6 +138,7 @@ function snapClick(blockEl, model, t) {
     copyChart(blockEl, model, act === "choose");
     return true;
   }
+  if (act === "save") { saveChart(model); return true; }
   if (act === "clear") {
     Object.assign(model, { url: "", chart: 0, cfg: null, kind: "" });
     renderSnapshotBlock(blockEl.querySelector(".dk-content"), model);
@@ -533,13 +535,14 @@ function renderResearchPane() {
   RT.tabs = [];
   addTab({ kind: "plan", title: "Plan", pinned: true });
   addTab({ kind: "notes", title: "Notes", pinned: true });
+  addTab({ kind: "charts", title: "Charts", pinned: true });
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem(rtKey()) || "null"); } catch (e) { saved = null; }
   ((saved && saved.tabs) || []).filter(function (sp) { return sp.kind === "data" || sp.kind === "web"; })
     .slice(0, RT_MAX).forEach(function (sp) { addTab(sp); });
   var want = saved && typeof saved.active === "number" ? RT.tabs[saved.active] : null;
-  if (!want) want = S.plan || planInPage() ? RT.tabs[0] : RT.tabs[2];
-  if (!want) want = addTab({ kind: "new", title: "New Tab" });
+  // the plan when there is one; else the last search or page; else the chart library
+  if (!want) want = S.plan || planInPage() ? RT.tabs[0] : (RT.tabs[3] || RT.tabs[2]);
   $(".dk-rt-strip", box).addEventListener("click", function (e) {
     var t = e.target.closest("button");
     if (!t) return;
@@ -602,7 +605,7 @@ function activateTab(t) {
   RT.active = t;
   RT.tabs.forEach(function (x) { x.el.hidden = x !== t; });
   S.slotTarget = t.slot && slotEl(t.slot) ? t.slot : null;
-  if (t.kind === "plan" || t.kind === "notes" || !t.loaded) fillTab(t);
+  if (t.kind === "plan" || t.kind === "notes" || t.kind === "charts" || !t.loaded) fillTab(t);
   drawStrip();
   saveTabs();
 }
@@ -615,6 +618,7 @@ function fillTab(t) {
   t.loaded = true;
   if (t.kind === "plan") return planTab(t.el);
   if (t.kind === "notes") return notesTab(t.el);
+  if (t.kind === "charts") return chartsTab(t.el);
   if (t.kind === "data") return dataTab(t);
   if (t.kind === "web") return webTab(t);
   return newTab(t);
@@ -856,7 +860,8 @@ function dataSearch(q, res, asked) {
     if (seq !== res._seq) return;
     res.removeAttribute("aria-busy");
     var pages = r.pages || [];
-    if (!r.series.length && !r.companies.length && !pages.length && !(r.market || []).length) {
+    if (!r.series.length && !r.companies.length && !pages.length && !(r.common || []).length &&
+        !(r.places || []).length && !(r.market || []).length) {
       var shorter = q.trim().split(/\s+/).slice(0, -1).join(" ");
       if (shorter) { dataSearch(shorter, res, asked || q); return; }
       res.innerHTML = '<p class="muted">Nothing matches “' + escapeHtml(asked || q) + '”. Try a shorter name, ' +
@@ -868,16 +873,57 @@ function dataSearch(q, res, asked) {
     var firstCo = r.companies.some(function (c) {
       return String(c.code).toLowerCase() === ql || (c.name || "").toLowerCase().indexOf(ql) === 0;
     });
-    var seriesHtml =
-      (r.series.length ? '<p class="dk-rs-h">Series</p><ul class="dk-rs-list">' + r.series.map(function (s, i) {
-        return '<li><span class="dk-rs-name" title="' + escapeHtml(s.dataset_name + " · " + s.code) + '">' +
-          escapeHtml(s.name) + ' <span class="mono muted">' + escapeHtml(s.dataset) + "</span></span>" +
-          '<span class="dk-rs-acts"><button type="button" class="dk-mini" data-schart="' + i + '">Insert Chart</button>' +
-          '<button type="button" class="dk-mini" data-svalue="' + i + '">Insert Value</button>' +
-          '<button type="button" class="dk-mini" data-snote="' + i + '">Save Value to Notes</button></span></li>';
-      }).join("") + "</ul>" : "");
+    // every series is one list (its index is what the buttons name), shown
+    // grouped by dataset in the order the search ranked them, three a group
+    // until the writer asks for more
+    var places = r.places || [];
+    var allSeries = r.series.concat(places);
+    function seriesRow(s, i, hidden) {
+      return '<li' + (hidden ? ' class="dk-rs-more" hidden' : "") + '><span class="dk-rs-name" title="' + escapeHtml(s.dataset_name + " · " + s.code) + '">' +
+        escapeHtml(s.name) + "</span>" +
+        '<span class="dk-rs-acts"><button type="button" class="dk-mini" data-schart="' + i + '">Insert Chart</button>' +
+        '<button type="button" class="dk-mini" data-svalue="' + i + '">Insert Value</button>' +
+        '<button type="button" class="dk-mini" data-snote="' + i + '">Save Value to Notes</button></span></li>';
+    }
+    function groupsHtml(from, to) {
+      var order = [], by = {};
+      for (var i = from; i < to; i++) {
+        var s = allSeries[i];
+        if (!by[s.dataset]) { by[s.dataset] = []; order.push(s.dataset); }
+        by[s.dataset].push(i);
+      }
+      return order.map(function (ds) {
+        var idx = by[ds];
+        return '<div class="dk-rs-group"><p class="dk-rs-gh">' + escapeHtml(allSeries[idx[0]].dataset_name) +
+          ' <span class="muted">' + idx.length + "</span></p><ul class=\"dk-rs-list\">" +
+          idx.map(function (i, k) { return seriesRow(allSeries[i], i, k >= 3); }).join("") + "</ul>" +
+          (idx.length > 3 ? '<button type="button" class="linkish dk-rs-showmore">Show ' + (idx.length - 3) + " more</button>" : "") +
+          "</div>";
+      }).join("");
+    }
+    var seriesHtml = r.series.length ? '<p class="dk-rs-h">Series</p>' + groupsHtml(0, r.series.length) : "";
+    var placeHtml = places.length ? '<details class="dk-rs-places"><summary>Places named “' + escapeHtml(q) + "” (" +
+      places.length + ")</summary>" + groupsHtml(r.series.length, allSeries.length) + "</details>" : "";
+    var common = r.common || [];
+    var commonHtml = common.length ? '<p class="dk-rs-h">Ready Charts</p><ul class="dk-rs-list">' + common.map(function (c, i) {
+      return '<li><span class="dk-rs-name">' + escapeHtml(c.title) + "</span>" +
+        '<span class="dk-rs-acts"><button type="button" class="dk-mini" data-cmins="' + i + '">Insert Chart</button>' +
+        '<button type="button" class="dk-mini" data-cmsave="' + i + '">Save</button></span></li>';
+    }).join("") + "</ul>" : "";
+    var lead = r.company_first && r.companies.length ? r.companies[0] : null;
+    var leadHtml = lead ? '<p class="dk-rs-h">' + escapeHtml(lead.name) + ' <span class="mono muted">' + escapeHtml(lead.code) + "</span></p>" +
+      ((lead.charts || []).length ? '<ul class="dk-rs-list">' + lead.charts.map(function (c, i) {
+        return '<li><span class="dk-rs-name">' + escapeHtml(c.title) + "</span>" +
+          '<span class="dk-rs-acts"><button type="button" class="dk-mini" data-coins="' + i + '">Insert Chart</button>' +
+          '<button type="button" class="dk-mini" data-cosave="' + i + '">Save</button></span></li>';
+      }).join("") + "</ul>" : '<p class="muted">No filed figures to chart for this company yet.</p>') +
+      '<p class="dk-rs-pages">Its pages: ' + lead.pages.map(function (p) {
+        return '<a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener">' + escapeHtml(p.label) + "</a>";
+      }).join(" · ") + "</p>" : "";
+    var others = lead ? r.companies.slice(1) : r.companies;
     var companyHtml =
-      (r.companies.length ? '<p class="dk-rs-h">Companies</p><ul class="dk-rs-list">' + r.companies.map(function (c, i) {
+      (others.length ? '<p class="dk-rs-h">' + (lead ? "Other Companies" : "Companies") + '</p><ul class="dk-rs-list">' + others.map(function (c) {
+        var i = r.companies.indexOf(c);
         return '<li><span class="dk-rs-name" title="' + escapeHtml(c.name_ja || "") + '">' + escapeHtml(c.name) +
           ' <span class="mono muted">' + escapeHtml(c.code) + "</span></span>" +
           '<span class="dk-rs-acts"><select data-cpage="' + i + '" aria-label="Page">' + c.pages.map(function (p) {
@@ -894,8 +940,30 @@ function dataSearch(q, res, asked) {
           '<button type="button" class="dk-mini" data-popen="' + i + '">Open</button></span></li>';
       }).join("") + "</ul>" : "");
     res.innerHTML = (asked ? '<p class="hint">Nothing for “' + escapeHtml(asked) + '”; showing “' +
-      escapeHtml(q) + "”.</p>" : "") + marketList(r.market || []) + (firstCo ? companyHtml + seriesHtml : seriesHtml + companyHtml) + pageHtml;
+      escapeHtml(q) + "”.</p>" : "") + marketList(r.market || []) + commonHtml + leadHtml +
+      (firstCo ? companyHtml + seriesHtml : seriesHtml + companyHtml) + pageHtml + placeHtml;
     bindMarket(res, r.market || []);
+    $all(".dk-rs-showmore", res).forEach(function (b) {
+      b.addEventListener("click", function () {
+        $all(".dk-rs-more", b.parentNode).forEach(function (li) { li.hidden = false; });
+        b.remove();
+      });
+    });
+    $all("[data-cmins]", res).forEach(function (b) {
+      b.addEventListener("click", function () { insertCommon(common[Number(b.getAttribute("data-cmins"))]); });
+    });
+    $all("[data-cmsave]", res).forEach(function (b) {
+      b.addEventListener("click", function () { saveChart(common[Number(b.getAttribute("data-cmsave"))].block, b); });
+    });
+    $all("[data-coins]", res).forEach(function (b) {
+      b.addEventListener("click", function () { insertCompanyChart(lead, lead.charts[Number(b.getAttribute("data-coins"))]); });
+    });
+    $all("[data-cosave]", res).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var c = lead.charts[Number(b.getAttribute("data-cosave"))];
+        saveChart({ type: "snapshot", url: c.url, chart: 1, title: companyTitle(lead, c) }, b);
+      });
+    });
     $all("[data-pcopy]", res).forEach(function (b) {
       b.addEventListener("click", function () { copyFromSearch(pages[Number(b.getAttribute("data-pcopy"))].url); });
     });
@@ -906,7 +974,7 @@ function dataSearch(q, res, asked) {
     });
     $all("[data-schart]", res).forEach(function (b) {
       b.addEventListener("click", function () {
-        var s = r.series[Number(b.getAttribute("data-schart"))];
+        var s = allSeries[Number(b.getAttribute("data-schart"))];
         var into = S.slotTarget;
         insertAfterCaretBlock({ type: "chart", dataset: s.dataset, series: [s.code], measure: "index",
                                 start: "", end: "", title: s.name, note: "" });
@@ -915,10 +983,10 @@ function dataSearch(q, res, asked) {
       });
     });
     $all("[data-svalue]", res).forEach(function (b) {
-      b.addEventListener("click", function () { insertValue(r.series[Number(b.getAttribute("data-svalue"))], b); });
+      b.addEventListener("click", function () { insertValue(allSeries[Number(b.getAttribute("data-svalue"))], b); });
     });
     $all("[data-snote]", res).forEach(function (b) {
-      b.addEventListener("click", function () { noteValue(r.series[Number(b.getAttribute("data-snote"))], b); });
+      b.addEventListener("click", function () { noteValue(allSeries[Number(b.getAttribute("data-snote"))], b); });
     });
     $all("[data-ccopy]", res).forEach(function (b) {
       b.addEventListener("click", function () {
@@ -992,8 +1060,8 @@ function bindMarket(el, cards) {
    page has none, or the writer cancels the choice) the block is taken out
    again — or the planned chart it replaced is put back — and the reason
    shown, so nothing half-made is left in the draft. */
-function copyFromSearch(url) {
-  var el = insertAfterCaretBlock({ type: "snapshot", url: url, chart: 0, title: "", note: "" });
+function copyFromSearch(url, chart, title) {
+  var el = insertAfterCaretBlock({ type: "snapshot", url: url, chart: chart || 0, title: title || "", note: "" });
   // a page with one chart gives it straight away; with several, the writer chooses
   copyChart(el, S.models[el.getAttribute("data-id")], false).then(function (ok) {
     if (ok || !document.contains(el)) return;
@@ -1002,6 +1070,159 @@ function copyFromSearch(url) {
     if (el._slot) replaceBlock(el, el._slot, false);
     else removeBlock(el);
     toast(why ? why + " Nothing was added." : "No chart chosen. Nothing was added.");
+  });
+}
+
+/* ---- Charts tab: the chart library (app/chart_library.py) ----
+   Saved charts (the writer's own), the publication's coverage companies with
+   their charts, the most used and the common charts by topic: each goes in
+   with one click, where the cursor is. */
+
+var LIB = { data: null, co: {} };
+
+function libList(rows) { return '<ul class="dk-rs-list">' + rows.join("") + "</ul>"; }
+
+function libRow(title, acts, sub) {
+  return '<li><span class="dk-rs-name">' + escapeHtml(title) +
+    (sub ? ' <span class="mono muted">' + escapeHtml(sub) + "</span>" : "") + "</span>" +
+    '<span class="dk-rs-acts">' + acts + "</span></li>";
+}
+
+/* "TOYOTA MOTOR CORPORATION" as filed reads as shouting in a chart title */
+function niceName(name) {
+  if (!name || name !== name.toUpperCase()) return name;
+  return name.toLowerCase().replace(/(^|[\s(&\-\/])([a-z])/g, function (m, a, b) { return a + b.toUpperCase(); })
+    .replace(/\b(Co|Ltd|Inc|Corp)\b\.?/g, function (m) { return m; });
+}
+
+function companyTitle(co, chart) { return (niceName(co.name) || co.code) + ": " + chart.title; }
+
+function insertCommon(card) {
+  insertAfterCaretBlock(JSON.parse(JSON.stringify(card.block)));
+  send("POST", "/research/library/used", { id: card.id }).catch(function () { /* a count is a nicety */ });
+  toast("Chart inserted. Use the buttons above it to change the measure or the dates.");
+}
+
+function insertCompanyChart(co, chart) {
+  copyFromSearch(chart.url, 1, companyTitle(co, chart));
+}
+
+function insertSaved(row) {
+  var b = row.block;
+  if (b.type === "snapshot") { copyFromSearch(b.url, b.chart, b.title); return; }
+  insertAfterCaretBlock(JSON.parse(JSON.stringify(b)));
+  toast("Chart inserted.");
+}
+
+/* Keep a chart for later: from the draft (its Save Chart button), a search
+   or the library. Saved charts are the writer's own. */
+function saveChart(model, btn) {
+  var b = model.type === "snapshot"
+    ? { type: "snapshot", url: model.url, chart: model.chart || 0, title: model.title || "" }
+    : { type: "chart", dataset: model.dataset, series: model.series, measure: model.measure,
+        start: model.start || "", end: model.end || "", title: model.title || "" };
+  if (btn) btn.disabled = true;
+  return send("POST", "/research/library/saved", { block: b }).then(function () {
+    toast("Saved. Find it under Research → Charts → Your Saved Charts.");
+    if (LIB.data) LIB.data = null;
+    var t = RT.tabs.filter(function (x) { return x.kind === "charts"; })[0];
+    if (t && RT.active === t) fillTab(t);
+  }).catch(function (err) { toast(err.message || "The chart was not saved. Try again."); })
+    .then(function () { if (btn) btn.disabled = false; });
+}
+
+function chartsTab(el) {
+  if (!el.innerHTML) el.innerHTML = '<p class="muted">Loading the chart library…</p>';
+  api("/research/library?article=" + encodeURIComponent(ID)).then(function (d) {
+    LIB.data = d;
+    drawLibrary(el, d);
+  }).catch(function (err) { el.innerHTML = '<p class="bad">' + escapeHtml(err.message) + "</p>"; });
+}
+
+function drawLibrary(el, d) {
+  var openTopic = el._open || (d.topics[0] && d.topics[0].key);
+  el.innerHTML =
+    '<form class="dk-rs-form" data-go="data">' + DATA_SEARCH_INPUT + '<button type="submit" class="dk-mini">Search</button></form>' +
+    '<p class="dk-rt-lead">Charts that go in with one click, where your cursor is. Search above for anything else.</p>' +
+    marketList(d.market || []) +
+    (d.saved.length ? '<p class="dk-rs-h">Your Saved Charts</p>' + libList(d.saved.map(function (r, i) {
+      return libRow(r.title, '<button type="button" class="dk-mini" data-lsins="' + i + '">Insert</button>' +
+        '<button type="button" class="dk-mini" data-lsdel="' + i + '">Remove</button>');
+    })) : "") +
+    (d.coverage.length ? '<p class="dk-rs-h">' + escapeHtml(d.publication || "Publication") + " Coverage</p>" +
+      '<ul class="dk-rs-list dk-lib-cos">' + d.coverage.map(function (c, i) {
+        return '<li class="dk-lib-co"><span class="dk-rs-name">' + escapeHtml(c.name) + ' <span class="mono muted">' +
+          escapeHtml(c.code) + '</span></span><span class="dk-rs-acts"><button type="button" class="dk-mini" data-lco="' + i +
+          '" aria-expanded="false">Charts</button></span><div class="dk-lib-cocharts" hidden></div></li>';
+      }).join("") + "</ul>" : "") +
+    (d.popular.length ? '<p class="dk-rs-h">Most Used</p>' + libList(d.popular.map(function (c, i) {
+      return libRow(c.title, '<button type="button" class="dk-mini" data-lpins="' + i + '">Insert</button>' +
+        '<button type="button" class="dk-mini" data-lpsave="' + i + '">Save</button>');
+    })) : "") +
+    '<p class="dk-rs-h">Common Charts</p>' +
+    (d.topics.length ? d.topics.map(function (t) {
+      return '<details class="dk-lib-topic" data-topic="' + t.key + '"' + (t.key === openTopic ? " open" : "") + "><summary>" +
+        escapeHtml(t.label) + ' <span class="muted">' + t.charts.length + "</span></summary>" +
+        libList(t.charts.map(function (c) {
+          return libRow(c.title, '<button type="button" class="dk-mini" data-lcins="' + c.id + '">Insert</button>' +
+            '<button type="button" class="dk-mini" data-lcsave="' + c.id + '">Save</button>');
+        })) + "</details>";
+    }).join("") : '<p class="muted">No data on this server yet.</p>');
+  var byId = {};
+  bindMarket(el, d.market || []);
+  d.topics.forEach(function (t) { t.charts.forEach(function (c) { byId[c.id] = c; }); });
+  var form = $('[data-go="data"]', el);
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = $("input", form).value.trim();
+    if (q) openResearchTab({ kind: "data", q: q, title: q });
+  });
+  $all("details.dk-lib-topic", el).forEach(function (x) {
+    x.addEventListener("toggle", function () { if (x.open) el._open = x.getAttribute("data-topic"); });
+  });
+  $all("[data-lcins]", el).forEach(function (b) { b.addEventListener("click", function () { insertCommon(byId[b.getAttribute("data-lcins")]); }); });
+  $all("[data-lcsave]", el).forEach(function (b) { b.addEventListener("click", function () { saveChart(byId[b.getAttribute("data-lcsave")].block, b); }); });
+  $all("[data-lpins]", el).forEach(function (b) { b.addEventListener("click", function () { insertCommon(d.popular[Number(b.getAttribute("data-lpins"))]); }); });
+  $all("[data-lpsave]", el).forEach(function (b) { b.addEventListener("click", function () { saveChart(d.popular[Number(b.getAttribute("data-lpsave"))].block, b); }); });
+  $all("[data-lsins]", el).forEach(function (b) { b.addEventListener("click", function () { insertSaved(d.saved[Number(b.getAttribute("data-lsins"))]); }); });
+  $all("[data-lsdel]", el).forEach(function (b) {
+    b.addEventListener("click", function () {
+      var row = d.saved[Number(b.getAttribute("data-lsdel"))];
+      b.disabled = true;
+      api("/research/library/saved/" + row.id, { method: "DELETE" }).then(function () {
+        toast("Removed “" + row.title + "” from your saved charts.");
+        chartsTab(el);
+      }).catch(function (err) { b.disabled = false; toast(err.message); });
+    });
+  });
+  $all("[data-lco]", el).forEach(function (b) {
+    b.addEventListener("click", function () {
+      var co = d.coverage[Number(b.getAttribute("data-lco"))];
+      var box = $(".dk-lib-cocharts", b.closest("li"));
+      var open = box.hidden;
+      box.hidden = !open;
+      b.setAttribute("aria-expanded", String(open));
+      if (!open) return;
+      function show(charts) {
+        box.innerHTML = charts.length ? libList(charts.map(function (c, i) {
+          return libRow(c.title, '<button type="button" class="dk-mini" data-ccins="' + i + '">Insert</button>' +
+            '<button type="button" class="dk-mini" data-ccsave="' + i + '">Save</button>');
+        })) : '<p class="muted">No filed figures to chart for this company yet.</p>';
+        $all("[data-ccins]", box).forEach(function (x) { x.addEventListener("click", function () { insertCompanyChart(co, charts[Number(x.getAttribute("data-ccins"))]); }); });
+        $all("[data-ccsave]", box).forEach(function (x) {
+          x.addEventListener("click", function () {
+            var c = charts[Number(x.getAttribute("data-ccsave"))];
+            saveChart({ type: "snapshot", url: c.url, chart: 1, title: companyTitle(co, c) }, x);
+          });
+        });
+      }
+      if (LIB.co[co.code]) { show(LIB.co[co.code]); return; }
+      box.innerHTML = '<p class="muted">Finding ' + escapeHtml(co.name) + "’s charts…</p>";
+      api("/research/company-charts/" + encodeURIComponent(co.code)).then(function (res) {
+        LIB.co[co.code] = res.charts;
+        show(res.charts);
+      }).catch(function (err) { box.innerHTML = '<p class="bad">' + escapeHtml(err.message) + "</p>"; });
+    });
   });
 }
 

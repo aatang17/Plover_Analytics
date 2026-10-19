@@ -911,3 +911,55 @@ table.caltable .code:hover { text-decoration: underline; }
 }
 .memsaved { display: flex; gap: 8px; align-items: baseline; margin: 6px 0 0; font-size: 12.5px; color: var(--obs-text-muted); }
 .memsaved span { flex: 1; overflow-wrap: anywhere; }
+
+/* ---- Studies (assistant.js vStudies / vStudy) */
+.study-start { margin-top: 0; margin-bottom: 24px; }
+.study-ask { margin-top: 0; margin-bottom: 16px; }
+.study-title { width: 100%; font: inherit; font-size: 24px; line-height: 1.3; font-weight: 600; color: var(--obs-ink);
+  letter-spacing: -.015em; background: transparent; border: 1px solid transparent; border-radius: 3px; padding: 2px 6px; margin-left: -7px; }
+.study-title:hover { border-color: var(--obs-border); }
+.study-title:focus { outline: none; border-color: var(--obs-primary); background: var(--obs-surface); }
+.study-by { margin-bottom: 8px; }
+.study-note { margin-bottom: 16px; font-size: 14px; }
+.study-note p + p { margin-top: 8px; }
+.study-figs { margin-bottom: 16px; }
+.study-figs .stat b { font-size: 22px; }
+.study-result .iachart { margin-bottom: 8px; }
+.study-table { overflow-x: auto; max-height: 520px; overflow-y: auto; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); }
+.study-table table.t th { position: sticky; top: 0; background: var(--obs-surface); }
+.study-table td { white-space: nowrap; }
+.study-foot { margin-top: 8px; }
+.study-form { display: flex; flex-direction: column; gap: 12px; }
+.st-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.st-row input, .st-row select { height: 32px; padding: 0 10px; border: 1px solid var(--obs-border); border-radius: 4px;
+  background: var(--obs-surface); font: inherit; font-size: 13px; color: var(--obs-ink); min-width: 0; }
+.study-series { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.study-series .st-row input[data-sn] { width: 140px; }
+.study-series .st-row input[data-sr] { width: 280px; max-width: 100%; }
+.study-opts label, .study-q { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); }
+.study-q textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--obs-border); border-radius: 4px;
+  background: var(--obs-surface); color: var(--obs-ink); font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; font-weight: 400; resize: vertical; }
+.st-row input:focus, .st-row select:focus, .study-q textarea:focus { outline: none; border-color: var(--obs-primary); }
+.study-run { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rows > li.on { background: var(--obs-surface-subtle); }
+@media (max-width: 760px) {
+  .study-start, .study-ask { flex-direction: column; }
+  .study-start input, .study-ask input { flex: none; }
+  .study-series .st-row input[data-sn], .study-series .st-row input[data-sr] { width: 100%; }
+  .st-row > label, .study-series .st-row { width: 100%; }
+}
+.study-recipe { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+.study-recipe .st-row > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); }
+.st-slot { position: relative; align-items: flex-start; align-self: stretch; }
+.st-slot label { flex: 1; width: 100%; max-width: 520px; }
+.st-pick { width: 100%; box-sizing: border-box; }
+.st-picklist { position: absolute; left: 0; top: 100%; z-index: 5; width: 100%; max-width: 520px; max-height: 300px; overflow-y: auto;
+  border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); box-sizing: border-box; }
+.st-picklist button { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 8px 10px; font: inherit; font-size: 13px; color: var(--obs-ink); border-bottom: 1px solid var(--obs-grid); }
+.st-picklist button span:first-child { flex: 1; min-width: 0; }
+.st-picklist button:last-child { border-bottom: 0; }
+.st-picklist button:hover { background: var(--obs-surface-subtle); }
+.st-picklist button .muted { font-size: 11.5px; white-space: nowrap; }
+.st-picklist p { margin: 0; padding: 8px 10px; font-size: 13px; }
+.study-refresh { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--obs-text-muted); }
+.study-refresh select { height: 32px; padding: 0 8px; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-surface); font: inherit; font-size: 13px; color: var(--obs-ink); }

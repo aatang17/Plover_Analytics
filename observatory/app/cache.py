@@ -30,8 +30,13 @@ GZIP_LEVEL = 6
 MIN_GZIP_BYTES = 1024
 
 # The cache key includes user-supplied query strings (?q=…), so it is bounded
-# by count as well as by body size — a search box cannot grow it without limit.
-MAX_ENTRIES = 64
+# by count and by total size as well as by body size — a search box cannot
+# grow it without limit. 64 entries was set in August 2026 for two datasets;
+# by October start-up pre-built 497 paths (121 cacheable, 53 MB in all), so
+# all but the last 64 were evicted as soon as they were made and most series
+# lists were built again on their first visit.
+MAX_ENTRIES = 512
+MAX_TOTAL_BYTES = 256 * 1024 * 1024
 MAX_BODY_BYTES = 32 * 1024 * 1024
 
 # How long a browser may reuse a response without asking. The data is monthly;
@@ -92,6 +97,10 @@ async def warm(app, paths):
             pass
 
 
+def _size(entry):
+    return len(entry.body) + len(entry.gz or b"")
+
+
 class _Entry(object):
     __slots__ = ("version", "etag", "content_type", "body", "gz")
 
@@ -117,6 +126,7 @@ class ResponseCache(object):
         self.prefix = prefix
         self.max_age = max_age
         self._entries = OrderedDict()
+        self._bytes = 0
         self._lock = Lock()
 
     async def __call__(self, scope, receive, send):
@@ -145,16 +155,22 @@ class ResponseCache(object):
                 return None
             if entry.version != version:
                 del self._entries[key]
+                self._bytes -= _size(entry)
                 return None
             self._entries.move_to_end(key)
             return entry
 
     def _put(self, key, entry):
         with self._lock:
+            old = self._entries.pop(key, None)
+            if old is not None:
+                self._bytes -= _size(old)
             self._entries[key] = entry
-            self._entries.move_to_end(key)
-            while len(self._entries) > MAX_ENTRIES:
-                self._entries.popitem(last=False)
+            self._bytes += _size(entry)
+            while len(self._entries) > 1 and (len(self._entries) > MAX_ENTRIES
+                                              or self._bytes > MAX_TOTAL_BYTES):
+                _, gone = self._entries.popitem(last=False)
+                self._bytes -= _size(gone)
 
     async def _fill(self, key, version, scope, receive, send):
         """Run the app, buffering the response so it can be stored.

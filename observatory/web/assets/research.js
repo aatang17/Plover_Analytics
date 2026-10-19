@@ -20,9 +20,19 @@ var researchChart = (function () {
     return MEASURE_CAPTION[snap.measure] || snap.unit || "";
   }
 
+  /* The credit, unless the source name already opens with the same agency
+     (research_doc._credit_unless_repeated has the same rule). */
+  function creditUnlessRepeated(credit, sourceName) {
+    credit = (credit || "").trim();
+    if (credit.indexOf("Source:") !== 0 || !sourceName) return credit;
+    var agency = credit.slice(7).trim().replace(/\.$/, "").split(/,|;| \u2014 /)[0].trim();
+    if (agency && sourceName.trim().toLowerCase().indexOf(agency.toLowerCase()) === 0) return "";
+    return credit;
+  }
+
   function sourceLine(snap) {
     var rel = snap.release || {};
-    var parts = [snap.credit || "", rel.source_name || "",
+    var parts = [creditUnlessRepeated(snap.credit, rel.source_name), rel.source_name || "",
                  rel.label ? "Release " + rel.label : "",
                  snap.as_of ? "Data as of " + snap.as_of : "Live data",
                  snap.trust === "official" ? "Values as published" : ""];

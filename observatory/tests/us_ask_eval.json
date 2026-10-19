@@ -1,0 +1,461 @@
+[
+ {
+  "question": "largest S&P 500 companies by market value",
+  "route": "market_rank",
+  "must_say": [
+   "market value"
+  ],
+  "min_rows": 10
+ },
+ {
+  "question": "what is Exxon worth",
+  "route": "company_value",
+  "must_say": [
+   "ExxonMobil",
+   "worth"
+  ]
+ },
+ {
+  "question": "Visa market value",
+  "route": "company_value",
+  "must_say": [
+   "Visa",
+   "worth"
+  ]
+ },
+ {
+  "question": "what is Skydance worth",
+  "route": "company_value",
+  "must_say": [
+   "not shown"
+  ],
+  "must_not_say": [
+   "no single share count"
+  ]
+ },
+ {
+  "question": "SKYD price change over one year",
+  "route": "company_price_performance",
+  "must_say": [
+   "PSKY"
+  ]
+ },
+ {
+  "question": "best performing S&P 500 stocks this year",
+  "route": "market_rank",
+  "min_rows": 10
+ },
+ {
+  "question": "compare Coca-Cola and Pepsi margins",
+  "route": "compare_companies",
+  "must_say": [
+   "Coca Cola",
+   "Pepsico"
+  ]
+ },
+ {
+  "question": "how many S&P 500 companies have a P/E under 15 and a dividend yield above 3%",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ],
+  "pct_range": [
+   0,
+   100
+  ]
+ },
+ {
+  "question": "average operating margin of software companies",
+  "route": "steps",
+  "must_say": [
+   "median"
+  ],
+  "must_not_say": [
+   "−3,643",
+   "-3643"
+  ],
+  "pct_range": [
+   -100,
+   100
+  ],
+  "notes": "19 Oct 2026: the mean came out at −3,643%; the median is the answer"
+ },
+ {
+  "question": "which companies have more cash than debt and grew revenue over 20%",
+  "route": "steps",
+  "pct_range": [
+   -100,
+   500
+  ],
+  "min_rows": 2,
+  "notes": "19 Oct 2026: 'debt' became total liabilities unsaid, and a 23,360% growth from a tiny base led"
+ },
+ {
+  "question": "what share of S&P 500 market value is tech",
+  "route": "steps",
+  "must_say": [
+   "Technology"
+  ],
+  "pct_range": [
+   20,
+   70
+  ]
+ },
+ {
+  "question": "how many employees does Apple have",
+  "route": "refuse",
+  "must_say": [
+   "employee"
+  ]
+ },
+ {
+  "question": "why did Nvidia fall",
+  "route": "refuse",
+  "must_say": [
+   "why"
+  ]
+ },
+ {
+  "question": "which Japanese banks are cheapest",
+  "route": "refuse",
+  "must_say": [
+   "Japan"
+  ],
+  "notes": "19 Oct 2026: answered with US banks and no warning"
+ },
+ {
+  "question": "best Hong Kong stocks this year",
+  "route": "refuse",
+  "must_say": [
+   "Hong Kong"
+  ]
+ },
+ {
+  "question": "should I buy Tesla",
+  "route": "refuse",
+  "must_say": [
+   "advice"
+  ]
+ },
+ {
+  "question": "what will Apple earn next year",
+  "route": "refuse",
+  "must_say": [
+   "forecast"
+  ]
+ },
+ {
+  "question": "How many companies outperformed the S&P 500?",
+  "route": "steps",
+  "must_say": [
+   " of ",
+   "S&P 500"
+  ]
+ },
+ {
+  "question": "how many stocks beat the s&p this year",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ]
+ },
+ {
+  "question": "What share of Dow stocks are up this year?",
+  "route": "steps",
+  "pct_range": [
+   0,
+   100
+  ]
+ },
+ {
+  "question": "How many S&P 500 stocks have fallen more than 20% this year?",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ]
+ },
+ {
+  "question": "What is the median P/E of the S&P 500?",
+  "must_say": [
+   "median"
+  ],
+  "pct_range": [
+   0,
+   100
+  ]
+ },
+ {
+  "question": "How many S&P 500 companies have negative free cash flow?",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ]
+ },
+ {
+  "question": "Which sector did best in the S&P 500 this year?",
+  "route": "steps",
+  "min_rows": 5
+ },
+ {
+  "question": "Did the average S&P 500 stock beat the index this year?",
+  "route": "steps"
+ },
+ {
+  "question": "Which S&P 500 stocks were up last year but are down this year?",
+  "route": "steps",
+  "min_rows": 2
+ },
+ {
+  "question": "What share of the S&P 500 is in its ten largest companies?",
+  "route": "steps",
+  "pct_range": [
+   20,
+   60
+  ]
+ },
+ {
+  "question": "Which industries have the most companies in the S&P 500?",
+  "route": "steps",
+  "min_rows": 5
+ },
+ {
+  "question": "How many large companies lost money last year?",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ]
+ },
+ {
+  "question": "Is tech or health care more profitable in the S&P 500?",
+  "route": "steps",
+  "must_say": [
+   "median"
+  ]
+ },
+ {
+  "question": "Which S&P 500 stocks trade below 10 times earnings?",
+  "min_rows": 3
+ },
+ {
+  "question": "What is the total market value of the S&P 500?",
+  "route": "steps",
+  "must_say": [
+   "tn"
+  ]
+ },
+ {
+  "question": "Which banks have a return on equity above 15%?",
+  "min_rows": 5
+ },
+ {
+  "question": "What percentage of S&P 500 stocks are higher than a year ago?",
+  "route": "steps",
+  "pct_range": [
+   0,
+   100
+  ]
+ },
+ {
+  "question": "How much did Apple beat the S&P 500 by this year?",
+  "must_say": [
+   "pp"
+  ]
+ },
+ {
+  "question": "What is the average dividend yield of S&P 500 utilities?",
+  "route": "steps",
+  "must_say": [
+   "median"
+  ],
+  "pct_range": [
+   0,
+   15
+  ]
+ },
+ {
+  "question": "Which Chinese stocks did best this year?",
+  "route": "steps",
+  "must_say": [
+   "US-listed"
+  ],
+  "min_rows": 2
+ },
+ {
+  "question": "How many Russell 2000 stocks are up this year?",
+  "route": "refuse",
+  "must_say": [
+   "Russell"
+  ]
+ },
+ {
+  "question": "who owns Apple",
+  "route": "company_holders",
+  "must_say": [
+   "Apple"
+  ]
+ },
+ {
+  "question": "insider buying at Intel",
+  "route": "company_insiders"
+ },
+ {
+  "question": "when does Nvidia report",
+  "route": "company_calendar",
+  "must_say": [
+   "Nvidia"
+  ]
+ },
+ {
+  "question": "Apple vs Microsoft revenue growth",
+  "route": "compare_companies",
+  "must_say": [
+   "Apple",
+   "Microsoft"
+  ]
+ },
+ {
+  "question": "cheapest semiconductor stocks",
+  "route": "industry_rank",
+  "must_say": [
+   "P/E"
+  ],
+  "min_rows": 5
+ },
+ {
+  "question": "biggest buybacks in the S&P 500",
+  "min_rows": 5
+ },
+ {
+  "question": "which Dow stocks pay the highest dividend yield",
+  "min_rows": 5,
+  "pct_range": [
+   0,
+   20
+  ]
+ },
+ {
+  "question": "how many S&P 500 companies pay no dividend",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ]
+ },
+ {
+  "question": "which company has the most cash",
+  "min_rows": 1
+ },
+ {
+  "question": "average revenue growth of S&P 500 banks",
+  "route": "steps",
+  "must_say": [
+   "median"
+  ],
+  "pct_range": [
+   -50,
+   100
+  ]
+ },
+ {
+  "question": "which stocks fell most in 2024",
+  "route": "steps",
+  "must_say": [
+   "2024"
+  ],
+  "min_rows": 5,
+  "known_miss": true,
+  "notes": "prices begin July 2024, so 2024 is a partial year; the answer should say so"
+ },
+ {
+  "question": "fastest growing companies above $10bn",
+  "min_rows": 5,
+  "must_say": [
+   "year-before revenue"
+  ],
+  "notes": "Qxo leads at 11,925% after buying Beacon Roofing: real, but the reader must be told growth that large is an acquisition"
+ },
+ {
+  "question": "who were the top 10 paid CEOs",
+  "route": "steps",
+  "must_say": [
+   "CEO"
+  ],
+  "min_rows": 10
+ },
+ {
+  "question": "how much was Tim Cook paid",
+  "route": "steps",
+  "must_say": [
+   "Cook"
+  ]
+ },
+ {
+  "question": "which CEOs were paid most while their shareholders lost money",
+  "route": "steps",
+  "min_rows": 3
+ },
+ {
+  "question": "which S&P 500 companies grew revenue fastest last quarter",
+  "route": "steps",
+  "must_say": [
+   "quarter"
+  ],
+  "min_rows": 5,
+  "notes": "19 Oct 2026: went to the annual ranking and ignored 'last quarter'"
+ },
+ {
+  "question": "Nvidia revenue last quarter",
+  "route": "steps",
+  "must_say": [
+   "Nvidia"
+  ]
+ },
+ {
+  "question": "Apple quarterly revenue",
+  "route": "steps",
+  "must_say": [
+   "Apple"
+  ]
+ },
+ {
+  "question": "how much revenue does Apple get from China",
+  "route": "steps",
+  "must_say": [
+   "China"
+  ],
+  "notes": "19 Oct 2026: found nothing, Apple tags China as CN and Greater China as a reporting segment"
+ },
+ {
+  "question": "Microsoft segments",
+  "route": "steps",
+  "must_say": [
+   "Microsoft"
+  ]
+ },
+ {
+  "question": "where have insiders bought the most in the last 3 months",
+  "min_rows": 5
+ },
+ {
+  "question": "how many S&P 500 companies had insider buying this year",
+  "route": "steps",
+  "must_say": [
+   " of "
+  ]
+ },
+ {
+  "question": "which S&P 500 stocks did funds add to most last quarter",
+  "route": "steps",
+  "min_rows": 5,
+  "pct_range": [
+   -100,
+   300
+  ]
+ },
+ {
+  "question": "how many funds own Tesla",
+  "route": "steps",
+  "must_say": [
+   "Tesla"
+  ]
+ }
+]

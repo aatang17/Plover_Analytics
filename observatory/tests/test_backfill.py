@@ -425,15 +425,22 @@ class PhaseIsolationTest(unittest.TestCase):
     """The NameError of 2026-09-21: one phase crashing took every later one down."""
 
     def setUp(self):
+        # every phase is stubbed: an unstubbed one runs for real against data/ and the
+        # SEC (2026-10-19: a test run pulled 400 filings and swapped data/sec.duckdb)
         self._saved = {n: getattr(backfill, n) for n in (
             "backfill_macro", "stamp_cycle", "backfill_gdp_vintages",
-            "backfill_equity", "backfill_sec", "refresh_us_companies", "refresh_us_pay")}
+            "backfill_equity", "backfill_sec", "refresh_us_companies", "refresh_us_pay",
+            "refresh_us_holdings", "refresh_us_prices", "refresh_us_shares", "refresh_us_listings")}
         self.addCleanup(lambda: [setattr(backfill, n, f) for n, f in self._saved.items()])
         self.ran = []
         backfill.backfill_macro = lambda ds: self.ran.append("macro")
         backfill.stamp_cycle = lambda: self.ran.append("stamp")
         backfill.refresh_us_companies = lambda: self.ran.append("us")
         backfill.refresh_us_pay = lambda: self.ran.append("pay")
+        backfill.refresh_us_holdings = lambda: self.ran.append("holdings")
+        backfill.refresh_us_prices = lambda: self.ran.append("prices")
+        backfill.refresh_us_shares = lambda: self.ran.append("shares")
+        backfill.refresh_us_listings = lambda: self.ran.append("listings")
         backfill.backfill_equity = lambda d, m: self.ran.append("equity")
         backfill.backfill_sec = lambda q: self.ran.append("sec")
         for key in ("BACKFILL_DATASETS", "BACKFILL_GDP_VINTAGES",
@@ -468,6 +475,12 @@ class PhaseIsolationTest(unittest.TestCase):
         backfill.backfill_gdp_vintages = lambda: None
         backfill.main()
         self.assertNotIn("us", self.ran)
+
+    def test_listings_follow_share_counts_before_history(self):
+        backfill.backfill_gdp_vintages = lambda: None
+        backfill.main()
+        self.assertLess(self.ran.index("shares"), self.ran.index("listings"))
+        self.assertLess(self.ran.index("listings"), self.ran.index("equity"))
 
     def test_equity_runs_before_the_gdp_archive(self):
         backfill.backfill_gdp_vintages = lambda: self.ran.append("gdp")

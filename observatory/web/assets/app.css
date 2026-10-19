@@ -246,7 +246,7 @@ h3 { font-size: 13.5px; color: var(--obs-ink); font-weight: 600; margin: 16px 0 
   color: var(--obs-text-muted);
   white-space: nowrap;
 }
-.metric-sub { flex: 1 0 100%; margin-top: 6px; font-size: 13px; color: var(--obs-text-muted); }
+.metric-sub { flex: 1 0 100%; min-width: 0; margin-top: 6px; font-size: 13px; color: var(--obs-text-muted); }
 
 /* One framed strip rather than five separate cards: the readings are one
    family of measures on one reference month, and the shared frame says so.
@@ -335,6 +335,7 @@ h3 { font-size: 13.5px; color: var(--obs-ink); font-weight: 600; margin: 16px 0 
 .controls label { font-size: 12px; color: var(--obs-text-muted); }
 
 select, input[type="search"], input[type="text"] {
+  max-width: 100%;   /* a long option (a commodity, a partner) must not widen a phone page */
   font: inherit;
   font-size: 13px;
   color: var(--obs-ink);
@@ -1156,6 +1157,7 @@ table.data.tbl-bands td.trend-decel { color: var(--obs-trust-official); }
 /* ---------- states ---------- */
 
 .skeleton {
+  max-width: 100%;   /* placeholders carry a desktop width inline */
   background: var(--obs-surface-subtle);
   border-radius: 3px;
   animation: obs-shimmer 1.2s ease-in-out infinite alternate;
@@ -1306,6 +1308,7 @@ body.has-consent-bar .site-footer { margin-bottom: 76px; }
 .prose table { margin: 12px 0; }
 .prose code {
   font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  overflow-wrap: anywhere;   /* a long command (the Manual's curl line) wraps on a phone */
   font-size: 13px;
   background: var(--obs-surface-subtle);
   border: 1px solid var(--obs-border);
@@ -1404,7 +1407,9 @@ body.has-consent-bar .site-footer { margin-bottom: 76px; }
 /* Below this the title and the stamp cannot share a line, and a stamp wrapped
    between the title and the sub-line reads as a caption on the wrong text. */
 @media (max-width: 600px) {
-  .metric-asof { order: 3; margin-top: 2px; }
+  /* on its own line here, so a long stamp (Banks lists three releases) wraps
+     rather than pushing the page wider than the phone */
+  .metric-asof { order: 3; margin-top: 2px; white-space: normal; }
   .metric-card { padding: 18px 16px 14px; }
 }
 @media (max-width: 480px) {

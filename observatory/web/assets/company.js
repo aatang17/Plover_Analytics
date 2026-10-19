@@ -932,6 +932,9 @@ function load() {
     getJSON(CO_API + "/" + encodeURIComponent(state.code) + "?limit=25"),
     getJSON(FIN_API + "/metrics/" + encodeURIComponent(state.code)).catch(function () { return null; }),
   ]).then(function (res) {
+    // the company API answers an unknown code with every dataset missing
+    const held = ((res[0] && res[0].coverage) || {}).present || [];
+    if (!held.length && !res[1]) throw new Error("no company");
     CO = res[0];
     METRICS = res[1];
     renderIdentity();
@@ -946,6 +949,7 @@ function load() {
   }).catch(function (err) {
     $("profile").hidden = true;
     $("empty").hidden = false;
+    document.title = "No Company " + state.code + " · Company Profile · Plover Analytics";
     $("empty").innerHTML = "<p>We hold no company under the code " +
       escapeHtml(state.code) + ".</p><p class=\"co-empty-hint\">The profile covers companies " +
       "that have filed an annual securities report. Search by name above.</p>";

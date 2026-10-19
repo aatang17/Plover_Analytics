@@ -701,6 +701,23 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
   .dk-at { max-width: 150px; }
 }
 
+/* ---- search results grouped by dataset, places last; the chart library (Charts tab) */
+.dk-rs-group { margin-bottom: 6px; }
+.dk-rs-gh { margin: 10px 0 0; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); }
+.dk-rs-gh .muted { font-weight: 400; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.dk-rs-group .linkish { margin-top: 4px; font-size: 12px; }
+.dk-rs-list li[hidden] { display: none; }
+.dk-rs-places { margin-top: 14px; }
+.dk-rs-places > summary, .dk-lib-topic > summary { cursor: pointer; padding: 8px 0; font-weight: 600; color: var(--obs-ink); font-size: 13px; }
+.dk-rs-places > summary { color: var(--obs-text-muted); font-weight: 500; }
+.dk-lib-topic { border-bottom: 1px solid var(--obs-border); }
+.dk-lib-topic > summary .muted { font-weight: 400; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.dk-lib-topic .dk-rs-list li:last-child { border-bottom: 0; }
+.dk-rs-pages { margin: 6px 0 10px; font-size: 12px; color: var(--obs-text-muted); }
+.dk-rs-pages a { color: var(--obs-primary); }
+.dk-lib-cocharts { padding-left: 12px; border-left: 2px solid var(--obs-border); }
+.dk-lib-cocharts[hidden] { display: none; }
+.dk-chart-opts .dk-savechart { margin-left: auto; }
 .dk-market-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .dk-market-controls label { display: flex; flex-direction: column; gap: 4px; }
 .dk-market-controls input { background: var(--obs-surface); color: var(--obs-ink); border: 1px solid var(--obs-border); font: inherit; }

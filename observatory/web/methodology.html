@@ -328,6 +328,52 @@
     </div>
   </details>
 
+  <details class="ds" id="calc-us-companies">
+    <summary><span>US companies: market value and revenue</span><span class="ds-note">SEC filings and daily closes</span></summary>
+    <div class="ds-body">
+    <ul>
+      <li><b>Market value</b> is the latest close times the shares outstanding stated on the cover
+      of the company's newest 10-K or 10-Q (the figure the company itself gives a few weeks before
+      filing). A company with several share classes is valued class by class, each at its own
+      close; an unlisted class at the conversion ratio its own 10-K states, and where no ratio is
+      on file the market value is left blank with the reason. Where no cover count is on file the
+      year-end balance-sheet count is used, and the response says so; so it is where the cover
+      count is ten, a hundred or a thousand times the balance-sheet count (or a tenth of it) and no
+      split in the price history explains it — a scale slip on the cover, as Alibaba's 20-F carried
+      in 2026. A count with no second count to check it against is checked against the holders: a
+      value above $3bn of which the 13F filers together report holding under 0.1% is held back with a
+      note (a 20-F cover tagging 150 billion shares implied $417bn for a company no fund holds).</li>
+      <li><b>Depositary shares.</b> A foreign company's US listing is usually an American
+      Depositary Share, and one can stand for any number of the shares the filing counts: three
+      for HDFC Bank, eight for Alibaba, thirteen for BeOne, 4,000 for Scinai. That number is read
+      from the company's own annual report — the Section 12(b) table on its cover, or where the
+      cover only says "American Depositary Shares", the sentence in its text that states it —
+      and the count is divided by it before it meets the price. P/E multiplies the filed earnings
+      per share by the same number. A filing that names a depositary share without stating the
+      number, or a 20-F filer not yet read, gets no market value and a note, never a guess. The
+      source sentence is kept with each ratio. (Until October 2026 the count was used as filed,
+      which overstated HDFC Bank three times and Alibaba eight.)</li>
+      <li><b>Currency.</b> Market value is in US dollars whatever currency the filing reports in,
+      because the close is. P/E, dividend yield and buyback yield are computed only for filings in
+      US dollars; rankings by any filed figure take only US-dollar filers, so a yen revenue is never
+      ranked against a dollar one.</li>
+      <li><b>Revenue</b> is the first of the standard revenue elements a filer tags, with two
+      exceptions where that element is not the company's revenue. A bank tags its fee income as
+      revenue from contracts with customers and its interest income separately, so for banks (SIC
+      6020–6036 and 6099–6199) revenue is total interest and dividend income plus non-interest
+      income. A landlord tags rental income as operating lease income beside a small contract
+      line, so where lease income exceeds the revenue element found, revenue is the two together.
+      The element recorded with the figure names both parts; a filer's own "Revenues" line is
+      never replaced. (Until October 2026 Cullen/Frost's $122mn of fees stood as its revenue
+      against $649mn of net income.)</li>
+      <li><b>Dividends paid</b> are dividends to common shareholders where the filer tags them
+      separately; otherwise the all-in dividends line, which can include preferred dividends.</li>
+      <li><b>What is not a stock.</b> Funds, commodity trusts and blank-check companies file
+      annual reports too; they are left out of rankings and counts of companies.</li>
+    </ul>
+    </div>
+  </details>
+
   <details class="ds" id="calc-gdp">
     <summary><span>Quarterly GDP</span><span class="ds-note">Expenditure side, three bases, ¥bn</span></summary>
     <div class="ds-body">

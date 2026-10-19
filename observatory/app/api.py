@@ -570,8 +570,25 @@ def health():
         except Exception:                                    # noqa: BLE001
             pass
         try:
+            from . import sec_insiders_api, sec_13f_api, us_prices_api
+            equity = equity + sec_insiders_api.health() + sec_13f_api.health() + us_prices_api.health()
+        except Exception:                                    # noqa: BLE001
+            pass
+        try:
             from . import us_pay_api
             equity = equity + us_pay_api.health()
+        except Exception:                                    # noqa: BLE001
+            pass
+        try:
+            from . import sec_shares
+            equity = equity + sec_shares.health()
+        except Exception:                                    # noqa: BLE001
+            pass
+        # S&P 500 press releases: announcements companies post but do not file
+        # (app/us_press.py), on a clock of their own polls.
+        try:
+            from . import us_press
+            equity = equity + us_press.health()
         except Exception:                                    # noqa: BLE001
             pass
 

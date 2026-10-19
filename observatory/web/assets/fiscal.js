@@ -849,9 +849,12 @@ async function main() {
 
   // Series lists give the ministry and prefecture codes and their names, so
   // neither list is hard-coded on the page.
-  const [minList, prefList] = await Promise.all([
-    getJSON(MIN + "/series?q="), getJSON(PREF + "/series?q="),
+  // The tax list says which sides each tax has: "Other taxes" has a
+  // settlement but no budget line, and asking for one fails a whole batch.
+  const [minList, prefList, taxList] = await Promise.all([
+    getJSON(MIN + "/series?q="), getJSON(PREF + "/series?q="), getJSON(TAX + "/series?q="),
   ]);
+  const taxHeld = new Set(taxList.series.map(s => s.code));
   D.ministryCodes = minList.series
     .filter(s => s.code.endsWith(".budget"))
     .map(s => s.code.slice(0, -".budget".length));
@@ -865,7 +868,7 @@ async function main() {
     loadSeries(EXP, SPEND_HEADS.flatMap(h => SPEND_MEASURES.map(m => h.code + "." + m.id))),
     loadSeries(MIN, D.ministryCodes.map(c => c + ".budget")),
     loadSeries(TAX, TAX_ROWS.filter(r => r[1] !== null)
-      .flatMap(r => [r[0] + ".budget", r[0] + ".settlement"])),
+      .flatMap(r => [r[0] + ".budget", r[0] + ".settlement"]).filter(c => taxHeld.has(c))),
     loadSeries(DEBT, DEBT_LINES.map(l => l.code)),
     loadSeries(GG, GG_SECTORS.flatMap(s => GG_LINES.map(l => s.id + "." + l.code))),
     loadSeries(PREF, D.prefCodes.concat(["total"])

@@ -50,6 +50,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY web ./web
+# The Save to Plover browser extension: zipped per request for readers to
+# download (app/assistant/reading.py). Left out, the download fails.
+COPY extension ./extension
 COPY seed ./seed
 # The EDINET extractors run here now, not only on a laptop. They are what
 # turns the capture jobs' archive into the served equity tables, and keeping

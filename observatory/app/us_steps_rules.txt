@@ -1,0 +1,68 @@
+House rules. The judgement calls an analyst on this desk makes; follow them unless the question says otherwise.
+(Edit this file to teach the box. YEAR, LAST_YEAR, TODAY and ONE_YEAR_AGO are filled with today's dates.)
+
+Periods
+- "Beat", "outperformed", "did better than" an index means a bigger price change than that index's fund over the same days. Compare stocks.change_period_pct with benchmarks.change_period_pct for the same period, never two different columns.
+- No period named in a question about performance: this year, from YEAR-01-01 (to null). The headline says {period}, which reads "so far in YEAR".
+- "in LAST_YEAR" (a finished year): from LAST_YEAR-01-01 to LAST_YEAR-12-31. "this year", "year to date": from YEAR-01-01. "past year", "last 12 months": from ONE_YEAR_AGO. "since March": from YEAR-03-01. "last month": from the first day of last month.
+- A question about two periods ("up last year but down this year"): put the earlier one in "period" and use change_ytd_pct or change_1y_pct for the other.
+- Questions that are not about prices still give a period (this year); it does no harm.
+
+Which stocks
+- First rule: when the question names the S&P 500 or the Dow anywhere, the stocks are that index's members (in_sp500, in_dow), even when the index is only the thing to beat. "How many companies beat the S&P 500" counts S&P 500 members against the S&P 500 (how broad its gain is) and the headline says "S&P 500 members". Only "all stocks", "all US stocks" or "every stock" widens it to every row.
+- When no index is named anywhere in the question, the stocks are every row of stocks.
+- Only the S&P 500 and the Dow have member lists. Nasdaq-100, Russell 2000 and the others are fund prices: a stock can be compared with them, but their members cannot be counted or ranked. Say so in "cannot".
+- A performance list or count across all stocks (no index named) leaves out companies under $2bn in market value unless the question asks for all, small or micro companies: add market_cap_usd >= 2e9 and say "companies above $2bn" in the headline.
+- "Chinese", "Israeli", "Canadian" ... companies: country = 'CN' etc. on the business address; say "US-listed Chinese companies" in the headline, since only those listed in the US are here. Japan and Hong Kong are covered elsewhere on the site, not here.
+- "Large" means market_cap_usd >= 1e10 ($10bn), "mega" >= 2e11 ($200bn), "small" < 2e9. "Tech" is sector = 'Technology'; "banks" is industry ILIKE '%BANK%'; "carmakers" industry ILIKE '%MOTOR VEHICLES%'; "chipmakers" or "semiconductors" industry ILIKE '%SEMICONDUCTOR%'; "software" industry ILIKE '%SOFTWARE%' OR industry ILIKE '%PROGRAMMING%'; "oil" sector = 'Energy'; "pharma" industry ILIKE '%PHARMACEUTICAL%'; "REITs" sector = 'Real Estate'; "retailers" industry ILIKE '%RETAIL%'.
+- A company named by name: name ILIKE '%Apple%' or ticker = 'AAPL'.
+
+Counting and averaging
+- Missing is missing, never zero. Count only rows that have the figure: count(column), never count(*), for the "out of" number. Never coalesce a blank to 0.
+- "How many": report the count and the number it is out of: "{beat} of {members}".
+- "What share" or "what percentage": 100.0 * count(*) FILTER (WHERE condition) / count(column) AS share_pct.
+- An average of percentages or ratios across companies: lead with the median, and give the mean only beside it, even when the question says "average": the mean of margins is dominated by near-zero-revenue filers (the mean operating margin of 340 software companies came out at −3,643%). For margins also drop companies with revenue_usd below 1e8 and say "companies with revenue above $100mn".
+- A growth ranking or filter (revenue_growth_pct, profit_growth_pct) needs a base: revenue_prior_usd >= 5e7, and the headline says "from a base above $50mn". Without it a company growing from $1mn to $200mn leads every list.
+- "Debt" is borrowings_usd, never total_assets_usd - equity_usd. When a question's word must be measured by a different column (no column fits exactly), the headline names what was measured: "net income (for profit)", "borrowings (for debt)".
+- The index's own change, when comparing, comes from benchmarks (one row): join it with CROSS JOIN or a WITH.
+- A difference between two percentages is in percentage points: name it ..._pp.
+
+Lists
+- A list returns ticker and name first, then the figures asked about; ORDER BY the figure that answers the question; LIMIT 10 unless the question gives a number (at most 50).
+- For a list worth seeing as bars, set "chart": {"label": "ticker", "value": <the ranked column>}.
+- Group-bys (by sector, by industry): include count(...) AS n so the reader sees how many stocks stand behind each figure.
+
+Steps
+- The steps are read by the reader, not by a programmer: plain words, no table or column names, no SQL. Say what is taken, compared and counted, and why ("the S&P 500 is named, so its members").
+
+Result columns and the headline
+- Name result columns with unit suffixes: _pct percent, _pp percentage points, _usd US dollars, _x multiples; counts are plain words (n, beat, members, fell).
+- The headline answers the question in one plain sentence, first the answer, numbers only as {column} from the first result row, and the period as {period}. Do not write a number of your own: the server refuses a headline that does.
+- Signed changes print with their + or minus sign, so write "changed {x_pct}", not "rose {x_pct}".
+- For a list, the headline names the first row: "{name} did best {period}, {change_period_pct}." The table shows the rest.
+
+CEO pay (table pay)
+- "Highest-paid CEOs", "CEO pay": ceo_total_pay_usd (total pay as reported) unless the question says "actually paid" or "realised"; then ceo_actually_paid_usd. Pay covers S&P 500 members only: say "S&P 500 CEOs".
+- Each company's pay year ends on its own fiscal_year_end: return it, and say "in each company's latest fiscal year" in the headline.
+- Pay against performance: join stocks on ticker; tsr_value_of_100 is what $100 became since tsr_since, not a percentage.
+
+Quarterly results (table quarters)
+- "Last quarter", "latest quarter", "most recent quarter": is_latest. Companies' quarters end on different dates: return quarter_end.
+- Quarterly growth means against the same quarter a year earlier (revenue_growth_yoy_pct), never against the quarter before. A growth ranking needs revenue_year_ago_usd >= 5e7, said in the headline.
+- A fourth quarter is often worked out (q4_derived): keep it, it is the year less the first three quarters.
+
+Business segments (table segments)
+- "Segment" or "division" means kind = 'business'. A country or region ("China", "Europe", "international") is matched on the segment name with ILIKE across both 'geography' and 'business', because some companies' reporting segments are regions (Apple's "Greater China"); return kind and segment so the reader sees which. A product line ("iPhone", "cloud", "data center") is matched on the segment name with ILIKE across all kinds.
+- share_of_revenue_pct is of the company's total revenue; segments of one kind can overlap or leave a remainder, so never add them up to 100.
+- "What does X do", "what business is X in", "what does X sell": its product lines (kind 'product'), or its reporting segments when it has no product lines, largest first, with share_of_revenue_pct. Never answer with sector and industry alone: they name a category, not what the company does.
+
+Insider trades (table insider_trades)
+- Buying means side = 'buy' (open-market purchases); selling means side = 'sell'. Sum value_usd for amounts; count DISTINCT insider for how many insiders. Default to the past three months (trade_date >= TODAY minus 91 days) unless the question names a period; the table holds the past year.
+- Planned sales (planned) are pre-arranged; when the question is about conviction, say how many were planned.
+
+Fund holdings (table fund_holdings)
+- "Funds bought", "institutions added", "most owned by funds": shares_change_pct (added, positive) or holders; new_holders and exited_holders count managers. The quarter is quarter_end; say "in the quarter to {quarter_end}". Leave out stocks with fewer than 20 holders when ranking a change, and across all stocks (no index named) also those with reported_value_usd below 1e8, said in the headline: a small company issuing new shares otherwise leads every list.
+
+What cannot be answered
+- Why something happened, whether to buy or sell, forecasts, estimates, targets: "cannot".
+- Figures the tables do not hold: employees, research spending, analyst ratings, short interest, options, intraday prices, dividends per share history, pay below the executive level, pay outside the S&P 500, which fund holds what (a single fund's portfolio). Say which figure is missing in "cannot", and leave "sql" empty.

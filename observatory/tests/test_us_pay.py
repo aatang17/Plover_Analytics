@@ -451,7 +451,7 @@ class RefreshUsPayTest(unittest.TestCase):
         backfill._stopping = False
         con = duckdb.connect(str(backfill.LIVE_SEC))
         con.execute(PX.SCHEMA_SQL)
-        con.execute("INSERT INTO us_index_snapshots (snapshot_id) VALUES (1)")
+        con.execute("INSERT INTO us_index_snapshots (snapshot_id, index_name) VALUES (1, 'S&P 500 (SPY holdings)')")
         con.executemany("INSERT INTO us_index_members (snapshot_id, cik) VALUES (1, ?)",
                         [(i,) for i in range(1, 6)])
         con.close()

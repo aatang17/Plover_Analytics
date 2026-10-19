@@ -1,5 +1,5 @@
 {
-  "_about": "The deep-coverage US universe: the five largest S&P 500 members in each of the eleven GICS sectors, ranked by the order of the SEC's company_tickers.json (largest market value first) as fetched on 2026-09-23. `predecessors` are earlier registrants whose filings carry the same business's history before a holding-company reorganisation; their facts load under their own CIK and are linked here, never merged. `name` is the display name the pages show; the SEC files' own entity names (upper case, suffixes like /DE/, and for BAC a co-registrant subsidiary) are kept as filed in the database.",
+  "_about": "The deep-coverage US universe: the five largest S&P 500 members in each of the eleven GICS sectors, ranked by the order of the SEC's company_tickers.json (largest market value first) as fetched on 2026-09-23, plus names added on request outside that ranking (`added` gives the date). `predecessors` are earlier registrants whose filings carry the same business's history before a holding-company reorganisation; their facts load under their own CIK and are linked here, never merged. `name` is the display name the pages show; the SEC files' own entity names (upper case, suffixes like /DE/, and for BAC a co-registrant subsidiary) are kept as filed in the database.",
   "as_of": "2026-09-23",
   "ranking_source": "https://www.sec.gov/files/company_tickers.json",
   "companies": [
@@ -8,6 +8,8 @@
     {"ticker": "MSFT", "name": "Microsoft Corporation",  "cik": 789019,  "sector": "Information Technology"},
     {"ticker": "AVGO", "name": "Broadcom Inc.",  "cik": 1730168, "sector": "Information Technology", "predecessors": [1649338, 1441634]},
     {"ticker": "MU", "name": "Micron Technology, Inc.",    "cik": 723125,  "sector": "Information Technology"},
+    {"ticker": "AMD", "name": "Advanced Micro Devices, Inc.", "cik": 2488,  "sector": "Information Technology", "added": "2026-09-30"},
+    {"ticker": "INTC", "name": "Intel Corporation",  "cik": 50863,   "sector": "Information Technology", "added": "2026-09-30"},
 
     {"ticker": "GOOGL", "name": "Alphabet Inc.", "cik": 1652044, "sector": "Communication Services", "predecessors": [1288776]},
     {"ticker": "META", "name": "Meta Platforms, Inc.",  "cik": 1326801, "sector": "Communication Services"},

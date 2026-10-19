@@ -253,6 +253,7 @@ var NAV_SECTIONS = [
     // full filed depth (company-facts, 2009 on), pay for the S&P 500.
     id: "us-companies", market: "us", label: "Companies", suffix: "US Companies",
     pages: [
+      // The ask box is the home page (/), reached from the logo, since 2026-10-19.
       { id: "us-companies", label: "Company Financials", href: "us-companies.html" },
       // Pay versus performance from every S&P 500 member's proxy statement.
       { id: "us-pay", label: "Executive Pay", href: "us-pay.html" },
@@ -461,7 +462,7 @@ var NAV_SECTIONS = [
         var signIn = me.writers
           ? '<a href="write.html">Sign in</a>'
           : '<a href="signin.html?returnTo=' + encodeURIComponent(here) + '">Sign in</a>';
-        var desk = '<a href="write.html">Writer Desk</a>';
+        var desk = '<a href="my.html">Your Plover</a><a href="write.html">Writer Desk</a>';
         var mslot = document.getElementById("mnav-account");
         if (mslot) {
           mslot.innerHTML = me.email ? desk + '<a href="#" data-do="signout">Sign out</a>' : signIn;

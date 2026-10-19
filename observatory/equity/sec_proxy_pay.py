@@ -285,8 +285,8 @@ def refresh_members(con, fetcher):
     body = fetcher.get(SPY_URL, browser=True)
     sha = hashlib.sha256(body).hexdigest()
     as_of, holdings = parse_holdings(body)
-    last = con.execute("SELECT snapshot_id, as_of, sha256 FROM us_index_snapshots "
-                       "ORDER BY snapshot_id DESC LIMIT 1").fetchone()
+    last = con.execute("SELECT snapshot_id, as_of, sha256 FROM us_index_snapshots WHERE index_name = ? "
+                       "ORDER BY snapshot_id DESC LIMIT 1", [INDEX_NAME]).fetchone()
     if last and (last[1] == as_of or last[2] == sha):
         print("  members: holdings as of %s already stored (snapshot %d)" % (last[1], last[0]))
         return last[0]
@@ -304,7 +304,9 @@ def refresh_members(con, fetcher):
         m["weight"] += weight or 0.0
     if len(members) < 450:
         raise PullError("holdings matched only %d companies; expected about 500" % len(members))
-    sid = con.execute("SELECT nextval('us_index_snapshot_seq')").fetchone()[0]
+    # other index lists (equity/us_index_members.py) share this table: the next
+    # id is the table's highest plus one, never a sequence that may lag it
+    sid = con.execute("SELECT coalesce(max(snapshot_id), 0) + 1 FROM us_index_snapshots").fetchone()[0]
     con.execute("BEGIN")
     try:
         con.execute("INSERT INTO us_index_snapshots VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -885,7 +887,7 @@ def main():
         except Exception as e:                                      # noqa: BLE001
             print("  members: FAILED %s: %s — the stored list stays in force"
                   % (type(e).__name__, str(e)[:300]))
-    snap = con.execute("SELECT max(snapshot_id) FROM us_index_snapshots").fetchone()[0]
+    snap = con.execute("SELECT max(snapshot_id) FROM us_index_snapshots WHERE index_name = ?", [INDEX_NAME]).fetchone()[0]
     if snap is None:
         print("no member list stored; nothing to check")
         con.close()

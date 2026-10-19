@@ -168,7 +168,33 @@ ANALYST = {
         "instead of guessing."),
     "task": ""}
 
-BY_SLUG = dict((s["slug"], s) for s in CATALOGUE + [ANALYST])
+# The Studies page's analyst: it turns a question into one analysis that runs
+# on the server (app/analysis.py), so it reads a preview and the figures asked
+# for, never a full history. No get_series: a series is reached through
+# run_analysis, which keeps every row out of the conversation.
+STUDY = {
+    "slug": "study", "initials": "ST", "name": "Study Analyst", "category": "Studies",
+    "version": "1.1.0", "chat": True, "tier": "study", "lean": True,
+    # one analysis, not a research loop: a failed query gets one retry
+    "budget": {"iterations": 6, "tool_calls": 5},
+    "summary": "Turns a question into an analysis that runs on Plover's data, saved as a study.",
+    "schedule": "On request", "delivery": "Studies",
+    "tools": ["search", "list_datasets", "describe_dataset", "run_analysis"],
+    "brief": (
+        "You turn the person's question into one analysis on Plover's data. The question comes "
+        "with likely series codes already found; use them, and call search only when none fits "
+        "(describe_dataset lists a dataset's codes). Then call run_analysis with "
+        "the series, the dates and one SQL query. The server runs it on the full history and "
+        "keeps every row; you see a preview and the summary figures you ask for. Ask for the "
+        "summary figures the answer needs (latest, min, max, mean, highest_since …) and give a "
+        "chart when a trend answers the question. If the query fails, read the error, fix the "
+        "query and run it again. The last analysis that ran is what the study keeps, so finish "
+        "with the one that answers the question. Then answer in at most four short sentences "
+        "from the figures returned, saying what was calculated and from which series. Never "
+        "state a number no tool returned."),
+    "task": ""}
+
+BY_SLUG = dict((s["slug"], s) for s in CATALOGUE + [ANALYST, STUDY])
 
 
 def get(slug):

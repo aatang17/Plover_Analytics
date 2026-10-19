@@ -15,6 +15,7 @@ the same function /api/v1 serves it with.
 """
 import datetime
 import json
+import re
 import time
 from typing import Optional
 
@@ -22,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import (market_history, pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
+from . import (chart_library, market_history, pub_coverage, pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
                writers)
 from .admin_api import _client_ip, audit
 
@@ -552,8 +553,21 @@ def data_search(request: Request, q: str = "", response: Response = None):
                           "name_ja": c.get("name"),
                           "pages": [{"label": lab, "url": tpl % c["sec_code"]}
                                     for lab, tpl in COMPANY_PAGES]})
-    return {"series": series, "companies": companies, "pages": page_hits(q),
-            "market": market_history.catalog(person, q)}
+    out = {"series": series, "companies": companies, "pages": page_hits(q),
+           # the chart people mean by this, when there is one ("CPI", "10-year")
+           "common": chart_library.match(q), "company_first": False, "places": [],
+           "market": market_history.catalog(person, q)}
+    nick = _nickname_codes(q)
+    named = next((c for c in companies if c["code"] in nick or _company_intent(q, c)), None)
+    if named is not None and not out["common"]:
+        # "Toyota": the company, with its charts ready, before Toyota City's guest nights
+        companies.remove(named)
+        companies.insert(0, named)
+        out["company_first"] = True
+        companies[0]["charts"] = chart_library.company_charts(companies[0]["code"])
+        out["places"] = [x for x in series if x["dataset"] in PLACE_DATASETS]
+        out["series"] = [x for x in series if x["dataset"] not in PLACE_DATASETS]
+    return out
 
 
 # Private hourly data never enters the public macro catalog or its cache.
@@ -598,6 +612,102 @@ def market_csv(slug: str, request: Request, start: str = "", end: str = "",
     return StreamingResponse(data, media_type="text/csv", headers={
         "Cache-Control": "private, no-store",
         "Content-Disposition": 'attachment; filename="%s-hourly.csv"' % slug})
+
+
+# Datasets whose series are named after places ("Toyota-shi, Aichi — guest
+# nights"): when a search names a company, they are listed apart, last.
+PLACE_DATASETS = frozenset(("accommodation-jp", "population-jp", "population-jp-municipal",
+                            "population-jp-history", "local-finance-jp", "fsa-regional-fi"))
+_CO_SUFFIX = re.compile(r"\b(corporation|corp|co|company|inc|incorporated|ltd|limited|holdings|group|"
+                        r"kabushiki kaisha|k\.k)\b\.?", re.I)
+
+
+def _nickname_codes(q):
+    """Codes a market nickname stands for ("MUFG"): app/aliases.py."""
+    try:
+        from . import aliases, equity_api
+        return set(aliases.codes(equity_api._cur(), q))
+    except Exception:  # noqa: BLE001 — no equity data: no nicknames
+        return set()
+
+
+def _company_intent(q, company):
+    """True when q names this company: its code, or the start of its name
+    ("toyota", "sony group"), in English or Japanese."""
+    ql = " ".join(q.lower().split())
+    if not ql:
+        return False
+    if ql == str(company.get("code") or "").lower():
+        return True
+    en = " ".join(_CO_SUFFIX.sub(" ", (company.get("name") or "").lower()).split())
+    ja = company.get("name_ja") or ""
+    return (len(ql) >= 3 and en.startswith(ql)) or (len(ql) >= 2 and ql in ja)
+
+
+# ---------------------------------------------------------------------------
+# chart library (app/chart_library.py): common, company, saved and most used
+
+def _own_writer(request):
+    person = _writer(request)
+    if person.get("shared") or not person.get("id"):
+        raise HTTPException(403, "Sign in with your own account to keep saved charts: they are personal.")
+    return person
+
+
+@router.get("/library")
+def library(request: Request, article: Optional[int] = None, response: Response = None):
+    """The Charts tab: the writer's saved charts, the most used and common
+    charts, and the coverage list of the open article's publication."""
+    person = _writer(request)
+    if response is not None:
+        response.headers["Cache-Control"] = "private, no-store"
+    out = chart_library.view(person["id"]) if person.get("id") else \
+        {"topics": chart_library.topics(), "popular": chart_library.popular(), "saved": []}
+    out["coverage"], out["publication"] = [], None
+    out["market"] = market_history.catalog(person)
+    if article:
+        a = research.get(article)
+        if a is not None and writers.can(person, "view", a):
+            pub = research.publication(a["publication_id"])
+            out["coverage"] = pub_coverage.companies(a["publication_id"])
+            out["publication"] = pub["name"] if pub else None
+    return out
+
+
+@router.get("/company-charts/{code}")
+def company_charts(code: str, request: Request):
+    _writer(request)
+    return {"code": code.upper(), "charts": chart_library.company_charts(code)}
+
+
+class UsedBody(BaseModel):
+    id: str
+
+
+@router.post("/library/used")
+def library_used(body: UsedBody, request: Request):
+    _writer(request)
+    chart_library.used(body.id)
+    return {"ok": True}
+
+
+class SaveChartBody(BaseModel):
+    block: dict
+
+
+@router.post("/library/saved")
+def library_save(body: SaveChartBody, request: Request):
+    person = _own_writer(request)
+    try:
+        return chart_library.save(person["id"], body.block)
+    except chart_library.LibraryError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.delete("/library/saved/{saved_id}")
+def library_unsave(saved_id: int, request: Request):
+    person = _own_writer(request)
+    return {"saved": chart_library.unsave(person["id"], saved_id)}
 
 
 class ReadBody(BaseModel):

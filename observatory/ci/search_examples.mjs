@@ -159,6 +159,14 @@ async function worker(wsUrl, boxes, report) {
         await sleep(250);
         const before = await areaHtml(box.area);
         await cdp.send("Input.insertText", { text: ex });
+        // a box marked "submit" answers on Enter or its button, not as the reader types
+        if (box.submit) {
+          await sleep(150);
+          // Enter carries a carriage return, or Chrome does not submit the form
+          await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13,
+                                                     text: "\r", unmodifiedText: "\r" });
+          await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+        }
         await settle(box.area, before);
         const n = await count(box.hits);
         if (process.env.TIMING) console.log(`${box.key} "${ex}" ${n} hits ${Date.now() - t0}ms`);

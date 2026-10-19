@@ -95,6 +95,14 @@ HOLDCO = {
     "0542": "7389",                                            # Aichi FG
     "0572": "8600", "0573": "8600",                            # Tomony
     "0537": "8362",                                            # Fukuho → Fukui Bank
+    # City, trust and other banks: not on the FSA's regional list, so linked
+    # here only. Codes are the JBA's (jba-banks), checked against its names.
+    "0001": "8411", "0289": "8411",                            # Mizuho Bank, Mizuho Trust → Mizuho FG
+    "0005": "8306", "0288": "8306",                            # MUFG Bank, MUFG Trust → MUFG
+    "0009": "8316",                                            # SMBC → SMFG
+    "0294": "8309",                                            # SuMi Trust Bank → SuMi Trust Group
+    "0010": "8308",                                            # Resona Bank → Resona
+    "0397": "8303", "0398": "8304", "0034": "8410",            # SBI Shinsei, Aozora, Seven Bank (file themselves)
 }
 
 TABLES = ("eq_bank_filings", "eq_bank_maturity", "eq_bank_securities")
@@ -182,6 +190,11 @@ def _links(cur):
         if sec:
             fi_to_sec[f["fi_code"]] = sec
             sec_to_fi.setdefault(sec, []).append(f["fi_code"])
+    # banks the FSA's regional list does not carry (city and trust banks)
+    for fi, sec in HOLDCO.items():
+        if fi not in fi_to_sec:
+            fi_to_sec[fi] = sec
+            sec_to_fi.setdefault(sec, []).append(fi)
     return fi_to_sec, sec_to_fi
 
 

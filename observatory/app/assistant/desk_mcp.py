@@ -24,7 +24,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from .. import tools_v2
+from .. import analysis, tools_v2
 from . import runner, specialists, store
 
 router = APIRouter(include_in_schema=False)
@@ -78,7 +78,29 @@ DESK_TOOLS = [
          "specialist": {"type": "string", "description": "Its handle, e.g. buyback-monitor."},
          "question": {"type": "string"}},
          "required": ["specialist", "question"]}},
+    # Studies: the analysis runs on Plover's server, so the agent reads a
+    # preview and the figures it asks for, not the history (app/analysis.py).
+    dict(analysis.tool_for("study"), inputSchema=analysis.tool_for("study")["parameters"]),
+    {"name": "save_study",
+     "description": ("Run an analysis (the same arguments as run_analysis) and keep it as a study "
+                     "on the owner's Studies page, with every row, its chart and a CSV. Give a "
+                     "title; give study_id instead to add a new run to an existing study. Returns "
+                     "the same preview as run_analysis and the study's address."),
+     "inputSchema": {"type": "object", "properties": dict(
+         analysis.TOOL["parameters"]["properties"],
+         title={"type": "string", "description": "The study's title (a new study)."},
+         study_id={"type": "integer", "description": "An existing study to add this run to."},
+         note={"type": "string", "description": "One or two sentences on what the run shows."}),
+         "required": ["series"]}},
+    {"name": "list_studies", "description": "The owner's studies, newest first.",
+     "inputSchema": _OBJ},
+    {"name": "read_study",
+     "description": "One study: its question, the analysis it keeps and a preview of its newest run.",
+     "inputSchema": {"type": "object", "properties": {"study_id": {"type": "integer"}},
+                     "required": ["study_id"]}},
 ]
+for _t in DESK_TOOLS:
+    _t.pop("parameters", None)
 DESK_TOOL_NAMES = set(t["name"] for t in DESK_TOOLS)
 
 # MCP annotations. Clients use them to decide what needs the person's OK:
@@ -90,7 +112,8 @@ _WRITES = {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": Fa
            "openWorldHint": False}
 for _t in DESK_TOOLS:
     _t["annotations"] = dict(_READ_ONLY if _t["name"] in (
-        "desk_overview", "read_feed", "list_threads", "read_thread") else _WRITES)
+        "desk_overview", "read_feed", "list_threads", "read_thread", "run_analysis",
+        "list_studies", "read_study") else _WRITES)
 
 RULES = (
     "This is the owner's private desk on Plover Analytics (Japanese official statistics and "
@@ -197,6 +220,38 @@ def _call_desk(owner, name, args, run_id):
         out = runner.run(aid, h, "connection:" + owner["label"], q, mode="thread")
         return _j({"outcome": out["outcome"], "answer": out["text"], "error": out["error"],
                    "tool_calls": out["tool_calls"], "run_id": out["run_id"]})
+    if name in ("run_analysis", "save_study"):
+        spec = dict((k, v) for k, v in args.items() if k not in ("title", "study_id", "note"))
+        try:
+            result = analysis.execute(spec)
+        except analysis.AnalysisError as exc:
+            return _fail(str(exc))
+        out = analysis.brief(result)
+        if name == "save_study":
+            sid = args.get("study_id")
+            if sid:
+                if store.study(aid, int(sid)) is None:
+                    return _fail("No study %s on this desk. Call list_studies." % sid)
+            else:
+                title = (args.get("title") or "").strip()
+                if not title:
+                    return _fail("save_study needs a title (or a study_id to add a run to).")
+                sid = store.add_study(aid, title)["id"]
+            store.add_study_run(aid, int(sid), author, result, note=(args.get("note") or "").strip(),
+                                run_id=run_id)
+            out["study"] = {"id": int(sid), "url": "/assistant.html#/studies/%d" % int(sid)}
+        return _j(out)
+    if name == "list_studies":
+        return _j({"studies": [dict((k, s[k]) for k in ("id", "title", "question", "runs", "last_run_at"))
+                               for s in store.studies(aid)]})
+    if name == "read_study":
+        st = store.study(aid, int(args.get("study_id") or 0))
+        if st is None:
+            return _fail("No such study on this desk. Call list_studies.")
+        run = store.study_run(aid, st["id"])
+        return _j({"id": st["id"], "title": st["title"], "question": st["question"], "spec": st["spec"],
+                   "newest_run": analysis.brief(run["result"]) if run and run["result"].get("rows") is not None
+                   else None})
     return _fail("Unknown tool '%s'." % name)
 
 

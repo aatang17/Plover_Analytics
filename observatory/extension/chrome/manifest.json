@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Save to Plover",
+  "version": "0.1.0",
+  "description": "Save the article you are reading to your Plover account, and get its summary.",
+  "action": {
+    "default_title": "Save this article to Plover"
+  },
+  "permissions": ["activeTab", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

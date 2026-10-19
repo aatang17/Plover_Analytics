@@ -238,7 +238,7 @@
     const meta = [`Edited ${when(a.updated_at)} by ${esc(a.updated_by)}`];
     if (ask) meta.push(`asked to publish by ${esc(a.review_requested_by)}`);
     if (a.status === "published") meta.push(`<a href="${esc(addr)}" target="_blank" rel="noopener">${esc(addr)}</a>`);
-    return `<li class="wd-art${ask && a.can.publish ? " wd-ask" : ""}" data-id="${a.id}">
+    return `<li class="wd-art${ask && a.can.publish ? " wd-ask" : ""}" data-id="${a.id}" data-status="${esc(a.status)}"${ask ? " data-ask" : ""}>
       <div><b><a href="desk.html?id=${a.id}">${esc(a.title || "Untitled")}</a></b><small>${meta.join(" · ")}</small></div>
       <span class="wd-tags">${tags.join("")}</span>
       <span class="wd-acts"><a class="btn sm" href="desk.html?id=${a.id}">Edit</a>` +
@@ -266,10 +266,10 @@
       const asked = list.filter(a => a.review_requested_at).length;
       const canPublish = pub.role !== "writer";
       const stats = `<div class="stats">
-        <div class="stat"><span class="lbl">Drafts</span><b>${n("draft").toLocaleString()}</b><small>Not on the site yet</small></div>
-        <div class="stat${asked && canPublish ? " warn" : ""}"><span class="lbl">Ready for Review</span><b>${asked.toLocaleString()}</b><small>${canPublish ? "Writers asked you to publish" : "Waiting for an editor"}</small></div>
-        <div class="stat"><span class="lbl">Published</span><b>${n("published").toLocaleString()}</b><small>On ${esc(pub.base)}</small></div>
-        <div class="stat"><span class="lbl">Withdrawn</span><b>${n("withdrawn").toLocaleString()}</b><small>Taken down, versions kept</small></div></div>`;
+        <div class="stat"><span class="lbl">Drafts</span><b data-n="draft">${n("draft").toLocaleString()}</b><small>Not on the site yet</small></div>
+        <div class="stat${asked && canPublish ? " warn" : ""}"><span class="lbl">Ready for Review</span><b data-n="ask">${asked.toLocaleString()}</b><small>${canPublish ? "Writers asked you to publish" : "Waiting for an editor"}</small></div>
+        <div class="stat"><span class="lbl">Published</span><b data-n="published">${n("published").toLocaleString()}</b><small>On ${esc(pub.base)}</small></div>
+        <div class="stat"><span class="lbl">Withdrawn</span><b data-n="withdrawn">${n("withdrawn").toLocaleString()}</b><small>Taken down, versions kept</small></div></div>`;
       const note = pub.role === "writer"
         ? '<div class="notice">You see the articles you started or are credited on. When one is ready, press <b>Ask to Publish</b> in the editor and an editor of this publication publishes it.</div>'
         : "";
@@ -300,12 +300,23 @@
     return `<p class="wd-backup${b.last_run && !b.ok ? " err" : ""}">${esc(text)} <button type="button" class="linkbtn" id="wd-backup">Back Up Now</button></p>`;
   }
 
+  /* The counts above the list follow the rows still showing, so a delete
+     waiting on its Undo is already left out of them. */
+  function recount(body) {
+    const rows = $$("li[data-id]", body).filter(li => !li.hidden);
+    const count = k => rows.filter(li => (k === "ask" ? li.hasAttribute("data-ask") : li.dataset.status === k)).length;
+    $$("[data-n]", body).forEach(b => { b.textContent = count(b.dataset.n).toLocaleString(); });
+    const note = $("h2.band .h2-note", body);
+    if (note) note.textContent = rows.length.toLocaleString();
+  }
+
   /* Delete is one click with a few seconds to undo it: the row goes at once,
      and the draft is deleted when the Undo bar times out or the page is left. */
   function deleteLater(body, id, title) {
     if (PENDING) finishDelete(body);
     const li = $(`li[data-id="${id}"]`, body);
     if (li) li.hidden = true;
+    recount(body);
     PENDING = { id: id, title: title || "Untitled" };
     PENDING.timer = setTimeout(() => finishDelete(body), UNDO_MS);
     const box = $("#wd-alert", body);
@@ -317,6 +328,7 @@
       PENDING = null;
       const row = $(`li[data-id="${p.id}"]`, body);
       if (row) row.hidden = false;
+      recount(body);
       box.innerHTML = "";
     });
   }
@@ -334,6 +346,7 @@
     }).catch(err => {
       const row = $(`li[data-id="${p.id}"]`, body);
       if (row) row.hidden = false;
+      recount(body);
       if (box) box.innerHTML = `<div class="notice wd-bad" role="alert">Could not delete “${esc(p.title)}”: ${esc(err.message)}</div>`;
     });
   }

@@ -31,7 +31,7 @@ const card = document.getElementById("card");
 function safeReturnTo(raw) {
   if (raw && raw.charAt(0) === "/" && raw.slice(0, 2) !== "//") return raw;
   if (raw && /^[a-z0-9-]+\.html(\?[^#]*)?$/i.test(raw)) return raw;
-  return "index.html";
+  return "my.html";
 }
 
 const params = new URLSearchParams(location.search);

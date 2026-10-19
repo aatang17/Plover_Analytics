@@ -189,3 +189,21 @@ class CoverageSearchExamples(unittest.TestCase):
         for q in examples + ["Toyota", "7203", "Sony", "MUFG"]:
             with self.subTest(q=q):
                 self.assertTrue(find_companies(q), "the coverage search finds nothing for %r" % q)
+
+    def _my_examples(self):
+        """Your Plover's Add a company box (my.html) uses the same search."""
+        text = (ROOT / "web" / "my.html").read_text(encoding="utf-8")
+        m = re.search(r'id="my-co-q"[^>]*placeholder="([^"]*)"', text, re.S)
+        self.assertTrue(m, "my.html's Add a company box has moved: update this test")
+        after = re.split(r"\be\.g\.?\s*", m.group(1), flags=re.I)[-1]
+        return [p.strip() for p in after.split(",") if p.strip()]
+
+    def test_your_plover_box_shows_examples(self):
+        self.assertTrue(self._my_examples())
+
+    @unittest.skipUnless(_data.EQUITY, _data.NO_EQUITY)
+    def test_your_plover_examples_find_companies(self):
+        from app.assistant.api import find_companies
+        for q in self._my_examples() + ["Toyota", "7203", "Sony", "MUFG"]:
+            with self.subTest(q=q):
+                self.assertTrue(find_companies(q), "Your Plover's company box finds nothing for %r" % q)

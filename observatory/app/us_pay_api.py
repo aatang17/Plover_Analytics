@@ -128,7 +128,8 @@ def _check(name, value, allowed):
 def _snapshot(cur):
     row = sec_api._rows(cur, """SELECT snapshot_id, index_name, source_url, as_of, fetched_at,
                                        holdings, companies, unmatched
-                                FROM us_index_snapshots ORDER BY snapshot_id DESC LIMIT 1""")
+                                FROM us_index_snapshots WHERE index_name = 'S&P 500 (SPY holdings)'
+                                ORDER BY snapshot_id DESC LIMIT 1""")
     if not row:
         raise HTTPException(503, "no S&P 500 member list stored yet")
     s = row[0]
@@ -704,7 +705,7 @@ def health():
     last, members, checked_recent, latest_filed, first_filed = cur.execute("""
         SELECT (SELECT max(checked_at) FROM sec_px_checks),
                (SELECT count(*) FROM us_index_members
-                 WHERE snapshot_id = (SELECT max(snapshot_id) FROM us_index_snapshots)),
+                 WHERE snapshot_id = (SELECT max(snapshot_id) FROM us_index_snapshots WHERE index_name = 'S&P 500 (SPY holdings)')),
                (SELECT count(DISTINCT cik) FROM sec_px_checks
                  WHERE checked_at >= now()::TIMESTAMP - INTERVAL 3 DAY),
                (SELECT max(filed) FROM sec_px_filings WHERE status = 'ok'),
@@ -713,7 +714,7 @@ def health():
         SELECT m.ticker FROM us_index_members m
         JOIN (SELECT cik, arg_max(status, checked_at) AS s FROM sec_px_checks GROUP BY cik) c
           USING (cik)
-        WHERE m.snapshot_id = (SELECT max(snapshot_id) FROM us_index_snapshots)
+        WHERE m.snapshot_id = (SELECT max(snapshot_id) FROM us_index_snapshots WHERE index_name = 'S&P 500 (SPY holdings)')
           AND c.s = 'failed' ORDER BY m.ticker""").fetchall()]
     days = (datetime.datetime.utcnow() - last).days if last else None
     stale = days is None or days > STALE_AFTER_DAYS

@@ -1,0 +1,6203 @@
+{
+ "1090872": {
+  "cik": 1090872,
+  "ticker": "A",
+  "name": "AGILENT TECHNOLOGIES INC",
+  "site": "http://www.agilent.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.agilent.com 403",
+   "investors.agilent.com 0",
+   "www.agilent.com 403"
+  ]
+ },
+ "320193": {
+  "cik": 320193,
+  "ticker": "AAPL",
+  "name": "APPLE INC",
+  "site": "https://apple.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.apple.com 403",
+   "news.apple.com 200",
+   "applenews.apple.com 200",
+   "www.apple.com 200"
+  ]
+ },
+ "1551152": {
+  "cik": 1551152,
+  "ticker": "ABBV",
+  "name": "ABBVIE INC",
+  "site": "http://www.abbvie.com",
+  "checked": "2026-10-19",
+  "feed": "https://news.abbvie.com/index.php?s=2429&pagetemplate=rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-18"
+ },
+ "1559720": {
+  "cik": 1559720,
+  "ticker": "ABNB",
+  "name": "AIRBNB INC CLASS A",
+  "site": "https://www.airbnb.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.airbnb.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "1800": {
+  "cik": 1800,
+  "ticker": "ABT",
+  "name": "ABBOTT LABORATORIES",
+  "site": "https://abbott.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.abbott.com 200"
+  ]
+ },
+ "947484": {
+  "cik": 947484,
+  "ticker": "ACGL",
+  "name": "ARCH CAPITAL GROUP LTD",
+  "site": "https://www.archcapgroup.com",
+  "checked": "2026-10-19",
+  "feed": "https://www.archgroup.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "1467373": {
+  "cik": 1467373,
+  "ticker": "ACN",
+  "name": "ACCENTURE PLC CL A",
+  "site": "https://www.accenture.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.accenture.com 200",
+   "ir.accenture.com 0",
+   "newsroom.accenture.com 200",
+   "www.accenture.com 200"
+  ]
+ },
+ "796343": {
+  "cik": 796343,
+  "ticker": "ADBE",
+  "name": "ADOBE INC",
+  "site": "https://www.adobe.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "news.adobe.com 200",
+   "www.adobe.com 200"
+  ]
+ },
+ "6281": {
+  "cik": 6281,
+  "ticker": "ADI",
+  "name": "ANALOG DEVICES INC",
+  "site": "https://www.analog.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.analog.com 0",
+   "www.analog.com 0"
+  ]
+ },
+ "7084": {
+  "cik": 7084,
+  "ticker": "ADM",
+  "name": "ARCHER DANIELS MIDLAND CO",
+  "site": "https://adm.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.adm.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-06"
+ },
+ "8670": {
+  "cik": 8670,
+  "ticker": "ADP",
+  "name": "AUTOMATIC DATA PROCESSING",
+  "site": "http://www.adp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.adp.com 403",
+   "www.adp.com 200"
+  ]
+ },
+ "769397": {
+  "cik": 769397,
+  "ticker": "ADSK",
+  "name": "AUTODESK INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1002910": {
+  "cik": 1002910,
+  "ticker": "AEE",
+  "name": "AMEREN CORPORATION",
+  "site": "https://www.ameren.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.ameren.com 403"
+  ]
+ },
+ "4904": {
+  "cik": 4904,
+  "ticker": "AEP",
+  "name": "AMERICAN ELECTRIC POWER",
+  "site": "https://www.aep.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.aep.com 200"
+  ]
+ },
+ "874761": {
+  "cik": 874761,
+  "ticker": "AES",
+  "name": "AES CORP",
+  "site": "https://www.aes.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.aes.com 200",
+   "newsroom.aes.com 200",
+   "www.aes.com 200"
+  ]
+ },
+ "4977": {
+  "cik": 4977,
+  "ticker": "AFL",
+  "name": "AFLAC INC",
+  "site": "https://www.aflac.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.aflac.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "5272": {
+  "cik": 5272,
+  "ticker": "AIG",
+  "name": "AMERICAN INTERNATIONAL GROUP",
+  "site": "https://www.aig.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.aig.com 200"
+  ]
+ },
+ "1267238": {
+  "cik": 1267238,
+  "ticker": "AIZ",
+  "name": "ASSURANT INC",
+  "site": "http://www.assurant.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.assurant.com 403",
+   "newsroom.assurant.com 0",
+   "www.assurant.com 200"
+  ]
+ },
+ "354190": {
+  "cik": 354190,
+  "ticker": "AJG",
+  "name": "ARTHUR J GALLAGHER + CO",
+  "site": "http://www.ajg.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.ajg.com 403",
+   "ir.ajg.com 403",
+   "www.ajg.com 200"
+  ]
+ },
+ "1086222": {
+  "cik": 1086222,
+  "ticker": "AKAM",
+  "name": "AKAMAI TECHNOLOGIES INC",
+  "site": "https://www.akamai.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.akamai.com 403"
+  ]
+ },
+ "915913": {
+  "cik": 915913,
+  "ticker": "ALB",
+  "name": "ALBEMARLE CORP",
+  "site": "http://www.albemarle.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.albemarle.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "1097149": {
+  "cik": 1097149,
+  "ticker": "ALGN",
+  "name": "ALIGN TECHNOLOGY INC",
+  "site": "https://www.aligntech.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.aligntech.com 0",
+   "news.aligntech.com 0",
+   "www.aligntech.com 0"
+  ]
+ },
+ "899051": {
+  "cik": 899051,
+  "ticker": "ALL",
+  "name": "ALLSTATE CORP",
+  "site": "https://www.allstate.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.allstate.com 0",
+   "www.allstate.com 0"
+  ]
+ },
+ "1579241": {
+  "cik": 1579241,
+  "ticker": "ALLE",
+  "name": "ALLEGION PLC",
+  "site": "http://www.allegion.com//",
+  "checked": "2026-10-19",
+  "feed": "https://investor.allegion.com/rss/news-releases.xml",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-08"
+ },
+ "6951": {
+  "cik": 6951,
+  "ticker": "AMAT",
+  "name": "APPLIED MATERIALS INC",
+  "site": "https://www.appliedmaterials.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.appliedmaterials.com 0",
+   "investors.appliedmaterials.com 0",
+   "ir.appliedmaterials.com 0",
+   "www.appliedmaterials.com 403"
+  ]
+ },
+ "1748790": {
+  "cik": 1748790,
+  "ticker": "AMCR",
+  "name": "AMCOR PLC",
+  "site": "http://www.amcor.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.amcor.com 200"
+  ]
+ },
+ "2488": {
+  "cik": 2488,
+  "ticker": "AMD",
+  "name": "ADVANCED MICRO DEVICES",
+  "site": "https://www.amd.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.amd.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-12"
+ },
+ "1037868": {
+  "cik": 1037868,
+  "ticker": "AME",
+  "name": "AMETEK INC",
+  "site": "https://www.ametek.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.ametek.com 0",
+   "www.ametek.com 200"
+  ]
+ },
+ "318154": {
+  "cik": 318154,
+  "ticker": "AMGN",
+  "name": "AMGEN INC",
+  "site": "http://www.amgen.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.amgen.com 0",
+   "news.amgen.com 0",
+   "amgennews.amgen.com 0",
+   "www.amgen.com 200"
+  ]
+ },
+ "820027": {
+  "cik": 820027,
+  "ticker": "AMP",
+  "name": "AMERIPRISE FINANCIAL INC",
+  "site": "http://www.ameriprise.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.ameriprise.com 403",
+   "newsroom.ameriprise.com 0",
+   "www.ameriprise.com 200"
+  ]
+ },
+ "1053507": {
+  "cik": 1053507,
+  "ticker": "AMT",
+  "name": "AMERICAN TOWER CORP",
+  "site": "https://www.americantower.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.americantower.com 0",
+   "www.americantower.com 403"
+  ]
+ },
+ "1018724": {
+  "cik": 1018724,
+  "ticker": "AMZN",
+  "name": "AMAZON.COM INC",
+  "site": "https://www.amazon.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.amazon.com 202"
+  ]
+ },
+ "1596532": {
+  "cik": 1596532,
+  "ticker": "ANET",
+  "name": "ARISTA NETWORKS INC",
+  "site": "https://www.arista.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.arista.com 403",
+   "www.arista.com 200"
+  ]
+ },
+ "315293": {
+  "cik": 315293,
+  "ticker": "AON",
+  "name": "AON PLC CLASS A",
+  "site": "https://www.aon.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.aon.com 200",
+   "www.aon.com 200"
+  ]
+ },
+ "91142": {
+  "cik": 91142,
+  "ticker": "AOS",
+  "name": "SMITH (A.O.) CORP",
+  "site": "https://www.aosmith.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.aosmith.com 0",
+   "www.aosmith.com 200"
+  ]
+ },
+ "1841666": {
+  "cik": 1841666,
+  "ticker": "APA",
+  "name": "APA CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "2969": {
+  "cik": 2969,
+  "ticker": "APD",
+  "name": "AIR PRODUCTS + CHEMICALS INC",
+  "site": "http://airproducts.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.airproducts.com 0",
+   "www.airproducts.com 200"
+  ]
+ },
+ "820313": {
+  "cik": 820313,
+  "ticker": "APH",
+  "name": "AMPHENOL CORP CL A",
+  "site": "http://www.amphenol.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.amphenol.com 403",
+   "investors.amphenol.com 403",
+   "www.amphenol.com 403"
+  ]
+ },
+ "1858681": {
+  "cik": 1858681,
+  "ticker": "APO",
+  "name": "APOLLO GLOBAL MANAGEMENT INC",
+  "site": "https://www.apollo.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.apollo.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "1751008": {
+  "cik": 1751008,
+  "ticker": "APP",
+  "name": "APPLOVIN CORP CLASS A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1521332": {
+  "cik": 1521332,
+  "ticker": "APTV",
+  "name": "APTIV PLC",
+  "site": "https://www.aptiv.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.aptiv.com 403",
+   "www.aptiv.com 200"
+  ]
+ },
+ "1035443": {
+  "cik": 1035443,
+  "ticker": "ARE",
+  "name": "ALEXANDRIA REAL ESTATE EQUIT",
+  "site": "http://www.are.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.are.com 403",
+   "www.are.com 200"
+  ]
+ },
+ "1176948": {
+  "cik": 1176948,
+  "ticker": "ARES",
+  "name": "ARES MANAGEMENT CORP   A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "731802": {
+  "cik": 731802,
+  "ticker": "ATO",
+  "name": "ATMOS ENERGY CORP",
+  "site": "http://www.atmosenergy.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.atmosenergy.com 403",
+   "www.atmosenergy.com 200"
+  ]
+ },
+ "1730168": {
+  "cik": 1730168,
+  "ticker": "AVGO",
+  "name": "BROADCOM INC",
+  "site": "https://www.broadcom.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.broadcom.com 200",
+   "investors.broadcom.com 0",
+   "ir.broadcom.com 200",
+   "news.broadcom.com 200",
+   "www.broadcom.com 200"
+  ]
+ },
+ "8818": {
+  "cik": 8818,
+  "ticker": "AVY",
+  "name": "AVERY DENNISON CORP",
+  "site": "http://www.avery.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.avery.com 200"
+  ]
+ },
+ "1410636": {
+  "cik": 1410636,
+  "ticker": "AWK",
+  "name": "AMERICAN WATER WORKS CO INC",
+  "site": "http://www.amwater.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.amwater.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-16"
+ },
+ "1069183": {
+  "cik": 1069183,
+  "ticker": "AXON",
+  "name": "AXON ENTERPRISE INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "4962": {
+  "cik": 4962,
+  "ticker": "AXP",
+  "name": "AMERICAN EXPRESS CO",
+  "site": "https://www.americanexpress.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.americanexpress.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-12"
+ },
+ "866787": {
+  "cik": 866787,
+  "ticker": "AZO",
+  "name": "AUTOZONE INC",
+  "site": "https://www.autozone.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.autozone.com 0",
+   "www.autozone.com 403"
+  ]
+ },
+ "12927": {
+  "cik": 12927,
+  "ticker": "BA",
+  "name": "BOEING CO/THE",
+  "site": "https://boeing.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.boeing.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "70858": {
+  "cik": 70858,
+  "ticker": "BAC",
+  "name": "BANK OF AMERICA CORP",
+  "site": "https://www.bankofamerica.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.bankofamerica.com 200",
+   "newsroom.bankofamerica.com 200",
+   "www.bankofamerica.com 200"
+  ]
+ },
+ "9389": {
+  "cik": 9389,
+  "ticker": "BALL",
+  "name": "BALL CORP",
+  "site": "https://www.ball.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.ball.com 200",
+   "www.ball.com 200"
+  ]
+ },
+ "10456": {
+  "cik": 10456,
+  "ticker": "BAX",
+  "name": "BAXTER INTERNATIONAL INC",
+  "site": "http://www.baxter.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.baxter.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-07"
+ },
+ "764478": {
+  "cik": 764478,
+  "ticker": "BBY",
+  "name": "BEST BUY CO INC",
+  "site": "https://www.bestbuy.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.bestbuy.com 0",
+   "investors.bestbuy.com 403",
+   "www.bestbuy.com 0"
+  ]
+ },
+ "10795": {
+  "cik": 10795,
+  "ticker": "BDX",
+  "name": "BECTON DICKINSON AND CO",
+  "site": "http://www.bd.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.bd.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-08"
+ },
+ "1664703": {
+  "cik": 1664703,
+  "ticker": "BE",
+  "name": "BLOOM ENERGY CORP  A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "38777": {
+  "cik": 38777,
+  "ticker": "BEN",
+  "name": "FRANKLIN TEMPLETON INC",
+  "site": "http://www.franklintempleton.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.franklintempleton.com 403",
+   "www.franklintempleton.com 200"
+  ]
+ },
+ "14693": {
+  "cik": 14693,
+  "ticker": "BF-B",
+  "name": "BROWN FORMAN CORP CLASS B",
+  "site": "http://www.brown-forman.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.brown-forman.com 403",
+   "www.brown-forman.com 200"
+  ]
+ },
+ "1996862": {
+  "cik": 1996862,
+  "ticker": "BG",
+  "name": "BUNGE GLOBAL SA",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "875045": {
+  "cik": 875045,
+  "ticker": "BIIB",
+  "name": "BIOGEN INC",
+  "site": "https://www.biogen.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.biogen.com 0",
+   "newsroom.biogen.com 0",
+   "www.biogen.com 200"
+  ]
+ },
+ "1075531": {
+  "cik": 1075531,
+  "ticker": "BKNG",
+  "name": "BOOKING HOLDINGS INC",
+  "site": "https://bookingholdings.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.bookingholdings.com 403",
+   "www.bookingholdings.com 200"
+  ]
+ },
+ "1701605": {
+  "cik": 1701605,
+  "ticker": "BKR",
+  "name": "BAKER HUGHES CO",
+  "site": "https://www.bakerhughes.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.bakerhughes.com 403",
+   "www.bakerhughes.com 200"
+  ]
+ },
+ "2012383": {
+  "cik": 2012383,
+  "ticker": "BLK",
+  "name": "BLACKROCK INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "14272": {
+  "cik": 14272,
+  "ticker": "BMY",
+  "name": "BRISTOL MYERS SQUIBB CO",
+  "site": "https://www.bms.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.bms.com 403",
+   "investors.bms.com 403",
+   "newsroom.bms.com 0",
+   "news.bms.com 403",
+   "www.bms.com 200"
+  ]
+ },
+ "1390777": {
+  "cik": 1390777,
+  "ticker": "BNY",
+  "name": "BANK OF NEW YORK MELLON CORP",
+  "site": "https://www.bnymellon.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.bnymellon.com 200"
+  ]
+ },
+ "1383312": {
+  "cik": 1383312,
+  "ticker": "BR",
+  "name": "BROADRIDGE FINANCIAL SOLUTIO",
+  "site": "https://www.broadridge.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.broadridge.com 200",
+   "www.broadridge.com 200"
+  ]
+ },
+ "1067983": {
+  "cik": 1067983,
+  "ticker": "BRK-B",
+  "name": "BERKSHIRE HATHAWAY INC CL B",
+  "site": "https://www.berkshirehathaway.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.berkshirehathaway.com 0",
+   "investors.berkshirehathaway.com 0",
+   "ir.berkshirehathaway.com 0",
+   "newsroom.berkshirehathaway.com 0",
+   "news.berkshirehathaway.com 0",
+   "berkshirehathawaynews.berkshirehathaway.com 0",
+   "www.berkshirehathaway.com 200"
+  ]
+ },
+ "79282": {
+  "cik": 79282,
+  "ticker": "BRO",
+  "name": "BROWN + BROWN INC",
+  "site": "https://www.bbinsurance.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.bbinsurance.com 403",
+   "www.bbinsurance.com 200"
+  ]
+ },
+ "885725": {
+  "cik": 885725,
+  "ticker": "BSX",
+  "name": "BOSTON SCIENTIFIC CORP",
+  "site": "http://www.bostonscientific.com",
+  "checked": "2026-10-19",
+  "feed": "https://news.bostonscientific.com/news-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-07"
+ },
+ "1393818": {
+  "cik": 1393818,
+  "ticker": "BX",
+  "name": "BLACKSTONE INC",
+  "site": "https://www.blackstone.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.blackstone.com 200",
+   "www.blackstone.com 403"
+  ]
+ },
+ "1037540": {
+  "cik": 1037540,
+  "ticker": "BXP",
+  "name": "BXP INC",
+  "site": "https://www.bxp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.bxp.com 0",
+   "www.bxp.com 200"
+  ]
+ },
+ "831001": {
+  "cik": 831001,
+  "ticker": "C",
+  "name": "CITIGROUP INC",
+  "site": "http://www.citigroup.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "news.citigroup.com 0",
+   "www.citigroup.com 308"
+  ]
+ },
+ "721371": {
+  "cik": 721371,
+  "ticker": "CAH",
+  "name": "CARDINAL HEALTH INC",
+  "site": "https://www.cardinalhealth.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.cardinalhealth.com/company-news?pagetemplate=rss",
+  "how": "found",
+  "items": 25,
+  "newest": "2026-10-01"
+ },
+ "1783180": {
+  "cik": 1783180,
+  "ticker": "CARR",
+  "name": "CARRIER GLOBAL CORP",
+  "site": "https://www.corporate.carrier.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.carrier.com 403",
+   "www.carrier.com 200"
+  ]
+ },
+ "726958": {
+  "cik": 726958,
+  "ticker": "CASY",
+  "name": "CASEY S GENERAL STORES INC",
+  "site": "https://www.caseys.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.caseys.com 0",
+   "www.caseys.com 403"
+  ]
+ },
+ "18230": {
+  "cik": 18230,
+  "ticker": "CAT",
+  "name": "CATERPILLAR INC",
+  "site": "https://www.caterpillar.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.caterpillar.com 403",
+   "www.caterpillar.com 0"
+  ]
+ },
+ "896159": {
+  "cik": 896159,
+  "ticker": "CB",
+  "name": "CHUBB LTD",
+  "site": "http://www.chubb.com/",
+  "checked": "2026-10-19",
+  "feed": "https://news.chubb.com/news-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 15,
+  "newest": "2026-10-15"
+ },
+ "1374310": {
+  "cik": 1374310,
+  "ticker": "CBOE",
+  "name": "CBOE GLOBAL MARKETS INC",
+  "site": "https://www.cboe.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.cboe.com/insights/rss/",
+  "how": "found",
+  "items": 25,
+  "newest": "2026-10-16"
+ },
+ "1138118": {
+  "cik": 1138118,
+  "ticker": "CBRE",
+  "name": "CBRE GROUP INC   A",
+  "site": "https://www.cbre.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.cbre.com/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-28"
+ },
+ "1051470": {
+  "cik": 1051470,
+  "ticker": "CCI",
+  "name": "CROWN CASTLE INC",
+  "site": "https://www.crowncastle.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.crowncastle.com 0",
+   "investors.crowncastle.com 0",
+   "www.crowncastle.com 200"
+  ]
+ },
+ "815097": {
+  "cik": 815097,
+  "ticker": "CCL",
+  "name": "CARNIVAL CORP LTD",
+  "site": "https://www.carnivalcorp.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.carnivalcorp.com/feed/",
+  "how": "found",
+  "items": 8,
+  "newest": "2026-10-14"
+ },
+ "813672": {
+  "cik": 813672,
+  "ticker": "CDNS",
+  "name": "CADENCE DESIGN SYS INC",
+  "site": "https://www.cadence.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.cadence.com 403",
+   "newsroom.cadence.com 403",
+   "www.cadence.com 403"
+  ]
+ },
+ "1402057": {
+  "cik": 1402057,
+  "ticker": "CDW",
+  "name": "CDW CORP/DE",
+  "site": "http://www.cdw.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.cdw.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-25"
+ },
+ "1868275": {
+  "cik": 1868275,
+  "ticker": "CEG",
+  "name": "CONSTELLATION ENERGY",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1324404": {
+  "cik": 1324404,
+  "ticker": "CF",
+  "name": "CF INDUSTRIES HOLDINGS INC",
+  "site": "https://www.cfindustries.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.cfindustries.com 403",
+   "investors.cfindustries.com 403",
+   "ir.cfindustries.com 403",
+   "www.cfindustries.com 200"
+  ]
+ },
+ "759944": {
+  "cik": 759944,
+  "ticker": "CFG",
+  "name": "CITIZENS FINANCIAL GROUP",
+  "site": "https://www.citizensbank.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.citizensbank.com 200",
+   "www.citizensbank.com 403"
+  ]
+ },
+ "313927": {
+  "cik": 313927,
+  "ticker": "CHD",
+  "name": "CHURCH + DWIGHT CO INC",
+  "site": "https://www.churchdwight.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.churchdwight.com 403",
+   "investors.churchdwight.com 403",
+   "www.churchdwight.com 200"
+  ]
+ },
+ "1043277": {
+  "cik": 1043277,
+  "ticker": "CHRW",
+  "name": "C.H. ROBINSON WORLDWIDE INC",
+  "site": "https://www.chrobinson.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.chrobinson.com 403",
+   "investors.chrobinson.com 403",
+   "ir.chrobinson.com 403",
+   "www.chrobinson.com 200"
+  ]
+ },
+ "1091667": {
+  "cik": 1091667,
+  "ticker": "CHTR",
+  "name": "CHARTER COMMUNICATIONS INC A",
+  "site": "http://www.charter.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.charter.com 0",
+   "ir.charter.com 0",
+   "newsroom.charter.com 200",
+   "news.charter.com 0",
+   "www.charter.com 403"
+  ]
+ },
+ "1739940": {
+  "cik": 1739940,
+  "ticker": "CI",
+  "name": "THE CIGNA GROUP",
+  "site": "https://www.cigna.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.cigna.com/latest-press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-06"
+ },
+ "936395": {
+  "cik": 936395,
+  "ticker": "CIEN",
+  "name": "CIENA CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "20286": {
+  "cik": 20286,
+  "ticker": "CINF",
+  "name": "CINCINNATI FINANCIAL CORP",
+  "site": "https://www.cinfin.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.cinfin.com 200",
+   "investors.cinfin.com 200",
+   "www.cinfin.com 200"
+  ]
+ },
+ "21665": {
+  "cik": 21665,
+  "ticker": "CL",
+  "name": "COLGATE PALMOLIVE CO",
+  "site": "http://www.colgatepalmolive.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.colgatepalmolive.com 0",
+   "www.colgatepalmolive.com 200"
+  ]
+ },
+ "21076": {
+  "cik": 21076,
+  "ticker": "CLX",
+  "name": "CLOROX COMPANY",
+  "site": "http://www.thecloroxcompany.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.thecloroxcompany.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-12"
+ },
+ "1166691": {
+  "cik": 1166691,
+  "ticker": "CMCSA",
+  "name": "COMCAST CORP CLASS A",
+  "site": "https://www.cmcsa.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.cmcsa.com 0"
+  ]
+ },
+ "1156375": {
+  "cik": 1156375,
+  "ticker": "CME",
+  "name": "CME GROUP INC",
+  "site": "https://www.cmegroup.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.cmegroup.com 0",
+   "www.cmegroup.com 0"
+  ]
+ },
+ "1058090": {
+  "cik": 1058090,
+  "ticker": "CMG",
+  "name": "CHIPOTLE MEXICAN GRILL INC",
+  "site": "https://chipotle.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.chipotle.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-13"
+ },
+ "26172": {
+  "cik": 26172,
+  "ticker": "CMI",
+  "name": "CUMMINS INC",
+  "site": "https://www.cummins.com",
+  "checked": "2026-10-19",
+  "feed": "https://investor.cummins.com/news/rss",
+  "how": "found",
+  "items": 20,
+  "newest": "2026-10-13"
+ },
+ "811156": {
+  "cik": 811156,
+  "ticker": "CMS",
+  "name": "CMS ENERGY CORP",
+  "site": "http://www.cmsenergy.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.cmsenergy.com 403"
+  ]
+ },
+ "1071739": {
+  "cik": 1071739,
+  "ticker": "CNC",
+  "name": "CENTENE CORP",
+  "site": "https://www.centene.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.centene.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-16"
+ },
+ "1130310": {
+  "cik": 1130310,
+  "ticker": "CNP",
+  "name": "CENTERPOINT ENERGY INC",
+  "site": "http://www.centerpointenergy.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.centerpointenergy.com 0",
+   "www.centerpointenergy.com 200"
+  ]
+ },
+ "927628": {
+  "cik": 927628,
+  "ticker": "COF",
+  "name": "CAPITAL ONE FINANCIAL CORP",
+  "site": "https://www.capitalone.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.capitalone.com 0",
+   "www.capitalone.com 200"
+  ]
+ },
+ "820318": {
+  "cik": 820318,
+  "ticker": "COHR",
+  "name": "COHERENT CORP",
+  "site": "https://www.coherent.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.coherent.com 200",
+   "ir.coherent.com 0",
+   "www.coherent.com 200"
+  ]
+ },
+ "1679788": {
+  "cik": 1679788,
+  "ticker": "COIN",
+  "name": "COINBASE GLOBAL INC  CLASS A",
+  "site": "https://www.coinbase.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.coinbase.com 403",
+   "www.coinbase.com 403"
+  ]
+ },
+ "711404": {
+  "cik": 711404,
+  "ticker": "COO",
+  "name": "COOPER COS INC/THE",
+  "site": "http://www.coopercos.com",
+  "checked": "2026-10-19",
+  "feed": "https://www.coopercos.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-07-20"
+ },
+ "1163165": {
+  "cik": 1163165,
+  "ticker": "COP",
+  "name": "CONOCOPHILLIPS",
+  "site": "https://www.conocophillips.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.conocophillips.com 200",
+   "investors.conocophillips.com 200",
+   "ir.conocophillips.com 200",
+   "news.conocophillips.com 200",
+   "conocophillipsnews.conocophillips.com 200",
+   "www.conocophillips.com 200"
+  ]
+ },
+ "1140859": {
+  "cik": 1140859,
+  "ticker": "COR",
+  "name": "CENCORA INC",
+  "site": "http://www.cencora.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.cencora.com 403",
+   "www.cencora.com 200"
+  ]
+ },
+ "909832": {
+  "cik": 909832,
+  "ticker": "COST",
+  "name": "COSTCO WHOLESALE CORP",
+  "site": "https://www.costco.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.costco.com 403",
+   "www.costco.com 200"
+  ]
+ },
+ "1175454": {
+  "cik": 1175454,
+  "ticker": "CPAY",
+  "name": "CORPAY INC",
+  "site": "https://www.corpay.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.corpay.com 0",
+   "www.corpay.com 200"
+  ]
+ },
+ "900075": {
+  "cik": 900075,
+  "ticker": "CPRT",
+  "name": "COPART INC",
+  "site": "https://www.copart.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.copart.com 200"
+  ]
+ },
+ "906345": {
+  "cik": 906345,
+  "ticker": "CPT",
+  "name": "CAMDEN PROPERTY TRUST",
+  "site": "https://www.camdenliving.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.camdenliving.com 403",
+   "www.camdenliving.com 200"
+  ]
+ },
+ "849395": {
+  "cik": 849395,
+  "ticker": "CRH",
+  "name": "CRH PLC",
+  "site": "http://www.crh.com",
+  "checked": "2026-10-19",
+  "feed": "https://www.crh.com/feed/",
+  "how": "found",
+  "items": 12,
+  "newest": "2026-10-15"
+ },
+ "1100682": {
+  "cik": 1100682,
+  "ticker": "CRL",
+  "name": "CHARLES RIVER LABORATORIES",
+  "site": "http://www.criver.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.criver.com 0",
+   "www.criver.com 403"
+  ]
+ },
+ "1108524": {
+  "cik": 1108524,
+  "ticker": "CRM",
+  "name": "SALESFORCE INC",
+  "site": "https://www.salesforce.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.salesforce.com 403",
+   "www.salesforce.com 200"
+  ]
+ },
+ "1535527": {
+  "cik": 1535527,
+  "ticker": "CRWD",
+  "name": "CROWDSTRIKE HOLDINGS INC   A",
+  "site": "https://www.crowdstrike.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.crowdstrike.com 0",
+   "www.crowdstrike.com 200"
+  ]
+ },
+ "858877": {
+  "cik": 858877,
+  "ticker": "CSCO",
+  "name": "CISCO SYSTEMS INC",
+  "site": "https://www.cisco.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.cisco.com 403",
+   "ir.cisco.com 0",
+   "newsroom.cisco.com 200",
+   "news.cisco.com 403",
+   "www.cisco.com 200"
+  ]
+ },
+ "1057352": {
+  "cik": 1057352,
+  "ticker": "CSGP",
+  "name": "COSTAR GROUP INC",
+  "site": "https://www.costargroup.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.costargroup.com 403",
+   "investors.costargroup.com 0",
+   "ir.costargroup.com 403",
+   "www.costargroup.com 403"
+  ]
+ },
+ "277948": {
+  "cik": 277948,
+  "ticker": "CSX",
+  "name": "CSX CORP",
+  "site": "https://www.csx.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.csx.com 403",
+   "www.csx.com 403"
+  ]
+ },
+ "723254": {
+  "cik": 723254,
+  "ticker": "CTAS",
+  "name": "CINTAS CORP",
+  "site": "http://www.cintas.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.cintas.com 200"
+  ]
+ },
+ "1058290": {
+  "cik": 1058290,
+  "ticker": "CTSH",
+  "name": "COGNIZANT TECH SOLUTIONS A",
+  "site": "https://www.cognizant.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.cognizant.com 403",
+   "news.cognizant.com 200",
+   "www.cognizant.com 200"
+  ]
+ },
+ "1690820": {
+  "cik": 1690820,
+  "ticker": "CVNA",
+  "name": "CARVANA CO",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "64803": {
+  "cik": 64803,
+  "ticker": "CVS",
+  "name": "CVS HEALTH CORP",
+  "site": "https://cvshealth.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.cvshealth.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "93410": {
+  "cik": 93410,
+  "ticker": "CVX",
+  "name": "CHEVRON CORP",
+  "site": "https://www.chevron.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.chevron.com 0",
+   "www.chevron.com 200"
+  ]
+ },
+ "715957": {
+  "cik": 715957,
+  "ticker": "D",
+  "name": "DOMINION ENERGY INC",
+  "site": "https://www.dominionenergy.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.dominionenergy.com 403",
+   "news.dominionenergy.com 403",
+   "www.dominionenergy.com 200"
+  ]
+ },
+ "27904": {
+  "cik": 27904,
+  "ticker": "DAL",
+  "name": "DELTA AIR LINES INC",
+  "site": "https://de.delta.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.delta.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-09"
+ },
+ "1792789": {
+  "cik": 1792789,
+  "ticker": "DASH",
+  "name": "DOORDASH INC   A",
+  "site": "https://www.doordash.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.doordash.com 403",
+   "www.doordash.com 403"
+  ]
+ },
+ "1666700": {
+  "cik": 1666700,
+  "ticker": "DD",
+  "name": "DUPONT DE NEMOURS INC",
+  "site": "https://www.dupont.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.dupont.com 0",
+   "investors.dupont.com 0",
+   "news.dupont.com 0",
+   "www.dupont.com 200"
+  ]
+ },
+ "1561550": {
+  "cik": 1561550,
+  "ticker": "DDOG",
+  "name": "DATADOG INC   CLASS A",
+  "site": "https://www.datadoghq.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.datadoghq.com 200",
+   "investors.datadoghq.com 0",
+   "ir.datadoghq.com 0",
+   "newsroom.datadoghq.com 200",
+   "news.datadoghq.com 200",
+   "datadoghqnews.datadoghq.com 200",
+   "www.datadoghq.com 200"
+  ]
+ },
+ "315189": {
+  "cik": 315189,
+  "ticker": "DE",
+  "name": "DEERE + CO",
+  "site": "https://www.deere.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.deere.com:443 200",
+   "investor.deere.com 200",
+   "news.deere.com 0",
+   "www.deere.com 200"
+  ]
+ },
+ "910521": {
+  "cik": 910521,
+  "ticker": "DECK",
+  "name": "DECKERS OUTDOOR CORP",
+  "site": "http://www.deckers.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.deckers.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-12"
+ },
+ "1571996": {
+  "cik": 1571996,
+  "ticker": "DELL",
+  "name": "DELL TECHNOLOGIES  C",
+  "site": "https://www.dell.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.delltechnologies.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-07"
+ },
+ "29534": {
+  "cik": 29534,
+  "ticker": "DG",
+  "name": "DOLLAR GENERAL CORP",
+  "site": "https://www.dollargeneral.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.dollargeneral.com 200",
+   "www.dollargeneral.com 403"
+  ]
+ },
+ "1022079": {
+  "cik": 1022079,
+  "ticker": "DGX",
+  "name": "QUEST DIAGNOSTICS INC",
+  "site": "https://www.questdiagnostics.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.questdiagnostics.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-01"
+ },
+ "882184": {
+  "cik": 882184,
+  "ticker": "DHI",
+  "name": "DR HORTON INC",
+  "site": "http://www.drhorton.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.drhorton.com 200",
+   "www.drhorton.com 200"
+  ]
+ },
+ "313616": {
+  "cik": 313616,
+  "ticker": "DHR",
+  "name": "DANAHER CORP",
+  "site": "https://www.danaher.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.danaher.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 20,
+  "newest": "2026-10-14"
+ },
+ "1744489": {
+  "cik": 1744489,
+  "ticker": "DIS",
+  "name": "WALT DISNEY CO/THE",
+  "site": "https://www.disney.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.disney.com 403",
+   "investors.disney.com 403",
+   "news.disney.com 200",
+   "www.disney.com 200"
+  ]
+ },
+ "1297996": {
+  "cik": 1297996,
+  "ticker": "DLR",
+  "name": "DIGITAL REALTY TRUST INC",
+  "site": "https://www.digitalrealty.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.digitalrealty.com 0",
+   "www.digitalrealty.com 200"
+  ]
+ },
+ "935703": {
+  "cik": 935703,
+  "ticker": "DLTR",
+  "name": "DOLLAR TREE INC",
+  "site": "https://www.dollartree.com/",
+  "checked": "2026-10-19",
+  "feed": "https://corporate.dollartree.com/investors/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-08-27"
+ },
+ "765880": {
+  "cik": 765880,
+  "ticker": "DOC",
+  "name": "HEALTHPEAK PROPERTIES INC",
+  "site": "http://www.hcpi.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.hcpi.com 0",
+   "www.hcpi.com 0"
+  ]
+ },
+ "29905": {
+  "cik": 29905,
+  "ticker": "DOV",
+  "name": "DOVER CORP",
+  "site": "http://www.dovercorporation.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.dovercorporation.com 0",
+   "www.dovercorporation.com 403"
+  ]
+ },
+ "1751788": {
+  "cik": 1751788,
+  "ticker": "DOW",
+  "name": "DOW INC",
+  "site": "https://www.dow.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.dow.com 403",
+   "news.dow.com 0",
+   "www.dow.com 0"
+  ]
+ },
+ "1286681": {
+  "cik": 1286681,
+  "ticker": "DPZ",
+  "name": "DOMINO S PIZZA INC",
+  "site": "https://www.dominos.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.dominos.com 0",
+   "www.dominos.com 200"
+  ]
+ },
+ "940944": {
+  "cik": 940944,
+  "ticker": "DRI",
+  "name": "DARDEN RESTAURANTS INC",
+  "site": "http://www.darden.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.darden.com 403",
+   "news.darden.com 0",
+   "www.darden.com 200"
+  ]
+ },
+ "936340": {
+  "cik": 936340,
+  "ticker": "DTE",
+  "name": "DTE ENERGY COMPANY",
+  "site": "http://www.dteenergy.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.dteenergy.com 0",
+   "ir.dteenergy.com 403",
+   "newsroom.dteenergy.com 0",
+   "www.dteenergy.com 200"
+  ]
+ },
+ "1326160": {
+  "cik": 1326160,
+  "ticker": "DUK",
+  "name": "DUKE ENERGY CORP",
+  "site": "https://www.duke-energy.com/",
+  "checked": "2026-10-19",
+  "feed": "https://news.duke-energy.com/rss.xml",
+  "how": "found",
+  "items": 100,
+  "newest": "2026-10-16"
+ },
+ "927066": {
+  "cik": 927066,
+  "ticker": "DVA",
+  "name": "DAVITA INC",
+  "site": "https://www.davita.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.davita.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "1090012": {
+  "cik": 1090012,
+  "ticker": "DVN",
+  "name": "DEVON ENERGY CORP",
+  "site": "http://www.devonenergy.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.devonenergy.com 403",
+   "investors.devonenergy.com 403",
+   "www.devonenergy.com 200"
+  ]
+ },
+ "1093557": {
+  "cik": 1093557,
+  "ticker": "DXCM",
+  "name": "DEXCOM INC",
+  "site": "http://dexcom.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.dexcom.com 403",
+   "www.dexcom.com 200"
+  ]
+ },
+ "1065088": {
+  "cik": 1065088,
+  "ticker": "EBAY",
+  "name": "EBAY INC",
+  "site": "https://www.ebay.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.ebay.com 503",
+   "news.ebay.com 0",
+   "www.ebay.com 403"
+  ]
+ },
+ "1415404": {
+  "cik": 1415404,
+  "ticker": "ECHO",
+  "name": "ECHOSTAR CORP A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "31462": {
+  "cik": 31462,
+  "ticker": "ECL",
+  "name": "ECOLAB INC",
+  "site": "http://ecolab.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.ecolab.com 403",
+   "www.ecolab.com 504"
+  ]
+ },
+ "1047862": {
+  "cik": 1047862,
+  "ticker": "ED",
+  "name": "CONSOLIDATED EDISON INC",
+  "site": "http://www.coned.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.coned.com 200"
+  ]
+ },
+ "33185": {
+  "cik": 33185,
+  "ticker": "EFX",
+  "name": "EQUIFAX INC",
+  "site": "https://www.equifax.com",
+  "checked": "2026-10-19",
+  "feed": "https://investor.equifax.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-16"
+ },
+ "1095073": {
+  "cik": 1095073,
+  "ticker": "EG",
+  "name": "EVEREST GROUP LTD",
+  "site": "http://www.everestre.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.everestre.com 403",
+   "www.everestre.com 200"
+  ]
+ },
+ "827052": {
+  "cik": 827052,
+  "ticker": "EIX",
+  "name": "EDISON INTERNATIONAL",
+  "site": "http://www.edison.com",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.edison.com/releases.xml",
+  "how": "found",
+  "items": 100,
+  "newest": "2026-10-08"
+ },
+ "1001250": {
+  "cik": 1001250,
+  "ticker": "EL",
+  "name": "ESTEE LAUDER COMPANIES CL A",
+  "site": "http://www.elcompanies.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.elcompanies.com/tools/urlproxy/urlproxy.aspx?settingname=newsroom-rss",
+  "how": "found",
+  "items": 9,
+  "newest": "2026-10-15"
+ },
+ "1156039": {
+  "cik": 1156039,
+  "ticker": "ELV",
+  "name": "ELEVANCE HEALTH INC",
+  "site": "https://www.elevancehealth.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.elevancehealth.com 403",
+   "www.elevancehealth.com 200"
+  ]
+ },
+ "105634": {
+  "cik": 105634,
+  "ticker": "EME",
+  "name": "EMCOR GROUP INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "32604": {
+  "cik": 32604,
+  "ticker": "EMR",
+  "name": "EMERSON ELECTRIC CO",
+  "site": "http://www.emerson.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.emerson.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-14"
+ },
+ "821189": {
+  "cik": 821189,
+  "ticker": "EOG",
+  "name": "EOG RESOURCES INC",
+  "site": "https://www.eogresources.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.eogresources.com 200",
+   "www.eogresources.com 200"
+  ]
+ },
+ "1101239": {
+  "cik": 1101239,
+  "ticker": "EQIX",
+  "name": "EQUINIX INC",
+  "site": "https://www.equinix.com",
+  "checked": "2026-10-19",
+  "feed": "https://investor.equinix.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 6,
+  "newest": "2026-10-01"
+ },
+ "33213": {
+  "cik": 33213,
+  "ticker": "EQT",
+  "name": "EQT CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "922621": {
+  "cik": 922621,
+  "ticker": "ERIE",
+  "name": "ERIE INDEMNITY COMPANY CL A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "72741": {
+  "cik": 72741,
+  "ticker": "ES",
+  "name": "EVERSOURCE ENERGY",
+  "site": "https://www.eversource.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.eversource.com 0",
+   "www.eversource.com 200"
+  ]
+ },
+ "920522": {
+  "cik": 920522,
+  "ticker": "ESS",
+  "name": "ESSEX PROPERTY TRUST INC",
+  "site": "https://www.essexapartmenthomes.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.essexapartmenthomes.com 403",
+   "www.essexapartmenthomes.com 429"
+  ]
+ },
+ "1551182": {
+  "cik": 1551182,
+  "ticker": "ETN",
+  "name": "EATON CORP PLC",
+  "site": "https://www.eaton.com/us/en-us.html",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.eaton.com 0"
+  ]
+ },
+ "65984": {
+  "cik": 65984,
+  "ticker": "ETR",
+  "name": "ENTERGY CORP",
+  "site": "https://www.entergy.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.entergy.com/feed",
+  "how": "found",
+  "items": 15,
+  "newest": "2026-10-16"
+ },
+ "1711269": {
+  "cik": 1711269,
+  "ticker": "EVRG",
+  "name": "EVERGY INC",
+  "site": "https://www.evergy.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.evergy.com 0",
+   "newsroom.evergy.com 200",
+   "www.evergy.com 200"
+  ]
+ },
+ "1099800": {
+  "cik": 1099800,
+  "ticker": "EW",
+  "name": "EDWARDS LIFESCIENCES CORP",
+  "site": "http://www.EdwardsLifesciences.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.edwardslifesciences.com 0"
+  ]
+ },
+ "1109357": {
+  "cik": 1109357,
+  "ticker": "EXC",
+  "name": "EXELON CORP",
+  "site": "https://www.exeloncorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.exeloncorp.com 0",
+   "investors.exeloncorp.com 0",
+   "www.exeloncorp.com 200"
+  ]
+ },
+ "895126": {
+  "cik": 895126,
+  "ticker": "EXE",
+  "name": "EXPAND ENERGY CORP",
+  "site": "http://www.chk.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.chk.com 200",
+   "www.chk.com 200"
+  ]
+ },
+ "746515": {
+  "cik": 746515,
+  "ticker": "EXPD",
+  "name": "EXPEDITORS INTL WASH INC",
+  "site": "http://www.expeditors.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.expeditors.com 200",
+   "www.expeditors.com 200"
+  ]
+ },
+ "1324424": {
+  "cik": 1324424,
+  "ticker": "EXPE",
+  "name": "EXPEDIA GROUP INC",
+  "site": "https://www.expediagroup.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.expediagroup.com 403",
+   "www.expediagroup.com 200"
+  ]
+ },
+ "1289490": {
+  "cik": 1289490,
+  "ticker": "EXR",
+  "name": "EXTRA SPACE STORAGE INC",
+  "site": "https://www.extraspace.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.extraspace.com 403",
+   "news.extraspace.com 403",
+   "www.extraspace.com 403"
+  ]
+ },
+ "37996": {
+  "cik": 37996,
+  "ticker": "F",
+  "name": "FORD MOTOR CO",
+  "site": "https://www.ford.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.ford.com 0"
+  ]
+ },
+ "1539838": {
+  "cik": 1539838,
+  "ticker": "FANG",
+  "name": "DIAMONDBACK ENERGY INC",
+  "site": "https://www.diamondbackenergy.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.diamondbackenergy.com 0",
+   "www.diamondbackenergy.com 0"
+  ]
+ },
+ "815556": {
+  "cik": 815556,
+  "ticker": "FAST",
+  "name": "FASTENAL CO",
+  "site": "https://www.fastenal.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.fastenal.com 403",
+   "www.fastenal.com 403"
+  ]
+ },
+ "831259": {
+  "cik": 831259,
+  "ticker": "FCX",
+  "name": "FREEPORT MCMORAN INC",
+  "site": "http://www.fcx.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.fcx.com 403",
+   "www.fcx.com 200"
+  ]
+ },
+ "1013237": {
+  "cik": 1013237,
+  "ticker": "FDS",
+  "name": "FACTSET RESEARCH SYSTEMS INC",
+  "site": "http://www.factset.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.factset.com 0",
+   "news.factset.com 200",
+   "www.factset.com 200"
+  ]
+ },
+ "1048911": {
+  "cik": 1048911,
+  "ticker": "FDX",
+  "name": "FEDEX CORP",
+  "site": "https://www.fedex.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.fedex.com/index.rss",
+  "how": "found",
+  "items": 8,
+  "newest": "2026-10-06"
+ },
+ "2082247": {
+  "cik": 2082247,
+  "ticker": "FDXF",
+  "name": "FEDEX FREIGHT HOLDING CO",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1031296": {
+  "cik": 1031296,
+  "ticker": "FE",
+  "name": "FIRSTENERGY CORP",
+  "site": "https://www.firstenergycorp.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.firstenergycorp.com 403",
+   "www.firstenergycorp.com 200"
+  ]
+ },
+ "2011641": {
+  "cik": 2011641,
+  "ticker": "FERG",
+  "name": "FERGUSON ENTERPRISES INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1048695": {
+  "cik": 1048695,
+  "ticker": "FFIV",
+  "name": "F5 INC",
+  "site": "https://www.f5.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.f5.com 403",
+   "www.f5.com 200"
+  ]
+ },
+ "814547": {
+  "cik": 814547,
+  "ticker": "FICO",
+  "name": "FAIR ISAAC CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1136893": {
+  "cik": 1136893,
+  "ticker": "FIS",
+  "name": "FIDELITY NATIONAL INFO SERV",
+  "site": "https://www.fisglobal.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.fisglobal.com 200"
+  ]
+ },
+ "798354": {
+  "cik": 798354,
+  "ticker": "FISV",
+  "name": "FISERV INC",
+  "site": "https://www.fiserv.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.fiserv.com 0",
+   "newsroom.fiserv.com 0",
+   "www.fiserv.com 200"
+  ]
+ },
+ "35527": {
+  "cik": 35527,
+  "ticker": "FITB",
+  "name": "FIFTH THIRD BANCORP",
+  "site": "https://ir.53.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.53.com 0",
+   "investors.53.com 0",
+   "ir.53.com 403",
+   "newsroom.53.com 0",
+   "news.53.com 0",
+   "53news.53.com 0",
+   "www.53.com 200"
+  ]
+ },
+ "1035983": {
+  "cik": 1035983,
+  "ticker": "FIX",
+  "name": "COMFORT SYSTEMS USA INC",
+  "site": "http://comfortsystemsusa.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.comfortsystemsusa.com 0",
+   "www.comfortsystemsusa.com 0"
+  ]
+ },
+ "866374": {
+  "cik": 866374,
+  "ticker": "FLEX",
+  "name": "FLEX LTD",
+  "site": "https://www.flex.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.flex.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-14"
+ },
+ "1754301": {
+  "cik": 1754301,
+  "ticker": "FOXA",
+  "name": "FOX CORP   CLASS A",
+  "site": "https://foxcorporation.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.foxcorporation.com/news/press-releases/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "34903": {
+  "cik": 34903,
+  "ticker": "FRT",
+  "name": "FEDERAL REALTY INVS TRUST",
+  "site": "http://www.federalrealty.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "boston25news.com 200",
+   "ir.federalrealty.com 0",
+   "www.federalrealty.com 200"
+  ]
+ },
+ "1274494": {
+  "cik": 1274494,
+  "ticker": "FSLR",
+  "name": "FIRST SOLAR INC",
+  "site": "https://www.firstsolar.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.firstsolar.com 403",
+   "investors.firstsolar.com 403",
+   "ir.firstsolar.com 403",
+   "www.firstsolar.com 200"
+  ]
+ },
+ "1262039": {
+  "cik": 1262039,
+  "ticker": "FTNT",
+  "name": "FORTINET INC",
+  "site": "http://www.fortinet.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.fortinet.com 0",
+   "www.fortinet.com 200"
+  ]
+ },
+ "1659166": {
+  "cik": 1659166,
+  "ticker": "FTV",
+  "name": "FORTIVE CORP",
+  "site": "http://www.fortive.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.fortive.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-30"
+ },
+ "40533": {
+  "cik": 40533,
+  "ticker": "GD",
+  "name": "GENERAL DYNAMICS CORP",
+  "site": "https://www.gd.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.gd.com 200"
+  ]
+ },
+ "1609711": {
+  "cik": 1609711,
+  "ticker": "GDDY",
+  "name": "GODADDY INC   CLASS A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "40545": {
+  "cik": 40545,
+  "ticker": "GE",
+  "name": "GENERAL ELECTRIC",
+  "site": "https://www.geaerospace.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.geaerospace.com 200"
+  ]
+ },
+ "1932393": {
+  "cik": 1932393,
+  "ticker": "GEHC",
+  "name": "GE HEALTHCARE TECHNOLOGY",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "849399": {
+  "cik": 849399,
+  "ticker": "GEN",
+  "name": "GEN DIGITAL INC",
+  "site": "https://www.gendigital.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.gendigital.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-12"
+ },
+ "1996810": {
+  "cik": 1996810,
+  "ticker": "GEV",
+  "name": "GE VERNOVA INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "882095": {
+  "cik": 882095,
+  "ticker": "GILD",
+  "name": "GILEAD SCIENCES INC",
+  "site": "https://www.gilead.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.gilead.com 403",
+   "www.gilead.com 200"
+  ]
+ },
+ "40704": {
+  "cik": 40704,
+  "ticker": "GIS",
+  "name": "GENERAL MILLS INC",
+  "site": "http://www.generalmills.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.generalmills.com 0",
+   "investors.generalmills.com 403",
+   "www.generalmills.com 200"
+  ]
+ },
+ "320335": {
+  "cik": 320335,
+  "ticker": "GL",
+  "name": "GLOBE LIFE INC",
+  "site": "http://www.torchmarkcorp.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.globelifeinsurance.com 200",
+   "www.torchmarkcorp.com 200"
+  ]
+ },
+ "24741": {
+  "cik": 24741,
+  "ticker": "GLW",
+  "name": "CORNING INC",
+  "site": "http://www.corning.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.corning.com 403",
+   "www.corning.com 403"
+  ]
+ },
+ "1467858": {
+  "cik": 1467858,
+  "ticker": "GM",
+  "name": "GENERAL MOTORS CO",
+  "site": "https://www.gm.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.gm.com 0",
+   "investors.gm.com 0",
+   "news.gm.com 403",
+   "www.gm.com 403"
+  ]
+ },
+ "1474735": {
+  "cik": 1474735,
+  "ticker": "GNRC",
+  "name": "GENERAC HOLDINGS INC",
+  "site": "http://www.generac.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.generac.com 0",
+   "www.generac.com 200"
+  ]
+ },
+ "1652044": {
+  "cik": 1652044,
+  "ticker": "GOOGL",
+  "name": "ALPHABET INC CL A",
+  "site": "https://abc.xyz/",
+  "checked": "2026-10-19",
+  "feed": "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+  "how": "found",
+  "items": 38,
+  "newest": "2026-10-19"
+ },
+ "40987": {
+  "cik": 40987,
+  "ticker": "GPC",
+  "name": "GENUINE PARTS CO",
+  "site": "http://www.genpt.com",
+  "checked": "2026-10-19",
+  "feed": "https://www.genpt.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-09-29"
+ },
+ "1123360": {
+  "cik": 1123360,
+  "ticker": "GPN",
+  "name": "GLOBAL PAYMENTS INC",
+  "site": "https://www.globalpaymentsinc.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.globalpayments.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-23"
+ },
+ "1121788": {
+  "cik": 1121788,
+  "ticker": "GRMN",
+  "name": "GARMIN LTD",
+  "site": "http://www.garmin.com/de-CH",
+  "checked": "2026-10-19",
+  "feed": "https://www.garmin.com/en-US/newsroom/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "886982": {
+  "cik": 886982,
+  "ticker": "GS",
+  "name": "GOLDMAN SACHS GROUP INC",
+  "site": "https://www.goldmansachs.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.goldmansachs.com 403"
+  ]
+ },
+ "277135": {
+  "cik": 277135,
+  "ticker": "GWW",
+  "name": "WW GRAINGER INC",
+  "site": "https://www.grainger.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.grainger.com 0",
+   "www.grainger.com 200"
+  ]
+ },
+ "45012": {
+  "cik": 45012,
+  "ticker": "HAL",
+  "name": "HALLIBURTON CO",
+  "site": "http://www.halliburton.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.halliburton.com 0",
+   "www.halliburton.com 200"
+  ]
+ },
+ "46080": {
+  "cik": 46080,
+  "ticker": "HAS",
+  "name": "HASBRO INC",
+  "site": "https://shop.hasbro.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.hasbro.com 0",
+   "newsroom.hasbro.com 0",
+   "www.hasbro.com 200"
+  ]
+ },
+ "49196": {
+  "cik": 49196,
+  "ticker": "HBAN",
+  "name": "HUNTINGTON BANCSHARES INC",
+  "site": "https://www.huntington.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.huntington.com 200",
+   "www.huntington.com 403"
+  ]
+ },
+ "860730": {
+  "cik": 860730,
+  "ticker": "HCA",
+  "name": "HCA HEALTHCARE INC",
+  "site": "https://hcahealthcare.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.hcahealthcare.com 403",
+   "investors.hcahealthcare.com 0",
+   "ir.hcahealthcare.com 0",
+   "newsroom.hcahealthcare.com 0",
+   "news.hcahealthcare.com 0",
+   "hcahealthcarenews.hcahealthcare.com 0",
+   "www.hcahealthcare.com 200"
+  ]
+ },
+ "354950": {
+  "cik": 354950,
+  "ticker": "HD",
+  "name": "HOME DEPOT INC",
+  "site": "https://www.homedepot.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.homedepot.com/rss/news-releases.xml",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-07"
+ },
+ "874766": {
+  "cik": 874766,
+  "ticker": "HIG",
+  "name": "HARTFORD INSURANCE GROUP INC",
+  "site": "https://www.thehartford.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.thehartford.com 403",
+   "newsroom.thehartford.com 403",
+   "www.thehartford.com 200"
+  ]
+ },
+ "1501585": {
+  "cik": 1501585,
+  "ticker": "HII",
+  "name": "HUNTINGTON INGALLS INDUSTRIE",
+  "site": "https://hii.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.hii.com 403",
+   "newsroom.hii.com 308",
+   "www.hii.com 200"
+  ]
+ },
+ "1585689": {
+  "cik": 1585689,
+  "ticker": "HLT",
+  "name": "HILTON WORLDWIDE HOLDINGS IN",
+  "site": "https://www.hilton.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.hilton.com/news-events/investor-news/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-30"
+ },
+ "773840": {
+  "cik": 773840,
+  "ticker": "HON",
+  "name": "HONEYWELL INTERNATIONAL INC",
+  "site": "https://www.honeywell.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.honeywell.com 0",
+   "www.honeywell.com 200"
+  ]
+ },
+ "2089271": {
+  "cik": 2089271,
+  "ticker": "HONA",
+  "name": "HONEYWELL AEROSPACE INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1783879": {
+  "cik": 1783879,
+  "ticker": "HOOD",
+  "name": "ROBINHOOD MARKETS INC   A",
+  "site": "https://www.robinhood.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.robinhood.com 0",
+   "investors.robinhood.com 0",
+   "ir.robinhood.com 0",
+   "newsroom.robinhood.com 403",
+   "news.robinhood.com 0",
+   "robinhoodnews.robinhood.com 0",
+   "www.robinhood.com 200"
+  ]
+ },
+ "1645590": {
+  "cik": 1645590,
+  "ticker": "HPE",
+  "name": "HEWLETT PACKARD ENTERPRISE",
+  "site": "https://www.hpe.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.hpe.com/rss/news",
+  "how": "found",
+  "items": 123,
+  "newest": "2026-09-30"
+ },
+ "47217": {
+  "cik": 47217,
+  "ticker": "HPQ",
+  "name": "HP INC",
+  "site": "https://www.hp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.hp.com 403",
+   "www.hp.com 200"
+  ]
+ },
+ "48465": {
+  "cik": 48465,
+  "ticker": "HRL",
+  "name": "HORMEL FOODS CORP",
+  "site": "http://www.hormel.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.hormel.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-01-27"
+ },
+ "1000228": {
+  "cik": 1000228,
+  "ticker": "HSIC",
+  "name": "HENRY SCHEIN INC",
+  "site": "https://www.henryschein.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.henryschein.com 403",
+   "news.henryschein.com 403",
+   "www.henryschein.com 200"
+  ]
+ },
+ "1070750": {
+  "cik": 1070750,
+  "ticker": "HST",
+  "name": "HOST HOTELS + RESORTS INC",
+  "site": "http://www.hosthotels.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.hosthotels.com 0",
+   "www.hosthotels.com 200"
+  ]
+ },
+ "47111": {
+  "cik": 47111,
+  "ticker": "HSY",
+  "name": "HERSHEY CO/THE",
+  "site": "https://www.thehersheycompany.com/en_us/home.html",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.thehersheycompany.com 200",
+   "investors.thehersheycompany.com 200",
+   "www.thehersheycompany.com 403"
+  ]
+ },
+ "48898": {
+  "cik": 48898,
+  "ticker": "HUBB",
+  "name": "HUBBELL INC",
+  "site": "http://www.hubbell.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.hubbell.com 200",
+   "www.hubbell.com 200"
+  ]
+ },
+ "49071": {
+  "cik": 49071,
+  "ticker": "HUM",
+  "name": "HUMANA INC",
+  "site": "https://www.humana.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "news.humana.com 200",
+   "www.humana.com 200"
+  ]
+ },
+ "4281": {
+  "cik": 4281,
+  "ticker": "HWM",
+  "name": "HOWMET AEROSPACE INC",
+  "site": "https://arconic.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.arconic.com 200"
+  ]
+ },
+ "1381197": {
+  "cik": 1381197,
+  "ticker": "IBKR",
+  "name": "INTERACTIVE BROKERS GRO CL A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "51143": {
+  "cik": 51143,
+  "ticker": "IBM",
+  "name": "INTL BUSINESS MACHINES CORP",
+  "site": "https://www.ibm.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.ibm.com/announcements?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-14"
+ },
+ "1571949": {
+  "cik": 1571949,
+  "ticker": "ICE",
+  "name": "INTERCONTINENTAL EXCHANGE IN",
+  "site": "https://www.theice.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.theice.com 403",
+   "www.theice.com 200"
+  ]
+ },
+ "874716": {
+  "cik": 874716,
+  "ticker": "IDXX",
+  "name": "IDEXX LABORATORIES INC",
+  "site": "http://www.idexx.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.idexx.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "832101": {
+  "cik": 832101,
+  "ticker": "IEX",
+  "name": "IDEX CORP",
+  "site": "https://www.idexcorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.idexcorp.com 403",
+   "www.idexcorp.com 200"
+  ]
+ },
+ "51253": {
+  "cik": 51253,
+  "ticker": "IFF",
+  "name": "INTL FLAVORS + FRAGRANCES",
+  "site": "http://www.iff.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.iff.com 0",
+   "www.iff.com 403"
+  ]
+ },
+ "1110803": {
+  "cik": 1110803,
+  "ticker": "ILMN",
+  "name": "ILLUMINA INC",
+  "site": "https://www.illumina.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.illumina.com 0",
+   "www.illumina.com 200"
+  ]
+ },
+ "879169": {
+  "cik": 879169,
+  "ticker": "INCY",
+  "name": "INCYTE CORP",
+  "site": "http://www.incyte.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.incyte.com 0",
+   "investors.incyte.com 0",
+   "www.incyte.com 200"
+  ]
+ },
+ "50863": {
+  "cik": 50863,
+  "ticker": "INTC",
+  "name": "INTEL CORP",
+  "site": "https://www.intel.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "newsroom.intel.com 200",
+   "www.intel.com 200"
+  ]
+ },
+ "896878": {
+  "cik": 896878,
+  "ticker": "INTU",
+  "name": "INTUIT INC",
+  "site": "https://www.intuit.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.intuit.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "1687229": {
+  "cik": 1687229,
+  "ticker": "INVH",
+  "name": "INVITATION HOMES INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "51434": {
+  "cik": 51434,
+  "ticker": "IP",
+  "name": "INTERNATIONAL PAPER CO",
+  "site": "https://www.internationalpaper.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.internationalpaper.com 0",
+   "www.internationalpaper.com 200"
+  ]
+ },
+ "1478242": {
+  "cik": 1478242,
+  "ticker": "IQV",
+  "name": "IQVIA HOLDINGS INC",
+  "site": "https://www.iqvia.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.iqvia.com 0",
+   "investors.iqvia.com 0",
+   "ir.iqvia.com 403",
+   "www.iqvia.com 200"
+  ]
+ },
+ "1699150": {
+  "cik": 1699150,
+  "ticker": "IR",
+  "name": "INGERSOLL RAND INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1020569": {
+  "cik": 1020569,
+  "ticker": "IRM",
+  "name": "IRON MOUNTAIN INC",
+  "site": "http://www.ironmountain.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.ironmountain.com 403",
+   "www.ironmountain.com 429"
+  ]
+ },
+ "1035267": {
+  "cik": 1035267,
+  "ticker": "ISRG",
+  "name": "INTUITIVE SURGICAL INC",
+  "site": "https://www.intuitive.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.intuitive.com 200"
+  ]
+ },
+ "749251": {
+  "cik": 749251,
+  "ticker": "IT",
+  "name": "GARTNER INC",
+  "site": "https://www.gartner.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.gartner.com 0",
+   "www.gartner.com 403"
+  ]
+ },
+ "49826": {
+  "cik": 49826,
+  "ticker": "ITW",
+  "name": "ILLINOIS TOOL WORKS",
+  "site": "https://www.itw.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.itw.com 403",
+   "www.itw.com 200"
+  ]
+ },
+ "914208": {
+  "cik": 914208,
+  "ticker": "IVZ",
+  "name": "INVESCO LTD",
+  "site": "http://www.invesco.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.invesco.com 200",
+   "www.invesco.com 200"
+  ]
+ },
+ "52988": {
+  "cik": 52988,
+  "ticker": "J",
+  "name": "JACOBS SOLUTIONS INC",
+  "site": "http://www.jacobs.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.jacobs.com 200"
+  ]
+ },
+ "728535": {
+  "cik": 728535,
+  "ticker": "JBHT",
+  "name": "HUNT (JB) TRANSPRT SVCS INC",
+  "site": "https://www.jbhunt.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.jbhunt.com/rss/news.xml",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "898293": {
+  "cik": 898293,
+  "ticker": "JBL",
+  "name": "JABIL INC",
+  "site": "http://www.jabil.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.jabil.com 403",
+   "www.jabil.com 200"
+  ]
+ },
+ "833444": {
+  "cik": 833444,
+  "ticker": "JCI",
+  "name": "JOHNSON CONTROLS INTERNATION",
+  "site": "https://www.johnsoncontrols.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.johnsoncontrols.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "779152": {
+  "cik": 779152,
+  "ticker": "JKHY",
+  "name": "JACK HENRY + ASSOCIATES INC",
+  "site": "https://www.jackhenry.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.jackhenry.com 0",
+   "www.jackhenry.com 200"
+  ]
+ },
+ "200406": {
+  "cik": 200406,
+  "ticker": "JNJ",
+  "name": "JOHNSON + JOHNSON",
+  "site": "https://www.jnj.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.jnj.com 403",
+   "www.jnj.com 200"
+  ]
+ },
+ "19617": {
+  "cik": 19617,
+  "ticker": "JPM",
+  "name": "JPMORGAN CHASE + CO",
+  "site": "https://www.jpmorganchase.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.jpmorganchase.com 200",
+   "news.jpmorganchase.com 200",
+   "www.jpmorganchase.com 200"
+  ]
+ },
+ "1418135": {
+  "cik": 1418135,
+  "ticker": "KDP",
+  "name": "KEURIG DR PEPPER INC",
+  "site": "http://www.drpeppersnapplegroup.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.drpeppersnapplegroup.com 200",
+   "news.drpeppersnapplegroup.com 403",
+   "www.drpeppersnapplegroup.com 403"
+  ]
+ },
+ "91576": {
+  "cik": 91576,
+  "ticker": "KEY",
+  "name": "KEYCORP",
+  "site": "https://www.key.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.key.com 403",
+   "www.key.com 403"
+  ]
+ },
+ "1601046": {
+  "cik": 1601046,
+  "ticker": "KEYS",
+  "name": "KEYSIGHT TECHNOLOGIES IN",
+  "site": "http://www.keysight.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.keysight.com 403",
+   "www.keysight.com 403"
+  ]
+ },
+ "1637459": {
+  "cik": 1637459,
+  "ticker": "KHC",
+  "name": "KRAFT HEINZ CO/THE",
+  "site": "http://www.kraftheinzcompany.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.kraftheinzcompany.com 200",
+   "news.kraftheinzcompany.com 403",
+   "www.kraftheinzcompany.com 200"
+  ]
+ },
+ "879101": {
+  "cik": 879101,
+  "ticker": "KIM",
+  "name": "KIMCO REALTY CORP",
+  "site": "https://www.kimcorealty.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.kimcorealty.com/news/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-22"
+ },
+ "1404912": {
+  "cik": 1404912,
+  "ticker": "KKR",
+  "name": "KKR + CO INC",
+  "site": "https://www.kkr.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.kkr.com 200",
+   "www.kkr.com 200"
+  ]
+ },
+ "319201": {
+  "cik": 319201,
+  "ticker": "KLAC",
+  "name": "KLA CORP",
+  "site": "https://www.kla.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.kla.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "55785": {
+  "cik": 55785,
+  "ticker": "KMB",
+  "name": "KIMBERLY CLARK CORP",
+  "site": "http://www.kimberly-clark.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.kimberly-clark.com 403",
+   "news.kimberly-clark.com 403",
+   "www.kimberly-clark.com 403"
+  ]
+ },
+ "1506307": {
+  "cik": 1506307,
+  "ticker": "KMI",
+  "name": "KINDER MORGAN INC",
+  "site": "http://www.kindermorgan.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.kindermorgan.com 403",
+   "news.kindermorgan.com 403",
+   "www.kindermorgan.com 200"
+  ]
+ },
+ "21344": {
+  "cik": 21344,
+  "ticker": "KO",
+  "name": "COCA COLA CO/THE",
+  "site": "https://www.coca-colacompany.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.coca-colacompany.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "56873": {
+  "cik": 56873,
+  "ticker": "KR",
+  "name": "KROGER CO",
+  "site": "https://www.kroger.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.kroger.com 403",
+   "www.kroger.com 0"
+  ]
+ },
+ "1944048": {
+  "cik": 1944048,
+  "ticker": "KVUE",
+  "name": "KENVUE INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "60086": {
+  "cik": 60086,
+  "ticker": "L",
+  "name": "LOEWS CORP",
+  "site": "http://www.loews.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.loews.com 403",
+   "www.loews.com 403"
+  ]
+ },
+ "1336920": {
+  "cik": 1336920,
+  "ticker": "LDOS",
+  "name": "LEIDOS HOLDINGS INC",
+  "site": "http://www.leidos.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.leidos.com 0",
+   "ir.leidos.com 0",
+   "www.leidos.com 200"
+  ]
+ },
+ "920760": {
+  "cik": 920760,
+  "ticker": "LEN",
+  "name": "LENNAR CORP A",
+  "site": "http://www.lennar.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.lennar.com/rss/earnings",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-06"
+ },
+ "920148": {
+  "cik": 920148,
+  "ticker": "LH",
+  "name": "LABCORP HOLDINGS INC",
+  "site": "https://www.labcorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.labcorp.com 0",
+   "www.labcorp.com 200"
+  ]
+ },
+ "202058": {
+  "cik": 202058,
+  "ticker": "LHX",
+  "name": "L3HARRIS TECHNOLOGIES INC",
+  "site": "https://www.l3harris.com",
+  "checked": "2026-10-19",
+  "feed": "https://www.l3harris.com/feeds/newsroom/rss.xml",
+  "how": "found",
+  "items": 71,
+  "newest": "2026-10-15"
+ },
+ "1069202": {
+  "cik": 1069202,
+  "ticker": "LII",
+  "name": "LENNOX INTERNATIONAL INC",
+  "site": "https://www.lennox.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.lennox.com 0",
+   "www.lennox.com 200"
+  ]
+ },
+ "1707925": {
+  "cik": 1707925,
+  "ticker": "LIN",
+  "name": "LINDE PLC",
+  "site": "http://www.linde.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.linde.com 200",
+   "news.linde.com 200",
+   "www.linde.com 200"
+  ]
+ },
+ "1633978": {
+  "cik": 1633978,
+  "ticker": "LITE",
+  "name": "LUMENTUM HOLDINGS INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "59478": {
+  "cik": 59478,
+  "ticker": "LLY",
+  "name": "ELI LILLY + CO",
+  "site": "https://www.lilly.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.lilly.com 0",
+   "newsroom.lilly.com 503",
+   "www.lilly.com 403"
+  ]
+ },
+ "936468": {
+  "cik": 936468,
+  "ticker": "LMT",
+  "name": "LOCKHEED MARTIN CORP",
+  "site": "https://lockheedmartin.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.lockheedmartin.com 0",
+   "news.lockheedmartin.com 200",
+   "www.lockheedmartin.com 200"
+  ]
+ },
+ "352541": {
+  "cik": 352541,
+  "ticker": "LNT",
+  "name": "ALLIANT ENERGY CORP",
+  "site": "https://www.alliantenergy.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.alliantenergy.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "60667": {
+  "cik": 60667,
+  "ticker": "LOW",
+  "name": "LOWE S COS INC",
+  "site": "http://lowes.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.lowes.com 200",
+   "newsroom.lowes.com 200",
+   "www.lowes.com 200"
+  ]
+ },
+ "707549": {
+  "cik": 707549,
+  "ticker": "LRCX",
+  "name": "LAM RESEARCH CORP",
+  "site": "https://www.lamresearch.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.lamresearch.com/index.php?s=43&pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-09-30"
+ },
+ "1397187": {
+  "cik": 1397187,
+  "ticker": "LULU",
+  "name": "LULULEMON ATHLETICA INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "92380": {
+  "cik": 92380,
+  "ticker": "LUV",
+  "name": "SOUTHWEST AIRLINES CO",
+  "site": "https://www.southwest.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.southwest.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "1300514": {
+  "cik": 1300514,
+  "ticker": "LVS",
+  "name": "LAS VEGAS SANDS CORP",
+  "site": "http://www.lasvegassands.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.lasvegassands.com 403"
+  ]
+ },
+ "1489393": {
+  "cik": 1489393,
+  "ticker": "LYB",
+  "name": "LYONDELLBASELL INDU CL A",
+  "site": "https://www.lyondellbasell.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.lyondellbasell.com 403",
+   "www.lyondellbasell.com 200"
+  ]
+ },
+ "1335258": {
+  "cik": 1335258,
+  "ticker": "LYV",
+  "name": "LIVE NATION ENTERTAINMENT IN",
+  "site": "https://www.livenationentertainment.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.livenationentertainment.com 200",
+   "news.livenationentertainment.com 200",
+   "www.livenationentertainment.com 200"
+  ]
+ },
+ "1141391": {
+  "cik": 1141391,
+  "ticker": "MA",
+  "name": "MASTERCARD INC   A",
+  "site": "https://www.mastercard.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.mastercard.com 403",
+   "investors.mastercard.com 0",
+   "newsroom.mastercard.com 200",
+   "www.mastercard.com 403"
+  ]
+ },
+ "912595": {
+  "cik": 912595,
+  "ticker": "MAA",
+  "name": "MID AMERICA APARTMENT COMM",
+  "site": "http://www.maac.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.maac.com 403",
+   "www.maac.com 403"
+  ]
+ },
+ "1048286": {
+  "cik": 1048286,
+  "ticker": "MAR",
+  "name": "MARRIOTT INTERNATIONAL  CL A",
+  "site": "https://www.marriott.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "news.marriott.com 200",
+   "www.marriott.com 403"
+  ]
+ },
+ "62996": {
+  "cik": 62996,
+  "ticker": "MAS",
+  "name": "MASCO CORP",
+  "site": "http://www.masco.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.masco.com 403",
+   "investors.masco.com 0",
+   "www.masco.com 200"
+  ]
+ },
+ "63908": {
+  "cik": 63908,
+  "ticker": "MCD",
+  "name": "MCDONALD S CORP",
+  "site": "https://www.mcdonalds.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.mcdonalds.com 403",
+   "www.mcdonalds.com 403"
+  ]
+ },
+ "827054": {
+  "cik": 827054,
+  "ticker": "MCHP",
+  "name": "MICROCHIP TECHNOLOGY INC",
+  "site": "https://www.microchip.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.microchip.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-14"
+ },
+ "927653": {
+  "cik": 927653,
+  "ticker": "MCK",
+  "name": "MCKESSON CORP",
+  "site": "https://www.mckesson.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.mckesson.com 403",
+   "www.mckesson.com 200"
+  ]
+ },
+ "1059556": {
+  "cik": 1059556,
+  "ticker": "MCO",
+  "name": "MOODY S CORP",
+  "site": "https://www.moodys.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.moodys.com 403",
+   "www.moodys.com 200"
+  ]
+ },
+ "1103982": {
+  "cik": 1103982,
+  "ticker": "MDLZ",
+  "name": "MONDELEZ INTERNATIONAL INC A",
+  "site": "https://www.mondelezinternational.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.mondelezinternational.com 0",
+   "www.mondelezinternational.com 200"
+  ]
+ },
+ "1613103": {
+  "cik": 1613103,
+  "ticker": "MDT",
+  "name": "MEDTRONIC PLC",
+  "site": "https://www.medtronic.com/",
+  "checked": "2026-10-19",
+  "feed": "https://news.medtronic.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-15"
+ },
+ "1099219": {
+  "cik": 1099219,
+  "ticker": "MET",
+  "name": "METLIFE INC",
+  "site": "https://www.metlife.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.metlife.com 403",
+   "www.metlife.com 200"
+  ]
+ },
+ "1326801": {
+  "cik": 1326801,
+  "ticker": "META",
+  "name": "META PLATFORMS INC CLASS A",
+  "site": "https://www.meta.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.meta.com 400"
+  ]
+ },
+ "789570": {
+  "cik": 789570,
+  "ticker": "MGM",
+  "name": "MGM RESORTS INTERNATIONAL",
+  "site": "http://www.mgmresorts.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.mgmresorts.com/news-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-15"
+ },
+ "63754": {
+  "cik": 63754,
+  "ticker": "MKC",
+  "name": "MCCORMICK + CO NON VTG SHRS",
+  "site": "http://www.mccormickcorporation.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.mccormickcorporation.com 200"
+  ]
+ },
+ "916076": {
+  "cik": 916076,
+  "ticker": "MLM",
+  "name": "MARTIN MARIETTA MATERIALS",
+  "site": "https://www.martinmarietta.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.martinmarietta.com 0",
+   "news.martinmarietta.com 308",
+   "www.martinmarietta.com 200"
+  ]
+ },
+ "66740": {
+  "cik": 66740,
+  "ticker": "MMM",
+  "name": "3M CO",
+  "site": "https://www.3m.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.3m.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-06"
+ },
+ "865752": {
+  "cik": 865752,
+  "ticker": "MNST",
+  "name": "MONSTER BEVERAGE CORP",
+  "site": "http://www.monsterbevcorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.monsterbevcorp.com 0",
+   "www.monsterbevcorp.com 403"
+  ]
+ },
+ "764180": {
+  "cik": 764180,
+  "ticker": "MO",
+  "name": "ALTRIA GROUP INC",
+  "site": "http://www.altria.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.altria.com 403",
+   "www.altria.com 200"
+  ]
+ },
+ "1285785": {
+  "cik": 1285785,
+  "ticker": "MOS",
+  "name": "MOSAIC CO/THE",
+  "site": "http://www.mosaicco.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.mosaicco.com 403",
+   "www.mosaicco.com 200"
+  ]
+ },
+ "1510295": {
+  "cik": 1510295,
+  "ticker": "MPC",
+  "name": "MARATHON PETROLEUM CORP",
+  "site": "https://www.marathonpetroleum.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.marathonpetroleum.com 403",
+   "news.marathonpetroleum.com 403",
+   "www.marathonpetroleum.com 403"
+  ]
+ },
+ "1280452": {
+  "cik": 1280452,
+  "ticker": "MPWR",
+  "name": "MONOLITHIC POWER SYSTEMS INC",
+  "site": "http://www.monolithicpower.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.monolithicpower.com 200",
+   "ir.monolithicpower.com 200",
+   "www.monolithicpower.com 200"
+  ]
+ },
+ "310158": {
+  "cik": 310158,
+  "ticker": "MRK",
+  "name": "MERCK + CO. INC.",
+  "site": "https://www.merck.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.merck.com 200",
+   "www.merck.com 200"
+  ]
+ },
+ "1682852": {
+  "cik": 1682852,
+  "ticker": "MRNA",
+  "name": "MODERNA INC",
+  "site": "https://www.modernatx.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.modernatx.com 200",
+   "investors.modernatx.com 200",
+   "ir.modernatx.com 200",
+   "newsroom.modernatx.com 200",
+   "news.modernatx.com 200",
+   "modernatxnews.modernatx.com 200",
+   "www.modernatx.com 200"
+  ]
+ },
+ "62709": {
+  "cik": 62709,
+  "ticker": "MRSH",
+  "name": "MARSH + MCLENNAN COS",
+  "site": "http://www.mmc.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.mmc.com 200"
+  ]
+ },
+ "1835632": {
+  "cik": 1835632,
+  "ticker": "MRVL",
+  "name": "MARVELL TECHNOLOGY INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "895421": {
+  "cik": 895421,
+  "ticker": "MS",
+  "name": "MORGAN STANLEY",
+  "site": "https://morganstanley.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.morganstanley.com 0"
+  ]
+ },
+ "1408198": {
+  "cik": 1408198,
+  "ticker": "MSCI",
+  "name": "MSCI INC",
+  "site": "https://www.msci.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.msci.com 0",
+   "news.msci.com 0",
+   "www.msci.com 200"
+  ]
+ },
+ "789019": {
+  "cik": 789019,
+  "ticker": "MSFT",
+  "name": "MICROSOFT CORP",
+  "site": "https://www.microsoft.com/",
+  "checked": "2026-10-19",
+  "feed": "https://news.microsoft.com/source/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-16"
+ },
+ "68505": {
+  "cik": 68505,
+  "ticker": "MSI",
+  "name": "MOTOROLA SOLUTIONS INC",
+  "site": "http://www.motorola.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.motorola.com 200",
+   "investors.motorola.com 200",
+   "www.motorola.com 200"
+  ]
+ },
+ "36270": {
+  "cik": 36270,
+  "ticker": "MTB",
+  "name": "M + T BANK CORP",
+  "site": "https://www3.mtb.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.mtb.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-16"
+ },
+ "1037646": {
+  "cik": 1037646,
+  "ticker": "MTD",
+  "name": "METTLER TOLEDO INTERNATIONAL",
+  "site": "http://www.mt.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.mt.com 403",
+   "ir.mt.com 200",
+   "www.mt.com 200"
+  ]
+ },
+ "723125": {
+  "cik": 723125,
+  "ticker": "MU",
+  "name": "MICRON TECHNOLOGY INC",
+  "site": "https://tw.micron.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.micron.com 403",
+   "news.micron.com 0",
+   "www.micron.com 200"
+  ]
+ },
+ "1513761": {
+  "cik": 1513761,
+  "ticker": "NCLH",
+  "name": "NORWEGIAN CRUISE LINE HOLDIN",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1120193": {
+  "cik": 1120193,
+  "ticker": "NDAQ",
+  "name": "NASDAQ INC",
+  "site": "http://business.nasdaq.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.nasdaq.com 0",
+   "ir.nasdaq.com 0",
+   "news.nasdaq.com 0",
+   "www.nasdaq.com 0"
+  ]
+ },
+ "72331": {
+  "cik": 72331,
+  "ticker": "NDSN",
+  "name": "NORDSON CORP",
+  "site": "http://www.nordson.com/de-de/pages/home.aspx",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.nordson.com 403",
+   "www.nordson.com 403"
+  ]
+ },
+ "753308": {
+  "cik": 753308,
+  "ticker": "NEE",
+  "name": "NEXTERA ENERGY INC",
+  "site": "http://www.nexteraenergy.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.investor.nexteraenergy.com:443/rss/news-releases.xml",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-07"
+ },
+ "1164727": {
+  "cik": 1164727,
+  "ticker": "NEM",
+  "name": "NEWMONT CORP",
+  "site": "http://www.newmont.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.newmont.com 403",
+   "ir.newmont.com 0",
+   "www.newmont.com 403"
+  ]
+ },
+ "1065280": {
+  "cik": 1065280,
+  "ticker": "NFLX",
+  "name": "NETFLIX INC",
+  "site": "https://ir.netflix.net/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.netflix.net 403",
+   "www.netflix.net 0"
+  ]
+ },
+ "1111711": {
+  "cik": 1111711,
+  "ticker": "NI",
+  "name": "NISOURCE INC",
+  "site": "http://www.nisource.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.nisource.com 403",
+   "ir.nisource.com 0",
+   "www.nisource.com 200"
+  ]
+ },
+ "320187": {
+  "cik": 320187,
+  "ticker": "NKE",
+  "name": "NIKE INC  CL B",
+  "site": "https://www.nike.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.nike.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "1133421": {
+  "cik": 1133421,
+  "ticker": "NOC",
+  "name": "NORTHROP GRUMMAN CORP",
+  "site": "https://www.northropgrumman.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.northropgrumman.com 0",
+   "news.northropgrumman.com 200",
+   "www.northropgrumman.com 200"
+  ]
+ },
+ "1373715": {
+  "cik": 1373715,
+  "ticker": "NOW",
+  "name": "SERVICENOW INC",
+  "site": "https://www.servicenow.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.servicenow.com 403",
+   "investors.servicenow.com 403",
+   "newsroom.servicenow.com 403",
+   "www.servicenow.com 403"
+  ]
+ },
+ "1013871": {
+  "cik": 1013871,
+  "ticker": "NRG",
+  "name": "NRG ENERGY INC",
+  "site": "https://www.nrg.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.nrg.com 0",
+   "www.nrg.com 200"
+  ]
+ },
+ "702165": {
+  "cik": 702165,
+  "ticker": "NSC",
+  "name": "NORFOLK SOUTHERN CORP",
+  "site": "https://www.norfolksouthern.com/",
+  "checked": "2026-10-19",
+  "feed": "https://norfolksouthern.investorroom.com/news?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-02"
+ },
+ "1002047": {
+  "cik": 1002047,
+  "ticker": "NTAP",
+  "name": "NETAPP INC",
+  "site": "https://www.netapp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.netapp.com 403",
+   "www.netapp.com 403"
+  ]
+ },
+ "73124": {
+  "cik": 73124,
+  "ticker": "NTRS",
+  "name": "NORTHERN TRUST CORP",
+  "site": "http://www.northerntrust.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.northerntrust.com 0"
+  ]
+ },
+ "73309": {
+  "cik": 73309,
+  "ticker": "NUE",
+  "name": "NUCOR CORP",
+  "site": "http://www.nucor.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.nucor.com 403",
+   "www.nucor.com 502"
+  ]
+ },
+ "1045810": {
+  "cik": 1045810,
+  "ticker": "NVDA",
+  "name": "NVIDIA CORP",
+  "site": "https://www.nvidia.com/",
+  "checked": "2026-10-19",
+  "feed": "https://nvidianews.nvidia.com/rss.xml",
+  "how": "found",
+  "items": 20,
+  "newest": "2026-10-17"
+ },
+ "906163": {
+  "cik": 906163,
+  "ticker": "NVR",
+  "name": "NVR INC",
+  "site": "http://www.nvrinc.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.nvrinc.com 200"
+  ]
+ },
+ "1564708": {
+  "cik": 1564708,
+  "ticker": "NWSA",
+  "name": "NEWS CORP   CLASS A",
+  "site": "https://newscorp.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newscorp.com/comments/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-19"
+ },
+ "1413447": {
+  "cik": 1413447,
+  "ticker": "NXPI",
+  "name": "NXP SEMICONDUCTORS NV",
+  "site": "https://www.nxp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.nxp.com 0",
+   "www.nxp.com 200"
+  ]
+ },
+ "726728": {
+  "cik": 726728,
+  "ticker": "O",
+  "name": "REALTY INCOME CORP",
+  "site": "http://www.realtyincome.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.realtyincome.com 530",
+   "www.realtyincome.com 200"
+  ]
+ },
+ "878927": {
+  "cik": 878927,
+  "ticker": "ODFL",
+  "name": "OLD DOMINION FREIGHT LINE",
+  "site": "http://www.odfl.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.odfl.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-06"
+ },
+ "1039684": {
+  "cik": 1039684,
+  "ticker": "OKE",
+  "name": "ONEOK INC",
+  "site": "http://www.oneok.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.oneok.com/rss/press-releases",
+  "how": "found",
+  "items": 20,
+  "newest": "2026-10-14"
+ },
+ "29989": {
+  "cik": 29989,
+  "ticker": "OMC",
+  "name": "OMNICOM GROUP",
+  "site": "https://www.omnicomgroup.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.omc.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-16"
+ },
+ "1097864": {
+  "cik": 1097864,
+  "ticker": "ON",
+  "name": "ON SEMICONDUCTOR",
+  "site": "https://www.onsemi.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.onsemi.com 0",
+   "www.onsemi.com 200"
+  ]
+ },
+ "1341439": {
+  "cik": 1341439,
+  "ticker": "ORCL",
+  "name": "ORACLE CORP",
+  "site": "https://www.oracle.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.oracle.com 403",
+   "www.oracle.com 403"
+  ]
+ },
+ "898173": {
+  "cik": 898173,
+  "ticker": "ORLY",
+  "name": "O REILLY AUTOMOTIVE INC",
+  "site": "http://www.oreillyauto.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.oreillyauto.com 403"
+  ]
+ },
+ "1781335": {
+  "cik": 1781335,
+  "ticker": "OTIS",
+  "name": "OTIS WORLDWIDE CORP",
+  "site": "https://www.otis.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "otisinvestors.com 403",
+   "www.otisinvestors.com 403",
+   "www.otis.com 200"
+  ]
+ },
+ "797468": {
+  "cik": 797468,
+  "ticker": "OXY",
+  "name": "OCCIDENTAL PETROLEUM CORP",
+  "site": "https://www.oxy.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.oxy.com 200"
+  ]
+ },
+ "1474432": {
+  "cik": 1474432,
+  "ticker": "P",
+  "name": "EVERPURE INC A",
+  "site": "https://www.purestorage.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.purestorage.com 403",
+   "investors.purestorage.com 403",
+   "ir.purestorage.com 403",
+   "www.purestorage.com 200"
+  ]
+ },
+ "1327567": {
+  "cik": 1327567,
+  "ticker": "PANW",
+  "name": "PALO ALTO NETWORKS INC",
+  "site": "https://www.paloaltonetworks.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.paloaltonetworks.com 0",
+   "www.paloaltonetworks.com 200"
+  ]
+ },
+ "723531": {
+  "cik": 723531,
+  "ticker": "PAYX",
+  "name": "PAYCHEX INC",
+  "site": "http://www.paychex.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.paychex.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "75362": {
+  "cik": 75362,
+  "ticker": "PCAR",
+  "name": "PACCAR INC",
+  "site": "http://www.paccar.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.paccar.com 403",
+   "www.paccar.com 0"
+  ]
+ },
+ "1004980": {
+  "cik": 1004980,
+  "ticker": "PCG",
+  "name": "P G + E CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "788784": {
+  "cik": 788784,
+  "ticker": "PEG",
+  "name": "PUBLIC SERVICE ENTERPRISE GP",
+  "site": "http://www.pseg.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.pseg.com 403",
+   "www.pseg.com 403"
+  ]
+ },
+ "77476": {
+  "cik": 77476,
+  "ticker": "PEP",
+  "name": "PEPSICO INC",
+  "site": "https://www.pepsico.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.pepsico.com 200",
+   "investors.pepsico.com 200",
+   "www.pepsico.com 200"
+  ]
+ },
+ "78003": {
+  "cik": 78003,
+  "ticker": "PFE",
+  "name": "PFIZER INC",
+  "site": "https://www.pfizer.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.pfizer.com 403",
+   "www.pfizer.com 403"
+  ]
+ },
+ "1126328": {
+  "cik": 1126328,
+  "ticker": "PFG",
+  "name": "PRINCIPAL FINANCIAL GROUP",
+  "site": "https://www.principal.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.principal.com 0",
+   "www.principal.com 200"
+  ]
+ },
+ "80424": {
+  "cik": 80424,
+  "ticker": "PG",
+  "name": "PROCTER + GAMBLE CO/THE",
+  "site": "http://www.pg.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.pginvestor.com:443 200",
+   "www.pginvestor.com 200",
+   "investor.pg.com 0",
+   "ir.pg.com 200",
+   "news.pg.com 200",
+   "www.pg.com 200"
+  ]
+ },
+ "80661": {
+  "cik": 80661,
+  "ticker": "PGR",
+  "name": "PROGRESSIVE CORP",
+  "site": "https://www.progressive.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.progressive.com 403",
+   "investors.progressive.com 403",
+   "newsroom.progressive.com 0",
+   "www.progressive.com 200"
+  ]
+ },
+ "76334": {
+  "cik": 76334,
+  "ticker": "PH",
+  "name": "PARKER HANNIFIN CORP",
+  "site": "http://www.parker.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.parker.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-14"
+ },
+ "822416": {
+  "cik": 822416,
+  "ticker": "PHM",
+  "name": "PULTEGROUP INC",
+  "site": "http://pulte.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.pulte.com 200"
+  ]
+ },
+ "75677": {
+  "cik": 75677,
+  "ticker": "PKG",
+  "name": "PACKAGING CORP OF AMERICA",
+  "site": "https://www.packagingcorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.packagingcorp.com 0",
+   "www.packagingcorp.com 200"
+  ]
+ },
+ "1045609": {
+  "cik": 1045609,
+  "ticker": "PLD",
+  "name": "PROLOGIS INC",
+  "site": "https://www.prologis.com/",
+  "checked": "2026-10-19",
+  "feed": "https://ir.prologis.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "1321655": {
+  "cik": 1321655,
+  "ticker": "PLTR",
+  "name": "PALANTIR TECHNOLOGIES INC A",
+  "site": "https://www.palantir.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.palantir.com 200",
+   "www.palantir.com 200"
+  ]
+ },
+ "1413329": {
+  "cik": 1413329,
+  "ticker": "PM",
+  "name": "PHILIP MORRIS INTERNATIONAL",
+  "site": "https://www.pmi.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.pmi.com 200",
+   "www.pmi.com 200"
+  ]
+ },
+ "713676": {
+  "cik": 713676,
+  "ticker": "PNC",
+  "name": "PNC FINANCIAL SERVICES GROUP",
+  "site": "https://www.pnc.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.pnc.com/news-events/financial-press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "77360": {
+  "cik": 77360,
+  "ticker": "PNR",
+  "name": "PENTAIR PLC",
+  "site": "http://www.pentair.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.pentair.com 0",
+   "www.pentair.com 200"
+  ]
+ },
+ "764622": {
+  "cik": 764622,
+  "ticker": "PNW",
+  "name": "PINNACLE WEST CAPITAL",
+  "site": "http://www.pinnaclewest.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.pinnaclewest.com 403"
+  ]
+ },
+ "1145197": {
+  "cik": 1145197,
+  "ticker": "PODD",
+  "name": "INSULET CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "79879": {
+  "cik": 79879,
+  "ticker": "PPG",
+  "name": "PPG INDUSTRIES INC",
+  "site": "https://www.ppg.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.ppg.com 403",
+   "newsroom.ppg.com 403",
+   "news.ppg.com 403",
+   "www.ppg.com 200"
+  ]
+ },
+ "922224": {
+  "cik": 922224,
+  "ticker": "PPL",
+  "name": "PPL CORP",
+  "site": "http://www.pplweb.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.pplweb.com/investor-news?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-09-24"
+ },
+ "1137774": {
+  "cik": 1137774,
+  "ticker": "PRU",
+  "name": "PRUDENTIAL FINANCIAL INC",
+  "site": "http://prudential.com",
+  "checked": "2026-10-19",
+  "feed": "https://investor.prudential.com/news/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-09"
+ },
+ "1393311": {
+  "cik": 1393311,
+  "ticker": "PSA",
+  "name": "PUBLIC STORAGE",
+  "site": "https://www.publicstorage.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.publicstorage.com 403",
+   "www.publicstorage.com 200"
+  ]
+ },
+ "1534701": {
+  "cik": 1534701,
+  "ticker": "PSX",
+  "name": "PHILLIPS 66",
+  "site": "https://www.phillips66.com",
+  "checked": "2026-10-19",
+  "feed": "https://investor.phillips66.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-16"
+ },
+ "857005": {
+  "cik": 857005,
+  "ticker": "PTC",
+  "name": "PTC INC",
+  "site": "http://www.ptc.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.ptc.com 403",
+   "news.ptc.com 0",
+   "www.ptc.com 403"
+  ]
+ },
+ "1050915": {
+  "cik": 1050915,
+  "ticker": "PWR",
+  "name": "QUANTA SERVICES INC",
+  "site": "https://www.quantaservices.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.quantaservices.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "1633917": {
+  "cik": 1633917,
+  "ticker": "PYPL",
+  "name": "PAYPAL HOLDINGS INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "2058873": {
+  "cik": 2058873,
+  "ticker": "Q",
+  "name": "QNITY ELECTRONICS INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "804328": {
+  "cik": 804328,
+  "ticker": "QCOM",
+  "name": "QUALCOMM INC",
+  "site": "https://www.qualcomm.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.qualcomm.com 403",
+   "www.qualcomm.com 200"
+  ]
+ },
+ "884887": {
+  "cik": 884887,
+  "ticker": "RCL",
+  "name": "ROYAL CARIBBEAN CRUISES LTD",
+  "site": "https://www.royalcaribbeangroup.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.royalcaribbeangroup.com 200"
+  ]
+ },
+ "1713445": {
+  "cik": 1713445,
+  "ticker": "RDDT",
+  "name": "REDDIT INC CL A",
+  "site": "https://www.redditinc.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.redditinc.com 403",
+   "investors.redditinc.com 403",
+   "ir.redditinc.com 403",
+   "www.redditinc.com 200"
+  ]
+ },
+ "910606": {
+  "cik": 910606,
+  "ticker": "REG",
+  "name": "REGENCY CENTERS CORP",
+  "site": "http://www.regencycenters.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.regencycenters.com 0",
+   "www.regencycenters.com 200"
+  ]
+ },
+ "872589": {
+  "cik": 872589,
+  "ticker": "REGN",
+  "name": "REGENERON PHARMACEUTICALS",
+  "site": "https://www.regeneron.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.regeneron.com 0",
+   "newsroom.regeneron.com 0",
+   "www.regeneron.com 403"
+  ]
+ },
+ "1281761": {
+  "cik": 1281761,
+  "ticker": "RF",
+  "name": "REGIONS FINANCIAL CORP",
+  "site": "https://www.regions.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.regions.com 403",
+   "www.regions.com 200"
+  ]
+ },
+ "720005": {
+  "cik": 720005,
+  "ticker": "RJF",
+  "name": "RAYMOND JAMES FINANCIAL INC",
+  "site": "https://www.raymondjames.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.raymondjames.com 0"
+  ]
+ },
+ "1037038": {
+  "cik": 1037038,
+  "ticker": "RL",
+  "name": "RALPH LAUREN CORP",
+  "site": "https://www.ralphlauren.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.ralphlauren.com 0",
+   "news.ralphlauren.com 0",
+   "www.ralphlauren.com 403"
+  ]
+ },
+ "943819": {
+  "cik": 943819,
+  "ticker": "RMD",
+  "name": "RESMED INC",
+  "site": "http://www.resmed.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.resmed.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-01"
+ },
+ "1024478": {
+  "cik": 1024478,
+  "ticker": "ROK",
+  "name": "ROCKWELL AUTOMATION INC",
+  "site": "http://www.rockwellautomation.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.rockwellautomation.com 200",
+   "www.rockwellautomation.com 200"
+  ]
+ },
+ "84839": {
+  "cik": 84839,
+  "ticker": "ROL",
+  "name": "ROLLINS INC",
+  "site": "http://www.rollins.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.rollins.com/investors/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-07"
+ },
+ "882835": {
+  "cik": 882835,
+  "ticker": "ROP",
+  "name": "ROPER TECHNOLOGIES INC",
+  "site": "http://www.roperind.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.roperind.com 0",
+   "www.roperind.com 0"
+  ]
+ },
+ "745732": {
+  "cik": 745732,
+  "ticker": "ROST",
+  "name": "ROSS STORES INC",
+  "site": "https://www.rossstores.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.rossstores.com 0",
+   "www.rossstores.com 200"
+  ]
+ },
+ "1060391": {
+  "cik": 1060391,
+  "ticker": "RSG",
+  "name": "REPUBLIC SERVICES INC",
+  "site": "https://www.republicservices.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.republicservices.com 0",
+   "www.republicservices.com 200"
+  ]
+ },
+ "101829": {
+  "cik": 101829,
+  "ticker": "RTX",
+  "name": "RTX CORP",
+  "site": "https://www.rtx.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.rtx.com/rss-feeds/news",
+  "how": "found",
+  "items": 50,
+  "newest": "2026-10-15"
+ },
+ "31791": {
+  "cik": 31791,
+  "ticker": "RVTY",
+  "name": "REVVITY INC",
+  "site": "http://revvity.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.revvity.com 403",
+   "news.revvity.com 403",
+   "www.revvity.com 403"
+  ]
+ },
+ "1034054": {
+  "cik": 1034054,
+  "ticker": "SBAC",
+  "name": "SBA COMMUNICATIONS CORP",
+  "site": "http://www.sbasite.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.sbasite.com 403",
+   "www.sbasite.com 200"
+  ]
+ },
+ "829224": {
+  "cik": 829224,
+  "ticker": "SBUX",
+  "name": "STARBUCKS CORP",
+  "site": "https://www.starbucks.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.starbucks.com 403",
+   "news.starbucks.com 0",
+   "www.starbucks.com 200"
+  ]
+ },
+ "316709": {
+  "cik": 316709,
+  "ticker": "SCHW",
+  "name": "SCHWAB (CHARLES) CORP",
+  "site": "https://www.schwab.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.schwab.com 403",
+   "www.schwab.com 200"
+  ]
+ },
+ "89800": {
+  "cik": 89800,
+  "ticker": "SHW",
+  "name": "SHERWIN WILLIAMS CO/THE",
+  "site": "https://www.sherwin-williams.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.sherwin-williams.com 403",
+   "investors.sherwin-williams.com 403",
+   "ir.sherwin-williams.com 403",
+   "www.sherwin-williams.com 200"
+  ]
+ },
+ "91419": {
+  "cik": 91419,
+  "ticker": "SJM",
+  "name": "JM SMUCKER CO/THE",
+  "site": "https://www.jmsmucker.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.jmsmucker.com 403",
+   "www.jmsmucker.com 200"
+  ]
+ },
+ "2041610": {
+  "cik": 2041610,
+  "ticker": "SKYD",
+  "name": "SKYDANCE CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "87347": {
+  "cik": 87347,
+  "ticker": "SLB",
+  "name": "SLB LTD",
+  "site": "https://www.slb.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "newsroom.slb.com 200",
+   "www.slb.com 200"
+  ]
+ },
+ "1375365": {
+  "cik": 1375365,
+  "ticker": "SMCI",
+  "name": "SUPER MICRO COMPUTER INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "91440": {
+  "cik": 91440,
+  "ticker": "SNA",
+  "name": "SNAP ON INC",
+  "site": "http://www.snapon.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "news.snapon.com 502",
+   "www.snapon.com 0"
+  ]
+ },
+ "2023554": {
+  "cik": 2023554,
+  "ticker": "SNDK",
+  "name": "SANDISK CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "883241": {
+  "cik": 883241,
+  "ticker": "SNPS",
+  "name": "SYNOPSYS INC",
+  "site": "https://www.synopsys.com/",
+  "checked": "2026-10-19",
+  "feed": "https://news.synopsys.com/home?pagetemplate=rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-05"
+ },
+ "92122": {
+  "cik": 92122,
+  "ticker": "SO",
+  "name": "SOUTHERN CO/THE",
+  "site": "http://www.southerncompany.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.southerncompany.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-10"
+ },
+ "1964738": {
+  "cik": 1964738,
+  "ticker": "SOLV",
+  "name": "SOLVENTUM CORP",
+  "site": "https://www.solventum.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.solventum.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-15"
+ },
+ "1063761": {
+  "cik": 1063761,
+  "ticker": "SPG",
+  "name": "SIMON PROPERTY GROUP INC",
+  "site": "https://www.simon.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.simon.com 0",
+   "www.simon.com 200"
+  ]
+ },
+ "64040": {
+  "cik": 64040,
+  "ticker": "SPGI",
+  "name": "S+P GLOBAL INC",
+  "site": "https://www.spglobal.com/en",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.spglobal.com 403",
+   "www.spglobal.com 403"
+  ]
+ },
+ "1032208": {
+  "cik": 1032208,
+  "ticker": "SRE",
+  "name": "SEMPRA",
+  "site": "http://www.sempra.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.sempra.com 0",
+   "www.sempra.com 403"
+  ]
+ },
+ "1757898": {
+  "cik": 1757898,
+  "ticker": "STE",
+  "name": "STERIS PLC",
+  "site": "http://www.steris.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.steris.com 200"
+  ]
+ },
+ "1022671": {
+  "cik": 1022671,
+  "ticker": "STLD",
+  "name": "STEEL DYNAMICS INC",
+  "site": "http://www.steeldynamics.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.steeldynamics.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-08"
+ },
+ "93751": {
+  "cik": 93751,
+  "ticker": "STT",
+  "name": "STATE STREET CORP",
+  "site": "https://www.statestreet.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.statestreet.com 403",
+   "newsroom.statestreet.com 403",
+   "www.statestreet.com 200"
+  ]
+ },
+ "1137789": {
+  "cik": 1137789,
+  "ticker": "STX",
+  "name": "SEAGATE TECHNOLOGY HOLDINGS",
+  "site": "http://www.seagate.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.seagate.com 403",
+   "www.seagate.com 302"
+  ]
+ },
+ "16918": {
+  "cik": 16918,
+  "ticker": "STZ",
+  "name": "CONSTELLATION BRANDS INC A",
+  "site": "http://www.cbrands.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.cbrands.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-06"
+ },
+ "2005951": {
+  "cik": 2005951,
+  "ticker": "SW",
+  "name": "SMURFIT WESTROCK PLC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "93556": {
+  "cik": 93556,
+  "ticker": "SWK",
+  "name": "STANLEY BLACK + DECKER INC",
+  "site": "http://www.stanleyblackanddecker.com",
+  "checked": "2026-10-19",
+  "feed": "https://ir.stanleyblackanddecker.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-09-23"
+ },
+ "4127": {
+  "cik": 4127,
+  "ticker": "SWKS",
+  "name": "SKYWORKS SOLUTIONS INC",
+  "site": "https://www.skyworksinc.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.skyworksinc.com 0",
+   "www.skyworksinc.com 200"
+  ]
+ },
+ "1601712": {
+  "cik": 1601712,
+  "ticker": "SYF",
+  "name": "SYNCHRONY FINANCIAL",
+  "site": "https://www.synchronybank.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.synchronybank.com 403"
+  ]
+ },
+ "310764": {
+  "cik": 310764,
+  "ticker": "SYK",
+  "name": "STRYKER CORP",
+  "site": "https://stryker.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.stryker.com 403",
+   "www.stryker.com 200"
+  ]
+ },
+ "96021": {
+  "cik": 96021,
+  "ticker": "SYY",
+  "name": "SYSCO CORP",
+  "site": "https://www.sysco.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.sysco.com/site-services/rss/news-releases",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "732717": {
+  "cik": 732717,
+  "ticker": "T",
+  "name": "AT+T INC",
+  "site": "https://www.att.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.att.com 429",
+   "news.att.com 404",
+   "www.att.com 200"
+  ]
+ },
+ "1260221": {
+  "cik": 1260221,
+  "ticker": "TDG",
+  "name": "TRANSDIGM GROUP INC",
+  "site": "http://www.transdigm.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.transdigm.com 403"
+  ]
+ },
+ "1094285": {
+  "cik": 1094285,
+  "ticker": "TDY",
+  "name": "TELEDYNE TECHNOLOGIES INC",
+  "site": "http://www.teledyne.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.teledyne.com 200"
+  ]
+ },
+ "842023": {
+  "cik": 842023,
+  "ticker": "TECH",
+  "name": "BIO TECHNE CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1385157": {
+  "cik": 1385157,
+  "ticker": "TEL",
+  "name": "TE CONNECTIVITY PLC",
+  "site": "http://www.te.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.te.com 403",
+   "newsroom.te.com 200",
+   "www.te.com 200"
+  ]
+ },
+ "97210": {
+  "cik": 97210,
+  "ticker": "TER",
+  "name": "TERADYNE INC",
+  "site": "https://www.teradyne.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.teradyne.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "92230": {
+  "cik": 92230,
+  "ticker": "TFC",
+  "name": "TRUIST FINANCIAL CORP",
+  "site": "https://www.truist.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.truist.com 200",
+   "www.truist.com 200"
+  ]
+ },
+ "27419": {
+  "cik": 27419,
+  "ticker": "TGT",
+  "name": "TARGET CORP",
+  "site": "https://www.target.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.target.com 200",
+   "www.target.com 200"
+  ]
+ },
+ "109198": {
+  "cik": 109198,
+  "ticker": "TJX",
+  "name": "TJX COMPANIES INC",
+  "site": "http://www.tjx.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.tjx.com 0",
+   "www.tjx.com 200"
+  ]
+ },
+ "1973266": {
+  "cik": 1973266,
+  "ticker": "TKO",
+  "name": "TKO GROUP HOLDINGS INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "97745": {
+  "cik": 97745,
+  "ticker": "TMO",
+  "name": "THERMO FISHER SCIENTIFIC INC",
+  "site": "https://www.thermofisher.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.thermofisher.com 403",
+   "newsroom.thermofisher.com 403",
+   "news.thermofisher.com 0",
+   "www.thermofisher.com 0"
+  ]
+ },
+ "1283699": {
+  "cik": 1283699,
+  "ticker": "TMUS",
+  "name": "T MOBILE US INC",
+  "site": "https://www.t-mobile.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.t-mobile.com 403",
+   "newsroom.t-mobile.com 403",
+   "www.t-mobile.com 403"
+  ]
+ },
+ "1811074": {
+  "cik": 1811074,
+  "ticker": "TPL",
+  "name": "TEXAS PACIFIC LAND CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1116132": {
+  "cik": 1116132,
+  "ticker": "TPR",
+  "name": "TAPESTRY INC",
+  "site": "https://www.coach.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.coach.com 403"
+  ]
+ },
+ "1389170": {
+  "cik": 1389170,
+  "ticker": "TRGP",
+  "name": "TARGA RESOURCES CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "864749": {
+  "cik": 864749,
+  "ticker": "TRMB",
+  "name": "TRIMBLE INC",
+  "site": "http://www.trimble.com",
+  "checked": "2026-10-19",
+  "feed": "https://news.trimble.com/news-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 25,
+  "newest": "2026-09-29"
+ },
+ "1113169": {
+  "cik": 1113169,
+  "ticker": "TROW",
+  "name": "T ROWE PRICE GROUP INC",
+  "site": "http://www.troweprice.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.troweprice.com 0",
+   "ir.troweprice.com 0",
+   "www.troweprice.com 200"
+  ]
+ },
+ "86312": {
+  "cik": 86312,
+  "ticker": "TRV",
+  "name": "TRAVELERS COS INC/THE",
+  "site": "http://www.travelers.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.travelers.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-16"
+ },
+ "916365": {
+  "cik": 916365,
+  "ticker": "TSCO",
+  "name": "TRACTOR SUPPLY COMPANY",
+  "site": "http://www.tractorsupply.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.tractorsupply.com 403",
+   "www.tractorsupply.com 0"
+  ]
+ },
+ "1318605": {
+  "cik": 1318605,
+  "ticker": "TSLA",
+  "name": "TESLA INC",
+  "site": "https://www.tesla.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.tesla.com 403",
+   "www.tesla.com 403"
+  ]
+ },
+ "100493": {
+  "cik": 100493,
+  "ticker": "TSN",
+  "name": "TYSON FOODS INC CL A",
+  "site": "http://www.tyson.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.tyson.com 403",
+   "www.tyson.com 200"
+  ]
+ },
+ "1466258": {
+  "cik": 1466258,
+  "ticker": "TT",
+  "name": "TRANE TECHNOLOGIES PLC",
+  "site": "http://www.ingersollrand.com",
+  "checked": "2026-10-19",
+  "feed": "https://investors.irco.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-08"
+ },
+ "946581": {
+  "cik": 946581,
+  "ticker": "TTWO",
+  "name": "TAKE TWO INTERACTIVE SOFTWRE",
+  "site": "http://www.take2games.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.take2games.com 200",
+   "www.take2games.com 200"
+  ]
+ },
+ "1447669": {
+  "cik": 1447669,
+  "ticker": "TWLO",
+  "name": "TWILIO INC   A",
+  "site": "http://www.authy.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.authy.com 200"
+  ]
+ },
+ "97476": {
+  "cik": 97476,
+  "ticker": "TXN",
+  "name": "TEXAS INSTRUMENTS INC",
+  "site": "http://ti.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.ti.com 0",
+   "news.ti.com 200",
+   "www.ti.com 200"
+  ]
+ },
+ "217346": {
+  "cik": 217346,
+  "ticker": "TXT",
+  "name": "TEXTRON INC",
+  "site": "https://www.textron.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.textron.com 403",
+   "www.textron.com 200"
+  ]
+ },
+ "860731": {
+  "cik": 860731,
+  "ticker": "TYL",
+  "name": "TYLER TECHNOLOGIES INC",
+  "site": "https://tylertech.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.tylertech.com 403",
+   "www.tylertech.com 200"
+  ]
+ },
+ "100517": {
+  "cik": 100517,
+  "ticker": "UAL",
+  "name": "UNITED AIRLINES HOLDINGS INC",
+  "site": "https://ir.united.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.united.com 0",
+   "newsroom.united.com 0",
+   "www.united.com 0"
+  ]
+ },
+ "1543151": {
+  "cik": 1543151,
+  "ticker": "UBER",
+  "name": "UBER TECHNOLOGIES INC",
+  "site": "https://www.uber.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.uber.com 403",
+   "newsroom.uber.com 406",
+   "www.uber.com 406"
+  ]
+ },
+ "74208": {
+  "cik": 74208,
+  "ticker": "UDR",
+  "name": "UDR INC",
+  "site": "http://www.udr.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.udr.com 403",
+   "www.udr.com 200"
+  ]
+ },
+ "352915": {
+  "cik": 352915,
+  "ticker": "UHS",
+  "name": "UNIVERSAL HEALTH SERVICES B",
+  "site": "http://www.uhsinc.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.uhsinc.com 0",
+   "www.uhsinc.com 403"
+  ]
+ },
+ "1403568": {
+  "cik": 1403568,
+  "ticker": "ULTA",
+  "name": "ULTA BEAUTY INC",
+  "site": "https://www.ulta.com/",
+  "checked": "2026-10-19",
+  "feed": "https://www.ulta.com/investor/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-14"
+ },
+ "731766": {
+  "cik": 731766,
+  "ticker": "UNH",
+  "name": "UNITEDHEALTH GROUP INC",
+  "site": "https://www.uhc.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "newsroom.uhc.com 200",
+   "www.uhc.com 200"
+  ]
+ },
+ "100885": {
+  "cik": 100885,
+  "ticker": "UNP",
+  "name": "UNION PACIFIC CORP",
+  "site": "http://www.up.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.up.com 200"
+  ]
+ },
+ "1090727": {
+  "cik": 1090727,
+  "ticker": "UPS",
+  "name": "UNITED PARCEL SERVICE CL B",
+  "site": "https://www.ups.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.ups.com/news-events/press-releases/rss",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "1067701": {
+  "cik": 1067701,
+  "ticker": "URI",
+  "name": "UNITED RENTALS INC",
+  "site": "https://www.unitedrentals.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investors.unitedrentals.com/rss/pressrelease.aspx",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-08"
+ },
+ "36104": {
+  "cik": 36104,
+  "ticker": "USB",
+  "name": "US BANCORP",
+  "site": "https://www.usbank.com/about-us-bank.html",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.usbank.com 403",
+   "news.usbank.com 0",
+   "www.usbank.com 200"
+  ]
+ },
+ "1403161": {
+  "cik": 1403161,
+  "ticker": "V",
+  "name": "VISA INC CLASS A SHARES",
+  "site": "https://corporate.visa.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.visa.com 403",
+   "www.visa.com 200"
+  ]
+ },
+ "1393052": {
+  "cik": 1393052,
+  "ticker": "VEEV",
+  "name": "VEEVA SYSTEMS INC CLASS A",
+  "site": "https://www.veeva.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.veeva.com 403",
+   "www.veeva.com 200"
+  ]
+ },
+ "1705696": {
+  "cik": 1705696,
+  "ticker": "VICI",
+  "name": "VICI PROPERTIES INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1035002": {
+  "cik": 1035002,
+  "ticker": "VLO",
+  "name": "VALERO ENERGY CORP",
+  "site": "https://www.valero.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.valero.com 0",
+   "www.valero.com 200"
+  ]
+ },
+ "1967680": {
+  "cik": 1967680,
+  "ticker": "VLTO",
+  "name": "VERALTO CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1396009": {
+  "cik": 1396009,
+  "ticker": "VMC",
+  "name": "VULCAN MATERIALS CO",
+  "site": "https://www.vulcanmaterials.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.vulcanmaterials.com 200",
+   "www.vulcanmaterials.com 200"
+  ]
+ },
+ "906107": {
+  "cik": 906107,
+  "ticker": "VMRK",
+  "name": "VIVMARK RESIDENTIAL",
+  "site": "https://www.equityapartments.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.equityapartments.com 403",
+   "www.equityapartments.com 403"
+  ]
+ },
+ "1442145": {
+  "cik": 1442145,
+  "ticker": "VRSK",
+  "name": "VERISK ANALYTICS INC",
+  "site": "http://www.verisk.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.verisk.com 403",
+   "www.verisk.com 200"
+  ]
+ },
+ "1014473": {
+  "cik": 1014473,
+  "ticker": "VRSN",
+  "name": "VERISIGN INC",
+  "site": "https://www.verisign.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.verisign.com 0",
+   "www.verisign.com 200"
+  ]
+ },
+ "1674101": {
+  "cik": 1674101,
+  "ticker": "VRT",
+  "name": "VERTIV HOLDINGS CO A",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "875320": {
+  "cik": 875320,
+  "ticker": "VRTX",
+  "name": "VERTEX PHARMACEUTICALS INC",
+  "site": "https://www.vrtx.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.vrtx.com 0",
+   "news.vrtx.com 0",
+   "www.vrtx.com 403"
+  ]
+ },
+ "1692819": {
+  "cik": 1692819,
+  "ticker": "VST",
+  "name": "VISTRA CORP",
+  "site": "https://www.vistracorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.vistracorp.com 200",
+   "www.vistracorp.com 0"
+  ]
+ },
+ "740260": {
+  "cik": 740260,
+  "ticker": "VTR",
+  "name": "VENTAS INC",
+  "site": "http://www.ventasreit.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.ventasreit.com 403",
+   "www.ventasreit.com 200"
+  ]
+ },
+ "1792044": {
+  "cik": 1792044,
+  "ticker": "VTRS",
+  "name": "VIATRIS INC",
+  "site": "https://www.viatris.com/en",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.viatris.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 15,
+  "newest": "2026-10-16"
+ },
+ "2128626": {
+  "cik": 2128626,
+  "ticker": "VYLR",
+  "name": "VYLOR INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "732712": {
+  "cik": 732712,
+  "ticker": "VZ",
+  "name": "VERIZON COMMUNICATIONS INC",
+  "site": "https://www.verizon.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.verizon.com 0",
+   "www.verizon.com 200"
+  ]
+ },
+ "943452": {
+  "cik": 943452,
+  "ticker": "WAB",
+  "name": "WABTEC CORP",
+  "site": "https://www.wabteccorp.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.wabteccorp.com 0",
+   "www.wabteccorp.com 200"
+  ]
+ },
+ "1000697": {
+  "cik": 1000697,
+  "ticker": "WAT",
+  "name": "WATERS CORP",
+  "site": "http://www.waters.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.waters.com 403",
+   "www.waters.com 0"
+  ]
+ },
+ "1327811": {
+  "cik": 1327811,
+  "ticker": "WDAY",
+  "name": "WORKDAY INC CLASS A",
+  "site": "https://www.workday.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.workday.com/press-releases?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-10-13"
+ },
+ "106040": {
+  "cik": 106040,
+  "ticker": "WDC",
+  "name": "WESTERN DIGITAL CORP",
+  "site": "https://www.westerndigital.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.westerndigital.com 0",
+   "www.westerndigital.com 200"
+  ]
+ },
+ "783325": {
+  "cik": 783325,
+  "ticker": "WEC",
+  "name": "WEC ENERGY GROUP INC",
+  "site": "http://www.wisconsinenergy.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.wisconsinenergy.com 0"
+  ]
+ },
+ "766704": {
+  "cik": 766704,
+  "ticker": "WELL",
+  "name": "WELLTOWER INC",
+  "site": "https://welltower.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.welltower.com 200"
+  ]
+ },
+ "72971": {
+  "cik": 72971,
+  "ticker": "WFC",
+  "name": "WELLS FARGO + CO",
+  "site": "https://www.wellsfargo.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.wellsfargo.com 200"
+  ]
+ },
+ "823768": {
+  "cik": 823768,
+  "ticker": "WM",
+  "name": "WASTE MANAGEMENT INC",
+  "site": "https://www.wm.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.wm.com 0",
+   "news.wm.com 200",
+   "www.wm.com 403"
+  ]
+ },
+ "107263": {
+  "cik": 107263,
+  "ticker": "WMB",
+  "name": "WILLIAMS COS INC",
+  "site": "http://www.williams.com",
+  "checked": "2026-10-19",
+  "feed": "https://www.williams.com/feed/",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "104169": {
+  "cik": 104169,
+  "ticker": "WMT",
+  "name": "WALMART INC",
+  "site": "https://www.walmart.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "news.walmart.com 0",
+   "www.walmart.com 200"
+  ]
+ },
+ "11544": {
+  "cik": 11544,
+  "ticker": "WRB",
+  "name": "WR BERKLEY CORP",
+  "site": "http://www.wrberkley.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "ir.wrberkley.com 0",
+   "www.wrberkley.com 200"
+  ]
+ },
+ "719955": {
+  "cik": 719955,
+  "ticker": "WSM",
+  "name": "WILLIAMS SONOMA INC",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "105770": {
+  "cik": 105770,
+  "ticker": "WST",
+  "name": "WEST PHARMACEUTICAL SERVICES",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1140536": {
+  "cik": 1140536,
+  "ticker": "WTW",
+  "name": "WILLIS TOWERS WATSON PLC",
+  "site": "https://www.wtwco.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.wtwco.com 0",
+   "www.wtwco.com 429"
+  ]
+ },
+ "106535": {
+  "cik": 106535,
+  "ticker": "WY",
+  "name": "WEYERHAEUSER CO",
+  "site": "http://www.weyerhaeuser.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.weyerhaeuser.com/news-room?pagetemplate=rss",
+  "how": "found",
+  "items": 5,
+  "newest": "2026-09-24"
+ },
+ "1174922": {
+  "cik": 1174922,
+  "ticker": "WYNN",
+  "name": "WYNN RESORTS LTD",
+  "site": "https://www.wynnresorts.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.wynnresorts.com 0",
+   "newsroom.wynnresorts.com 200",
+   "www.wynnresorts.com 200"
+  ]
+ },
+ "72903": {
+  "cik": 72903,
+  "ticker": "XEL",
+  "name": "XCEL ENERGY INC",
+  "site": "https://my.xcelenergy.com/",
+  "checked": "2026-10-19",
+  "feed": "https://newsroom.xcelenergy.com/releases.xml",
+  "how": "found",
+  "items": 20,
+  "newest": "2026-10-12"
+ },
+ "2115436": {
+  "cik": 2115436,
+  "ticker": "XOM",
+  "name": "EXXONMOBIL HOLDINGS CORP",
+  "site": null,
+  "feed": null,
+  "how": "no website",
+  "checked": "2026-10-19"
+ },
+ "1524472": {
+  "cik": 1524472,
+  "ticker": "XYL",
+  "name": "XYLEM INC",
+  "site": "http://www.xylem.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "www.xylem.com 200"
+  ]
+ },
+ "1512673": {
+  "cik": 1512673,
+  "ticker": "XYZ",
+  "name": "BLOCK INC",
+  "site": "https://block.xyz/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.block.xyz 403",
+   "www.block.xyz 200"
+  ]
+ },
+ "1041061": {
+  "cik": 1041061,
+  "ticker": "YUM",
+  "name": "YUM  BRANDS INC",
+  "site": "https://yum.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.yum.com 403",
+   "yumnews.yum.com 200",
+   "www.yum.com 0"
+  ]
+ },
+ "1136869": {
+  "cik": 1136869,
+  "ticker": "ZBH",
+  "name": "ZIMMER BIOMET HOLDINGS INC",
+  "site": "http://www.zimmer.com/",
+  "checked": "2026-10-19",
+  "feed": "https://investor.zimmerbiomet.com/rss/news.xml",
+  "how": "found",
+  "items": 10,
+  "newest": "2026-10-13"
+ },
+ "877212": {
+  "cik": 877212,
+  "ticker": "ZBRA",
+  "name": "ZEBRA TECHNOLOGIES CORP CL A",
+  "site": "https://www.zebra.com/",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investors.zebra.com 403",
+   "www.zebra.com 200"
+  ]
+ },
+ "1555280": {
+  "cik": 1555280,
+  "ticker": "ZTS",
+  "name": "ZOETIS INC",
+  "site": "http://www.zoetis.com",
+  "checked": "2026-10-19",
+  "feed": null,
+  "how": "not found",
+  "tried": [
+   "investor.zoetis.com 403",
+   "news.zoetis.com 403",
+   "www.zoetis.com 200"
+  ]
+ }
+}

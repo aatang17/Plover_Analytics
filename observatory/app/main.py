@@ -9,7 +9,7 @@ import os
 import pathlib
 import threading
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import Headers
@@ -53,6 +53,12 @@ from .risk_api import router as risk_router  # noqa: E402
 from . import sec_api  # noqa: E402
 from .sec_api import router as sec_router  # noqa: E402
 from .sec_deep_api import router as sec_deep_router  # noqa: E402
+from .sec_insiders_api import router as sec_insiders_router  # noqa: E402
+from .sec_13f_api import router as sec_13f_router  # noqa: E402
+from .sec_calendar_api import router as sec_calendar_router  # noqa: E402
+from .us_prices_api import router as us_prices_router  # noqa: E402
+from .us_ask_api import router as us_ask_router  # noqa: E402
+from .us_press_api import router as us_press_router  # noqa: E402
 from .us_pay_api import router as us_pay_router  # noqa: E402
 from .catalog_api import router as catalog_router  # noqa: E402
 from .nav_preview import router as nav_preview_router  # noqa: E402
@@ -134,7 +140,16 @@ async def lifespan(app):
     # /catalog/health — never a reason for the port not to open.
     registry.bind(app)
     # The Data menu's previews too: every page header fetches them on first open.
-    await cache.warm(app, api.warm_paths() + ["/api/v1/catalog/previews"])
+    paths = api.warm_paths() + ["/api/v1/catalog/previews"]
+    # WARM_SERIES_LATER=1 (the DigitalOcean server) builds the full series
+    # lists just after the port opens instead of before: they are 46 of the
+    # 64 s this takes (measured 2026-10-11), and there a deploy waits for it
+    # while the old copy goes on serving. Railway still builds everything first.
+    later = []
+    if os.environ.get("WARM_SERIES_LATER", "").strip().lower() in ("1", "true", "yes", "on"):
+        later = [p for p in paths if p.endswith("/series")]
+        paths = [p for p in paths if not p.endswith("/series")]
+    await cache.warm(app, paths)
     # WARM_PAGES=1 also builds every page once before the port answers (the
     # DigitalOcean server, where the previous copy serves meanwhile). The
     # 2026-10-10 trial: a fresh copy took 1.3-8 s over the home and company
@@ -145,6 +160,10 @@ async def lifespan(app):
     # The series search reads every dataset's series list; load them once in
     # the background, after the port is open, so boot is not held up.
     threading.Thread(target=tools_v2.warm_search, name="warm-search", daemon=True).start()
+    # The US stock box's ratios, price repairs and name indexes, rebuilt whenever
+    # the SEC database is swapped (app/stock_recipes.warm_forever).
+    from . import stock_recipes
+    threading.Thread(target=stock_recipes.warm_forever, name="warm-us-stocks", daemon=True).start()
     # Watches ingest health for as long as we serve, and — only under
     # start.sh, which sets REFRESH_SUPERVISED — ends the process once a day so
     # the supervisor can re-run the ingests. See refresh.py.
@@ -155,6 +174,8 @@ async def lifespan(app):
     # DigitalOcean server), so two copies of the site overlapping during a
     # deploy never back up twice.
     tasks = [task]
+    if later:
+        tasks.append(asyncio.ensure_future(_warm_when_released(app, later)))
     if os.environ.get("WEB_RUNS_BACKUPS", "1").strip().lower() not in ("0", "false", "no", "off"):
         tasks.append(asyncio.ensure_future(research_backup.loop()))
     try:
@@ -164,6 +185,24 @@ async def lifespan(app):
             t.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await t
+
+
+async def _warm_when_released(app, paths):
+    """Build the deferred series lists once deploy.sh has released this copy
+    (READY_GATE), or straight away without the gate. Built while deploy.sh is
+    still checking the copy, they took the processor its checks needed: the
+    smoke check stretched to ~50 s (2026-10-11)."""
+    if os.environ.get("READY_GATE", "").strip().lower() in ("1", "true", "yes", "on"):
+        for _ in range(1800):
+            if RELEASE_FLAG.exists():
+                break
+            await asyncio.sleep(1)
+    # one list at a time with a pause between, so readers arriving at a copy
+    # just released are not queued behind it (2026-10-11 trial: a cold company
+    # page took 8.6 s while all the lists were being built at once)
+    for path in paths:
+        await cache.warm(app, [path])
+        await asyncio.sleep(0.5)
 
 
 # The human reference is /api.html, rendered from this schema and the dataset
@@ -210,7 +249,9 @@ RELEASE_FLAG = pathlib.Path(os.environ.get("RELEASE_FLAG", "/tmp/plover-released
 
 @app.get("/healthz", include_in_schema=False)
 def healthz():
-    return Response("ok\n", media_type="text/plain")
+    # names the container, so deploy.sh can see through Caddy which copy
+    # readers are reaching before it stops the other one
+    return Response("ok %s\n" % os.environ.get("HOSTNAME", ""), media_type="text/plain")
 
 
 @app.get("/healthz/ready", include_in_schema=False)
@@ -270,6 +311,12 @@ app.include_router(equity_router)
 # router for the same reason as the equity ones.
 app.include_router(sec_router)
 app.include_router(sec_deep_router)
+app.include_router(sec_insiders_router)
+app.include_router(sec_13f_router)
+app.include_router(sec_calendar_router)
+app.include_router(us_prices_router)
+app.include_router(us_ask_router)
+app.include_router(us_press_router)
 app.include_router(us_pay_router)
 # The catalog of manifests ahead of the core router, so its literal
 # /api/v1/catalog/… paths can never be shadowed by /{dataset}/… catch-alls.
@@ -326,4 +373,14 @@ if assistant.enabled():
 # the mount answers every remaining path and would 404 both.
 app.include_router(seo_router)
 app.include_router(answers_router)
+
+
+# The ask box became the home page on 2026-10-19. Answers already shared as
+# us-stocks.html?q=... or ?t=... land on the same answer at /, permanently.
+@app.get("/us-stocks.html", include_in_schema=False)
+def us_stocks_moved(request: Request):
+    query = request.url.query
+    return RedirectResponse("/" + ("?" + query if query else ""), status_code=301)
+
+
 app.mount("/", RevalidatedStatic(directory=str(WEB_DIR), html=True), name="web")

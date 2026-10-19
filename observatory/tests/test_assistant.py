@@ -163,7 +163,7 @@ class AssistantTests(unittest.TestCase):
         cls._slack = delivery.slack
         runner.tools_v2.descriptors = lambda: TOOLS
         runner.tools_v2.run_tool = fake_run_tool
-        runner.tools_v2.instructions = lambda: "canned instructions"
+        runner.tools_v2.instructions = lambda compact=False: "canned instructions"
         aapi.tools_v2.search = fake_search
         app = FastAPI()
         app.include_router(accounts.router)

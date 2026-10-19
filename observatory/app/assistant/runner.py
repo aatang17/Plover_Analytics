@@ -14,10 +14,11 @@ Runs synchronously and is safe to call from a request thread or from the CLI
 import argparse
 import datetime
 import json
+import re
 import sys
 import time
 
-from .. import tools_v2
+from .. import analysis, tools_v2
 from . import (charts, codex, digest, drive, gateway, keychain, market_data, mcp_client,
                memory, specialists, store)
 
@@ -73,6 +74,7 @@ ACTION_SCHEMAS = [
          "content": {"type": "string"}},
          "required": ["path", "content"]}},
     charts.SCHEMA,
+    analysis.tool_for("study"),
 ]
 ACTION_BY_NAME = dict((s["name"], s) for s in ACTION_SCHEMAS)
 
@@ -124,11 +126,27 @@ def tool_schemas(allowlist):
     return out
 
 
+LEAN_DATA = ("Plover holds official statistics and company filings for Japan, the United States "
+             "and Hong Kong as named series, addressed dataset:code. search finds a series by "
+             "name; list_datasets names every dataset; describe_dataset lists one dataset's codes.")
+
+
 def _system_prompt(spec, coverage, last_summary):
     today = datetime.date.today().isoformat()
-    lines = ["You are %s, a specialist on an investor's desk. Today is %s." % (spec["name"], today),
+    if spec.get("lean"):
+        # A lean role (the Study Analyst) is not sent the catalogue of every
+        # dataset, which is three-quarters of a normal prompt and re-sent on
+        # every step: it finds series by search. What changes from day to day
+        # comes last, so the provider's cache reads the fixed part each time.
+        return "\n\n".join(["You are %s, a specialist on an investor's desk." % spec["name"],
+                             "Your brief: " + spec["brief"], RULES, LEAN_DATA,
+                             "Today is %s." % today])
+    # Every other role gets the datasets named in a line each, not described
+    # in a paragraph each: the description is re-sent on every step, and
+    # describe_dataset is a call away when one is needed. The date goes last.
+    lines = ["You are %s, a specialist on an investor's desk." % spec["name"],
              "", "Your brief: " + spec["brief"], "", RULES, "",
-             "Where the data comes from: " + tools_v2.instructions()]
+             "Where the data comes from: " + tools_v2.instructions(compact=True)]
     if coverage:
         lines.append("")
         lines.append("The desk's coverage list: " + "; ".join(
@@ -139,6 +157,8 @@ def _system_prompt(spec, coverage, last_summary):
     if last_summary:
         lines.append("")
         lines.append("What you found last time: " + last_summary[:1500])
+    lines.append("")
+    lines.append("Today is %s." % today)
     return "\n".join(lines)
 
 
@@ -147,6 +167,12 @@ def _system_prompt(spec, coverage, last_summary):
 # vintage and truncation metadata, raw XBRL facts. A reader needs that once;
 # a model paying per token on every turn does not. Values, ids, dates, cite
 # URLs and the short `calc` labels stay; explanations and bulk go.
+# A lean role (the Study Analyst) needs codes, names and numbers from a
+# lookup, not a dataset's source, licence, page or capabilities.
+LEAN_DROP = ("source", "cite", "coverage", "capabilities", "endpoints", "keys", "page",
+             "provenance", "calc", "measures_note", "how", "frequency_note", "name_ja")
+LEAN_ROWS = 8
+LEAN_STR = 120
 DROP_KEYS = ("vintage", "truncated", "tool", "section", "shape", "sha256", "parser_version",
              "facts", "notes", "note", "daily_rows", "lifecycle_labels", "names_note")
 DROP_SUFFIX = "_note"
@@ -154,11 +180,15 @@ MAX_ROWS = 12
 MAX_STR = 240
 
 
-def _compact(obj, depth=0):
+def _compact(obj, depth=0, lean=False):
+    max_rows = LEAN_ROWS if lean else MAX_ROWS
+    max_str = LEAN_STR if lean else MAX_STR
     if isinstance(obj, dict):
         out = {}
         for k, v in obj.items():
             if k in DROP_KEYS or k.endswith(DROP_SUFFIX):
+                continue
+            if lean and k in LEAN_DROP:
                 continue
             # A financials row states each value under `values`, then again
             # as the raw filed lines with their XBRL element names: the same
@@ -167,13 +197,13 @@ def _compact(obj, depth=0):
                 continue
             if k == "provenance" and isinstance(v, dict):
                 v = dict((kk, vv) for kk, vv in v.items() if kk in ("trust", "document", "credit"))
-            cv = _compact(v, depth + 1)
+            cv = _compact(v, depth + 1, lean)
             if cv is None or cv == {} or cv == []:
                 continue
             out[k] = cv
         return out
     if isinstance(obj, list):
-        rows = [_compact(x, depth + 1) for x in obj[:MAX_ROWS]]
+        rows = [_compact(x, depth + 1, lean) for x in obj[:max_rows]]
         rows = [r for r in rows if r is not None]
         # A column that says the same thing on every row (the filer's name,
         # its code) is said once, at the top, not once per row.
@@ -184,17 +214,17 @@ def _compact(obj, depth=0):
                 hoisted = dict((k, rows[0][k]) for k in same)
                 rows = [dict((k, v) for k, v in r.items() if k not in same) for r in rows]
                 rows.insert(0, {"same_on_every_row": hoisted})
-        if len(obj) > MAX_ROWS:
-            rows.append("... %d more rows not shown; narrow the request" % (len(obj) - MAX_ROWS))
+        if len(obj) > max_rows:
+            rows.append("... %d more rows not shown; narrow the request" % (len(obj) - max_rows))
         return rows
     if obj is None or obj == "":
         return None
-    if isinstance(obj, str) and len(obj) > MAX_STR and depth > 0:
-        return obj[:MAX_STR] + "..."
+    if isinstance(obj, str) and len(obj) > max_str and depth > 0:
+        return obj[:max_str] + "..."
     return obj
 
 
-def compact_result(text):
+def compact_result(text, lean=False):
     """A tool result with the explanations stripped. Never changes a number."""
     try:
         data = json.loads(text)
@@ -202,7 +232,46 @@ def compact_result(text):
         return text
     if not isinstance(data, dict) or "error" in data:
         return text
-    return json.dumps(_compact(data), ensure_ascii=False)
+    return json.dumps(_compact(data, 0, lean), ensure_ascii=False)
+
+
+def _slim_schema(schema, limit=140):
+    """A tool's parameter schema with each parameter's description cut to its
+    first sentences: the schema is sent on every step of a run, and the full
+    wording is in the public MCP manual."""
+    if not isinstance(schema, dict):
+        return schema
+    out = {}
+    for k, v in schema.items():
+        if k in ("examples", "title", "$schema"):
+            continue
+        # a long enum (every dataset id, on several tools) repeats what the
+        # prompt's catalogue already says; the server still refuses a bad value
+        if k == "enum" and isinstance(v, list) and len(v) > 12:
+            continue
+        if k == "description" and isinstance(v, str):
+            out[k] = _short(v, limit)
+        elif isinstance(v, dict):
+            out[k] = _slim_schema(v, limit)
+        elif isinstance(v, list):
+            out[k] = [_slim_schema(x, limit) if isinstance(x, dict) else x for x in v]
+        else:
+            out[k] = v
+    return out
+
+
+def _short(description, limit=260):
+    """The first sentences of a tool description, within the limit: a lean
+    run is sent its tools on every step, and the long form is for readers."""
+    text = " ".join((description or "").split())
+    if len(text) <= limit:
+        return text
+    out = ""
+    for part in re.split(r"(?<=[.!?])\s+", text):
+        if out and len(out) + len(part) + 1 > limit:
+            break
+        out = (out + " " + part).strip()
+    return out or text[:limit]
 
 
 def _clip(text):
@@ -251,9 +320,14 @@ class Run(object):
         # Full results of this run's data calls, by call number: what a chart
         # is read from. The model sees a shortened copy; a chart never does.
         self.data_calls = {}
-        self.usage = {"in": 0, "out": 0}
+        self.usage = {"in": 0, "out": 0, "cached": 0}
         self.n_calls = 0
         self.run_id = None
+        # a role may cap its own run below the shared budget, never above it
+        self.budget = dict(BUDGET)
+        for k, v in (self.spec.get("budget") or {}).items():
+            if k in BUDGET and isinstance(v, (int, float)) and v < BUDGET[k]:
+                self.budget[k] = v
 
     # ---- action tools
 
@@ -301,6 +375,19 @@ class Run(object):
             self.approvals.append(a)
             return json.dumps({"approval_id": a["id"], "status": "pending",
                                "note": "A person will decide. Nothing has been sent."})
+        if name == "run_analysis":
+            # Run on the server; the full result is kept under this run (in the
+            # database, as a Codex run serves tools from another process) and the
+            # model is shown a preview and the figures it asked for.
+            try:
+                result = analysis.execute(args)
+            except analysis.AnalysisError as exc:
+                return _fail(str(exc))
+            store.add_analysis(self.account_id, self.run_id, result)
+            out = analysis.brief(result)
+            out["kept"] = ("Every row is kept with this study and its chart is drawn from them; "
+                           "state only the figures the answer needs.")
+            return json.dumps(out, ensure_ascii=False, default=str)
         if name == "write_workspace_file":
             path = (args.get("path") or "").strip().lstrip("/")
             content = args.get("content")
@@ -353,12 +440,12 @@ class Run(object):
         try:
             full = json.loads(text)
         except (TypeError, ValueError):
-            return compact_result(text)
+            return compact_result(text, self.spec.get("lean"))
         if not isinstance(full, dict):
-            return compact_result(text)
+            return compact_result(text, self.spec.get("lean"))
         seq = self.n_calls + 1
         self.data_calls[seq] = {"seq": seq, "name": name, "args": args, "result": full}
-        short = json.loads(compact_result(text))
+        short = json.loads(compact_result(text, self.spec.get("lean")))
         return json.dumps(dict([("call", seq)] + list(short.items())), ensure_ascii=False)
 
     # ---- the loop
@@ -371,6 +458,7 @@ class Run(object):
         # research specialists take the main model.
         tier = self.spec.get("tier", "research")
         model = (desk.get("monitor_model") if tier == "monitor" else None) or \
+            (desk.get("study_model") if tier == "study" else None) or \
             desk["model_name"] or gateway.default_model(provider or "")
         self.run_id = store.start_run(self.account_id, self.hire["id"], self.spec["slug"],
                                       self.hire["version"], self.trigger, self.task, model)
@@ -404,12 +492,19 @@ class Run(object):
         tools = (tool_schemas(self.spec["tools"]) + [e["schema"] for e in self.ext.values()]
                  + [t for t in drive.TOOL_SCHEMAS if t["name"] in self.drive] + self.market
                  + (memory.TOOL_SCHEMAS if self.memory else []))
+        # The read tools' long descriptions are for readers (the public MCP
+        # manual); a run is sent its tools on every step, so it gets the first
+        # sentences. A role's own action tools are already worded for the model.
+        limit = 260 if self.spec.get("lean") else 420
+        tools = [dict(t, description=t["description"] if t["name"] in ACTION_BY_NAME else _short(t["description"], limit),
+                      parameters=_slim_schema(t.get("parameters") or {}))
+                 for t in tools]
 
         # Codex on the desk's ChatGPT plan: the same prompt and history, its
         # tool calls served and audited by codex_mcp under this run.
         if provider == codex.PROVIDER:
             text, outcome, error = codex.run(self, messages, model or None,
-                                             BUDGET["seconds"])
+                                             self.budget["seconds"])
             self.n_calls = len(store.calls(self.run_id))
             self.charts = [c["id"] for c in store.charts_for_run(self.run_id)]
             return self._finish(outcome, text, error)
@@ -418,11 +513,11 @@ class Run(object):
         text = ""
         outcome = "done"
         error = None
-        for _ in range(BUDGET["iterations"]):
-            if time.time() - started > BUDGET["seconds"]:
+        for _ in range(self.budget["iterations"]):
+            if time.time() - started > self.budget["seconds"]:
                 outcome, error = "budget", "The run hit its time budget before finishing."
                 break
-            if self.usage["in"] + self.usage["out"] > BUDGET["tokens"]:
+            if self.usage["in"] + self.usage["out"] > self.budget["tokens"]:
                 outcome, error = "budget", "The run hit its token budget before finishing."
                 break
             try:
@@ -432,13 +527,14 @@ class Run(object):
                 break
             self.usage["in"] += turn["usage"]["in"]
             self.usage["out"] += turn["usage"]["out"]
+            self.usage["cached"] += turn["usage"].get("cached") or 0
             if not turn["tool_calls"]:
                 text = turn["text"]
                 break
             messages.append({"role": "assistant", "content": turn["text"],
                              "tool_calls": turn["tool_calls"]})
             for tc in turn["tool_calls"]:
-                if self.n_calls >= BUDGET["tool_calls"]:
+                if self.n_calls >= self.budget["tool_calls"]:
                     result, is_err = _fail("Tool-call budget exhausted; finish with what you have."), True
                 else:
                     t0 = time.time()
@@ -537,6 +633,7 @@ class Run(object):
             return self._result("failed", "", str(exc))
         self.usage["in"] += turn["usage"]["in"]
         self.usage["out"] += turn["usage"]["out"]
+        self.usage["cached"] += turn["usage"].get("cached") or 0
         text = turn["text"].strip() or brief
         self.posts.append(store.add_post(self.account_id, self.spec["slug"], text,
                                          hire_id=self.hire["id"], run_id=self.run_id, refs=refs))
@@ -575,6 +672,7 @@ def run(account_id, hire, trigger, task, history=None, mode="desk", remember=Fal
 
 def _cli(argv):
     ap = argparse.ArgumentParser(description="Run specialists outside the API process.")
+    ap.add_argument("--studies", action="store_true", help="re-run the studies whose refresh is due")
     ap.add_argument("--all", action="store_true",
                     help="run every enabled hire on every desk with its default task")
     ap.add_argument("--account", type=int, help="account id (with --slug)")
@@ -582,6 +680,10 @@ def _cli(argv):
     ap.add_argument("--task", help="override the task text")
     args = ap.parse_args(argv)
     jobs = []
+    if args.studies:
+        from . import api as assistant_api
+        print("studies refreshed: %d" % assistant_api.refresh_due_studies())
+        return
     if args.all:
         rows = store.conn().execute("SELECT DISTINCT account_id FROM ia_hires WHERE enabled = 1")
         for r in rows.fetchall():

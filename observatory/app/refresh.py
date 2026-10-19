@@ -404,6 +404,31 @@ def watch():
 
 # --- the loop ----------------------------------------------------------------
 
+def _refresh_studies():
+    """Studies set to refresh themselves (app/assistant/api.py): re-run the
+    due ones on the newest data. No AI; a failure is kept as a run that says
+    so. Nothing to do where the Assistant is off."""
+    try:
+        from .assistant import api as assistant_api
+        made = assistant_api.refresh_due_studies()
+    except Exception as exc:  # noqa: BLE001 — never let a study stop the watch
+        print("refresh: study refresh failed: %s" % exc)
+        return
+    if made:
+        print("refresh: %d stud%s refreshed on schedule" % (made, "y" if made == 1 else "ies"))
+
+
+def _poll_press():
+    """S&P 500 press releases (app/us_press.py): read every company's news
+    feed when US_PRESS_POLL_HOURS have passed since the last poll. Writes only
+    its own SQLite file; a failure is printed and the watch goes on."""
+    try:
+        from . import us_press
+        us_press.poll_if_due()
+    except Exception as exc:  # noqa: BLE001 — never let a newsroom stop the watch
+        print("refresh: press-release poll failed: %s" % exc)
+
+
 async def run():
     """Tick until cancelled: refresh on the clock, watch health in between."""
     if not enabled():
@@ -431,6 +456,8 @@ async def run():
             if time.time() >= next_watch:
                 next_watch = time.time() + HEALTH_EVERY_SECONDS
                 await run_in_threadpool(watch)
+                await run_in_threadpool(_refresh_studies)
+                await run_in_threadpool(_poll_press)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 — the loop outlives any one failure

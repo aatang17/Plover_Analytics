@@ -133,8 +133,13 @@ FIELDS = [
     ("cf_investing", "duration", ["NetCashProvidedByUsedInInvestingActivities"]),
     ("cf_financing", "duration", ["NetCashProvidedByUsedInFinancingActivities"]),
     ("capex", "duration", ["PaymentsToAcquirePropertyPlantAndEquipment"]),
-    ("dividends_paid", "duration", ["PaymentsOfDividends", "PaymentsOfDividendsCommonStock"]),
+    # dividends to common shareholders first: the all-in line also carries preferred dividends
+    ("dividends_paid", "duration", ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]),
     ("buybacks", "duration", ["PaymentsForRepurchaseOfCommonStock"]),
+    # the parts of a bank's or a landlord's revenue (sec_metrics.composite_revenue)
+    ("interest_income", "duration", ["InterestAndDividendIncomeOperating"]),
+    ("noninterest_income", "duration", ["NoninterestIncome"]),
+    ("lease_income", "duration", ["OperatingLeaseLeaseIncome"]),
     ("shares_outstanding", "instant",
      ["EntityCommonStockSharesOutstanding", "CommonStockSharesOutstanding"]),
 ]
@@ -150,6 +155,7 @@ SCREEN_FIELDS = ("revenue", "operating_income", "net_income", "total_assets",
 STALE_AFTER_DAYS = 130
 
 _CIK_RE = re.compile(r"^(?:cik:)?0*(\d{1,10})$", re.I)
+_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9-]{0,9}$")   # a ticker starts with a letter; "7203x" is neither
 
 
 # ---- reader ----------------------------------------------------------------
@@ -202,6 +208,45 @@ def parse_cik(value):
     if not m:
         raise HTTPException(400, "give a CIK (digits, optionally written cik:NNN), e.g. 320193")
     return int(m.group(1))
+
+
+def _has(cur, table):
+    return bool(cur.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = ?",
+                            [table]).fetchone()[0])
+
+
+def resolve_company(cur, value):
+    """A CIK ('320193', 'cik:320193') or a ticker ('AAPL', 'brk-b') -> CIK.
+
+    Tickers come from the SEC's own company_tickers_exchange.json, loaded by
+    equity/sec_universe.py into sec_companies; a share-class ticker (GOOG,
+    GOOGL) resolves to the one filer. Unknown is 404, not a guess."""
+    raw = (value or "").strip()
+    m = _CIK_RE.match(raw)
+    if m and (raw.lower().startswith("cik:") or raw.isdigit()):
+        return int(m.group(1))
+    t = raw.upper().replace(".", "-")
+    if not _TICKER_RE.match(t) or not _has(cur, "sec_companies"):
+        raise HTTPException(400, "give a CIK (digits, optionally cik:NNN) or a ticker, e.g. AAPL")
+    row = cur.execute("""
+        SELECT cik FROM sec_companies
+        WHERE ticker = ? OR list_contains(string_split(tickers, ','), ?)
+        ORDER BY (ticker = ?) DESC LIMIT 1""", [t, t, t]).fetchone()
+    if not row:
+        raise HTTPException(404, "no SEC filer with ticker %s" % t)
+    return int(row[0])
+
+
+def _company_meta(cur, cik):
+    """ticker / exchange / industry for one CIK, or {} before the universe is loaded."""
+    if not _has(cur, "sec_companies"):
+        return {}
+    r = cur.execute("SELECT ticker, tickers, exchange, sic, industry, office FROM sec_companies "
+                    "WHERE cik = ?", [cik]).fetchone()
+    if not r:
+        return {}
+    return {"ticker": r[0], "tickers": (r[1] or "").split(",") if r[1] else [],
+            "exchange": r[2], "sic": r[3], "industry": r[4], "office": r[5]}
 
 
 def _forms(form):
@@ -303,6 +348,12 @@ def _indicators(cur, f):
                 if hit is not None:
                     ytd_values[field] = hit[0]
                     break
+    from . import sec_metrics
+    as_tagged = dict(tags)
+    if sec_metrics.composite_revenue(values, tags, f.get("sic")):
+        units["revenue"] = units.get("interest_income") or units.get("lease_income") or units.get("revenue")
+        if ytd_values.get("interest_income") is not None or ytd_values.get("lease_income") is not None:
+            sec_metrics.composite_revenue(ytd_values, as_tagged, f.get("sic"))
     return values, tags, units, ytd_values
 
 
@@ -313,10 +364,11 @@ def company_by_cik(cik: str,
     """One company's key indicators per filing, newest first, each row naming
     the tag behind every field."""
     cur = _require()
-    n = parse_cik(cik)
+    n = resolve_company(cur, cik)
     forms = _forms(form)
     filings = _filings(cur, n, forms)[:limit]
     head = filings[0]
+    meta = _company_meta(cur, n)
     panel = []
     for f in filings:
         values, tags, units, ytd = _indicators(cur, f)
@@ -331,7 +383,9 @@ def company_by_cik(cik: str,
             row["ytd_span_quarters"] = _ytd_span(f)
         panel.append(row)
     return {
-        "cik": n, "name": head["name"], "sic": head["sic"],
+        "cik": n, "sec_code": "cik:%d" % n, "name": head["name"], "sic": head["sic"],
+        "ticker": meta.get("ticker"), "tickers": meta.get("tickers") or [],
+        "exchange": meta.get("exchange"), "industry": meta.get("industry"),
         "country": head["country_ba"], "state": head["state_ba"], "city": head["city_ba"],
         "country_inc": head["country_inc"], "fiscal_year_end": head["fye"],
         "forms": sorted({f["form"] for f in filings}),
@@ -402,7 +456,7 @@ def statements_by_cik(cik: str,
     """One statement of one filing, every line as filed, with the comparative
     the filer tagged."""
     cur = _require()
-    n = parse_cik(cik)
+    n = resolve_company(cur, cik)
     st = (statement or "BS").strip().upper()
     if st not in STATEMENTS:
         raise HTTPException(400, "statement must be one of %s" % ", ".join(STATEMENTS))
@@ -455,7 +509,7 @@ def facts_by_cik(cik: str,
     """Every filed value of one tag for one company, across filings — the raw
     panel a model is built on."""
     cur = _require()
-    n = parse_cik(cik)
+    n = resolve_company(cur, cik)
     t = (tag or "").strip()
     if not t:
         raise HTTPException(400, "tag is required")
@@ -485,28 +539,51 @@ def facts_by_cik(cik: str,
 
 # ---- search, tags, summary -------------------------------------------------
 @router.get("/companies", openapi_extra={"x-example": "/api/v1/us/financials/companies?q=apple"})
-def companies(q: str = Query("", description="name substring or CIK"),
-              limit: int = Query(25, ge=1, le=200)):
-    """Filers with at least one periodic report loaded, by name or CIK."""
+def companies(q: str = Query("", description="name substring, ticker or CIK"),
+              exchange: str = Query("", description="Nasdaq | NYSE | OTC | CBOE | TXSE"),
+              sic: str = Query("", description="SIC code, e.g. 3674"),
+              limit: int = Query(25, ge=1, le=500)):
+    """Filers with at least one periodic report loaded, by name, ticker or
+    CIK — with the ticker, exchange and industry the SEC lists for them."""
     cur = _require()
     needle = (q or "").strip()
     forms = ANNUAL_FORMS + QUARTERLY_FORMS
+    universe = _has(cur, "sec_companies")
     where, params = "", []
     if needle:
         m = _CIK_RE.match(needle)
         if m and (needle.lower().startswith("cik:") or needle.isdigit()):
             where, params = " AND s.cik = ?", [int(m.group(1))]
+        elif universe:
+            t = needle.upper().replace(".", "-")
+            where = (" AND (lower(s.name) LIKE ? OR s.cik IN (SELECT cik FROM sec_companies "
+                     "WHERE ticker = ? OR list_contains(string_split(tickers, ','), ?)))")
+            params = ["%" + needle.lower() + "%", t, t]
         else:
             where, params = " AND lower(s.name) LIKE ?", ["%" + needle.lower() + "%"]
+    if universe and (exchange or "").strip():
+        where += " AND s.cik IN (SELECT cik FROM sec_companies WHERE lower(exchange) = ?)"
+        params.append(exchange.strip().lower())
+    if (sic or "").strip():
+        if not sic.strip().isdigit():
+            raise HTTPException(400, "sic must be a code, e.g. 3674")
+        where += " AND s.sic = ?"
+        params.append(int(sic.strip()))
+    join = ("LEFT JOIN sec_companies c ON c.cik = f.cik" if universe else "")
+    cols = ("c.ticker, c.exchange, c.industry" if universe
+            else "NULL AS ticker, NULL AS exchange, NULL AS industry")
     rows = _rows(cur, """
-        SELECT s.cik, arg_max(s.name, s.filed) AS name, arg_max(s.sic, s.filed) AS sic,
-               arg_max(s.country_ba, s.filed) AS country, arg_max(s.state_ba, s.filed) AS state,
-               max(s.filed) AS latest_filed, arg_max(s.form, s.filed) AS latest_form,
-               count(*) AS filings
-        FROM sec_filings s
-        WHERE s.form IN (%s)%s%s
-        GROUP BY s.cik ORDER BY latest_filed DESC, name LIMIT ?
-        """ % (",".join("?" * len(forms)), asof.clause("filed", "s"), where),
+        WITH f AS (
+            SELECT s.cik, arg_max(s.name, s.filed) AS name, arg_max(s.sic, s.filed) AS sic,
+                   arg_max(s.country_ba, s.filed) AS country, arg_max(s.state_ba, s.filed) AS state,
+                   max(s.filed) AS latest_filed, arg_max(s.form, s.filed) AS latest_form,
+                   count(*) AS filings
+            FROM sec_filings s
+            WHERE s.form IN (%s)%s%s
+            GROUP BY s.cik)
+        SELECT f.*, %s FROM f %s
+        ORDER BY f.latest_filed DESC, f.name LIMIT ?
+        """ % (",".join("?" * len(forms)), asof.clause("filed", "s"), where, cols, join),
         list(forms) + params + [limit])
     for r in rows:
         r["latest_filed"] = _d(r["latest_filed"])
@@ -611,6 +688,232 @@ def screen(metric: str = Query("revenue", description="one of " + ", ".join(SCRE
             "rows": rows, "calc": CALC, "provenance": PROVENANCE}
 
 
+# ---- ratios: metrics, screener, industries ---------------------------------
+DERIVED_PROVENANCE = {
+    "trust": "derived",
+    "note": ("Calculated on this platform from each filer's latest annual report as the SEC "
+             "extracted it; every metric names its formula and the tag behind every input. "
+             "No market data: there is no market value, yield or multiple here."),
+    "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (inputs).",
+}
+
+
+def _num(value, name):
+    v = (value or "").strip()
+    if not v:
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        raise HTTPException(400, "%s must be a number" % name)
+
+
+def _decorate(cur, rows):
+    """Attach ticker, exchange and industry from the universe to metric rows.
+    The industry title follows the SIC code on the filing itself; the
+    universe's title is the fallback for a filing with no code."""
+    meta = ({r[0]: r[1:] for r in cur.execute(
+        "SELECT cik, ticker, exchange, industry, office FROM sec_companies").fetchall()}
+        if _has(cur, "sec_companies") else {})
+    titles = ({r[0]: r[1] for r in cur.execute("SELECT sic, industry FROM sec_sic").fetchall()}
+              if _has(cur, "sec_sic") else {})
+    from . import sec_metrics, sec_shares, us_prices_api
+    closes = us_prices_api.latest_closes(cur)
+    by_symbol = {sec_shares._norm(k): v for k, v in closes.items()}
+    for r in rows:
+        # each decorated copy gets its own metrics: the price figures written below would otherwise
+        # land in the dict shared with the cached ratio rows, and two passes running at once (the
+        # warm-up and a first request) could blank a value before the other pass judged it
+        r["metrics"] = dict(r.get("metrics") or {})
+        m = meta.get(r["cik"]) or (None, None, None, None)
+        r["ticker"], r["exchange"], r["office"] = m[0], m[1], m[3]
+        r["industry"] = (titles.get(int(r["sic"])) if r.get("sic") is not None else None) or m[2]
+        px = (closes.get(r["ticker"]) or by_symbol.get(sec_shares._norm(r["ticker"]))) if r["ticker"] else None
+        if px is not None:
+            sec_metrics.with_prices(r, px[1], px[2], _d(px[0]), sec_shares.basis(cur, r, by_symbol))
+    sec_shares.hold_back_uncorroborated(cur, rows)
+    return rows
+
+
+def _has_prices(cur):
+    return _has(cur, "us_px_daily")
+
+
+@router.get("/metrics/{company}", openapi_extra={"x-example": "/api/v1/us/financials/metrics/AAPL"})
+def metrics(company: str):
+    """One filer's platform-calculated ratios from its latest annual report,
+    with the formula for each and the tag behind every input."""
+    from . import sec_metrics, us_prices_api
+    cur = _require()
+    n = resolve_company(cur, company)
+    row = next((r for r in sec_metrics.all_rows(cur) if r["cik"] == n), None)
+    if row is None:
+        raise HTTPException(404, "no annual report loaded for CIK %d, so no ratios" % n)
+    row = dict(row)
+    _decorate(cur, [row])
+    priced = _has_prices(cur)
+    row["metric_defs"] = sec_metrics.metric_defs(prices=priced)
+    row["calc"] = dict(sec_metrics.FORMULAS, **(sec_metrics.PRICE_FORMULAS if priced else {}))
+    row["provenance"] = DERIVED_PROVENANCE
+    if priced:
+        row["price_provenance"] = us_prices_api.PROVENANCE
+    return row
+
+
+@router.get("/screener", openapi_extra={"x-example": "/api/v1/us/financials/screener?sort=roe_pct&limit=20"})
+def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit prefix (37)"),
+             industry: str = Query("", description="substring of the SIC industry title, e.g. motor vehicles"),
+             exchange: str = Query("", description="Nasdaq | NYSE | OTC | CBOE | TXSE"),
+             tickers: str = Query("", description="comma-separated tickers to rank within"),
+             unit: str = Query("USD", description="reporting currency ranked; size sorts never mix units"),
+             min_revenue: str = Query(""), min_assets: str = Query(""),
+             roe_min: str = Query(""), roe_max: str = Query(""), roa_min: str = Query(""),
+             operating_margin_min: str = Query(""), net_margin_min: str = Query(""),
+             equity_ratio_min: str = Query(""), equity_ratio_max: str = Query(""),
+             revenue_growth_min: str = Query(""), cash_to_assets_min: str = Query(""),
+             payout_ratio_min: str = Query(""), buyback_ratio_min: str = Query(""),
+             sort: str = Query("roe_pct", description="a metric or a size field to rank on"),
+             order: str = Query("desc", description="desc | asc"),
+             current_only: bool = Query(True, description="leave out filers whose latest annual report "
+                                                          "ended more than 18 months ago (delisted, acquired or late)"),
+             limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)):
+    """Every US filer's latest annual report on platform-calculated ratios,
+    filtered and ranked. Companies missing the sort field are excluded from
+    the ranking and counted in `excluded_missing_sort`. Size fields are
+    ranked within one reporting currency only."""
+    from . import sec_metrics, us_prices_api
+    cur = _require()
+    priced = _has_prices(cur)
+    sortable = set(sec_metrics.METRIC_ORDER) | set(sec_metrics.SIZE_FIELDS)
+    if priced:
+        sortable |= set(sec_metrics.PRICE_ORDER)
+    if sort not in sortable:
+        raise HTTPException(400, "sort must be one of %s" % ", ".join(sorted(sortable)))
+    asc = (order or "").lower() == "asc"
+    rows = _decorate(cur, [dict(r) for r in sec_metrics.all_rows(cur)])
+    f = {k: _num(v, k) for k, v in (
+        ("min_revenue", min_revenue), ("min_assets", min_assets), ("roe_min", roe_min),
+        ("roe_max", roe_max), ("roa_min", roa_min), ("operating_margin_min", operating_margin_min),
+        ("net_margin_min", net_margin_min), ("equity_ratio_min", equity_ratio_min),
+        ("equity_ratio_max", equity_ratio_max), ("revenue_growth_min", revenue_growth_min),
+        ("cash_to_assets_min", cash_to_assets_min), ("payout_ratio_min", payout_ratio_min),
+        ("buyback_ratio_min", buyback_ratio_min))}
+    sic_q = (sic or "").strip()
+    if sic_q and not sic_q.isdigit():
+        raise HTTPException(400, "sic must be digits: a full code or a prefix")
+    ind_q = (industry or "").strip().lower()
+    ex_q = (exchange or "").strip().lower()
+    want = {t.strip().upper().replace(".", "-") for t in (tickers or "").split(",") if t.strip()}
+    u = (unit or "USD").strip().upper()
+    size_sort = sort in sec_metrics.SIZE_FIELDS
+
+    def ge(v, lim):
+        return lim is None or (v is not None and v >= lim)
+
+    def le(v, lim):
+        return lim is None or (v is not None and v <= lim)
+
+    cutoff = (datetime.date.today() - datetime.timedelta(days=550)).isoformat()
+    kept = []
+    for r in rows:
+        m, z = r["metrics"], r["size"]
+        if current_only and (r.get("period_end") or "") < cutoff:
+            continue
+        if sic_q and not (r.get("sic") is not None and str(int(r["sic"])).startswith(sic_q)):
+            continue
+        if ind_q and ind_q not in (r.get("industry") or "").lower():
+            continue
+        if ex_q and (r.get("exchange") or "").lower() != ex_q:
+            continue
+        if want and (r.get("ticker") or "") not in want:
+            continue
+        if (size_sort or f["min_revenue"] is not None or f["min_assets"] is not None) and r["unit"] != u:
+            continue
+        if not (ge(z["revenue"], f["min_revenue"]) and ge(z["total_assets"], f["min_assets"])
+                and ge(m["roe_pct"], f["roe_min"]) and le(m["roe_pct"], f["roe_max"])
+                and ge(m["roa_pct"], f["roa_min"]) and ge(m["operating_margin_pct"], f["operating_margin_min"])
+                and ge(m["net_margin_pct"], f["net_margin_min"])
+                and ge(m["equity_ratio_pct"], f["equity_ratio_min"]) and le(m["equity_ratio_pct"], f["equity_ratio_max"])
+                and ge(m["revenue_growth_pct"], f["revenue_growth_min"])
+                and ge(m["cash_to_assets_pct"], f["cash_to_assets_min"])
+                and ge(m["payout_ratio_pct"], f["payout_ratio_min"])
+                and ge(m["buyback_ratio_pct"], f["buyback_ratio_min"])):
+            continue
+        kept.append(r)
+
+    def key(r):
+        return r["metrics"].get(sort) if sort in r["metrics"] else r["size"].get(sort)
+    ranked = [r for r in kept if key(r) is not None]
+    missing = len(kept) - len(ranked)
+    ranked.sort(key=key, reverse=not asc)
+    page = []
+    for i, r in enumerate(ranked[offset:offset + limit], offset + 1):
+        page.append({
+            "rank": i, "cik": r["cik"], "sec_code": r["sec_code"], "name": r["name"],
+            "ticker": r.get("ticker"), "exchange": r.get("exchange"), "sic": r.get("sic"),
+            "industry": r.get("industry"), "country": r.get("country"), "form": r["form"],
+            "period_end": r["period_end"], "fy": r["fy"], "filed": r["filed"], "status": r["status"],
+            "unit": r["unit"], "size": r["size"], "per_share": r.get("per_share"), "price": r.get("price"),
+            "metrics": r["metrics"], "tags": r["tags"],
+            "checks": r["checks"], "flags": r["flags"], "sort_value": key(r),
+            "source_url": r["source_url"],
+        })
+    return {"sort": sort, "order": "asc" if asc else "desc",
+            "filters": {"sic": sic_q or None, "industry": ind_q or None, "exchange": ex_q or None,
+                        "tickers": sorted(want) or None, "unit": u,
+                        **{k: v for k, v in f.items() if v is not None}},
+            "universe": len(rows), "matched": len(kept), "ranked": len(ranked),
+            "excluded_missing_sort": missing, "offset": offset, "limit": limit,
+            "rows": page, "metric_defs": sec_metrics.metric_defs(prices=priced),
+            "calc": dict(sec_metrics.FORMULAS, **(sec_metrics.PRICE_FORMULAS if priced else {})),
+            "provenance": DERIVED_PROVENANCE,
+            "price_provenance": us_prices_api.PROVENANCE if priced else None}
+
+
+@router.get("/screener/options")
+def screener_options():
+    """What the screener can filter and sort on, with universe counts."""
+    from . import sec_metrics
+    cur = _require()
+    rows = _decorate(cur, [dict(r) for r in sec_metrics.all_rows(cur)])
+    by_ind, by_ex, by_unit = {}, {}, {}
+    for r in rows:
+        k = (r.get("sic"), r.get("industry"))
+        by_ind[k] = by_ind.get(k, 0) + 1
+        by_ex[r.get("exchange")] = by_ex.get(r.get("exchange"), 0) + 1
+        by_unit[r.get("unit")] = by_unit.get(r.get("unit"), 0) + 1
+    return {
+        "universe": len(rows),
+        "industries": sorted([{"sic": k[0], "industry": k[1], "companies": v}
+                              for k, v in by_ind.items() if k[0] is not None], key=lambda x: -x["companies"]),
+        "exchanges": sorted([{"exchange": k, "companies": v} for k, v in by_ex.items() if k],
+                            key=lambda x: -x["companies"]),
+        "units": sorted([{"unit": k, "companies": v} for k, v in by_unit.items() if k],
+                        key=lambda x: -x["companies"]),
+        "metrics": sec_metrics.metric_defs(prices=_has_prices(cur)),
+        "size_fields": sec_metrics.SIZE_FIELDS,
+        "provenance": DERIVED_PROVENANCE,
+    }
+
+
+@router.get("/industries", openapi_extra={"x-example": "/api/v1/us/financials/industries?q=semiconductor"})
+def industries(q: str = Query("", description="substring of the industry title")):
+    """The SEC's SIC codes with their industry titles and how many filers
+    with a loaded annual report carry each."""
+    cur = _require()
+    if not _has(cur, "sec_sic"):
+        raise HTTPException(503, "industry list not loaded yet (equity/sec_universe.py)")
+    needle = (q or "").strip().lower()
+    rows = _rows(cur, """
+        SELECT s.sic, s.office, s.industry, count(DISTINCT f.cik) AS companies
+        FROM sec_sic s
+        LEFT JOIN sec_filings f ON f.sic = s.sic AND f.form IN (%s)
+        WHERE ? = '' OR lower(s.industry) LIKE ?
+        GROUP BY s.sic, s.office, s.industry ORDER BY s.sic
+        """ % ",".join("?" * len(ANNUAL_FORMS)), list(ANNUAL_FORMS) + [needle, "%" + needle + "%"])
+    return {"query": needle, "industries": rows, "provenance": PROVENANCE}
+
+
 # ---- health ----------------------------------------------------------------
 def health():
     """One entry in the shape /catalog/health lists the equity extractors in."""
@@ -648,6 +951,34 @@ def health():
         "last_extracted_at": ran.isoformat() + "Z" if ran else None,
         "archive_read_back_to": back_to.isoformat(),
         "shape_flags": (["quarter %s failed to load" % f for f in failed]),
+    }] + _universe_health(cur)
+
+
+UNIVERSE_STALE_AFTER_DAYS = 10
+
+
+def _universe_health(cur):
+    """The ticker/industry lookup's own row: when the SEC was last reached."""
+    if not _has(cur, "sec_universe_pulls"):
+        return []
+    last_ok, last_any, n_cos, first = cur.execute("""
+        SELECT (SELECT max(fetched_at) FROM sec_universe_pulls WHERE status = 'ok'),
+               (SELECT max(fetched_at) FROM sec_universe_pulls),
+               (SELECT count(*) FROM sec_companies),
+               (SELECT min(fetched_at) FROM sec_universe_pulls WHERE status = 'ok')""").fetchone()
+    failed = bool(last_any and (last_ok is None or last_any > last_ok))
+    days = (datetime.datetime.utcnow() - last_ok).days if last_ok else None
+    stale = days is None or days > UNIVERSE_STALE_AFTER_DAYS
+    return [{
+        "dataset": "sec-universe",
+        "status": "attention" if (stale or failed or not n_cos) else "ok",
+        "archive_read_through": last_ok.date().isoformat() if last_ok else None,
+        "days_behind": days,
+        "stale_after_days": UNIVERSE_STALE_AFTER_DAYS,
+        "stale": stale,
+        "last_extracted_at": last_ok.isoformat() + "Z" if last_ok else None,
+        "archive_read_back_to": first.date().isoformat() if first else None,
+        "shape_flags": (["latest pull failed"] if failed else []) + ([] if n_cos else ["no companies loaded"]),
     }]
 
 
@@ -704,6 +1035,11 @@ MANIFEST = {
         "tags": "/api/v1/us/financials/tags",
         "summary": "/api/v1/us/financials/summary",
         "screen": "/api/v1/us/financials/screen",
+        "screener": "/api/v1/us/financials/screener",
+        "metrics": "/api/v1/us/financials/metrics/{cik_or_ticker}",
+        "industries": "/api/v1/us/financials/industries",
+        "calendar": "/api/v1/us/earnings/calendar",
+        "calendar_company": "/api/v1/us/earnings/company/{cik_or_ticker}",
     },
     "capabilities": ["company", "search", "summary", "screen"],
     "screens": [{"id": k, "title": "US filers ranked on %s, latest annual report" % k.replace("_", " ")}
@@ -716,6 +1052,13 @@ MANIFEST = {
         "Key-indicator fields are a tag mapping, not a calculation: the tag used is named on "
         "every row, and a filing tagging none of a field's candidates has that field null.",
         "The SEC's nil facts (a dash in the statement) are dropped as missing, never stored as 0.",
+        "Tickers, exchanges and industry titles come from the SEC's company_tickers_exchange.json "
+        "and SIC code list (equity/sec_universe.py); any endpoint taking a CIK also takes a ticker.",
+        "The ratios under /screener and /metrics are the one calculated layer (app/sec_metrics.py): "
+        "no badge, a formula on every metric, and the tag behind every input named.",
+        "The reporting calendar (/api/v1/us/earnings/…) rests on these filing dates: an expected date is "
+        "last year's filing of the same report moved a year forward, named on the row; it is not an "
+        "announced date and not the earnings-release date.",
         "Every filing carries a balance-sheet verdict (status, bs_check); partial filings are "
         "served with the reason and are never silently excluded or corrected.",
         "Not a product surface: the US shelf exists so a Japanese figure has a US counterpart "

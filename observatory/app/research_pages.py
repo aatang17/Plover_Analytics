@@ -48,9 +48,13 @@ log = logging.getLogger(__name__)
 router = APIRouter(include_in_schema=False)
 
 BRAND = "PloverResearch"
+# Cloudflare adds its cookieless Web Analytics beacon to every page it serves;
+# the data pages send no policy and count, so the research pages allow that one
+# script and its reporting address, or every article visit goes uncounted.
 CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
-       "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
-       "frame-ancestors 'self'")
+       "script-src 'self' https://static.cloudflareinsights.com; "
+       "connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; "
+       "form-action 'self'; frame-ancestors 'self'")
 SECURITY_HEADERS = {"Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff",
                     "Referrer-Policy": "strict-origin-when-cross-origin"}
 

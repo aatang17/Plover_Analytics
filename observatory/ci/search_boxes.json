@@ -35,21 +35,27 @@
     {"key": "hk-economy.html#q", "url": "/hk-economy.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": ["GDP"]},
     {"key": "hk-prices.html#q", "url": "/hk-prices.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": ["CPI"]},
     {"key": "labour.html#q", "url": "/labour.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "placeholder_examples": false, "extra": ["unemployment", "wage"]},
-    {"key": "us-companies.html#cn-q", "url": "/us-companies.html?t=DIS", "input": "#cn-q", "area": "#cn-table", "hits": "#cn-table tbody tr", "ready": "#cn-table tbody tr", "extra": ["revenue"]}
+    {"key": "us-companies.html#cn-q", "url": "/us-companies.html?t=DIS", "input": "#cn-q", "area": "#cn-table", "hits": "#cn-table tbody tr", "ready": "#cn-table tbody tr", "extra": ["revenue"]},
+    {"key": "index.html#q", "url": "/", "input": "#q", "submit": true, "area": "#answer", "hits": "#answer .hit", "extra": ["What is Apple worth?", "AAPL insiders this year"]}
   ],
   "elsewhere": {
     "write.js#wd-cvq": "The coverage search on a publication's Coverage tab, inside the signed-in Writer Desk. tests/test_search_examples.py types the box's own examples and the obvious company queries into the same search.",
     "desk-research.js#class=dk-rs-q": "Inside the signed-in research desk, on every Research data tab. Its examples and the obvious queries run against the same search in tests/test_search_examples.py.",
-    "desk.js#data-f=q": "The search box on a chart in the signed-in desk. An empty chart runs the desk's data search, and tests/test_search_examples.py types the box's own examples into it."
+    "desk.js#data-f=q": "The search box on a chart in the signed-in desk. An empty chart runs the desk's data search, and tests/test_search_examples.py types the box's own examples into it.",
+    "my.html#my-co-q": "The Add a company box on Your Plover (my.html), behind a sign-in. It calls the same company search as the Writer Desk's coverage box (app/assistant/api.find_companies); tests/test_search_examples.py types the box's own examples and the obvious company queries into it."
   },
   "not_run": {
     "desk-tabs.js#class=dk-at-q": "Filters the writer's own articles, already listed under + Open Article in the desk; there is nothing to fetch.",
     "sortable.js#class=table-filter": "Filters the rows a table already shows; there is nothing to fetch.",
     "admin.js#rh-find": "Filters the datasets already listed on the signed-in admin Release History page; there is nothing to fetch.",
-    "assistant.js#cat-q": "Filters the specialists already listed; there is nothing to fetch."
+    "assistant.js#cat-q": "Filters the specialists already listed; there is nothing to fetch.",
+    "assistant.js#class=st-pick": "Studies: picks a series for a ready-made analysis through /api/v1/assistant/studies/series. The Assistant needs a signed-in account, which this check does not have; tests/test_studies.py exercises the endpoint with CPI and 10-year examples."
   },
   "not_searches": {
     "assistant.js#l-name": "A name for a new list.",
+    "assistant.js#class=st-name": "Studies: a short name the query uses for a series (e.g. japan).",
+    "assistant.js#class=st-ref": "Studies: the dataset:code of a series, typed or set by the Analyst; it does not search.",
+    "assistant.js#st-chcols": "Studies: which result columns to chart.",
     "cohorts.html#p-company": "Highlights one company in a ranking; it does not search.",
     "desk-research.js#snap-": "A page address to copy a chart from.",
     "desk.js#data-f=source": "A source line for a table or chart.",

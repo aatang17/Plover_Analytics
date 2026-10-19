@@ -39,6 +39,11 @@ Environment (all optional):
   BACKFILL_CATCH_UP_DAYS    archive days per equity slice (default 40)
   BACKFILL_MAX_SLICES       stop after this many equity slices (default 400)
   BACKFILL_SEC_QUARTERS     quarterly SEC data sets to hold in all (default 12; 0 = none)
+  BACKFILL_US_PRICES        fetch yesterday's US closes from Databento each cycle (default 1);
+                            DATABENTO_DAILY_MAX_USD caps one day's spend (default 0.50)
+  BACKFILL_US_HOLDINGS      refresh the US ticker universe, insider trades and 13F holdings
+                            each cycle (default 1); SEC_INSIDER_QUARTERS and SEC_13F_BATCHES
+                            say how many newest sets to hold (default 2 each)
   BACKFILL_US_COMPANIES     0 to skip the daily pull of the US deep-coverage
                             companies (default: on; needs EDGAR_USER_AGENT)
   BACKFILL_US_PAY           0 to skip the daily check of S&P 500 proxy
@@ -559,7 +564,7 @@ def _px_unchecked(path, since):
             return None, 0
         return con.execute("""
             SELECT (SELECT count(*) FROM us_index_members m
-                     WHERE m.snapshot_id = (SELECT max(snapshot_id) FROM us_index_snapshots)
+                     WHERE m.snapshot_id = (SELECT max(snapshot_id) FROM us_index_snapshots WHERE index_name = 'S&P 500 (SPY holdings)')
                        AND NOT EXISTS (SELECT 1 FROM sec_px_checks c
                                        WHERE c.cik = m.cik AND c.checked_at >= ?)),
                    (SELECT count(*) FROM sec_px_checks WHERE checked_at >= ?)""",
@@ -618,6 +623,192 @@ def refresh_us_pay(per_slice=100, max_slices=8):
                          None if rc == 0 else "some companies failed; the rest landed")
             return
     record_check("sec-proxy-pay", "failed", "cycle ended with members unchecked")
+
+
+def _table_count(path, table):
+    """Rows in one table of a DuckDB file, 0 when the table is absent."""
+    con = duckdb.connect(str(path), read_only=True)
+    try:
+        if not con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = ?",
+                           [table]).fetchone()[0]:
+            return 0
+        return con.execute("SELECT count(*) FROM %s" % table).fetchone()[0]
+    finally:
+        con.close()
+
+
+def refresh_us_holdings():
+    """The US company universe, insider trades and 13F holdings, every cycle.
+
+    Three loaders, one working copy of data/sec.duckdb, one swap:
+      * equity/sec_universe.py fetches the SEC's ticker/exchange file and SIC
+        list (a minute) and rebuilds sec_companies and sec_sic;
+      * equity/sec_insiders_extract.py and equity/sec_13f_extract.py read the
+        us/ shelf in the bucket for the newest quarterly sets the capture job
+        banked and load any that are new or re-published.
+    Each records its own outcome in its own tables, which is what the health
+    rows read, and a loader that fails leaves the others' work in the copy.
+    The copy is swapped in when any of the three recorded something new;
+    otherwise it is discarded and the served file is untouched.
+    """
+    work = DATA_DIR / "sec.holdings.duckdb"
+    if not LIVE_SEC.exists():
+        log("no sec.duckdb yet; the US holdings wait for the statements shelf")
+        return
+    if fresh_copy(LIVE_SEC, work) is None:
+        for ds in ("sec-universe", "sec-insiders", "sec-13f"):
+            record_check(ds, "failed", "no working copy of sec.duckdb")
+        return
+    before = {t: _table_count(work, t) for t in ("sec_universe_pulls", "sec_ins_quarters", "sec_13f_batches")}
+    changed = False
+    env = dict(os.environ)
+    if os.environ.get("EDGAR_USER_AGENT"):
+        rc = _run([sys.executable, str(ROOT / "equity" / "sec_universe.py"), "--db", str(work)], env, ROOT)
+        after = _table_count(work, "sec_universe_pulls")
+        if after > before["sec_universe_pulls"] and rc == 0:
+            changed = True
+            record_check("sec-universe", "published")
+        else:
+            record_check("sec-universe", "failed", "sec_universe.py exited %s" % rc)
+    else:
+        log("ATTENTION no EDGAR_USER_AGENT; the US company universe was not refreshed")
+        record_check("sec-universe", "failed", "EDGAR_USER_AGENT not set")
+    if os.environ.get("EDINET_S3_BUCKET"):
+        for ds, script, table, n in (
+                ("sec-insiders", "sec_insiders_extract.py", "sec_ins_quarters",
+                 os.environ.get("SEC_INSIDER_QUARTERS", "2")),
+                ("sec-13f", "sec_13f_extract.py", "sec_13f_batches",
+                 os.environ.get("SEC_13F_BATCHES", "2"))):
+            if _stopping:
+                break
+            started = time.time()
+            rc = _run([sys.executable, str(ROOT / "equity" / script), "--source", "s3",
+                       "--db", str(work), "--last", str(n)], env, ROOT)
+            after = _table_count(work, table)
+            if rc == 0:
+                if after != before[table]:
+                    changed = True
+                record_check(ds, "published", None if after != before[table] else "nothing new on the shelf")
+                log("%s: exit 0 in %.0fs (%d -> %d sets)" % (ds, time.time() - started, before[table], after))
+            else:
+                record_check(ds, "failed", "%s exited %s" % (script, rc))
+                log("%s: %s exited %s; earlier sets stay live" % (ds, script, rc))
+    else:
+        log("no EDINET_S3_BUCKET; insider and 13F sets stay as they are")
+    if changed:
+        swap(work, LIVE_SEC)
+    else:
+        _discard(work)
+        log("US holdings: nothing new; served data untouched")
+
+
+def refresh_us_prices():
+    """Yesterday's US closes from Databento, every cycle, under a dollar cap.
+
+    equity/us_prices_databento.py asks for the days after the last one held,
+    quotes them, and downloads only when the quote is at or under
+    DATABENTO_DAILY_MAX_USD (default $0.50 — a day of every symbol costs a
+    few cents). It runs on a copy of data/sec.duckdb that is swapped in only
+    when bars landed. A refused or failed pull is recorded in us_px_pulls,
+    which is what the health row reads, and the served file is untouched.
+    """
+    if not os.environ.get("DATABENTO_API_KEY"):
+        log("no DATABENTO_API_KEY; US prices stay as they are")
+        return
+    if not LIVE_SEC.exists():
+        return
+    work = DATA_DIR / "sec.prices.duckdb"
+    if fresh_copy(LIVE_SEC, work) is None:
+        record_check("us-prices", "failed", "no working copy of sec.duckdb")
+        return
+    before = _table_count(work, "us_px_daily")
+    cap = os.environ.get("DATABENTO_DAILY_MAX_USD", "0.50")
+    rc = _run([sys.executable, str(ROOT / "equity" / "us_prices_databento.py"), "--db", str(work),
+               "--max-cost-usd", cap], dict(os.environ), ROOT)
+    after = _table_count(work, "us_px_daily")
+    if after > before:
+        swap(work, LIVE_SEC)
+        record_check("us-prices", "published")
+        log("US prices: %d new bars (exit %s)" % (after - before, rc))
+    else:
+        if rc == 0:
+            _discard(work)
+            record_check("us-prices", "published", "nothing new to fetch")
+        else:
+            swap(work, LIVE_SEC)          # keep the recorded refusal/failure so health can show it
+            record_check("us-prices", "failed", "us_prices_databento.py exited %s" % rc)
+            log("US prices: exit %s; nothing new landed" % rc)
+
+
+def refresh_us_shares(limit=300):
+    """Shares outstanding from 10-K and 10-Q covers, every cycle.
+
+    equity/sec_cover_shares.py reads the SEC's frames files (six requests:
+    the cover count of every company filing one figure), then the covers of
+    up to `limit` priced companies the frames miss — mostly companies with
+    several share classes — least recently checked first. It runs on a copy
+    of data/sec.duckdb that is swapped in when the run recorded itself; the
+    run row in sec_cover_runs is what the health row reads.
+    """
+    if not os.environ.get("EDGAR_USER_AGENT"):
+        log("ATTENTION no EDGAR_USER_AGENT; share counts were not refreshed")
+        record_check("sec-cover-shares", "failed", "EDGAR_USER_AGENT not set")
+        return
+    if not LIVE_SEC.exists():
+        return
+    work = DATA_DIR / "sec.shares.duckdb"
+    if fresh_copy(LIVE_SEC, work) is None:
+        record_check("sec-cover-shares", "failed", "no working copy of sec.duckdb")
+        return
+    before = _table_count(work, "sec_cover_runs")
+    started = time.time()
+    rc = _run([sys.executable, str(ROOT / "equity" / "sec_cover_shares.py"), "--db", str(work),
+               "--limit", str(limit)], dict(os.environ), ROOT)
+    after = _table_count(work, "sec_cover_runs") if rc != -1 else before
+    if after > before:
+        swap(work, LIVE_SEC)
+        record_check("sec-cover-shares", "published" if rc == 0 else "failed",
+                     None if rc == 0 else "sec_cover_shares.py exited %s" % rc)
+        log("US share counts: exit %s in %.0fs" % (rc, time.time() - started))
+    else:
+        _discard(work)
+        record_check("sec-cover-shares", "failed", "sec_cover_shares.py exited %s, nothing recorded" % rc)
+        log("US share counts: exit %s, nothing recorded; served data untouched" % rc)
+
+
+def refresh_us_listings(limit=400):
+    """What one US-listed depositary share stands for, every cycle.
+
+    equity/sec_ads_ratios.py reads the cover (and, when the cover does not
+    say, the text) of the newest annual report of every 20-F filer and every
+    10-K filer incorporated abroad, up to `limit` companies a run, least
+    recently checked first; a company is read again only when it files a new
+    annual report. It runs on a copy of data/sec.duckdb that is swapped in
+    when the run recorded itself.
+    """
+    if not os.environ.get("EDGAR_USER_AGENT"):
+        record_check("sec-ads-ratios", "failed", "EDGAR_USER_AGENT not set")
+        return
+    if not LIVE_SEC.exists():
+        return
+    work = DATA_DIR / "sec.listings.duckdb"
+    if fresh_copy(LIVE_SEC, work) is None:
+        record_check("sec-ads-ratios", "failed", "no working copy of sec.duckdb")
+        return
+    before = _table_count(work, "sec_ads_runs")
+    started = time.time()
+    rc = _run([sys.executable, str(ROOT / "equity" / "sec_ads_ratios.py"), "--db", str(work),
+               "--limit", str(limit)], dict(os.environ), ROOT)
+    after = _table_count(work, "sec_ads_runs") if rc != -1 else before
+    if after > before:
+        swap(work, LIVE_SEC)
+        record_check("sec-ads-ratios", "published" if rc == 0 else "failed",
+                     None if rc == 0 else "sec_ads_ratios.py exited %s" % rc)
+        log("US listings: exit %s in %.0fs" % (rc, time.time() - started))
+    else:
+        _discard(work)
+        record_check("sec-ads-ratios", "failed", "sec_ads_ratios.py exited %s, nothing recorded" % rc)
+        log("US listings: exit %s, nothing recorded; served data untouched" % rc)
 
 
 def stamp_cycle():
@@ -687,6 +878,19 @@ def main():
     # sliced so a restart keeps what landed.
     if os.environ.get("BACKFILL_US_PAY", "1") not in ("", "0") and not _stopping:
         _phase("US pay", refresh_us_pay)
+    # Tickers and industries for every filer, insider trades and 13F
+    # holdings: current data from the SEC's structured sets, a few minutes.
+    if os.environ.get("BACKFILL_US_HOLDINGS", "1") not in ("", "0") and not _stopping:
+        _phase("US holdings", refresh_us_holdings)
+    # Yesterday's closes, a few cents a day, under a cap.
+    if os.environ.get("BACKFILL_US_PRICES", "1") not in ("", "0") and not _stopping:
+        _phase("US prices", refresh_us_prices)
+    # Shares outstanding from filing covers, for market value: a few minutes.
+    if os.environ.get("BACKFILL_US_SHARES", "1") not in ("", "0") and not _stopping:
+        _phase("US share counts", refresh_us_shares)
+    # What a foreign company's US-listed depositary share stands for: a few minutes.
+    if os.environ.get("BACKFILL_US_SHARES", "1") not in ("", "0") and not _stopping:
+        _phase("US listings", refresh_us_listings)
     # Current data before history: the equity extractors carry this week's
     # filings, the GDP archive is a one-off load of 2002-2019 releases that is
     # already complete on the production volume.

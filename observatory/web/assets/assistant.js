@@ -266,9 +266,10 @@
     folder: I('<path d="M3 6.5h6l2 2h10V19H3z"/>'),
     folderplus: I('<path d="M3 6.5h6l2 2h10V19H3z"/><path d="M12 11.5v5M9.5 14h5"/>'),
     file: I('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'),
-    upload: I('<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>')
+    upload: I('<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>'),
+    studies: I('<path d="M9 3h6M10 3v6l-5.2 9.2A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.8L14 9V3"/><path d="M7.5 15h9"/>')
   };
-  const NAV = [['inbox', 'Inbox'], ['desk', 'Desk'], ['chat', 'Chat'], ['coverage', 'Coverage'], ['calendar', 'Calendar'], ['specialists', 'Specialists'], ['research', 'Research'], ['files', 'Files'], ['drive', 'Drive']];
+  const NAV = [['inbox', 'Inbox'], ['desk', 'Desk'], ['chat', 'Chat'], ['coverage', 'Coverage'], ['calendar', 'Calendar'], ['specialists', 'Specialists'], ['research', 'Research'], ['studies', 'Studies'], ['files', 'Files'], ['drive', 'Drive']];
   const SYSTEM_NAV = [['data', 'Data sources'], ['memory', 'Memory'], ['tools', 'MCP tools'], ['keys', 'API keys'], ['audit', 'Audit'], ['settings', 'Settings']];
 
   /* ------------------------------------------------------------ routing */
@@ -327,7 +328,7 @@
       if (e.signin) return signinState();
       return errorState(e);
     }
-    const views = { data: vData, memory: vMemory, tools: vTools, keys: vKeys, inbox: vInbox, desk: vDesk, coverage: vCoverage, calendar: vCalendar, specialists: r.id ? vSpecialist : vSpecialists, chat: vChat, research: r.id ? vThread : vResearch, files: vFiles, drive: vDrive, audit: vAudit, settings: vSettings };
+    const views = { data: vData, memory: vMemory, tools: vTools, keys: vKeys, inbox: vInbox, desk: vDesk, coverage: vCoverage, calendar: vCalendar, specialists: r.id ? vSpecialist : vSpecialists, chat: vChat, research: r.id ? vThread : vResearch, studies: r.id ? vStudy : vStudies, files: vFiles, drive: vDrive, audit: vAudit, settings: vSettings };
     shell(navHtml(r), '<div class="content"><div class="page">' + working('Loading') + '</div></div>');
     bindCommon();
     try { await (views[r.sec] || vDesk)(r); } catch (e) { if (e.signin) return signinState(); console.error(e); $('#main').innerHTML = topbar([['Error']]) + `<div class="content"><div class="page"><p class="err">${esc(e.detail || e.message || 'Could not load this page.')}</p></div></div>`; }
@@ -1013,6 +1014,225 @@
     const c = $('#main .content'); if (c) c.scrollTop = 1e6;
   }
 
+  /* ---- Studies: analyses run on Plover's server (app/analysis.py). The AI
+     writes the query and reads a preview; the rows, chart and CSV come from
+     the server. A query run by hand uses no AI at all. Every run is kept. */
+  const STUDY_EXAMPLE = 'How far apart are the US and Japanese 10-year yields since 2020, and when was the gap widest?';
+  // One precision per column: the most decimals any value carries, at most four.
+  function colDp(rows, i) { let dp = 0; rows.forEach(r => { const v = r[i]; if (typeof v === 'number' && isFinite(v)) { const t = String(v).split('.')[1]; if (t) dp = Math.max(dp, Math.min(4, t.length)); } }); return dp; }
+  const cell = (v, dp) => v == null ? '—' : (typeof v === 'number' ? fmtNum(v, dp) : esc(v));
+  // a figure with the decimals it carries (at most three), never padded: 4.67 stays 4.67
+  const fig = v => v == null ? '—' : (typeof v === 'number' ? fmtNum(v, Math.min(3, ((String(v).split('.')[1]) || '').length)) : esc(v));
+  const STAT_LABEL = { latest: 'Latest', min: 'Lowest', max: 'Highest', mean: 'Average', median: 'Median', count: 'Count', highest_since: 'Highest since', lowest_since: 'Lowest since' };
+  function figuresHtml(summary, sources) {
+    if (!summary) return '';
+    const cells = [];
+    const titles = {}; (sources || []).forEach(s => { titles[s.name] = s.title || s.series; });
+    Object.keys(summary).forEach(col => Object.keys(summary[col]).forEach(k => {
+      const v = summary[col][k];
+      let big, sub;
+      if (v && typeof v === 'object' && 'since' in v) { big = v.since ? esc(v.since) : 'Never'; sub = v.since ? 'last at ' + fig(v.that_value) + ', now ' + fig(v.latest) : esc(v.note || ''); }
+      else if (v && typeof v === 'object') { big = fig(v.value); sub = esc(v.at || ''); }
+      else { big = fig(v); sub = ''; }
+      cells.push(stat(esc(titles[col] || col) + ' · ' + esc(STAT_LABEL[k] || k), big, sub));
+    }));
+    return cells.length ? `<div class="stats study-figs">${cells.join('')}</div>` : '';
+  }
+  function studySpecForm(spec) {
+    const series = Object.entries(spec.series || {});
+    while (series.length < 2) series.push(['', '']);
+    const ch = spec.chart || {};
+    const figs = (spec.summary || []).map(x => x.column + ': ' + (x.stats || []).join(', ')).join('; ');
+    return `<div class="study-form">
+      <div class="study-series">${series.map(([n, ref], i) => `<div class="st-row"><input class="st-name" data-sn="${i}" value="${esc(n)}" placeholder="name, e.g. japan" aria-label="Series name"><input class="st-ref" data-sr="${i}" value="${esc(ref)}" placeholder="dataset:code, e.g. jgb-yields:10Y" aria-label="Series code"></div>`).join('')}
+        <button class="linkbtn" id="st-addser">${ICONS.plus} Add a series</button></div>
+      <div class="st-row study-opts"><label>From <input id="st-start" value="${esc(spec.start || '')}" placeholder="YYYY-MM-DD"></label>
+        <label>To <input id="st-end" value="${esc(spec.end || '')}" placeholder="latest"></label>
+        <label>Dates <select id="st-join"><option value="both"${spec.join !== 'any' ? ' selected' : ''}>Every series has a value</option><option value="any"${spec.join === 'any' ? ' selected' : ''}>Any series has a value</option></select></label>
+        <label>Monthly <select id="st-monthly"><option value="">As published</option>${['average', 'end', 'sum'].map(m => `<option value="${m}"${spec.monthly === m ? ' selected' : ''}>${m === 'average' ? 'Average (rates, prices)' : m === 'end' ? 'Month end (stocks)' : 'Sum (flows)'}</option>`).join('')}</select></label></div>
+      <label class="study-q">Query <textarea id="st-query" rows="4" spellcheck="false" placeholder="SELECT * FROM data">${esc(spec.query || '')}</textarea></label>
+      <div class="st-row study-opts"><label>Figures <input id="st-figs" value="${esc(figs)}" placeholder="gap: latest, max, highest_since"></label>
+        <label>Chart <input id="st-chcols" value="${esc((ch.columns || []).join(', '))}" placeholder="columns, e.g. japan, us"></label>
+        <label>Chart title <input id="st-chtitle" value="${esc(ch.title || '')}"></label>
+        <label>Unit <input id="st-chunit" value="${esc(ch.unit || '')}" placeholder="%"></label></div>
+      <div class="study-run"><button class="btn" id="st-run">Run Query</button><span class="muted small">Runs on Plover's server. No AI, no tokens.</span></div>
+      <p class="muted small">Helpers you can use in the query: yoy(x), mom(x), ann3m(x), pct_change(x, n), change(x, n), diff_pp(x, n), spread_pp(a, b), ratio(a, b), share(part, total), rebase(x, 'YYYY-MM-DD'), rolling_mean(x, n), rolling_sum(x, n), cumulative(x). Missing values stay blank.</p>
+    </div>`;
+  }
+  function readSpecForm() {
+    const spec = { series: {} };
+    $$('[data-sn]').forEach(el => { const n = el.value.trim(), ref = ($('[data-sr="' + el.dataset.sn + '"]') || {}).value || ''; if (n && ref.trim()) spec.series[n] = ref.trim(); });
+    const v = id => ($('#' + id) || {}).value || '';
+    if (v('st-start').trim()) spec.start = v('st-start').trim();
+    if (v('st-end').trim()) spec.end = v('st-end').trim();
+    spec.join = v('st-join') || 'both';
+    if (v('st-monthly')) spec.monthly = v('st-monthly');
+    if (v('st-query').trim()) spec.query = v('st-query').trim();
+    const figs = v('st-figs').split(';').map(x => x.trim()).filter(Boolean).map(x => { const p = x.split(':'); return { column: p[0].trim(), stats: (p[1] || 'latest').split(',').map(t => t.trim()).filter(Boolean) }; });
+    if (figs.length) spec.summary = figs;
+    const cols = v('st-chcols').split(',').map(x => x.trim()).filter(Boolean);
+    if (cols.length || v('st-chtitle').trim()) spec.chart = Object.assign({}, cols.length ? { columns: cols } : {}, v('st-chtitle').trim() ? { title: v('st-chtitle').trim() } : {}, v('st-chunit').trim() ? { unit: v('st-chunit').trim() } : {});
+    return spec;
+  }
+  const MEASURE_LABEL = { level: 'As published', yoy: 'Change on a year earlier, %', mom: 'Change on the month before, %', ann3m: 'Three-month change, annualised, %' };
+  function recipePanel(cat, spec) {
+    const was = (spec && spec.recipe && spec.recipe.id) || cat[0].id;   // reopen on the recipe that ran
+    return `<div class="study-recipe">
+      <div class="st-row"><label>Analysis <select id="rc-id">${cat.map(r => `<option value="${r.id}"${r.id === was ? ' selected' : ''}>${esc(r.label)}</option>`).join('')}</select></label>
+        <span class="muted small" id="rc-asks"></span></div>
+      <div class="study-series" id="rc-slots"></div>
+      <div class="st-row study-opts" id="rc-opts"></div>
+      <div class="st-row study-opts"><label>From <input id="rc-start" value="${esc(spec.start || '')}" placeholder="YYYY-MM-DD"></label>
+        <label>To <input id="rc-end" value="${esc(spec.end || '')}" placeholder="latest"></label>
+        <label>Monthly <select id="rc-monthly"><option value="">As published</option><option value="average"${spec.monthly === 'average' ? ' selected' : ''}>Average (rates, prices)</option><option value="end"${spec.monthly === 'end' ? ' selected' : ''}>Month end (stocks)</option><option value="sum"${spec.monthly === 'sum' ? ' selected' : ''}>Sum (flows)</option></select></label></div>
+      <div class="study-run"><button class="btn primary" id="rc-run">Run</button><span class="muted small">Built and run by Plover's server. No AI, no tokens.</span></div>
+      <div id="rc-err"></div></div>`;
+  }
+  // A series picker: type a name, pick from the list; the pick is dataset:code.
+  function slotHtml(slot, picked, shown) {
+    return `<div class="st-row st-slot" data-slot="${esc(slot.name)}" data-code="${esc(picked || '')}"><label>${esc(slot.label)}
+      <input class="st-pick" placeholder="Search a series, e.g. core CPI" value="${esc(picked ? (shown ? shown + ' (' + picked + ')' : picked) : '')}" autocomplete="off" aria-label="${esc(slot.label)}"></label>
+      <div class="st-picklist" hidden></div></div>`;
+  }
+  function wireRecipePanel(cat, spec, sources, onRun) {
+    const picks = Object.assign({}, (spec && spec.series) || {});
+    const titles = {}; (sources || []).forEach(s => { titles[s.name] = s.title || ''; });
+    let timer = null;
+    function current() { return cat.find(r => r.id === $('#rc-id').value) || cat[0]; }
+    function draw() {
+      const r = current();
+      $('#rc-asks').textContent = 'e.g. ' + r.asks;
+      $('#rc-slots').innerHTML = r.slots.map(sl => slotHtml(sl, picks[sl.name], titles[sl.name])).join('');
+      const o = r.options || {};
+      const had = (spec && spec.recipe && spec.recipe.id === r.id && spec.recipe.options) || {};
+      $('#rc-opts').innerHTML = (o.measure ? `<label>Measure <select id="rc-measure">${o.measure.map((m, i) => `<option value="${m}"${(had.measure ? m === had.measure : !i) ? ' selected' : ''}>${esc(MEASURE_LABEL[m] || m)}</option>`).join('')}</select></label>` : '') +
+        (o.periods ? `<label>Periods <input id="rc-periods" type="number" min="1" max="240" value="${had.periods || (r.id === 'change' ? 12 : 3)}"></label>` : '') +
+        (o.unit ? `<label>Change in <select id="rc-unit">${o.unit.map(u => `<option value="${u}"${had.unit === u ? ' selected' : ''}>${u === 'pp' ? 'percentage points' : 'percent'}</option>`).join('')}</select></label>` : '');
+      $$('.st-pick').forEach(inp => {
+        const box = inp.closest('.st-slot'); const list = $('.st-picklist', box);
+        inp.oninput = () => {
+          box.dataset.code = ''; delete picks[box.dataset.slot];
+          clearTimeout(timer); const q = inp.value.trim();
+          if (!q) { list.hidden = true; return; }
+          timer = setTimeout(async () => {
+            let found = [];
+            try { found = (await api('/studies/series?q=' + encodeURIComponent(q))).series; } catch (e) { found = []; }
+            if (inp.value.trim() !== q) return;
+            list.hidden = false;
+            list.innerHTML = found.length ? found.slice(0, 12).map(f => `<button type="button" data-code="${esc(f.dataset + ':' + f.code)}" data-name="${esc(f.name)}"><span>${esc(f.name)}</span><span class="muted">${esc(f.dataset + ':' + f.code)}${f.unit ? ' · ' + esc(f.unit) : ''}</span></button>`).join('')
+              : '<p class="muted">No series match. Try a shorter name, e.g. CPI.</p>';
+            $$('button', list).forEach(b => b.onclick = () => { box.dataset.code = b.dataset.code; picks[box.dataset.slot] = b.dataset.code; inp.value = b.dataset.name + ' (' + b.dataset.code + ')'; list.hidden = true; });
+          }, 220);
+        };
+        inp.onkeydown = e => { if (e.key === 'Escape') list.hidden = true; };
+      });
+    }
+    $('#rc-id').onchange = draw;
+    draw();
+    $('#rc-run').onclick = async () => {
+      const r = current();
+      const series = {};
+      $$('.st-slot').forEach(b => { if (b.dataset.code) series[b.dataset.slot] = b.dataset.code; });
+      const missing = r.slots.filter(sl => !sl.optional && !series[sl.name]);
+      if (missing.length) { $('#rc-err').innerHTML = `<p class="err">Pick a series for ${esc(missing[0].label.toLowerCase())}: type a name and choose from the list.</p>`; return; }
+      const options = {};
+      if ($('#rc-measure')) options.measure = $('#rc-measure').value;
+      if ($('#rc-periods')) options.periods = Number($('#rc-periods').value) || undefined;
+      if ($('#rc-unit')) options.unit = $('#rc-unit').value;
+      $('#rc-err').innerHTML = working('Running on Plover\'s server.');
+      try { await onRun({ recipe: r.id, series, start: $('#rc-start').value.trim(), end: $('#rc-end').value.trim(), monthly: $('#rc-monthly').value, options }); }
+      catch (e) { $('#rc-err').innerHTML = `<p class="err">${esc(e.detail || 'The analysis could not run.')}</p>`; }
+    };
+  }
+  function resultHtml(st, run) {
+    if (!run) return '<p class="muted">No run yet. Ask a question above, or fill in the analysis below and press Run Query.</p>';
+    const tk = run.tokens || {};
+    const by = run.by === 'analyst' ? 'The Analyst' : run.by === 'you' ? 'You' : run.by === 'schedule' ? 'Scheduled refresh' : 'Your AI (' + esc(String(run.by).replace(/^ext:/, '')) + ')';
+    const cost = run.by === 'analyst' && tk.in != null ? ` · ${fmtNum(tk.in + (tk.out || 0), 0)} tokens${tk.cached ? ' (' + fmtNum(tk.cached, 0) + ' from cache)' : ''}` : (run.by === 'you' || run.by === 'schedule' ? ' · no AI used' : '');
+    const shown = run.rows.slice(0, 200);
+    const dps = run.columns.map((c, i) => colDp(run.rows, i));
+    const isNum = run.columns.map((c, i) => run.rows.some(r => typeof r[i] === 'number'));
+    return `<p class="study-by muted small">${by} · ${when(run.created_at)}${cost}${run.question ? ' · asked: “' + esc(run.question) + '”' : ''}</p>
+      ${run.note ? `<div class="study-note">${md(run.note)}</div>` : ''}
+      ${figuresHtml(run.summary, run.sources)}
+      ${run.chart ? chartsHtml([run.chart], 'study') : (run.chart_error ? `<p class="err">${esc(run.chart_error)}</p>` : '')}
+      <h2 class="band">Result <span class="h2-note">${fmtNum(run.rows_total, 0)} rows</span></h2>
+      <div class="study-table"><table class="t"><thead><tr>${run.columns.map((c, i) => `<th${isNum[i] ? ' class="right"' : ''}>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${shown.map(r => `<tr>${r.map((v, i) => `<td${isNum[i] ? ' class="right"' : ''}>${cell(v, dps[i])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="muted small study-foot">${run.rows_total > shown.length ? 'Showing the first ' + shown.length + ' of ' + fmtNum(run.rows_total, 0) + ' rows. ' : ''}<a href="${API}/studies/${st.id}/runs/${run.id}/csv">Download CSV</a> with every row, its sources and the query. <a href="${API}/studies/${st.id}/runs/${run.id}/python">Download for Python</a>: the inputs, the query as plain SQL and a script to run it on your own machine. Sources: ${run.sources.map(s => esc(s.name + ' = ' + (s.title || s.series) + ' (' + (s.release || 'latest') + ')')).join('; ')}.</p>`;
+  }
+  async function vStudies() {
+    const d = await api('/studies');
+    const arch = location.hash.indexOf('archived') !== -1;
+    const list = arch ? (await api('/studies?archived=1')).studies : d.studies;
+    $('#main').innerHTML = topbar([['Studies']]) + `<div class="content"><div class="page narrow">${pageHead('Studies', 'Ask a question about Plover\'s data in plain English. The Analyst writes the query and Plover\'s server runs it, so your AI reads a short preview, not the whole history. Every run is kept.', '<button class="btn" id="st-blank">Build a Study</button>')}
+      ${setupNotice()}
+      <div class="ask study-start"><input id="st-new" placeholder="${esc('e.g. ' + STUDY_EXAMPLE)}" aria-label="Question for a new study"><button class="btn primary" id="st-go">Start Study</button></div>
+      <div id="st-wait"></div><div id="st-undo"></div>
+      <h2 class="band">${arch ? 'Archived Studies' : 'Your Studies'} <span class="h2-note">${list.length}</span></h2>
+      ${list.length ? `<ul class="rows">${list.map(x => `<li data-id="${x.id}"><div data-go="studies/${x.id}"><b>${esc(x.title)}</b></div><time class="muted small">${x.runs ? x.runs + (x.runs === 1 ? ' run' : ' runs') + ' · ' + when(x.last_run_at) : 'not run yet'}</time>${arch ? `<button class="btn sm" data-restore="${x.id}">Restore</button>` : `<button class="btn sm" data-archive="${x.id}" aria-label="Archive ${esc(x.title)}">Archive</button>`}</li>`).join('')}</ul>` : `<p class="muted">${arch ? 'Nothing archived.' : 'No studies yet. Ask a question above, or press Build a Study to pick an analysis yourself.'}</p>`}
+      <p class="muted small" style="margin-top:12px">${arch ? '<a href="#/studies">Back to your studies</a>' : (d.archived ? `<a href="#/studies/archived">Archived (${d.archived})</a>` : '')}</p></div></div>`;
+    const start = async () => {
+      const q = $('#st-new').value.trim() || STUDY_EXAMPLE;
+      $('#st-wait').innerHTML = working('Starting the study. The Analyst is finding the series and running the query on Plover\'s server.');
+      $('#st-new').disabled = true;
+      let made = null;
+      try { made = await api('/studies', { method: 'POST', body: { question: q } }); await api('/studies/' + made.study.id + '/ask', { method: 'POST', body: { question: q } }); go('studies/' + made.study.id); }
+      catch (e) { if (made) { toast(e.detail || 'The Analyst could not finish'); go('studies/' + made.study.id); } else { $('#st-wait').innerHTML = `<p class="err">${esc(e.detail || 'Could not start the study.')}</p>`; $('#st-new').disabled = false; } }
+    };
+    $('#st-go').onclick = start; $('#st-new').onkeydown = e => { if (e.key === 'Enter') start(); };
+    $('#st-blank').onclick = async () => { const m = await api('/studies', { method: 'POST', body: { title: 'Untitled study' } }); go('studies/' + m.study.id); };
+    $$('[data-archive]').forEach(b => b.onclick = async e => {
+      e.stopPropagation(); const id = b.dataset.archive; const li = b.closest('li');
+      await api('/studies/' + id, { method: 'DELETE' }); li.hidden = true;
+      $('#st-undo').innerHTML = `<div class="notice">Archived “${esc($('b', li).textContent)}”. <button class="btn sm" id="st-undo-b">Undo</button></div>`;
+      $('#st-undo-b').onclick = async () => { await api('/studies/' + id + '/restore', { method: 'POST' }); render(); };
+    });
+    $$('[data-restore]').forEach(b => b.onclick = async e => { e.stopPropagation(); await api('/studies/' + b.dataset.restore + '/restore', { method: 'POST' }); toast('Restored'); go('studies'); });
+  }
+  async function vStudy(r) {
+    if (r.id === 'archived') return vStudies();
+    const runId = r.sub && /^run\/\d+$/.test(r.sub) ? r.sub.split('/')[1] : '';
+    const [d, cat] = await Promise.all([api('/studies/' + r.id + (runId ? '?run=' + runId : '')), api('/studies/recipes')]);
+    const st = d.study, run = d.run;
+    const spec = (run && run.spec) || st.spec || {};
+    $('#main').innerHTML = topbar([['Studies', 'studies'], [st.title]]) + `<div class="content"><div class="page wide">
+      <div class="pagehead"><div><input class="study-title" id="st-title" value="${esc(st.title)}" aria-label="Study title"></div>
+        <div class="actions"><label class="study-refresh">Refresh <select id="st-refresh" aria-label="Refresh on a schedule"><option value="">Never</option><option value="daily"${st.refresh === 'daily' ? ' selected' : ''}>Daily</option><option value="weekly"${st.refresh === 'weekly' ? ' selected' : ''}>Weekly</option></select></label></div></div>
+      ${setupNotice()}
+      <div class="ask study-ask"><input id="st-ask" placeholder="${esc(st.question ? 'Ask a follow-up, e.g. now monthly averages since 2010' : 'e.g. ' + STUDY_EXAMPLE)}" aria-label="Question for the Analyst"><button class="btn primary" id="st-askb">Ask the Analyst</button></div>
+      <div id="st-wait"></div>
+      ${runId && st.runs.length && String(st.runs[0].id) !== runId ? `<div class="notice">An earlier run. <a href="#/studies/${st.id}">Show the newest</a></div>` : ''}
+      <section class="study-result">${resultHtml(st, run)}</section>
+      <h2 class="band">Ready-Made Analysis <span class="h2-note">pick and run, no AI</span></h2>
+      ${recipePanel(cat.recipes, spec)}
+      <h2 class="band">Query <span class="h2-note">the analysis as run; edit and run it yourself</span></h2>
+      ${studySpecForm(spec)}
+      <div id="st-runerr"></div>
+      <h2 class="band">Runs <span class="h2-note">${st.runs.length}</span></h2>
+      ${st.runs.length ? `<ul class="rows">${st.runs.map((x, i) => `<li data-go="studies/${st.id}${i ? '/run/' + x.id : ''}"${run && run.id === x.id ? ' class="on"' : ''}><div><b>${x.by === 'analyst' ? 'The Analyst' : x.by === 'you' ? 'You' : x.by === 'schedule' ? 'Scheduled refresh' : esc(String(x.by).replace(/^ext:/, ''))}${x.question ? ': ' + esc(x.question) : ''}</b></div><time class="muted small">${fmtNum(x.rows, 0)} rows · ${when(x.created_at)}</time></li>`).join('')}</ul>` : '<p class="muted">No runs yet.</p>'}
+    </div></div>`;
+    $('#st-refresh').onchange = async e => { try { await api('/studies/' + st.id, { method: 'PUT', body: { refresh: e.target.value } }); toast(e.target.value ? 'Refreshes ' + e.target.value + ' on Plover\'s server, no AI' : 'Refresh off'); } catch (err) { toast(err.detail || 'Could not save'); } };
+    $('#st-title').onchange = async e => { const t = e.target.value.trim(); if (!t) { e.target.value = st.title; toast('A study needs a title'); return; } try { await api('/studies/' + st.id, { method: 'PUT', body: { title: t } }); toast('Title saved'); } catch (err) { toast(err.detail || 'Could not save the title'); } };
+    const ask = async () => {
+      const q = $('#st-ask').value.trim(); if (!q) { $('#st-ask').focus(); toast('Type a question first'); return; }
+      $('#st-wait').innerHTML = working('The Analyst is writing the query and running it on Plover\'s server. This can take a minute.');
+      $('#st-ask').disabled = true;
+      try { await api('/studies/' + st.id + '/ask', { method: 'POST', body: { question: q } }); go('studies/' + st.id); render(); }
+      catch (e) { $('#st-wait').innerHTML = `<p class="err">${esc(e.detail || 'The Analyst could not finish.')} You can also fill in the analysis below and press Run Query.</p>`; $('#st-ask').disabled = false; }
+    };
+    $('#st-askb').onclick = ask; $('#st-ask').onkeydown = e => { if (e.key === 'Enter') ask(); };
+    wireRecipePanel(cat.recipes, spec, run && run.sources, async body => { await api('/studies/' + st.id + '/recipe', { method: 'POST', body }); go('studies/' + st.id); render(); });
+    $('#st-addser').onclick = e => { e.preventDefault(); const box = $('.study-series'); const i = $$('[data-sn]').length; if (i >= 6) { toast('Up to six series'); return; } const row = document.createElement('div'); row.className = 'st-row'; row.innerHTML = `<input class="st-name" data-sn="${i}" placeholder="name" aria-label="Series name"><input class="st-ref" data-sr="${i}" placeholder="dataset:code" aria-label="Series code">`; box.insertBefore(row, e.currentTarget); };
+    $('#st-run').onclick = async () => {
+      const spec2 = readSpecForm();
+      if (!Object.keys(spec2.series).length) { $('#st-runerr').innerHTML = '<p class="err">Name at least one series, e.g. japan = jgb-yields:10Y. Find codes with Ask the Analyst or on the dataset\'s page.</p>'; return; }
+      $('#st-runerr').innerHTML = working('Running on Plover\'s server.');
+      try { await api('/studies/' + st.id + '/run', { method: 'POST', body: { spec: spec2 } }); go('studies/' + st.id); render(); }
+      catch (e) { $('#st-runerr').innerHTML = `<p class="err">${esc(e.detail || 'The query could not run.')}</p>`; }
+    };
+  }
+
   /* ---- Files */
   async function vFiles(r) {
     const d = await api('/files');
@@ -1383,6 +1603,7 @@
         <dt>Provider</dt><dd><select id="provider">${s.providers.map(p => `<option value="${p.id}" ${p.id === prov ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select></dd>
         <dt>Model</dt><dd><input id="model" value="${esc(s.model_name || '')}" placeholder="${esc((s.providers.find(p => p.id === prov) || {}).default_model || '')}"><span class="hint">for research and questions</span></dd>
         <dt>Monitor model</dt><dd><input id="monitor-model" value="${esc(s.monitor_model || '')}" placeholder="same as above"><span class="hint">a cheaper model is enough: the desk does the bookkeeping</span></dd>
+        <dt>Studies model</dt><dd><input id="study-model" value="${esc(s.study_model || '')}" placeholder="same as above"><span class="hint">only writes a short query; a cheaper model is enough</span></dd>
         <dt class="keyrow">API key</dt><dd class="keyrow"><input id="key" type="password" placeholder="${s.model_key_set ? 'Stored · ends ' + esc(s.model_key_last4) + ' · paste to replace' : 'Paste your key'}" ${s.keychain ? '' : 'disabled'}></dd>
         ${s.codex && s.codex.available ? `<dt>ChatGPT account</dt><dd id="codex-row">${codexRow(s.codex)}</dd>` : ''}
         <dt></dt><dd><button class="btn primary" id="save-model">Save</button><button class="btn keyrow" id="test-model" ${s.model_key_set ? '' : 'disabled'}>Test</button><span class="hint" id="model-msg"></span></dd></dl></div>
@@ -1415,7 +1636,7 @@
     $('#provider').onchange = () => { const p = s.providers.find(x => x.id === $('#provider').value); $('#model').placeholder = p ? (p.default_model || (p.id === 'codex' ? 'Codex default' : '')) : ''; keyRows(); };
     $('#provider').onchange();
     bindCodex();
-    $('#save-model').onclick = async () => { const m = $('#model-msg'); m.textContent = 'Saving'; try { await api('/settings', { method: 'POST', body: { model_provider: $('#provider').value, model_name: $('#model').value, monitor_model: $('#monitor-model').value, model_key: $('#key').value } }); m.textContent = 'Saved'; render(); } catch (e) { m.textContent = e.detail || 'Could not save'; } };
+    $('#save-model').onclick = async () => { const m = $('#model-msg'); m.textContent = 'Saving'; try { await api('/settings', { method: 'POST', body: { model_provider: $('#provider').value, model_name: $('#model').value, monitor_model: $('#monitor-model').value, study_model: $('#study-model').value, model_key: $('#key').value } }); m.textContent = 'Saved'; render(); } catch (e) { m.textContent = e.detail || 'Could not save'; } };
     $('#test-model').onclick = async () => { const m = $('#model-msg'); m.textContent = 'Testing'; try { const r = await api('/settings/test', { method: 'POST' }); m.textContent = 'The model answered: ' + (r.reply || 'ok'); } catch (e) { m.textContent = e.detail || 'The test failed'; } };
     $('#save-slack').onclick = async () => { const m = $('#slack-msg'); m.textContent = 'Saving'; try { await api('/settings', { method: 'POST', body: { slack_webhook: $('#slack').value, slack_label: $('#slack-label').value } }); m.textContent = 'Saved'; render(); } catch (e) { m.textContent = e.detail || 'Could not save'; } };
   }

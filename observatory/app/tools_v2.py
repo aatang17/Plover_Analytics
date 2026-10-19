@@ -222,9 +222,19 @@ def _screen_banks(sort, f, limit):
 
 
 def _screen_sec(sort, f, limit):
-    return _eq("sec_api").screen(metric=sort, fy=str(f.get("fy", "") or ""),
-                                 order=str(f.get("order", "desc") or "desc"),
-                                 unit=str(f.get("unit", "USD") or "USD"), limit=limit)
+    m = _eq("sec_api")
+    # Ratios (roe_pct, operating_margin_pct …) and the universe filters live on
+    # /screener; a bare key-indicator rank by fiscal year stays on /screen.
+    if sort not in m.SCREEN_FIELDS or any(k in f for k in ("sic", "industry", "exchange", "tickers")):
+        return call_api(m.screener, sic=str(f.get("sic", "") or ""), industry=str(f.get("industry", "") or ""),
+                          exchange=str(f.get("exchange", "") or ""),
+                          tickers=str(f.get("tickers", "") or ""),
+                          unit=str(f.get("unit", "USD") or "USD"),
+                          min_revenue=str(f.get("min_revenue", "") or ""),
+                          sort=sort, order=str(f.get("order", "desc") or "desc"), limit=limit)
+    return m.screen(metric=sort, fy=str(f.get("fy", "") or ""),
+                    order=str(f.get("order", "desc") or "desc"),
+                    unit=str(f.get("unit", "USD") or "USD"), limit=limit)
 
 
 def _screen_fns():
@@ -611,7 +621,6 @@ SEARCH_SYNONYMS = {
     "ust": ("treasury",),
     "tips": ("real yield",),
     "inflation": ("cpi", "consumer price"),
-    "jobless": ("unemployment",),
     "job": ("employment",),
     "wage": ("earnings",),
     "salary": ("wage", "earnings"),
@@ -620,6 +629,9 @@ SEARCH_SYNONYMS = {
     "tourism": ("visitor", "guest"),
     "boj": ("bank of japan",),
     "gdp": ("gross domestic product",),
+    "lending": ("loan",),
+    "credit": ("loan",),
+    "jobless": ("unemployment",),
     u"金利": (u"利回り", u"イールド"),
 }
 _QUERY_FILLER = {"the", "of", "and", "in", "for", "a", "an", "to", "on", "by", "vs",
@@ -1691,7 +1703,12 @@ _HOW = (
 )
 
 
-def instructions():
+def instructions(compact=False):
+    """What the data is, for a model. The full form (each dataset's summary
+    and credit line) is for an outside client that reads it once at
+    connection; the compact form names each dataset in a few words, for a
+    prompt that is re-sent on every step of a run — describe_dataset gives
+    the summary when one is needed."""
     parts = ["This server is the Plover Analytics: Japanese official statistics and "
              "company disclosures, deep on one market. Datasets by section:"]
     by = dict((s["id"], s) for s in registry.by_section())
@@ -1702,9 +1719,16 @@ def instructions():
         lines = []
         for i in ids:
             m = registry.get(i)
-            lines.append("%s — %s. %s Credit: %s" % (i, m["name"]["en"], m["summary"],
-                                                    m["source"]["credit"]))
+            if compact:
+                lines.append("%s (%s%s)" % (i, m["name"]["en"],
+                                            ", " + m["frequency"] if m.get("frequency") else ""))
+            else:
+                lines.append("%s — %s. %s Credit: %s" % (i, m["name"]["en"], m["summary"],
+                                                        m["source"]["credit"]))
         parts.append("%s: %s" % (sec["label"].upper(), " | ".join(lines)))
+    if compact:
+        parts.append("describe_dataset tells what one dataset holds and its series codes; "
+                     "search finds a series or company by name.")
     parts.append(_RULES)
     parts.append(_HOW)
     return "\n\n".join(parts)

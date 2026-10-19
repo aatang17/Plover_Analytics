@@ -124,6 +124,15 @@ function api(path, opts) {
       // A 401 from the sign-in itself is a wrong password, not an expired session:
       // let its message through, and keep what the person typed.
       if (r.status === 401 && path !== "/login") { renderLogin(""); throw new Error("Signed out"); }
+      // Signing in as someone else in another tab changes who this page acts
+      // as: reload so the menu is theirs, rather than show their refusals.
+      if (r.status === 403 && ME && path !== "/session") {
+        fetch("/admin/api/session", { credentials: "same-origin" }).then(function (x) { return x.json(); })
+          .then(function (sess) {
+            var now = sess && sess.user;
+            if (!now || now.id !== ME.id || now.shared !== ME.shared) location.reload();
+          }).catch(function () {});
+      }
       if (!r.ok) {
         return r.json().catch(function () { return {}; }).then(function (b) {
           throw new Error(b.detail || "The request failed (" + r.status + ")");
@@ -257,13 +266,17 @@ function route() {
   var known = ADMIN_NAV.some(function (g) {
     return g.pages.some(function (p) { return p.id === view; });
   });
-  if (!known || !allowed.some(function (p) { return p.id === view; })) view = fallback;
+  var denied = null;
+  if (known && !allowed.some(function (p) { return p.id === view; })) {
+    ADMIN_NAV.forEach(function (g) { g.pages.forEach(function (p) { if (p.id === view) denied = p; }); });
+  }
+  if (!known || denied) view = fallback;
   var arg = parts[1] || null;
   /* #parties/new/<edinet-code> carries the filer to prefill from. */
   var arg2 = parts[2] || null;
   var links = document.querySelectorAll(".admin-nav-item");
   for (var i = 0; i < links.length; i++) {
-    if (links[i].getAttribute("data-view") === view) links[i].setAttribute("aria-current", "page");
+    if (!denied && links[i].getAttribute("data-view") === view) links[i].setAttribute("aria-current", "page");
     else links[i].removeAttribute("aria-current");
   }
   var side = document.getElementById("admin-sidebar");
@@ -271,6 +284,15 @@ function route() {
   var target = document.getElementById("admin-view");
   if (!target) return;
   disposeTrafficChart();  // the view about to be replaced may own it
+  if (denied) {
+    // say why, rather than quietly showing another page
+    target.innerHTML = '<div class="admin-alert"><span class="head">' + escapeHtml(denied.label) +
+      " needs the " + escapeHtml(denied.perm.charAt(0).toUpperCase() + denied.perm.slice(1)) +
+      " permission.</span> Ask someone with the Team permission to add it to your account. " +
+      '<a href="#' + escapeHtml(fallback) + '">Go to ' +
+      escapeHtml((allowed[0] || { label: "My Account" }).label) + "</a></div>";
+    return;
+  }
   if (view === "articles") location.href = "write.html";
   else if (view === "ai") viewAISetup(target);
   else if (view === "team") viewTeam(target);

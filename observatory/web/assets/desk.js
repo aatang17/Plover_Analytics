@@ -641,6 +641,22 @@ function loadDatasets() {
   });
 }
 
+/* The measures a dataset's frequency allows. Rates of change look back whole
+   months, so a daily or weekly series offers only its published values (the
+   API refuses the rest), and a monthly change needs monthly data. */
+var MEASURES_BY_FREQ = {
+  monthly: ["index", "yoy", "mom", "ann3m"],
+  quarterly: ["index", "yoy", "ann3m"],
+  semiannual: ["index", "yoy"],
+  annual: ["index", "yoy"],
+};
+
+function measuresFor(slug) {
+  var d = (S.datasets || []).filter(function (x) { return x.slug === slug; })[0];
+  if (!d) return MEASURES.map(function (m) { return m.key; });   // catalogue not loaded yet
+  return MEASURES_BY_FREQ[d.frequency] || ["index"];
+}
+
 function datasetName(slug) {
   var d = (S.datasets || []).filter(function (x) { return x.slug === slug; })[0];
   return d ? d.title : slug;
@@ -678,6 +694,7 @@ function renderChartBlock(c, b) {
     }).join("") + "</div>" +
     '<span class="dk-dates" hidden><label>From <input type="text" data-f="start" placeholder="YYYY-MM" maxlength="10"></label>' +
     '<label>to <input type="text" data-f="end" placeholder="latest" maxlength="10"></label></span>' +
+    '<button type="button" class="dk-mini dk-savechart" data-savechart="1" title="Keep this chart under Research → Charts">Save Chart</button>' +
     "</div>" +
     '<div class="dk-chart-plot" aria-label="Chart preview"></div>' +
     '<p class="source-line dk-chart-src"></p>' +
@@ -689,9 +706,17 @@ function renderChartBlock(c, b) {
   $('[data-f="note"]', c).value = b.note || "";
   delete b._open;
   if (rangeKey(b) === "custom") $(".dk-dates", c).hidden = false;
-  loadDatasets().then(function () { chartControls(c, b); });
+  // A rate needs the catalogue to know it applies: a chart saved before its
+  // measure stopped applying waits for it, then draws as published.
+  var wait = !S.datasets && (b.measure || "index") !== "index";
+  loadDatasets().then(function () {
+    var stale = b.dataset && measuresFor(b.dataset).indexOf(b.measure || "index") === -1;
+    if (stale) b.measure = "index";
+    chartControls(c, b);
+    if (wait || stale) drawChart(c, b);
+  });
   chartControls(c, b);
-  drawChart(c, b);
+  if (!wait) drawChart(c, b);
 }
 
 /* Chips, search hint and pressed buttons, from the model. */
@@ -704,8 +729,15 @@ function chartControls(c, b) {
     : "Search any series, e.g. core CPI, 10-year yield, births";
   q.disabled = b.series.length >= 6;
   $(".dk-chart-opts", c).hidden = !has;
+  var allowed = measuresFor(b.dataset);
+  var freq = ((S.datasets || []).filter(function (x) { return x.slug === b.dataset; })[0] || {}).frequency;
   $all("[data-measure]", c).forEach(function (x) {
-    x.setAttribute("aria-pressed", String(x.getAttribute("data-measure") === (b.measure || "index")));
+    var key = x.getAttribute("data-measure");
+    var ok = allowed.indexOf(key) !== -1;
+    x.disabled = !ok;
+    x.title = ok ? MEASURES.filter(function (m) { return m.key === key; })[0].full
+      : "Not available for " + (freq || "this") + " data: only published values can be charted.";
+    x.setAttribute("aria-pressed", String(key === (b.measure || "index")));
   });
   var rk = rangeKey(b);
   var dates = $(".dk-dates", c);
@@ -794,6 +826,7 @@ function pickSeries(c, b, pick) {
     b._names[code] = pick.getAttribute("data-name");
   }
   $(".dk-results", c).hidden = true;
+  if (measuresFor(b.dataset).indexOf(b.measure || "index") === -1) b.measure = "index";
   var q = $('[data-f="q"]', c);
   q.value = "";
   retitle(c, b, before);
@@ -861,6 +894,7 @@ function drawChart(c, b) {
     if (chartQuery(b) !== want) return;   // changed while loading
     plot.innerHTML = "";
     if (!r.ok) {
+      plot.classList.add("empty");
       err.hidden = false;
       err.textContent = r.body.detail || "This chart could not be drawn.";
       return;
@@ -872,6 +906,7 @@ function drawChart(c, b) {
     if (wasAuto) retitle(c, b, b.title);
     chartControls(c, b);
     if (!r.body.series.some(function (s) { return s.points.some(function (p) { return p[1] !== null; }); })) {
+      plot.classList.add("empty");
       err.hidden = false;
       err.textContent = "No values in the chosen date range.";
       return;
@@ -882,6 +917,7 @@ function drawChart(c, b) {
       " Publishing freezes the data as it stands that day.";
   }).catch(function () {
     plot.innerHTML = "";
+    plot.classList.add("empty");
     err.hidden = false;
     err.textContent = "The data could not be loaded. Check the connection and try again.";
   });
@@ -1563,6 +1599,8 @@ function onClick(e) {
     }
     var rg = t.closest("[data-range]");
     if (rg) { setRange(c, model, rg.getAttribute("data-range")); changed(); return; }
+    var sv = t.closest("[data-savechart]");
+    if (sv) { saveChart(model, sv); return; }
     if (t.getAttribute("data-f") === "q") searchSeries(c, model, t.value);
   }
   if (model.type === "datachart") {

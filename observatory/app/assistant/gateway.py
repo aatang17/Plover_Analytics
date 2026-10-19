@@ -13,7 +13,19 @@ The neutral shapes the runner uses:
   tools:    [{"name", "description", "parameters": <JSON schema>}]
 
   complete(...) -> {"text": str, "tool_calls": [{"id","name","args"}],
-                    "usage": {"in": int, "out": int}, "stop": str}
+                    "usage": {"in": int, "out": int, "cached": int}, "stop": str}
+
+"in" is every input token the model read this turn, cached or not, so a
+budget counts the same work on every provider; "cached" is the part of it
+served from the provider's prompt cache, which is billed at a fraction of
+the normal rate.
+
+A run sends the whole conversation again on every step, so each step's
+input repeats everything before it. Anthropic caches that repeated part only
+when the request asks: every Anthropic request here marks the end of the
+system prompt (tools and system, the same on every step of a run) and asks
+for automatic caching of the growing conversation after it. OpenAI and
+DeepSeek cache repeated prompts on their own; their usage says how much.
 """
 import json
 import urllib.error
@@ -99,9 +111,12 @@ def _anthropic_messages(messages):
 
 def _anthropic(key, model, messages, tools, max_tokens, base_url):
     system, msgs = _anthropic_messages(messages)
-    body = {"model": model, "max_tokens": max_tokens, "messages": msgs}
+    # Prompt caching: an explicit breakpoint after the system prompt, and the
+    # top-level field for the conversation that grows behind it.
+    body = {"model": model, "max_tokens": max_tokens, "messages": msgs,
+            "cache_control": {"type": "ephemeral"}}
     if system:
-        body["system"] = system
+        body["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
     if tools:
         body["tools"] = [{"name": t["name"], "description": t["description"],
                           "input_schema": t["parameters"]} for t in tools]
@@ -116,9 +131,12 @@ def _anthropic(key, model, messages, tools, max_tokens, base_url):
             calls.append({"id": block.get("id"), "name": block.get("name"),
                           "args": block.get("input") or {}})
     usage = resp.get("usage") or {}
+    # input_tokens counts only what was neither read from nor written to the cache
+    read = int(usage.get("cache_read_input_tokens") or 0)
+    written = int(usage.get("cache_creation_input_tokens") or 0)
     return {"text": "".join(text).strip(), "tool_calls": calls,
-            "usage": {"in": int(usage.get("input_tokens") or 0),
-                      "out": int(usage.get("output_tokens") or 0)},
+            "usage": {"in": int(usage.get("input_tokens") or 0) + read + written,
+                      "out": int(usage.get("output_tokens") or 0), "cached": read},
             "stop": resp.get("stop_reason") or ""}
 
 
@@ -173,9 +191,13 @@ def _openai(key, model, messages, tools, max_tokens, base_url):
             args = {"_unparseable": fn.get("arguments")}
         calls.append({"id": tc.get("id"), "name": fn.get("name"), "args": args})
     usage = resp.get("usage") or {}
+    # prompt_tokens already includes the cached part; OpenAI reports it under
+    # prompt_tokens_details, DeepSeek as prompt_cache_hit_tokens
+    cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") \
+        or usage.get("prompt_cache_hit_tokens") or 0
     return {"text": (msg.get("content") or "").strip(), "tool_calls": calls,
             "usage": {"in": int(usage.get("prompt_tokens") or 0),
-                      "out": int(usage.get("completion_tokens") or 0)},
+                      "out": int(usage.get("completion_tokens") or 0), "cached": int(cached)},
             "stop": choice.get("finish_reason") or ""}
 
 

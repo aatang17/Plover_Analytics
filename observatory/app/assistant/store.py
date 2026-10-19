@@ -275,6 +275,40 @@ CREATE TABLE IF NOT EXISTS ia_article_turns (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ia_article_turns_chat ON ia_article_turns (chat_id, id);
+CREATE TABLE IF NOT EXISTS ia_studies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  question TEXT NOT NULL DEFAULT '',
+  spec_json TEXT NOT NULL DEFAULT '{}',
+  archived_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ia_studies_owner ON ia_studies (account_id, updated_at);
+CREATE TABLE IF NOT EXISTS ia_study_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  study_id INTEGER NOT NULL,
+  account_id INTEGER NOT NULL,
+  by TEXT NOT NULL,
+  question TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  spec_json TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  rows INTEGER NOT NULL,
+  run_id INTEGER,
+  tokens_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ia_study_runs_study ON ia_study_runs (study_id, id);
+CREATE TABLE IF NOT EXISTS ia_analyses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL,
+  run_id INTEGER,
+  result_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ia_analyses_run ON ia_analyses (run_id, id);
 """
 
 APPROVAL_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -297,7 +331,12 @@ def conn():
                         "ALTER TABLE ia_list_items ADD COLUMN name_ja TEXT",
                         # a Codex sign-in (ChatGPT plan): auth.json, sealed
                         "ALTER TABLE ia_desks ADD COLUMN codex_auth_ct TEXT",
-                        "ALTER TABLE ia_desks ADD COLUMN codex_email TEXT"):
+                        "ALTER TABLE ia_desks ADD COLUMN codex_email TEXT",
+                        # a cheaper model for Studies, which only writes SQL
+                        "ALTER TABLE ia_desks ADD COLUMN study_model TEXT",
+                        # a study that re-runs itself: 'daily' or 'weekly', and when it last did
+                        "ALTER TABLE ia_studies ADD COLUMN refresh TEXT",
+                        "ALTER TABLE ia_studies ADD COLUMN refreshed_at INTEGER"):
                 try:
                     _conn.execute(ddl)
                 except sqlite3.OperationalError:
@@ -362,6 +401,7 @@ def desk(account_id):
         "model_provider": row["model_provider"],
         "model_name": row["model_name"],
         "monitor_model": row["monitor_model"],
+        "study_model": row["study_model"],
         "model_key_last4": row["model_key_last4"],
         "model_key_set": bool(row["model_key_ct"]),
         "slack_set": bool(row["slack_webhook_ct"]),
@@ -382,7 +422,7 @@ def desk_secrets(account_id):
 
 def update_desk(account_id, **fields):
     desk(account_id)
-    allowed = ("model_provider", "model_name", "monitor_model", "model_key_ct", "model_key_last4",
+    allowed = ("model_provider", "model_name", "monitor_model", "study_model", "model_key_ct", "model_key_last4",
                "slack_webhook_ct", "slack_label", "policy_json", "codex_auth_ct", "codex_email")
     sets = [k for k in fields if k in allowed]
     if not sets:
@@ -1074,3 +1114,154 @@ def delete_data_source(owner, source_id):
     table, col, oid = _src(owner)
     _write("DELETE FROM " + table + " WHERE id = ? AND " + col + " = ?", (source_id, oid))
     return True
+
+
+# ----------------------------------------------------------------- studies
+# A study is one person's saved analysis (app/analysis.py): a title, the
+# question asked and the spec that answers it. Every run of it is kept, never
+# changed: re-running, editing the query or asking the Analyst again adds a
+# run, so earlier evidence stays exactly as it was. Archived studies are
+# hidden, not deleted, and come back with restore.
+
+STUDY_ROWS_MAX = 20000      # rows kept with a run; beyond this the result says so
+
+
+def _study_out(r):
+    r["spec"] = _loads(r.pop("spec_json", None), {})
+    return r
+
+
+def add_study(account_id, title, question=""):
+    t = now()
+    sid = _write("INSERT INTO ia_studies (account_id, title, question, created_at, updated_at) "
+                 "VALUES (?, ?, ?, ?, ?)", (account_id, (title or "Untitled study")[:160],
+                                             (question or "")[:2000], t, t))
+    return study(account_id, sid)
+
+
+def studies(account_id, archived=False):
+    rows = _rows(conn().execute(
+        "SELECT s.id, s.title, s.question, s.created_at, s.updated_at, s.archived_at, "
+        "(SELECT count(*) FROM ia_study_runs r WHERE r.study_id = s.id) AS runs, "
+        "(SELECT max(created_at) FROM ia_study_runs r WHERE r.study_id = s.id) AS last_run_at "
+        "FROM ia_studies s WHERE s.account_id = ? AND s.archived_at IS " +
+        ("NOT NULL" if archived else "NULL") + " ORDER BY s.updated_at DESC", (account_id,)))
+    return rows
+
+
+def study(account_id, study_id):
+    r = _row(conn().execute("SELECT * FROM ia_studies WHERE id = ? AND account_id = ?",
+                            (study_id, account_id)))
+    if r is None:
+        return None
+    r = _study_out(r)
+    r["runs"] = _rows(conn().execute(
+        "SELECT id, by, question, rows, run_id, tokens_json, created_at FROM ia_study_runs "
+        "WHERE study_id = ? ORDER BY id DESC", (study_id,)))
+    for x in r["runs"]:
+        x["tokens"] = _loads(x.pop("tokens_json", None), {})
+    return r
+
+
+REFRESH_CHOICES = ("daily", "weekly")
+
+
+def update_study(account_id, study_id, title=None, question=None, spec=None, refresh=False):
+    """``refresh`` False leaves the setting alone; None or a choice sets it."""
+    cur = study(account_id, study_id)
+    if cur is None:
+        return None
+    keep = cur.get("refresh") if refresh is False else (refresh if refresh in REFRESH_CHOICES else None)
+    _write("UPDATE ia_studies SET title = ?, question = ?, spec_json = ?, refresh = ?, updated_at = ? "
+           "WHERE id = ? AND account_id = ?",
+           ((title if title is not None else cur["title"])[:160] or "Untitled study",
+            (question if question is not None else cur["question"])[:2000],
+            json.dumps(spec if spec is not None else cur["spec"], ensure_ascii=False),
+            keep, now(), study_id, account_id))
+    return study(account_id, study_id)
+
+
+def studies_due(at=None):
+    """Studies whose refresh is due: a daily one not refreshed since the last
+    14:00 UTC (after the day's ingest), a weekly one a week after its last.
+    Archived studies and ones with no analysis yet are left alone."""
+    at = at if at is not None else now()
+    day = 24 * 3600
+    today_1400 = (at // day) * day + 14 * 3600
+    last_1400 = today_1400 if at >= today_1400 else today_1400 - day
+    rows = _rows(conn().execute(
+        "SELECT * FROM ia_studies WHERE refresh IN ('daily', 'weekly') AND archived_at IS NULL "
+        "AND spec_json != '{}'"))
+    due = []
+    for r in rows:
+        last = r["refreshed_at"] or 0
+        if (r["refresh"] == "daily" and last < last_1400) or \
+                (r["refresh"] == "weekly" and last < at - 7 * day):
+            due.append(_study_out(r))
+    return due
+
+
+def mark_refreshed(study_id, at=None):
+    _write("UPDATE ia_studies SET refreshed_at = ? WHERE id = ?",
+           (at if at is not None else now(), study_id))
+
+
+def archive_study(account_id, study_id, archived=True):
+    _write("UPDATE ia_studies SET archived_at = ? WHERE id = ? AND account_id = ?",
+           (now() if archived else None, study_id, account_id))
+    return study(account_id, study_id)
+
+
+def _keepable(result):
+    """A result as a run keeps it: every row up to STUDY_ROWS_MAX."""
+    out = dict(result)
+    rows = out.get("rows") or []
+    out["rows_total"] = len(rows)
+    if len(rows) > STUDY_ROWS_MAX:
+        out["rows"] = rows[:STUDY_ROWS_MAX]
+    return out
+
+
+def add_study_run(account_id, study_id, by, result, question="", note="", run_id=None, tokens=None):
+    """Keep one run of a study, and make its spec the study's current one."""
+    if study(account_id, study_id) is None:
+        return None
+    kept = _keepable(result)
+    rid = _write(
+        "INSERT INTO ia_study_runs (study_id, account_id, by, question, note, spec_json, result_json, "
+        "rows, run_id, tokens_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (study_id, account_id, by[:80], (question or "")[:2000], (note or "")[:8000],
+         json.dumps(result.get("spec") or {}, ensure_ascii=False),
+         json.dumps(kept, ensure_ascii=False, default=str), kept["rows_total"], run_id,
+         json.dumps(tokens or {}), now()))
+    update_study(account_id, study_id, spec=result.get("spec") or {})
+    return rid
+
+
+def study_run(account_id, study_id, run_row_id=None):
+    """One kept run in full (the newest when no id is given), or None."""
+    sql = ("SELECT * FROM ia_study_runs WHERE study_id = ? AND account_id = ? " +
+           ("AND id = ? " if run_row_id else "") + "ORDER BY id DESC LIMIT 1")
+    params = (study_id, account_id) + ((run_row_id,) if run_row_id else ())
+    r = _row(conn().execute(sql, params))
+    if r is None:
+        return None
+    r["spec"] = _loads(r.pop("spec_json", None), {})
+    r["result"] = _loads(r.pop("result_json", None), {})
+    r["tokens"] = _loads(r.pop("tokens_json", None), {})
+    return r
+
+
+def add_analysis(account_id, run_id, result):
+    """An analysis an AI run made (its spec and full result), kept under the run
+    so the request that started the run can take it, whichever process ran it."""
+    return _write("INSERT INTO ia_analyses (account_id, run_id, result_json, created_at) "
+                  "VALUES (?, ?, ?, ?)", (account_id, run_id,
+                                          json.dumps(_keepable(result), ensure_ascii=False,
+                                                     default=str), now()))
+
+
+def analyses_for_run(account_id, run_id):
+    rows = _rows(conn().execute("SELECT id, result_json FROM ia_analyses WHERE account_id = ? "
+                                "AND run_id = ? ORDER BY id", (account_id, run_id)))
+    return [dict(id=r["id"], result=_loads(r["result_json"], {})) for r in rows]

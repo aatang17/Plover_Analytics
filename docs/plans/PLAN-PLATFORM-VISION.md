@@ -1,173 +1,120 @@
-# PLAN — Platform Vision: Japan Without a Japan Analyst
+# Plover: What It Becomes
 
-> **Status:** PROPOSAL v1 — awaiting approval. This is the umbrella document: it sits
-> *above* the three product plans and gives them one destination. It changes no schema
-> and no code by itself.
->
-> **One-liner:** The platform that lets a foreign investor or hedge fund run Japanese
-> exposure — starting with the governance-reform trade — without hiring a Japan analyst:
-> every primary source read, extracted, translated, screened, and monitored in English,
-> with the filing behind every number.
->
-> **Companion docs:** [PLAN-JAPAN-MACRO-OBSERVATORY.md](PLAN-JAPAN-MACRO-OBSERVATORY.md)
-> (macro, product #1) · [PLAN-CROSS-SHAREHOLDING-DB.md](PLAN-CROSS-SHAREHOLDING-DB.md)
-> (holdings, product #2) · [PLAN-BOARD-AND-PAY.md](PLAN-BOARD-AND-PAY.md) (governance,
-> surface #3) · [../SYLLABUS-JAPAN-EQUITIES.md](../SYLLABUS-JAPAN-EQUITIES.md) (the
-> domain map this vision is built on)
+Status: draft for decision, 19 October 2026. Replaces the earlier "Japan Without a Japan
+Analyst" vision, which is retired in full. Nothing here is built by this document.
 
----
+Written for: Aaron, as owner, and every working session that needs to know where the
+product is going.
 
-## 1. The customer and the job
+## The Answer
 
-**Who.** A fund that wants Japan exposure but has no Tokyo office and no Japanese
-speaker: US/European event-driven and value funds, family offices, smaller hedge funds,
-and increasingly the "generalist PM plus AI tools" shop. Today their choices are
-(a) hire a Japan analyst at $300–500k fully loaded, (b) rent sell-side coverage and
-accept its conflicts and gaps, or (c) skip the market. Japan is the most active
-governance situation in the developed world and most of these funds are choosing (c)
-because of language and plumbing, not conviction.
+Plover becomes **your analyst for markets, built on official data that nobody else
+keeps.**
 
-**The job we do.** A Japan analyst's week is mostly mechanical: read filings in
-Japanese, extract the numbers, screen for names, monitor the portfolio for events,
-explain the local context. That mechanical 70% is exactly what a database with an
-extraction pipeline does better than a person — completely, every filer, every day,
-with a citation. So the honest framing is:
+You ask it something. It answers with the number, the chart and the source. It
+remembers what you cover. It watches every release and filing for you, and tells you
+first when something changes. When you need to write, it drafts the note with the
+charts already in it.
 
-> **We replace the *first* analyst you would hire, not the last.**
+The data is the moat. The analyst is the product. Publishing is how it spreads.
 
-What we do **not** replace, and never claim to: judgment, valuation calls, management
-meetings, channel checks, taste in ideas. We are a data and publishing product, not an
-adviser — this line also keeps us out of investment-advice regulation (§7).
+## Who It Is For
 
-**Why the governance trade first.** "Invest in Japan" is too broad to own. "The
-governance-reform trade — unwinds, buybacks, boards, activism, M&A — investable from
-abroad" is ownable, because it runs on Japanese-only primary documents nobody else
-structures in English, and it is the trade foreign money actually wants on.
+In the order they pay:
 
-## 2. Scope: Japan is the product, Asia is the brand
+1. Sell-side economists and strategists.
+2. Buy-side and quant data teams, and their own AI agents.
+3. Discretionary portfolio managers.
+4. Writers and small research shops.
+5. Academics, free, because citations make Plover the standard source.
 
-Standing decision (unchanged): **Japan deep, not Asia wide.** The Substack brand is
-*Asia* Economics Observations and the long-term ambition is "invest in Asia without a
-local analyst" — but Asia is the **option**, not the roadmap. The trigger to open a
-second market is a paying customer asking for it, or Japan revenue proving the playbook
-repeats. (When that day comes, Korea is the natural analog — chaebol governance and the
-Value-up programme mirror the TSE reform story — but that is a future decision, made
-explicitly, not drift.) Until then, every hour goes into Japan depth, because depth is
-the moat and breadth is CEIC's business.
+## The Product: One Box, Four Jobs
 
-## 3. The product: five layers
+There is one place to start: a question box. Everything else sits behind it.
 
-The vision is one stack. Each layer makes the one below it sellable.
-
-| Layer | What it is | State today |
+| Job | What the person gets | Built today as |
 | --- | --- | --- |
-| **1. Data** | Primary-source datasets, extracted and archived: CPI (822 series), BOJ balance sheet, cross-shareholdings (~204k named holdings), boards & pay (~49k directors, ¥100m individuals), buybacks (~6.4k programmes) | **Live locally; the core asset** |
-| **2. Dossier** | One page per company that assembles everything: who it holds, who holds it, the board, pay, buyback record, unwind pace vs stated intent. The analyst's briefing book, generated | Partial — holdings/governance/buyback pages exist as separate surfaces; the unified dossier does not |
-| **3. Screens** | Idea generation: biggest remaining cross-holders, fastest/slowest unwinds, sub-book laggards, entrenched boards, cash-rich under-buyers, pay outliers | Partial (unwind ranking exists); blocked on prices for anything ratio-based |
-| **4. Watch** | The retention product: watchlists + event alerts + a weekly English digest ("your names this week: 2 buyback resolutions, 1 new 5% filer, 1 AGM result"). This is the analyst function funds *feel* the absence of daily | **Missing.** Raw material already being captured daily (EDINET extraordinary reports, 5% filings, tender offers, AGM voting results; TDnet fast tape) but none of it parsed or surfaced |
-| **5. Access** | How the customer consumes it: web for humans, CSV for analysts, API for quants, **MCP for the customer's own AI agent** | Web + API + MCP live for existing datasets |
+| Ask | An answer with its number, chart, source and working | Studies, inside the Investment Assistant |
+| Keep | Saved answers that re-run when new data lands | Investment Assistant coverage and saved studies |
+| Watch | A message from Plover when a saved answer or a covered company changes | Not built. Only drawn on the mockup canvas |
+| Write | The answer turned into a note or post, charts frozen and citable | Writer Desk and PloverResearch |
 
-**The 2026 point about layer 5.** "Without a Japan analyst" increasingly means "my AI
-does the analyst work." An LLM alone cannot be trusted on Japan — it hallucinates
-numbers and cannot read what was never digitised in English. Our MCP server makes the
-customer's *own* agent a competent Japan analyst, because every answer is grounded in
-tool calls against filed data with citations. This is fully consistent with keeping our
-own Ask box off: we do not run the LLM or bear its liability — the customer runs
-theirs; we sell the ground truth it stands on. "The data layer for your Japan agent"
-may end up the strongest institutional pitch we have.
+Today these are separate apps with separate front doors. The end state is one product,
+one account, one box. The Investment Assistant and the Writer Desk stop being names a
+customer has to learn.
 
-## 4. What makes this defensible
+Underneath sits the data layer: every dataset, the API and the MCP server. It is sold on
+its own as well, to people who bring their own tools.
 
-1. **The archive compounds** (unchanged from the product plans): EDINET deletes,
-   TDnet retains ~31 days, vintages accumulate only forward. Every day the capture
-   runs, the platform gets harder to replicate.
-2. **The entity graph.** 94% of free-text holding names resolved to entity codes, and
-   climbing. Joins nobody else can run (board age × unwind pace, buybacks × who owns
-   you) exist only because one database holds all of it, resolved.
-3. **The reverse views.** "Who holds this company" and "who filed 5% on this company"
-   appear in no single filing — they exist only in the assembled database.
-4. **Workflow lock-in.** Watchlists and alerts (layer 4) create switching costs the
-   raw data never will. A fund that has monitored its book through us for a year
-   doesn't leave over price.
-5. **Audience first.** The Substack means we arrive with readers, not cold emails.
+## Markets
 
-Not defensible, and worth saying plainly: the extraction itself. The tables are tagged
-XBRL; a funded incumbent could rebuild the pipeline in a quarter. They cannot rebuild
-the archive, the resolved graph, the vintage history, or the readership.
+Japan, Hong Kong and the United States are live. More follow. Every market meets the same
+bar before it ships: sources on every number, point-in-time history, and its own line in
+the health report.
 
-## 5. Roadmap
+## What Makes It Hard to Copy
 
-Phases, not dates — each phase is sellable on its own and none requires the next.
+- **Point-in-time history.** Every release is kept as it was published. This only grows
+  forward. A competitor starting today can never have our past.
+- **Filings that disappear.** Japanese sources delete filings after set periods. We keep
+  them.
+- **A source on every number.** Official figures are shown exactly as published.
+  Calculated figures show their formula. Nothing is unexplained.
+- **One database.** Holdings, boards, pay, buybacks and macro sit together, so questions
+  that cross them can be answered at all.
 
-- **Phase 1 — Finish the record (now).** Ship the three equity surfaces plus the
-  unified company dossier; publish coverage and methodology; keep macro waves J1–J2
-  moving. Substack cadence against every release. *Exit test: a PM can read one page
-  on any of ~4,000 companies and know its governance posture without asking anyone.*
-- **Phase 2 — Make it a workflow (the "no analyst" phase).** (a) **Prices** — EOD
-  closes and market caps, the single biggest unlock: turns levels into ratios
-  (cross-holdings as % of market cap, buyback yield, PBR screens). (b) **Parse what we
-  already capture**: 5% filings (activist stakes), tender offers, AGM voting results.
-  (c) **Watchlists, alerts, weekly digest.** *Exit test: a fund runs a 20-name Japan
-  book for a quarter with no local analyst and misses no disclosed event.*
-- **Phase 3 — Be the agent's data layer.** Harden the API and MCP surface as the
-  product for quant teams and internal AI: point-in-time everywhere, bulk export,
-  documentation good enough that an agent can self-serve. Licensing conversations
-  (screeners, terminals) become possible here.
-- **Phase 4 — Second market (option, closed by default).** Opens only on a paying
-  customer or a board-level decision. The playbook by then is written: capture →
-  extract → resolve → dossier → screens → watch.
+What is not hard to copy: the AI. Any model can sit on top. What it stands on is ours.
 
-## 6. Business model
+## How It Reaches People
 
-| Tier | Who | Gets | Price shape |
-| --- | --- | --- | --- |
-| Free | Academics, Substack readers | Charts, citable URLs, single-company pages, BibTeX | ¥0 — this is marketing and the citation moat |
-| Pro | Individual professionals | Screens, CSV exports, watchlists + alerts | ~$50–150/mo, self-serve |
-| Institutional | Sell-side, buy-side, quant | API + MCP, bulk/point-in-time, redistribution rights in notes | $10–50k/yr, sold in the order the macro plan already set |
+- **Inside the assistants people already use.** Plover listed as a connector in ChatGPT,
+  Claude and other assistants, through the MCP server we already run. Every person who
+  asks those assistants about our markets gets Plover's number with Plover's name on it.
+- **Cited by AI search.** When an AI answer quotes a figure for our markets, it links to us.
+- **The Asia Economics Observations Substack**, and every writer who publishes through
+  Plover.
 
-The anchor in every institutional conversation: the alternative is a $300k+ hire or a
-Japanese-language database they cannot read. We are priced as a rounding error against
-either.
+## How It Makes Money
 
-## 7. What we deliberately do not do
+The rule: **asking is free; paying starts when the data leaves the page or a machine asks.**
 
-- **No recommendations, no ratings, no "buy" lists.** Screens rank facts; the reader
-  concludes. This is the regulatory line (data/publishing, not investment advice) and
-  the credibility line, and it is permanent.
-- **No financials/estimates/news terminal.** Vendors do that well; we integrate the
-  minimum (prices) needed to make our own data ratio-ready, and stop.
-- **No execution, no brokerage, nothing that touches orders.**
-- **No LLM answering on our own site** (ASK_ENABLED stays off, settled decision) — the
-  customer's agent consumes our MCP; we never speak for the data in prose we can't
-  stand behind.
-- **No second market by drift** (§2).
+| Who pays | For what |
+| --- | --- |
+| Individuals | A seat: saved answers, alerts, downloads, writing tools |
+| Data and quant teams | API and MCP access, metered, and the point-in-time archive |
+| Companies building AI assistants | Licensed, sourced data their agent can cite |
+| Institutions | An annual desk licence: seats, single sign-on, service levels, rights to quote in notes |
+| Publications | A workspace for a team that writes and sells research |
 
-## 8. Honest risks
+Prices are not set. Billing does not exist yet: accounts do, payments do not.
 
-1. **The tagline oversells.** "Without a Japan analyst" is a sharp pitch and a wrong
-   literal claim — funds still need judgment and meetings. Mitigation: the "first
-   analyst, not the last" framing in every serious document; the marketing may be
-   sharper than the contract, never the reverse.
-2. **One person, five layers.** The roadmap survives only if phases ship sequentially
-   and capture keeps running unattended. Uptime of the boring jobs *is* the product.
-3. **Prices introduce a new dependency class.** Everything so far is free public
-   filings; a price feed has licensing terms. Choose a source whose redistribution
-   terms fit the API tier *before* building screens on it.
-4. **Translation liability.** English renderings of free-text purposes must always be
-   labelled as our translation with the Japanese alongside — one mistranslation quoted
-   in a fund letter is a credibility event.
-5. **The trade could cool.** If governance reform loses steam, the *urgency* fades but
-   the dataset doesn't — boards, pay, ownership and buybacks are permanent furniture of
-   the market. The macro platform is the hedge on the equity story and vice versa.
+## What It Never Becomes
 
-## 9. Open decisions (need your call, not code)
+- A stock picker. No ratings, no buy lists, no advice.
+- A broker. Nothing that touches orders or money.
+- A news and estimates terminal.
+- A place where sponsors sit next to numbers.
 
-1. **Price source** for Phase 2 — which EOD feed, and confirm its redistribution terms
-   fit the institutional tier.
-2. **Digest identity** — does the weekly English digest live inside the Substack (one
-   audience, one brand) or as a product feature behind Pro (revenue, lock-in)? This
-   shapes Phase 2 significantly.
-3. **Naming** — whether the equity side keeps living under "Plover Analytics" or
-   gets its own product name for the fund audience.
-4. **Korea research budget** — zero for now, or a fixed few hours to verify DART (the
-   Korean EDINET) feasibility so Phase 4 has a priced option on the shelf?
+## Decisions Needed
+
+These block the plan. Each is the owner's call.
+
+1. **Does Plover answer in its own words?** CLAUDE.md says the Ask feature stays off and
+   that this is settled. The one-box product reverses it. The middle path: Plover only
+   finds data, runs calculations and shows the formula and source. It never gives an
+   opinion. This needs an explicit yes, and CLAUDE.md changes with it.
+2. **Who pays for the AI?** Today a person's runs use their own AI key, and one writer
+   paid about $4 for one chart. Choices: Plover pays and prices it into the seat; the
+   person brings their own key; or both.
+3. **How deep per market.** All markets are in scope, but depth is the moat. Decide which
+   markets get company-level depth and which stay macro only.
+4. **Prices and billing.** Set the first price points and pick a payment provider.
+
+## What This Changes Elsewhere
+
+- **CLAUDE.md**, "What this product is" and "Ask feature": need rewriting once decision 1
+  is made. Proposed separately, not edited here.
+- **PLAN-JAPAN-MACRO-OBSERVATORY.md**: its customer order and vintage moat still hold. Its
+  tiers and scope do not.
+- **PLAN-INVESTMENT-ASSISTANT.md, PLAN-RESEARCH-PUBLISHING.md, PLAN-STUDIES-WORKSPACE.md**:
+  become parts of one product rather than three. Their build detail still holds.

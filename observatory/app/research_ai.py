@@ -70,7 +70,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import (article_search, calc, connectors, market_history, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
+from . import (analysis, article_search, calc, connectors, market_history, pub_coverage, pub_profile, research, research_clips, research_doc as rd, research_mcp,
                research_chat, research_web, skills, staff, staff_google, tools_v2, writers,
                writing_style)
 from .assistant import codex as codex_mod, gateway, keychain, market_data, memory, store as ia_store
@@ -565,7 +565,7 @@ def tool_list(ctx=None):
             for d in tools_v2.descriptors()]
     read_only = (ctx or {}).get("read_only")
     out = [t for t in ARTICLE_TOOLS if not (read_only and t["name"] in WRITE_TOOLS)]
-    out += [SKILL_TOOL, NEXT_TOOL] + data + article_search.TOOLS + [calc.TOOL]
+    out += [SKILL_TOOL, NEXT_TOOL] + data + [analysis.TOOL] + article_search.TOOLS + [calc.TOOL]
     if (ctx or {}).get("memory"):
         out += memory.TOOL_SCHEMAS
     person = (ctx or {}).get("person")
@@ -579,6 +579,23 @@ def tool_list(ctx=None):
         out += [dict((k, t[k]) for k in ("name", "description", "parameters"))
                 for t in connectors.run_tools(pid)]
     return out
+
+
+def _append_chart(ctx, markdown):
+    """Put a chart run_analysis made at the end of the run's draft, as the
+    writer via this run; an error string when the draft would not take it."""
+    cur = research.get(ctx["article_id"])
+    if cur is None:
+        return "The article no longer exists."
+    text, err = research_mcp.run(ctx["person"], ctx["client"], "append_to_draft",
+                                 {"article_id": ctx["article_id"], "base_revision": cur["revision"],
+                                  "markdown": markdown})
+    if not err:
+        return None
+    try:
+        return json.loads(text).get("error") or text[:300]
+    except ValueError:
+        return text[:300]
 
 
 def _account_id(person):
@@ -692,11 +709,22 @@ def call_tool(ctx, name, args):
                                ctx.get("origin"), memory.DESK)
     if name in tools_v2.IMPLS:
         text, err = tools_v2.run_tool(name, args)
-        return text[:TOOL_TEXT_MAX], err
+        if len(text) > TOOL_TEXT_MAX:
+            # Cutting the text would hide its end: for a series, the latest
+            # readings, which is the part an article is about.
+            return json.dumps({"error": "That result is %d characters, more than one reply can carry, "
+                                        "so nothing was sent. Ask for a shorter period or fewer series, "
+                                        "or use run_analysis, which works on the full history on the "
+                                        "server and sends back only what you ask for."
+                                        % len(text)}), True
+        return text, err
     if name in article_search.TOOL_NAMES:
         return article_search.run_tool(person, _publication(ctx), name, args)
     if name == calc.TOOL["name"]:
         return calc.run_tool(args)
+    if name == analysis.TOOL["name"]:
+        return analysis.run_tool(args, None if ctx.get("read_only") else
+                                 (lambda md: _append_chart(ctx, md)))
     if name == "read_skill":
         pid = _publication(ctx)
         sk = skills.get(str(args.get("name") or ""), pid) if pid is not None else None
@@ -763,7 +791,11 @@ def _system(article, person, skill=None, length=None, memory_text="", follow_up=
     extra += writing_style.prompt(person)
     extra += ("Arithmetic: work out every number you put in the draft that no tool returned as "
               "is (a change, a growth rate, a ratio, a share, a difference) with calculate, never "
-              "in your head. Earlier articles: search_past_articles finds what this publication "
+              "in your head. Data work: for anything that combines or compares series, a gap, "
+              "growth rates over many periods, a 'highest since', or a chart of more than one "
+              "series, use run_analysis: it works on the full history on the server and draws the "
+              "chart into the draft from the full result, so you read only a short preview and "
+              "never type a chart's numbers. Earlier articles: search_past_articles finds what this publication "
               "or the writer published before; link to one by its address when it helps the "
               "reader, and do not contradict it without saying what changed.\n\n")
     extra += pub_coverage.prompt_line(pid)
@@ -818,6 +850,29 @@ def _system(article, person, skill=None, length=None, memory_text="", follow_up=
     return head + extra + research_mcp.RULES
 
 
+def _no_tokens():
+    return {"in": 0, "out": 0, "cached": 0, "steps": 0}
+
+
+def _count(job, usage):
+    """Add one model call's usage to the run's count: the tokens it read (of
+    which "cached" came from the provider's prompt cache) and wrote. A data
+    analysis is costly mainly through "in", which repeats the conversation on
+    every step; the count is kept with the reply so a run can be compared
+    with another."""
+    usage = usage or {}
+    t = job.setdefault("tokens", _no_tokens())
+    for k in ("in", "out", "cached"):
+        try:
+            t[k] += int(usage.get(k) or 0)
+        except (TypeError, ValueError):
+            pass
+    try:
+        t["steps"] += int(usage.get("steps") or 1)
+    except (TypeError, ValueError):
+        t["steps"] += 1
+
+
 def _log(job, kind, text):
     job["steps"].append({"at": time.time(), "kind": kind, "text": text[:300]})
 
@@ -834,6 +889,7 @@ _PLAIN_STEPS = {
     "get_overview": "Read the latest headline numbers",
     "get_breakdown": "Read a breakdown",
     "get_vintages": "Checked releases and revisions",
+    "run_analysis": "Ran an analysis on Plover data",
 }
 
 
@@ -964,7 +1020,7 @@ def start(person, article_id, instruction, skill_id=None, image=None, chat_id=No
                "started": time.time(), "finished": None,
                "before_history_id": before, "revision_before": article["revision"],
                "skill": skill["name"] if skill else None, "writes": writes, "next": [],
-               "account_id": account_id}
+               "account_id": account_id, "tokens": _no_tokens()}
         if account_id:
             if chat is None:
                 chat = research_chat.start_chat(account_id, article_id, typed or skill["name"])
@@ -999,6 +1055,7 @@ def public(job):
             "changed": job.get("writes", True) and bool(a) and a["revision"] != job["revision_before"],
             "revision": a["revision"] if a else None,
             "seconds": round((job["finished"] or time.time()) - job["started"]),
+            "tokens": job.get("tokens"),
             "chat_id": job.get("chat_id"),
             # the notes this run saved to the writer's memory, while kept
             "memory": memory.saved_by(job.get("account_id"), "desk:" + job["id"])}
@@ -1048,6 +1105,7 @@ def _stored_public(t, account_id, job_id):
             "revision": a["revision"] if a else None,
             "seconds": m.get("seconds") if done and m.get("seconds") is not None
             else round(time.time() - t["created_at"]),
+            "tokens": m.get("tokens"),
             "chat_id": t["chat_id"], "memory": memory.saved_by(account_id, "desk:" + job_id),
             "elsewhere": True}
 
@@ -1085,7 +1143,7 @@ def _keep_turn(job):
         return
     p = public(job)
     meta = dict((k, p[k]) for k in ("job_id", "skill", "provider_label", "seconds", "next", "changed",
-                                    "before_history_id", "revision_after", "writes") if k in p)
+                                    "before_history_id", "revision_after", "writes", "tokens") if k in p)
     meta["job_id"] = job["id"]
     meta["steps"] = job["steps"][-60:]
     try:
@@ -1107,6 +1165,7 @@ def _run_api(job, ctx, provider, key, model, system, instruction, image=None):
     messages.append(user)
     for _ in range(MAX_STEPS):
         out = gateway.complete(provider, key, model, messages, tools, max_tokens=8000)
+        _count(job, out.get("usage"))
         messages.append({"role": "assistant", "content": out["text"],
                          "tool_calls": out["tool_calls"]})
         if not out["tool_calls"]:
@@ -1250,6 +1309,10 @@ def _run_codex(job, ctx, s, system, instruction, image=None):
             item = ev.get("item") or {}
             if ev.get("type") == "item.completed" and item.get("type") == "web_search":
                 _log(job, "web", "Searched the web for \"%s\"" % (item.get("query") or ""))
+            if ev.get("type") == "turn.completed":
+                u = ev.get("usage") or {}
+                _count(job, {"in": u.get("input_tokens"), "out": u.get("output_tokens"),
+                             "cached": u.get("cached_input_tokens")})
             if ev.get("type") in ("turn.failed", "error"):
                 errors.append(((ev.get("error") or {}).get("message") or ev.get("message") or "")[:300])
             if time.time() > deadline:
@@ -1356,6 +1419,12 @@ def _run_claude(job, ctx, s, system, instruction, image=None):
                         _log(job, "web", "Read %s" % ((b.get("input") or {}).get("url") or "a page"))
             elif ev.get("type") == "result":
                 result = ev
+                u = ev.get("usage") or {}
+                read = int(u.get("cache_read_input_tokens") or 0)
+                _count(job, {"in": int(u.get("input_tokens") or 0) + read
+                             + int(u.get("cache_creation_input_tokens") or 0),
+                             "out": u.get("output_tokens"), "cached": read,
+                             "steps": ev.get("num_turns")})
             if time.time() > deadline:
                 proc.kill()
                 errors.append("The run took longer than %d minutes." % (RUN_SECONDS // 60))

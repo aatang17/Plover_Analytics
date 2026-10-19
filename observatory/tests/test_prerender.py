@@ -85,10 +85,14 @@ class PrerenderTest(unittest.TestCase):
 
     @unittest.skipUnless(_data.MACRO, _data.NO_MACRO)
     def test_the_landing_page_counts_are_served_not_dashes(self):
+        # Since 2026-10-19 the landing page is one question box and shows no
+        # counts; its readable copy still states them, as numbers.
         home = self.client.get("/").text
-        self.assertRegex(home, r'id="n-datasets">\d')
-        self.assertRegex(home, r'id="n-sources">\d')
+        self.assertIn('id="q"', home)              # the ask box is the home page (2026-10-19)
         self.assertIn('"@type":"Organization"', home)
+        md = self.client.get("/index.md")
+        self.assertEqual(md.status_code, 200)
+        self.assertRegex(md.text, r"This server holds \d[\d,]* datasets")
 
     @unittest.skipUnless(_data.EQUITY, _data.NO_EQUITY)
     def test_a_company_page_serves_its_own_tables(self):

@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Plover Analytics — Official macro and market data</title>
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<title>Plover Analytics — Ask about US stocks and the US economy</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/front.css">
+<link rel="stylesheet" href="assets/ask.css">
 <script>
 /* The CPI overview used to live at this address. Anything already published
    against its section anchors — an exported chart's permalink, a newsletter
@@ -20,177 +23,70 @@
 })();
 </script>
 </head>
-<body class="page-home">
+<body class="fp-body">
 
-<header class="site-header" data-section=""></header>
-<script src="assets/nav.js"></script>
+<!-- The home page is the question box (2026-10-19), and answers appear here,
+     under it, like a conversation: a follow-up ("and Microsoft?") reads the
+     question before it. Signed out, a question shows the start of its answer;
+     the full answer (chart, table, every source, follow-ups) is one sign-up
+     away. Signed in, the full answer is here. us-stocks.js runs the page;
+     the old address, us-stocks.html, redirects here with its ?q= or ?t=. -->
+<header class="fp-header">
+  <a class="fp-brand" href="/"><svg width="26" height="26" viewBox="0 0 128 128" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"><circle cx="64" cy="64" r="54"/><path d="M22 86 L46 56 L62 70 L86 44 L106 58"/></g><g fill="currentColor"><circle cx="46" cy="56" r="8"/><circle cx="86" cy="44" r="8"/></g><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" opacity="0.55"><path d="M30 100 H62"/><path d="M74 100 H98"/></g></svg>Plover Analytics</a>
+  <span class="fp-account" id="fp-account"></span>
+</header>
 
-<!-- Live readings, one per dataset, scrolling. Filled by home.js from the
-     same API the product pages use; a dataset that cannot be reached is
-     simply absent from the strip — never a stub, never a stale value. -->
-<div class="home-ticker" aria-label="Latest readings"><div class="home-ticker-track" id="ticker"></div></div>
+<main class="fp-main ask-main">
+  <div id="stale-banner"></div>
 
-<main>
-
-  <!-- Hero: four Tokyo photographs crossfade behind the offer. Credits are
-       in the footer, as their licences require. The trace across the sky is
-       headline CPI from the API, drawn once it arrives. -->
-  <section class="hero" aria-label="Introduction">
-    <img class="hero-photo k1" src="assets/home/tokyo-1.jpg" alt="">
-    <img class="hero-photo k2" src="assets/home/tokyo-2.jpg" alt="">
-    <img class="hero-photo k3" src="assets/home/tokyo-3.jpg" alt="">
-    <img class="hero-photo k4" src="assets/home/tokyo-4.jpg" alt="">
-    <svg class="hero-trace" viewBox="0 0 1440 560" preserveAspectRatio="none" aria-hidden="true">
-      <path id="hero-trace-path" d="" fill="none" stroke-width="2.2" stroke-linejoin="round"/>
-    </svg>
-    <div class="container hero-inner">
-      <div class="hero-panel">
-        <div class="hero-status r d1" id="hero-status"><span class="live-dot"></span>Checking sources…</div>
-        <h1 class="hero-title r d2">Your personal investment agent, on the world's official data.</h1>
-        <p class="hero-sub r d3">An AI agent that works from official statistics and company filings for Japan and
-        the United States, rebuilt from the primary sources and archived as point-in-time vintages.
-        Every figure it cites carries its source and a permanent URL.</p>
-        <div class="hero-actions r d4">
-          <a class="btn btn-primary btn-lg" href="#assistant">Meet your agent</a>
-          <a class="btn btn-lg" href="datasets.html">Explore the data</a>
-          <a class="btn btn-lg" href="connect.html">Connect by API or MCP</a>
-        </div>
-      </div>
-    </div>
-    <div class="hero-legend"><div class="container"><span class="chip" id="hero-legend" hidden></span></div></div>
-  </section>
-
-  <!-- Coverage in numbers. Counted from the API at load, then counted up. -->
-  <section class="home-numbers r d5" aria-label="Coverage">
-    <div class="container home-numbers-grid">
-      <div class="home-number"><div class="home-number-value num" id="n-datasets">—</div><div class="home-number-label">Datasets</div></div>
-      <div class="home-number"><div class="home-number-value num" id="n-companies">—</div><div class="home-number-label">Listed companies</div></div>
-      <div class="home-number"><div class="home-number-value num" id="n-filings">—</div><div class="home-number-label">Filings parsed</div></div>
-      <div class="home-number"><div class="home-number-value num" id="n-sources">—</div><div class="home-number-label">Primary sources</div></div>
-    </div>
-  </section>
-
-  <div class="container">
-
-    <!-- Entry points -->
-    <nav class="home-entries" aria-label="Sections">
-      <a class="home-entry r d5" href="macro.html"><span class="home-entry-name">Macro</span><span class="home-entry-sub num" id="e-macro">from 1970</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d5" href="semis.html"><span class="home-entry-name">Trade</span><span class="home-entry-sub num" id="e-trade">from 2001</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d5" href="population.html"><span class="home-entry-name">Demographics</span><span class="home-entry-sub num" id="e-demo">from 1975</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d5" href="inbound.html"><span class="home-entry-name">Tourism</span><span class="home-entry-sub num" id="e-tourism">from 2003</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d6" href="rice.html"><span class="home-entry-name">Agriculture</span><span class="home-entry-sub num" id="e-agri">from 1957</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d6" href="equities.html"><span class="home-entry-name">Equities</span><span class="home-entry-sub num" id="e-equities">as filed</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d7" href="company.html"><span class="home-entry-name">Company Profile</span><span class="home-entry-sub">every dataset, one company</span><span class="home-entry-open">Open</span></a>
-      <a class="home-entry r d7" href="screener.html"><span class="home-entry-name">Screener</span><span class="home-entry-sub">rank on filed data</span><span class="home-entry-open">Open</span></a>
-    </nav>
-
+  <div class="home-wrap">
+    <h1 class="fp-title home-only">Ask about US stocks and the US economy.</h1>
+    <p class="fp-sub home-only">Who owns a company, what it earns, what its CEO is paid, what insiders and funds are doing, and where inflation, wages and Treasury yields stand. Every number comes from official filings and statistics, with its source.</p>
+    <form class="fp-box" id="ask-form" role="search" action="/" method="get" autocomplete="off">
+      <label for="q" class="fp-sr">Your question about a stock or the US economy</label>
+      <input type="search" id="q" name="q" maxlength="300" spellcheck="false"
+             placeholder="Ask, e.g. who owns Nvidia"
+             aria-label="Ask about a US stock or the US economy">
+      <button type="submit" class="fp-go" id="ask-btn" aria-label="Ask">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+      </button>
+    </form>
   </div>
 
-  <section class="home-band is-tint">
-    <div class="container">
-    <!-- Investment assistant: four scenarios rotate. Every number in them is
-         fetched from the API when the page loads; the tool names are the
-         MCP server's real ones. -->
-    <h2 id="assistant">Your Investment Assistant <span class="h2-note">Ask in plain language. The answer is drawn from the same API, and charted or tabulated beside it.</span></h2>
-    <div class="asst" id="asst"></div>
-    <!-- Run the demo yourself. Cursor and VS Code register a URL scheme and add the
-         server in one click; Claude Code takes the command the button copies. -->
-    <div class="home-connect">
-      <div class="home-connect-text">The same lookups in your own assistant, over one URL and no key:
-        <code>https://ploveranalytics.com/mcp</code></div>
-      <div class="home-connect-actions">
-        <a class="btn has-mark" href="cursor://anysphere.cursor-deeplink/mcp/install?name=plover-analytics&amp;config=eyJ1cmwiOiJodHRwczovL3Bsb3ZlcmFuYWx5dGljcy5jb20vbWNwIn0="><span class="mark" data-mark="cursor"></span>Add to Cursor</a>
-        <a class="btn has-mark" href="https://vscode.dev/redirect/mcp/install?name=plover-analytics&amp;config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fploveranalytics.com%2Fmcp%22%7D"><span class="mark" data-mark="vscode"></span>Add to VS Code</a>
-        <button type="button" class="btn has-mark" id="home-copy-cc"><span class="mark" data-mark="claudecode"></span>Copy Claude Code Command</button>
-        <a class="btn" href="connect.html">Other Clients</a>
-      </div>
-    </div>
-    </div>
-  </section>
+  <p id="status" class="state-wait" aria-live="polite" hidden></p>
+  <section id="answer" hidden></section>
+  <section id="stock" hidden></section>
 
-  <section class="home-band">
-    <div class="container">
-    <h2 id="api">Or Call It Directly <span class="h2-note">REST, JSON, no key</span></h2>
-    <div class="home-api">
-      <div>
-        <div class="home-api-label">Request</div>
-<pre class="home-code"><span id="api-request">GET /api/v1/cpi-jp/observations
-    ?series=0001&amp;measure=yoy
-    &amp;start=2016-01
-    &amp;as_of=…        </span><span class="muted" id="api-request-note"># the release in force on that date</span></pre>
-        <p class="home-api-note">One endpoint per dataset. Add <code>as_of</code> and you get the vintage a
-        reader would have seen that day, not today's revision. <a href="api.html">API reference</a></p>
-      </div>
-      <div>
-        <div class="home-api-label">Response</div>
-<pre class="home-code" id="api-response">{ … }</pre>
-        <p class="home-api-note muted" id="api-response-note">Live response, abbreviated to its first points.</p>
-      </div>
-    </div>
-    </div>
+  <section id="home-note">
+    <ul class="fp-examples" id="examples" aria-label="Example questions">
+      <li><a href="/?q=Who%20owns%20Nvidia%3F">Who owns Nvidia?</a></li>
+      <li><a href="/?q=Who%20were%20the%20top%2010%20paid%20CEOs%3F">Who were the top 10 paid CEOs?</a></li>
+      <li><a href="/?q=How%20much%20revenue%20does%20Apple%20get%20from%20China%3F">How much revenue does Apple get from China?</a></li>
+      <li><a href="/?q=Cheapest%20carmakers%20by%20P/E">Cheapest carmakers by P/E</a></li>
+      <li><a href="/?q=Insiders%20selling%20Meta">Insiders selling Meta</a></li>
+      <li><a href="/?q=Is%20US%20core%20inflation%20falling%3F">Is US core inflation falling?</a></li>
+      <li><a href="/?q=US%2010-year%20Treasury%20yield">US 10-year Treasury yield</a></li>
+    </ul>
+    <p class="fp-note" id="gate-note" hidden>See the start of any answer free. Sign up to see all of it.</p>
   </section>
-
-  <section class="home-band is-tint">
-    <div class="container">
-    <h2 id="trust">Why It Can Be Trusted</h2>
-    <div class="home-principles">
-      <div class="home-principle"><div class="home-rule"></div><div class="home-principle-title">Primary sources only</div><div class="home-principle-text">Every source file archived with its checksum.</div></div>
-      <div class="home-principle"><div class="home-rule"></div><div class="home-principle-title">Point-in-time vintages</div><div class="home-principle-text">A revision is a new vintage. Any date is replayable.</div></div>
-      <div class="home-principle"><div class="home-rule"></div><div class="home-principle-title">Official vs calculated</div><div class="home-principle-text">Published values exact. Computed values show their formula.</div></div>
-      <div class="home-principle"><div class="home-rule"></div><div class="home-principle-title">Every view has an address</div><div class="home-principle-text">The URL carries the whole chart or table.</div></div>
-    </div>
-    </div>
-  </section>
-
-  <section class="home-band">
-    <div class="container">
-    <h2 id="letter">From Asia Economics Observations <span class="h2-note">The research letter written on this data</span></h2>
-    <div class="home-letter">
-      <div class="home-featured">
-        <div class="home-featured-kicker num" id="post-kicker">Featured</div>
-        <div class="home-featured-title" id="post-title"></div>
-        <div class="ov-chart home-featured-chart" id="post-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
-        <div class="home-featured-foot"><span class="source-line" id="post-source"></span><span class="ov-dls"><a class="ov-dl" id="post-link" href="#" hidden>Read the letter</a> <a class="ov-dl" href="boj.html">Open the chart</a></span></div>
-      </div>
-      <div class="home-posts" id="posts"></div>
-    </div>
-    </div>
-  </section>
-
-  <section class="home-band is-tint">
-    <div class="container">
-    <h2 id="audience">Built For</h2>
-    <div class="home-audience">
-      <div class="home-audience-item"><div class="home-audience-title">Sell-side economists</div><div class="home-audience-lead">The Japan chart pack, citable.</div><div class="home-audience-text">Contributions to headline CPI by group, breadth across 582 items, the curve on any date, the BOJ balance sheet by asset. Every chart exports with its source embedded.</div></div>
-      <div class="home-audience-item"><div class="home-audience-title">Quant and data teams</div><div class="home-audience-lead">One endpoint per dataset, vintage-selectable.</div><div class="home-audience-text">Replay any dataset as it stood on a given date for a point-in-time backtest. JSON with the formula and calc version in the payload.</div></div>
-      <div class="home-audience-item"><div class="home-audience-title">Academics</div><div class="home-audience-lead">Free, stable URLs, stated methodology.</div><div class="home-audience-text">Cite the page. The number, the formula and the source file behind it stay reachable at that address.</div></div>
-    </div>
-    </div>
-  </section>
-
 </main>
 
-<footer class="site-footer">
-  <div class="inner">
-    Sources: Statistics Bureau of Japan via e-Stat · Bank of Japan · Ministry of Finance ·
-    Ministry of Agriculture, Forestry and Fisheries · Japan National Tourism Organization ·
-    Japan Tourism Agency · Ministry of Internal Affairs and Communications · company filings
-    via EDINET (Financial Services Agency). Published values are official; rates of change
-    and aggregates are calculated on this platform.
+<footer class="fp-footer">
+  <nav aria-label="Data and documentation">
+    <a href="us-treasury.html">US economy</a>
+    <a href="us-companies.html">US companies</a>
+    <a href="macro.html">Japan</a>
+    <a href="hk-economy.html">Hong Kong</a>
+    <a href="/research/">Research</a>
+    <a href="api.html">API</a>
     <a href="methodology.html">Methodology</a>
-    <div class="home-credits">Photographs: David Kernan
-      (<a href="https://commons.wikimedia.org/wiki/File:Minato_City,_Tokyo,_Japan.jpg">CC BY 4.0</a>) ·
-      Itoshin87 (<a href="https://commons.wikimedia.org/wiki/File:Skyscrapers_Shinjuku_2007_rev.jpg">public domain</a>) ·
-      Jason Goh (<a href="https://commons.wikimedia.org/wiki/File:Shinjuku_Park_Tower,_NTT_East,_and_Tokyo_Opera_City,_view_from_the_Tokyo_Metropolitan_Government_Building_No.2_(2013-06-07_by_Jason_Goh_@Pixabay_217878).jpg">CC0</a>) ·
-      anonymous (<a href="https://commons.wikimedia.org/wiki/File:2015-01-17_Skyline_in_Tokyo.jpg">CC0</a>),
-      via Wikimedia Commons.</div>
-  </div>
+  </nav>
 </footer>
 
 <script src="assets/echarts.min.js"></script>
 <script src="assets/format.js"></script>
 <script src="assets/charts.js"></script>
-<script src="assets/brandmarks.js"></script>
-<script src="assets/home.js"></script>
+<script src="assets/sortable.js"></script>
+<script src="assets/us-stocks.js"></script>
 </body>
 </html>

@@ -12,15 +12,16 @@ serving process.
 """
 import json
 import re
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from .. import accounts, tools_v2
+from .. import accounts, analysis, recipes, tools_v2
 from . import (codex, delivery, drive, gateway, keychain, market_data, mcp_client, memory, runner,
-               specialists, store)
+               specialists, store, study_export)
 
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
 
@@ -574,6 +575,7 @@ class SettingsRequest(BaseModel):
     model_provider: str = ""
     model_name: str = ""
     monitor_model: str = ""
+    study_model: str = ""
     model_key: str = ""
     model_base_url: str = ""
     slack_webhook: str = ""
@@ -614,6 +616,8 @@ def save_settings(payload: SettingsRequest, request: Request):
     # saving the model section sets the monitor model too; empty clears it
     if "model_provider" in fields or payload.monitor_model:
         fields["monitor_model"] = (payload.monitor_model or "").strip() or None
+    if "model_provider" in fields or payload.study_model:
+        fields["study_model"] = (payload.study_model or "").strip() or None
     if payload.model_key:
         if not keychain.enabled():
             raise HTTPException(503, "ASSISTANT_SECRET is not set on this server, so a key "
@@ -1104,3 +1108,411 @@ async def google_disconnect(request: Request):
 async def google_files(request: Request, view: str = "mydrive", folder: str = "", q: str = "", page: str = ""):
     aid = _account(request)["id"]
     return await run_in_threadpool(_drive_call, drive.google_list, aid, view, folder or None, q or None, page or None)
+
+
+# ----------------------------------------------------------------- studies
+# A study is an analysis the person keeps (store.add_study): asked in plain
+# English of the Study Analyst, or written and run by hand. Either way the
+# work happens on the server (app/analysis.py): the AI reads a preview and the
+# figures it asked for, never the full rows, and a hand-made run costs no AI
+# at all. Every run is kept; a new one never changes an earlier one.
+
+class StudyRequest(BaseModel):
+    title: str = ""
+    question: str = ""
+
+
+class StudyEdit(BaseModel):
+    title: Optional[str] = None
+    question: Optional[str] = None
+    refresh: Optional[str] = None       # "daily", "weekly" or "" for never
+
+
+class StudyRun(BaseModel):
+    spec: dict
+
+
+class StudyAsk(BaseModel):
+    question: str
+
+
+class StudyRecipe(BaseModel):
+    recipe: str
+    series: dict = {}
+    start: str = ""
+    end: str = ""
+    monthly: str = ""
+    options: dict = {}
+    title: str = ""
+
+
+def _title_from(question, limit=100):
+    """A question as a title: whole words, with … when it had to be cut."""
+    q = " ".join((question or "").split())
+    if len(q) <= limit:
+        return q
+    cut = q[:limit].rsplit(" ", 1)[0].rstrip(",;:")
+    return cut + "\u2026"
+
+
+def _study_or_404(aid, study_id):
+    st = store.study(aid, study_id)
+    if st is None:
+        raise HTTPException(404, "No such study.")
+    return st
+
+
+def _study_hire(aid):
+    """The Study Analyst, made on first use like the chat Analyst."""
+    spec = specialists.STUDY
+    h = store.add_hire(aid, spec["slug"], spec["version"])
+    if h["version"] != spec["version"]:
+        h = store.update_hire(aid, h["id"], version=spec["version"])
+    return h
+
+
+def _run_view(run):
+    """A kept run as the page shows it, with its chart worked out from the rows."""
+    if run is None:
+        return None
+    res = run["result"]
+    out = {"id": run["id"], "by": run["by"], "question": run["question"], "note": run["note"],
+           "created_at": run["created_at"], "tokens": run["tokens"], "spec": run["spec"],
+           "columns": res.get("columns") or [], "rows": res.get("rows") or [],
+           "rows_total": res.get("rows_total", len(res.get("rows") or [])),
+           "sources": [dict((k, s.get(k)) for k in ("name", "series", "title", "unit", "release", "credit"))
+                       for s in res.get("sources") or []],
+           "summary": res.get("summary"), "ran_at": res.get("ran_at"), "chart": None, "chart_error": None}
+    try:
+        out["chart"] = analysis.chart_spec(res) if out["rows"] else None
+    except analysis.AnalysisError as exc:
+        out["chart_error"] = str(exc)
+    return out
+
+
+def _study_view(aid, study_id, run_id=None):
+    st = _study_or_404(aid, study_id)
+    run = store.study_run(aid, study_id, run_id)
+    if run_id and run is None:
+        raise HTTPException(404, "No such run of this study.")
+    return {"study": st, "run": _run_view(run)}
+
+
+@router.get("/studies/series")
+def find_series(request: Request, q: str = ""):
+    """Series by name or code, for the pickers on a study: the public search,
+    series only. Under /studies/ because /api/v1/{dataset}/series is the public
+    API's own route and would take /assistant/series first."""
+    _account(request)
+    q = (q or "").strip()
+    if not q:
+        return {"series": []}
+    try:
+        d = json.loads(tools_v2.search(q, limit=20))
+    except Exception:  # noqa: BLE001
+        return {"series": []}
+    return {"series": [{"dataset": s["dataset"], "code": s["code"], "name": s.get("name_en") or s["code"],
+                        "unit": s.get("unit")} for s in d.get("series") or []]}
+
+
+@router.get("/studies/recipes")
+def study_recipes(request: Request):
+    _account(request)
+    return {"recipes": recipes.catalogue()}
+
+
+@router.get("/studies")
+def list_studies(request: Request, archived: int = 0):
+    aid = _account(request)["id"]
+    return {"studies": store.studies(aid, archived=bool(archived)),
+            "archived": len(store.studies(aid, archived=True))}
+
+
+@router.post("/studies")
+def new_study(payload: StudyRequest, request: Request):
+    aid = _account(request)["id"]
+    title = (payload.title or "").strip() or _title_from(payload.question) or "Untitled study"
+    return {"study": store.add_study(aid, title, (payload.question or "").strip())}
+
+
+@router.get("/studies/{study_id}")
+def get_study(study_id: int, request: Request, run: int = 0):
+    return _study_view(_account(request)["id"], study_id, run or None)
+
+
+@router.put("/studies/{study_id}")
+def edit_study(study_id: int, payload: StudyEdit, request: Request):
+    aid = _account(request)["id"]
+    _study_or_404(aid, study_id)
+    title = payload.title.strip() if payload.title is not None else None
+    if title is not None and not title:
+        raise HTTPException(400, "A study needs a title.")
+    refresh = False
+    if payload.refresh is not None:
+        refresh = payload.refresh.strip().lower() or None
+        if refresh is not None and refresh not in store.REFRESH_CHOICES:
+            raise HTTPException(400, "refresh is daily, weekly, or empty for never.")
+    return {"study": store.update_study(aid, study_id, title=title, question=payload.question,
+                                        refresh=refresh)}
+
+
+@router.delete("/studies/{study_id}")
+def archive_study(study_id: int, request: Request):
+    aid = _account(request)["id"]
+    _study_or_404(aid, study_id)
+    return {"study": store.archive_study(aid, study_id, True)}
+
+
+@router.post("/studies/{study_id}/restore")
+def restore_study(study_id: int, request: Request):
+    aid = _account(request)["id"]
+    _study_or_404(aid, study_id)
+    return {"study": store.archive_study(aid, study_id, False)}
+
+
+@router.post("/studies/{study_id}/run")
+async def run_study(study_id: int, payload: StudyRun, request: Request):
+    """Run a spec as written: no AI, nothing but the server's own work."""
+    aid = _account(request)["id"]
+    _study_or_404(aid, study_id)
+    try:
+        result = await run_in_threadpool(analysis.execute, payload.spec)
+    except analysis.AnalysisError as exc:
+        raise HTTPException(400, str(exc))
+    rid = store.add_study_run(aid, study_id, "you", result)
+    return _study_view(aid, study_id, rid)
+
+
+@router.post("/studies/{study_id}/recipe")
+async def run_recipe(study_id: int, payload: StudyRecipe, request: Request):
+    """A ready-made analysis, filled in with pickers: built and run by code, no AI."""
+    aid = _account(request)["id"]
+    _study_or_404(aid, study_id)
+    try:
+        spec = recipes.build(payload.recipe, payload.series, payload.start, payload.end,
+                             payload.options, payload.monthly or None, payload.title)
+        result = await run_in_threadpool(analysis.execute, spec)
+    except (recipes.RecipeError, analysis.AnalysisError) as exc:
+        raise HTTPException(400, str(exc))
+    rid = store.add_study_run(aid, study_id, "you", result,
+                              note=_recipe_note(payload.recipe, result, payload.options))
+    return _study_view(aid, study_id, rid)
+
+
+def _recipe_note(recipe_id, result, options):
+    titles = dict((s["name"], s.get("title") or s["series"]) for s in result.get("sources") or [])
+    return recipes.reads_as(recipe_id, titles, options)
+
+
+MATCH_RULES = (
+    "You match a question about economic or market data to one ready-made analysis, or say "
+    "none fits. Answer with one JSON object and nothing else: {\"recipe\": <id or null>, "
+    "\"series\": {<slot>: \"dataset:code\"}, \"start\": \"YYYY-MM-DD\" or null, "
+    "\"end\": null or a date, \"options\": {}, \"title\": <short chart title>}. Use only series "
+    "codes from the list given; if the question names a series that is not listed, or asks "
+    "for something no recipe computes — volatility, a standard deviation, a correlation, a "
+    "regression, a ranking, a count of periods, contributions, a forecast — answer "
+    "{\"recipe\": null}: a recipe only draws and summarises the series it is given. A question comparing two "
+    "rates is 'gap' when it asks about the difference and 'compare' otherwise; 'since' is for "
+    "'highest/lowest since' or 'last this high'. Dates: 'since 2020' is start 2020-01-01."
+)
+
+
+# Words that ask for a statistic no recipe computes: such a question goes
+# straight to the Study Analyst, which can write the query for it.
+_NOT_A_RECIPE = re.compile(r"volatil|standard deviation|std ?dev|variance|correlat|regress|beta\b|"
+                           r"rank|contribut|breadth|forecast|predict|elasticit|how many (months|days|"
+                           r"weeks|quarters|years)|count of|percentile|z-score|drawdown", re.I)
+
+
+NO_MATCH = "no"
+
+
+def _match_recipe(aid, desk, question, hints):
+    """One short AI call, no tools: the question matched to a recipe and its
+    blanks. Returns (spec, tokens, matched_id); NO_MATCH when the model said
+    nothing fits; None when the match was not tried (no usable model, no
+    hints, or a question no recipe computes)."""
+    provider = desk.get("model_provider")
+    if not provider or provider == codex.PROVIDER or not desk.get("model_key_set") or not hints:
+        return None
+    if _NOT_A_RECIPE.search(question or ""):
+        return None
+    try:
+        key = keychain.open_(store.desk_secrets(aid)["model_key_ct"])
+    except (ValueError, TypeError):
+        return None
+    model = desk.get("study_model") or desk["model_name"] or gateway.default_model(provider)
+    cat = "; ".join("%s (%s; slots %s%s)" % (r["id"], r["label"], ", ".join(
+        s["name"] + ("?" if s["optional"] else "") for s in r["slots"]),
+        "; options " + json.dumps(r["options"]) if r["options"] else "") for r in recipes.catalogue())
+    messages = [{"role": "system", "content": MATCH_RULES + "\n\nRecipes: " + cat},
+                {"role": "user", "content": question + "\n\n" + analysis.hints_text(hints)}]
+    try:
+        out = gateway.complete(provider, key, model, messages, tools=None, max_tokens=300)
+    except gateway.GatewayError:
+        return None
+    tokens = dict({"in": 0, "out": 0, "cached": 0}, **(out.get("usage") or {}))
+    tokens.update(calls=0, tier=1)
+    m = re.search(r"\{.*\}", out.get("text") or "", re.S)
+    if not m:
+        return None
+    try:
+        pick = json.loads(m.group(0))
+    except ValueError:
+        return None
+    if not isinstance(pick, dict) or not pick.get("recipe") or pick["recipe"] not in recipes.BY_ID:
+        return NO_MATCH
+    allowed = set("%s:%s" % (h["dataset"], h["code"]) for h in hints)
+    series = dict((k, v) for k, v in (pick.get("series") or {}).items() if v in allowed)
+    try:
+        spec = recipes.build(pick["recipe"], series, pick.get("start"), pick.get("end"),
+                             pick.get("options") or {}, None, pick.get("title"))
+    except recipes.RecipeError:
+        return None
+    return spec, tokens, pick["recipe"]
+
+
+@router.post("/studies/{study_id}/ask")
+async def ask_study(study_id: int, payload: StudyAsk, request: Request):
+    """A question in plain English. The cheapest route that answers it wins:
+    the series are found by search first; one short AI call tries to match
+    the question to a ready-made analysis, which code then runs; only a
+    question no recipe fits goes to the Study Analyst, which writes a query.
+    Either way the newest run is kept with its token count."""
+    aid = _account(request)["id"]
+    st = _study_or_404(aid, study_id)
+    q = (payload.question or "").strip()
+    if not q:
+        raise HTTPException(400, "Ask something: e.g. how far apart are US and Japanese 10-year yields?")
+    hints = await run_in_threadpool(analysis.suggest_series, q)
+    desk = store.desk(aid)
+    if not st["spec"]:                      # a follow-up changes a query; a fresh question may match a recipe
+        matched = await run_in_threadpool(_match_recipe, aid, desk, q, hints)
+        if matched == NO_MATCH:
+            # a miss is usually a missing series: once more, with a wider search
+            wider = await run_in_threadpool(analysis.suggest_series, q, 16, 5)
+            matched = await run_in_threadpool(_match_recipe, aid, desk, q, wider) if len(wider) > len(hints) else None
+            if matched == NO_MATCH:
+                matched = None
+            elif matched:
+                hints = wider
+        if matched:
+            spec, tokens, recipe_id = matched
+            try:
+                result = await run_in_threadpool(analysis.execute, spec)
+            except analysis.AnalysisError:
+                result = None
+            if result is not None:
+                if not st["question"] or st["title"] == "Untitled study":
+                    store.update_study(aid, study_id, question=q,
+                                       title=st["title"] if st["title"] != "Untitled study" else _title_from(q))
+                rid = store.add_study_run(aid, study_id, "analyst", result, question=q,
+                                          note=_recipe_note(recipe_id, result, spec.get("options")),
+                                          tokens=tokens)
+                return _study_view(aid, study_id, rid)
+    task = q
+    if hints:
+        task += "\n\n" + analysis.hints_text(hints)
+    if st["spec"]:
+        task += ("\n\nThe study's current analysis, to change or build on if the question is a "
+                 "follow-up:\n" + json.dumps(st["spec"], ensure_ascii=False))
+    h = _study_hire(aid)
+    out = await run_in_threadpool(runner.run, aid, h, "study", task, None, "thread", False)
+    made = store.analyses_for_run(aid, out["run_id"]) if out.get("run_id") else []
+    if not made:
+        why = out.get("error") or out.get("text") or out.get("outcome") or "it stopped early"
+        raise HTTPException(400, "The Analyst did not produce an analysis: %s" % str(why)[:400])
+    if not st["question"] or st["title"] == "Untitled study":
+        store.update_study(aid, study_id, question=q,
+                           title=st["title"] if st["title"] != "Untitled study" else _title_from(q))
+    rid = store.add_study_run(aid, study_id, "analyst", made[-1]["result"], question=q,
+                              note=out.get("text") or "", run_id=out.get("run_id"),
+                              tokens=dict(out.get("usage") or {}, calls=out.get("tool_calls"), tier=2))
+    return _study_view(aid, study_id, rid)
+
+
+def refresh_due_studies(at=None):
+    """Re-run every study whose refresh is due, as the server: no AI, the
+    study's own query on the newest data, kept as a run by "schedule". Called
+    from the refresh loop (app/refresh.py) and `runner --studies`. Returns
+    the number of runs made; one failure never stops the rest."""
+    made = 0
+    for st in store.studies_due(at):
+        store.mark_refreshed(st["id"], at)          # once per period, even if it fails
+        rc = st["spec"].get("recipe") or {}
+        try:
+            result = analysis.execute(st["spec"])
+        except analysis.AnalysisError as exc:
+            store.add_study_run(st["account_id"], st["id"], "schedule",
+                                {"spec": st["spec"], "columns": [], "rows": [], "sources": [],
+                                 "ran_at": None, "error": str(exc)},
+                                note="The scheduled refresh could not run: %s" % exc)
+            continue
+        note = _recipe_note(rc["id"], result, rc.get("options")) if rc.get("id") else "Refreshed on schedule."
+        store.add_study_run(st["account_id"], st["id"], "schedule", result, note=note)
+        made += 1
+    return made
+
+
+@router.get("/studies/{study_id}/runs/{run_id}/python")
+def study_python(study_id: int, run_id: int, request: Request):
+    """The study to run on the person's own machine (study_export.py)."""
+    aid = _account(request)["id"]
+    st = _study_or_404(aid, study_id)
+    run = store.study_run(aid, study_id, run_id)
+    if run is None:
+        raise HTTPException(404, "No such run of this study.")
+    try:
+        data, name = study_export.build(st["title"], run["spec"])
+    except analysis.AnalysisError as exc:
+        raise HTTPException(400, str(exc))
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="%s.zip"' % name})
+
+
+@router.get("/studies/{study_id}/runs/{run_id}/csv")
+def study_csv(study_id: int, run_id: int, request: Request):
+    """Every kept row, with the sources, the formula and the trust of each
+    column above them, so the file stands on its own."""
+    aid = _account(request)["id"]
+    st = _study_or_404(aid, study_id)
+    run = store.study_run(aid, study_id, run_id)
+    if run is None:
+        raise HTTPException(404, "No such run of this study.")
+    res = run["result"]
+    cols = res.get("columns") or []
+    import csv
+    import io
+    buf = io.StringIO()
+    buf.write("# %s\n" % st["title"].replace("\n", " "))
+    for s in res.get("sources") or []:
+        buf.write("# input %s = %s (%s), %s, %s\n" % (s.get("name"), s.get("series"), s.get("title"),
+                                                     s.get("release") or "latest", s.get("credit") or ""))
+    buf.write("# calculation: %s\n" % " ".join((run["spec"].get("query") or "SELECT * FROM data").split()))
+    official = [c for c in cols[1:] if analysis._official(c, run["spec"])]
+    buf.write("# trust: %s as published; every other column calculated by the query above\n"
+              % (", ".join(official) or "no column"))
+    buf.write("# ran %s; missing values are blank, never zero\n" % (res.get("ran_at") or ""))
+    if res.get("rows_total", 0) > len(res.get("rows") or []):
+        buf.write("# kept the first %d of %d rows\n" % (len(res["rows"]), res["rows_total"]))
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for r in res.get("rows") or []:
+        w.writerow(["" if v is None else v for v in r])
+    name = re.sub(r"[^a-z0-9]+", "-", st["title"].lower()).strip("-")[:60] or "study"
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="%s.csv"' % name})
+
+
+# ---------------------------------------------------------- your reading
+# Articles saved from the person's own browser (the extension and the Save to
+# Plover bookmark): /api/v1/assistant/reading. See app/assistant/reading.py.
+from . import reading as _reading  # noqa: E402
+
+router.include_router(_reading.router)
+
+# The front page's public answer preview: /api/v1/assistant/preview?q=...
+from . import preview as _preview  # noqa: E402
+
+router.include_router(_preview.router)
