@@ -1,32 +1,28 @@
 # Plover on the DigitalOcean server. Plan: docs/plans/PLAN-DROPLET-ZERO-DOWNTIME.md
 #
-# Services on one volume (/srv/plover-data → /app/data):
-#   web-a, web-b  two slots for the site (blue/green). One serves; a deploy
-#                 starts the new version in the other, checks it, moves readers
-#                 over and stops the old one: one start-up per deploy. (Until
-#                 2026-10-11 a "bridge" restarted the live version first, which
-#                 cost ~75 s a deploy.)
-#   refresher     the only DuckDB writer: app/refresher.py (copy → ingest → swap)
-#   caddy         the only container that publishes ports (ufw lets only
-#                 Cloudflare reach 80/443, and docker-firewall.sh does the same
-#                 for Docker's own rules; nothing else may publish a port)
+# Four services on one volume (/srv/plover-data → /app/data):
+#   web          serves only: uvicorn, read-only DuckDB, SQLite for the desk
+#   web-bridge   the previous image, up only during a deploy; Caddy prefers
+#                web and falls back to it, so a reader always has a copy
+#   refresher    the only DuckDB writer: app/refresher.py (copy → ingest → swap)
+#   caddy        the only container that publishes ports (ufw lets only
+#                Cloudflare reach 80/443; Docker-published ports bypass ufw,
+#                so nothing else may publish one)
 #
 # Images are built on the server by deploy.sh as plover:<commit>. Settings
-# come from /opt/plover/.env (chmod 600, never in git). ENV_FILE, DATA_DIR,
-# HTTP_BIND and HTTPS_BIND let deploy.sh run a second, private copy of all
-# this for testing.
+# come from /opt/plover/.env (chmod 600, never in git).
 #
 # Memory (8 GB server + 4 GB swap), from the 2026-10-10 measurements: the web
 # server peaked at 3.0 GB with an uncapped database buffer and 1.5 GB with a
 # 256 MB one, at the same speed; the nightly company-data job peaked at
 # 2.1 GB; the heaviest dataset load at 1.35 GB. DUCKDB_MEMORY_LIMIT caps each
-# database file's buffer in the web server (app/db.py:limit_memory). The two
-# slots overlap for under a minute per deploy.
+# database file's buffer in the web server (app/db.py:limit_memory).
 
 name: plover
 
 x-app: &app
-  env_file: ${ENV_FILE:-/opt/plover/.env}
+  image: plover:${IMAGE_TAG:?set IMAGE_TAG (deploy.sh does)}
+  env_file: /opt/plover/.env
   volumes:
     - ${DATA_DIR:-/srv/plover-data}:/app/data
   restart: unless-stopped
@@ -43,40 +39,39 @@ x-web: &web
     DUCKDB_MEMORY_LIMIT: "512MB"   # per database file; three files
     REFRESH_SUPERVISED: ""         # never restarts itself (start.sh is not used here)
     WARM_PAGES: "1"                # build every page before taking readers
-    WARM_SERIES_LATER: "1"         # the heavy series lists just after start-up, not before
     READY_GATE: "1"                # no readers until deploy.sh has checked and released it
   mem_limit: 3500m
   healthcheck:
     # the slim image has no curl; /healthz is not counted as a visit
     test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5).status == 200 else 1)"]
-    interval: 5s
-    timeout: 5s
+    interval: 10s
+    timeout: 6s
     retries: 3
     start_period: 180s
 
 services:
-  web-a:
+  web:
     <<: *web
-    image: plover:${WEB_A_TAG:-none}
 
-  web-b:
+  web-bridge:
     <<: *web
-    image: plover:${WEB_B_TAG:-none}
+    image: plover:${BRIDGE_IMAGE_TAG:-${IMAGE_TAG:?set IMAGE_TAG}}
+    profiles: ["deploy-bridge"]
 
   refresher:
     <<: *app
     # replaced only while idle (refresher-upgrade.sh), so a long slice is not cut
-    image: plover:${REFRESHER_IMAGE_TAG:-none}
+    image: plover:${REFRESHER_IMAGE_TAG:-${IMAGE_TAG:?set IMAGE_TAG}}
     command: ["python", "-m", "app.refresher"]
     environment:
-      IMAGE_TAG: ${REFRESHER_IMAGE_TAG:-none}   # shown in its state file
+      IMAGE_TAG: ${REFRESHER_IMAGE_TAG:-${IMAGE_TAG:?set IMAGE_TAG}}   # shown in its state file
     mem_limit: 4g
     stop_grace_period: 150s
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports: ["${HTTP_BIND:-80}:80", "${HTTPS_BIND:-443}:443"]
+    ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - /opt/plover/certs:/certs:ro

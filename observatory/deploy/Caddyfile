@@ -27,18 +27,14 @@
 (plover) {
 	tls /certs/origin.pem /certs/origin.key
 	encode zstd gzip
-	# Two slots, web-a and web-b (blue/green); a deploy brings the new version
-	# up in the empty one. Only a copy that deploy.sh has checked and released
-	# answers /healthz/ready, so readers reach only that one. During the few
-	# seconds both are released, readers are shared between them, which lets
-	# deploy.sh see through this proxy that the new copy really is reached
-	# before it stops the old one (/healthz names the container). Named
-	# upstreams are resolved at each dial, so a recreated container's new
-	# address is found at once. (Re-resolving a shared alias with `dynamic a`
-	# kept sending to a stopped container for 12 seconds in the 2026-10-10
-	# trial.)
-	reverse_proxy web-a:8080 web-b:8080 {
-		lb_policy round_robin
+	# Two named copies: web, and web-bridge (the previous image) only during a
+	# deploy. `first` sends every reader to web while it is healthy and to the
+	# bridge otherwise. Named upstreams are resolved at each dial, so a
+	# recreated container's new address is found at once. (Re-resolving a
+	# shared alias with `dynamic a` kept sending to a stopped container for 12
+	# seconds in the 2026-10-10 trial.)
+	reverse_proxy web:8080 web-bridge:8080 {
+		lb_policy first
 		# /healthz/ready answers 503 until deploy.sh has smoke-checked a new copy
 		# and released it, and again once it marks a copy as about to stop; so
 		# readers reach only checked copies. Not counted as a visit.
