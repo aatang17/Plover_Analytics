@@ -433,18 +433,29 @@ def _edgar_ua():
     return ua
 
 
-def _sec_get(url, ua):
-    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            body = r.read(8 * 1024 * 1024)
-            if r.headers.get("Content-Encoding") == "gzip":
-                body = gzip.decompress(body)
-            return r.status, body
-    except urllib.error.HTTPError as exc:
-        return exc.code, b""
-    except Exception:  # noqa: BLE001
-        return 0, b""
+def _sec_get(url, ua, tries=4):
+    """(status, body). The SEC refuses a reader that goes too fast (403 or
+    429, an HTML page): wait and try again, longer each time."""
+    for attempt in range(tries):
+        req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                body = r.read(8 * 1024 * 1024)
+                if r.headers.get("Content-Encoding") == "gzip":
+                    body = gzip.decompress(body)
+                return r.status, body
+        except urllib.error.HTTPError as exc:
+            # a missing daily index is also a 403, but a short non-HTML one;
+            # only the HTML refusal page means "slow down"
+            page = exc.read(2048) if exc.code in (403, 429) else b""
+            if exc.code == 429 or (exc.code == 403 and b"<html" in page.lower()):
+                time.sleep(5 * (attempt + 1))
+                continue
+            return exc.code, b""
+        except Exception:  # noqa: BLE001
+            time.sleep(2 * (attempt + 1))
+            continue
+    return 0, b""
 
 
 _ROW = re.compile(r"(?is)<tr[^>]*>(.*?)</tr>")
@@ -516,15 +527,16 @@ def _sec_exhibits(member, filing, ua):
     base = "https://www.sec.gov/Archives/edgar/data/%d/%s/" % (member["cik"], acc.replace("-", ""))
     status, idx = _sec_get(base + acc + "-index.htm", ua)
     if status != 200:
-        return []
+        return None
     out = []
     for href, typ in _exhibit_links(idx.decode("utf-8", "replace")):
         if not re.search(r"\.html?$", href, re.I):
             continue
         url = urllib.parse.urljoin("https://www.sec.gov/", href)
         st, body = _sec_get(url, ua)
-        if st == 200 and body:
-            out.append((url, body))
+        if st != 200 or not body:
+            return None            # a filing read in part is not kept: it is tried again next poll
+        out.append((url, body))
         time.sleep(0.15)
     return out
 
@@ -640,7 +652,13 @@ def poll_sec(only=None, workers=WORKERS, log=print, con=None):
     known = set(r[0] for r in con.execute("SELECT accession FROM press_releases WHERE accession IS NOT NULL"))
     new, read, failed = 0, 0, []
     last_sec = con.execute("SELECT max(published) FROM press_releases WHERE source = 'sec-8k'").fetchone()[0]
-    if last_sec and not only:
+    covered = con.execute("SELECT count(DISTINCT cik) FROM press_releases WHERE source = 'sec-8k'").fetchone()[0]
+    # The daily index only reaches back to the newest filing kept, so a
+    # catch-up that was cut short (the SEC refusing a fast reader) would never
+    # be filled in: until nearly every member has its filed releases, each
+    # poll catches up company by company again (filings kept are skipped).
+    caught_up = covered >= 0.9 * len(mem)
+    if last_sec and caught_up and not only:
         # Routine: the SEC's daily form index for each day since the newest kept
         # filing (one request a day), not 500 company lists every poll.
         by_cik = dict((int(m["cik"]), m) for m in mem)
@@ -664,7 +682,11 @@ def poll_sec(only=None, workers=WORKERS, log=print, con=None):
             # only the items press releases are attached to
             if not re.search(r"Item\s*(2\.02|7\.01|8\.01)", idx.decode("utf-8", "replace")):
                 continue
-            for url, body in _sec_exhibits(m, {"accession": acc}, ua):
+            exhibits = _sec_exhibits(m, {"accession": acc}, ua)
+            if exhibits is None:
+                failed.append(m["ticker"])
+                continue
+            for url, body in exhibits:
                 if _keep_filed(con, m, {"accession": acc, "filed": filed}, url, body):
                     new += 1
                     read += 1
@@ -683,7 +705,10 @@ def poll_sec(only=None, workers=WORKERS, log=print, con=None):
         for f in filings:
             if f["accession"] in known:
                 continue
-            for url, body in _sec_exhibits(m, f, ua):
+            exhibits = _sec_exhibits(m, f, ua)
+            if exhibits is None:
+                return m, None
+            for url, body in exhibits:
                 got.append((f, url, body))
         return m, got
 

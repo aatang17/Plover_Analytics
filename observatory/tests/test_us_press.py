@@ -102,6 +102,55 @@ class FiledReleases(unittest.TestCase):
                           "billion. More.").startswith("JPMorgan Chase Reports"))
 
 
+class SecPoliteness(unittest.TestCase):
+    """The SEC refuses a fast reader with an HTML 403 page: wait and retry; a
+    filing whose exhibits cannot all be read is not kept (tried next poll)."""
+
+    def test_refusal_is_retried(self):
+        import io
+        import urllib.error
+        calls = []
+
+        class Ok(io.BytesIO):
+            status = 200
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=None):
+            calls.append(req.full_url)
+            if len(calls) == 1:
+                raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"<html>Undeclared</html>"))
+            return Ok(b"{}")
+        with mock.patch.object(us_press.urllib.request, "urlopen", fake_urlopen), \
+                mock.patch.object(us_press.time, "sleep", lambda s: None):
+            self.assertEqual(us_press._sec_get("https://data.sec.gov/x", "UA a@b.c"), (200, b"{}"))
+        self.assertEqual(len(calls), 2)
+
+    def test_a_missing_daily_index_is_not_retried(self):
+        import io
+        import urllib.error
+        calls = []
+
+        def fake_urlopen(req, timeout=None):
+            calls.append(1)
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"\x1f\x8bAccessDenied"))
+        with mock.patch.object(us_press.urllib.request, "urlopen", fake_urlopen):
+            self.assertEqual(us_press._sec_get("https://www.sec.gov/idx", "UA a@b.c")[0], 403)
+        self.assertEqual(len(calls), 1)
+
+    def test_a_partly_read_filing_is_not_kept(self):
+        index = FiledReleases.INDEX
+        with mock.patch.object(us_press, "_sec_get",
+                               lambda url, ua: (200, index.encode()) if url.endswith("-index.htm") else (0, b"")), \
+                mock.patch.object(us_press.time, "sleep", lambda s: None):
+            self.assertIsNone(us_press._sec_exhibits({"cik": 1}, {"accession": "0001-26-000001"}, "UA"))
+
+
 class Poll(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
