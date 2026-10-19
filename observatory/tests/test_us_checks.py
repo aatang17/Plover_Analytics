@@ -149,7 +149,7 @@ class Review(unittest.TestCase):
     def test_verdict_is_read_and_cached(self):
         calls = []
 
-        def fake(prov, key, model, messages, max_tokens=300, timeout=None):
+        def fake(prov, key, model, messages, max_tokens=300, timeout=None, **kw):
             calls.append(messages)
             return {"text": "Sure: {\"verdict\": \"revise\", \"reason\": \"wrong group\"}", "usage": {}}
         with mock.patch("app.us_ask_model.provider", return_value=("deepseek", "k", "m")), \

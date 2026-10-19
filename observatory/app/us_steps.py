@@ -459,7 +459,7 @@ def _ask_model(messages):
     prov, key, model = cfg
     us_ask_model._tick("calls")
     try:
-        out = us_ask_model._complete(prov, key, model, messages, max_tokens=900, timeout=25)
+        out = us_ask_model._complete(prov, key, model, messages, max_tokens=900, timeout=25, cache_key="plover-us-steps")
     except Exception as exc:                                      # noqa: BLE001 — a timeout, a bad reply
         us_ask_model._tick("failed")
         raise StepsError("the model did not answer (%s)" % type(exc).__name__)

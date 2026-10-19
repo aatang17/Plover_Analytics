@@ -31,7 +31,7 @@ class ReaderInput(unittest.TestCase):
     def test_cache_keeps_a_follow_up_apart_from_the_bare_words(self):
         seen = []
 
-        def fake(prov, key, model, messages, max_tokens=300, timeout=None):
+        def fake(prov, key, model, messages, max_tokens=300, timeout=None, **kw):
             seen.append(messages[-1]["content"])
             return {"text": '{"shape": "company_value", "question": "what is Microsoft worth"}', "usage": {}}
         us_ask_model._CACHE.clear()

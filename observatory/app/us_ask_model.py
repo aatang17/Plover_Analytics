@@ -22,9 +22,20 @@ Guard rails, because this runs on Plover's own key for the public page:
   * one call per distinct question a day: readings are cached;
   * every call is counted, with its tokens, for /api/v1/us/ask/recipes.
 
-Provider: DeepSeek when DEEPSEEK_API_KEY is set, else OpenAI. The call is
-made here, with a short timeout, not through the desk's gateway, whose
+Provider: DeepSeek when DEEPSEEK_API_KEY is set, else OpenAI; with both keys
+US_ASK_PROVIDER picks one, and US_ASK_MODEL_NAME names the model. The call
+is made here, with a short timeout, not through the desk's gateway, whose
 two-minute limit suits long agent runs, not a search box.
+
+Tokens. Every prompt is laid out for the providers' prompt caches: the
+unchanging part (the tables, the rules) comes first and what varies (the
+question, the examples chosen for it) last, so the long prefix is read from
+cache (OpenAI charges half for it, DeepSeek a tenth); each kind of call
+carries a prompt_cache_key so OpenAI routes it to the same cache; and the
+cached share is counted in tokens_cached. Models that reason (OpenAI's
+GPT-5 and later) refuse `temperature` and `max_tokens`: on that refusal the
+call is sent again the way they want it, with reasoning kept low, and the
+model's way is remembered for the day.
 """
 import datetime
 import json
@@ -38,7 +49,8 @@ from collections import OrderedDict
 from .assistant import gateway
 
 _LOCK = threading.Lock()
-STATS = {"day": None, "calls": 0, "matched": 0, "declined": 0, "failed": 0, "cached": 0, "tokens_in": 0, "tokens_out": 0}
+STATS = {"day": None, "calls": 0, "matched": 0, "declined": 0, "failed": 0, "cached": 0,
+         "tokens_in": 0, "tokens_out": 0, "tokens_cached": 0}
 _ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
 
 
@@ -57,7 +69,11 @@ def provider():
     """(provider, key, model) or None when the layer is off."""
     if _env("US_ASK_MODEL") == "0":
         return None
-    for prov, var in (("deepseek", "DEEPSEEK_API_KEY"), ("openai", "OPENAI_API_KEY")):
+    order = (("deepseek", "DEEPSEEK_API_KEY"), ("openai", "OPENAI_API_KEY"))
+    want = _env("US_ASK_PROVIDER").lower()
+    if want in ("deepseek", "openai"):
+        order = tuple(o for o in order if o[0] == want)
+    for prov, var in order:
         key = _env(var)
         if key:
             return prov, key, _env("US_ASK_MODEL_NAME") or gateway.default_model(prov)
@@ -75,11 +91,13 @@ def _tick(field, tokens=None):
     with _LOCK:
         today = datetime.date.today().isoformat()
         if STATS["day"] != today:
-            STATS.update(day=today, calls=0, matched=0, declined=0, failed=0, cached=0, tokens_in=0, tokens_out=0)
+            STATS.update(day=today, calls=0, matched=0, declined=0, failed=0, cached=0, tokens_in=0, tokens_out=0,
+                         tokens_cached=0)
         STATS[field] += 1
         if tokens:
             STATS["tokens_in"] += int(tokens.get("in") or 0)
             STATS["tokens_out"] += int(tokens.get("out") or 0)
+            STATS["tokens_cached"] += int(tokens.get("cached") or 0)
 
 
 def under_cap():
@@ -134,19 +152,66 @@ def _norm(question):
     return re.sub(r"\s+", " ", (question or "").strip().lower()).strip(" ?.!")
 
 
-def _complete(prov, key, model, messages, max_tokens=300, timeout=None):
-    """One short JSON-mode call; {"text", "usage"}. Raises on any failure."""
-    base = gateway.PROVIDERS["deepseek" if prov == "deepseek" else "openai"]["base_url"]
-    body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0,
-            "response_format": {"type": "json_object"}}
-    req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode("utf-8"), method="POST")
+# how each OpenAI model wants to be called, learnt from its first refusal:
+# {"model": {"temperature": bool, "reasoning": bool}}
+_WAYS = {}
+REASONING_HEADROOM = 800          # output tokens a reasoning model may spend thinking before it writes
+
+
+def _body(prov, model, messages, max_tokens, cache_key, way):
+    body = {"model": model, "messages": messages, "response_format": {"type": "json_object"}}
+    if prov == "deepseek":
+        body.update(max_tokens=max_tokens, temperature=0)
+        return body
+    if cache_key:
+        body["prompt_cache_key"] = cache_key
+    if way.get("temperature", True):
+        body["temperature"] = 0
+        body["max_completion_tokens"] = max_tokens
+    else:
+        body["max_completion_tokens"] = max_tokens + REASONING_HEADROOM
+        if way.get("reasoning", True):
+            body["reasoning_effort"] = "low"
+    return body
+
+
+def _post(url, key, body, timeout):
+    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST")
     req.add_header("Content-Type", "application/json")
     req.add_header("Authorization", "Bearer " + key)
-    with urllib.request.urlopen(req, timeout=timeout or TIMEOUT_SECONDS) as resp:
-        out = json.loads(resp.read().decode("utf-8"))
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _complete(prov, key, model, messages, max_tokens=300, timeout=None, cache_key=None):
+    """One short JSON-mode call; {"text", "usage": {in, out, cached}}. Raises on any failure.
+    `cache_key` names the kind of prompt (reader, steps, review) for the provider's cache."""
+    url = gateway.PROVIDERS["deepseek" if prov == "deepseek" else "openai"]["base_url"].rstrip("/") + "/chat/completions"
+    way = dict(_WAYS.get(model) or {})
+    for _ in range(3):
+        try:
+            out = _post(url, key, _body(prov, model, messages, max_tokens, cache_key, way), timeout or TIMEOUT_SECONDS)
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code != 400 or prov == "deepseek":
+                raise
+            text = exc.read().decode("utf-8", "replace")[:600]
+            # a reasoning model: no temperature, no max_tokens; then, if it has no reasoning setting, none
+            if way.get("temperature", True) and re.search(r"temperature|max_tokens", text):
+                way["temperature"] = False
+            elif way.get("reasoning", True) and "reasoning" in text:
+                way["reasoning"] = False
+            else:
+                raise
+            _WAYS[model] = dict(way)
+    else:
+        raise RuntimeError("the model refused every way of calling it")
     msg = ((out.get("choices") or [{}])[0].get("message") or {})
     usage = out.get("usage") or {}
-    return {"text": msg.get("content") or "", "usage": {"in": usage.get("prompt_tokens") or 0, "out": usage.get("completion_tokens") or 0}}
+    # OpenAI reports the cached prefix under prompt_tokens_details, DeepSeek as prompt_cache_hit_tokens
+    cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or usage.get("prompt_cache_hit_tokens") or 0
+    return {"text": msg.get("content") or "", "usage": {"in": usage.get("prompt_tokens") or 0,
+                                                          "out": usage.get("completion_tokens") or 0, "cached": cached}}
 
 
 def prompt(shapes_text, rank_keys, universes, benchmarks, today=None):
@@ -184,7 +249,7 @@ def read(question, system_prompt, prev=None):
                 {"role": "user", "content": user_message(question, prev)}]
     _tick("calls")
     try:
-        out = _complete(prov, key, model, messages)
+        out = _complete(prov, key, model, messages, cache_key="plover-us-reader")
     except Exception:                                             # noqa: BLE001 — a timeout, a refusal, a bad reply
         _tick("failed")
         return None

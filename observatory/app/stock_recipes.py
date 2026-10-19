@@ -2390,7 +2390,7 @@ SHAPE_HINTS = {
     "company_price_performance": "how one company's share price has done over a period",
     "company_risks": "the risks a company lists in its annual report (its risk factors), or its risks from one thing ('risks to Apple from tariffs')",
     "company_says": "what a company's annual report says about a subject ('what does Apple say about tariffs', 'who are Nvidia's competitors'), its lawsuits and legal cases, cybersecurity, or where its offices and plants are",
-    "company_business": "what a company does or sells, its business, what it makes its money from, its revenue mix by product line, segment and region ('what does Nvidia do', 'tell me about Costco')",
+    "company_business": "what a company does or sells, its business, what it makes its money from, its whole revenue mix by product line, segment and region ('what does Nvidia do', 'tell me about Costco'); a question about ONE named segment, product or region, or its share ('what share of Apple's revenue is services', 'how much does Nvidia make in China'), is steps",
     "company_growth_margin": "a company's revenue growth and margins",
     "company_value": "what a company is worth: market value, P/E, yields",
     "manager_portfolio": "what a 13F manager owns, added and dropped",

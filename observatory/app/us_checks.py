@@ -314,6 +314,10 @@ def review_prompt(question, plan, headline, rows, cols):
             "the answer stands but the reader should be told one thing the headline does not already say; the reason is "
             "then printed under the answer as it stands, so write it to the reader (\"The latest month is not over, so "
             "the count can still change.\"), never about the reader or the analyst. \"ok\" otherwise.\n\n"
+            "House conventions, never grounds to revise: an index is measured by the fund that tracks it (the S&P 500 "
+            "by SPY, the Dow by DIA); \"the Nasdaq\" means the Nasdaq-100 (QQQ), since the Composite is not held; \"the "
+            "market\" means the S&P 500; price changes are before dividends; the current month or week counts to the "
+            "latest close; a question naming no period means this year.\n\n"
             "TODAY: %s\nQUESTION: %s\nSTEPS: %s\nHEADLINE: %s\nRESULT (%d rows, first %d): %s"
             % (datetime.date.today().isoformat(), question, json.dumps(plan.get("steps") or [], ensure_ascii=False), headline, len(rows),
                len(sample), json.dumps(sample, ensure_ascii=False, default=str)[:1500]))
@@ -337,7 +341,7 @@ def review(question, plan, headline, rows, cols):
         out = us_ask_model._complete(prov, key, model,
                                      [{"role": "system", "content": review_prompt(question, plan, headline, rows, cols)},
                                       {"role": "user", "content": "Your verdict?"}],
-                                     max_tokens=REVIEW_TOKENS, timeout=REVIEW_SECONDS)
+                                     max_tokens=REVIEW_TOKENS, timeout=REVIEW_SECONDS, cache_key="plover-us-review")
         m = re.search(r"\{.*\}", out.get("text") or "", re.S)
         got = json.loads(m.group(0)) if m else {}
         us_ask_model._tick("matched", out.get("usage"))
