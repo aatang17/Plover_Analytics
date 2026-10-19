@@ -211,7 +211,8 @@ class TwentyQuestionsTest(unittest.TestCase):
             e = self.c.get("/api/v1/us/ask", params={"q": "JPMorgan earnings per share by year"}).json()
             self.assertEqual(e["match"]["recipe"], "company_history")
             # a share price question over years stays a price question and says where prices begin
-            px = self.c.get("/api/v1/us/ask", params={"q": "Chart Apple stock over 5 years"}).json()
+            # (prices run from May 2018 since 2026-10-19, so ask for more than that)
+            px = self.c.get("/api/v1/us/ask", params={"q": "Chart Apple stock since 2016"}).json()
             self.assertEqual(px["match"]["recipe"], "company_price_performance")
             self.assertIn("prices on file begin", px["answer"])
             # a figure reported by segment only is explained, not charted
