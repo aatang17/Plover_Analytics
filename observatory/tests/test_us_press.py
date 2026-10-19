@@ -161,8 +161,19 @@ class Poll(unittest.TestCase):
         self.assertEqual(c.get("/api/v1/us/press/ZZZZ").status_code, 404)
         self.assertEqual(c.get("/api/v1/us/press").json()["with_feed"], 1)
 
+    def test_a_failed_poll_shows_in_health(self):
+        with mock.patch.object(us_press, "STATUS_PATH", pathlib.Path(self.tmp.name) / "status.json"), \
+                mock.patch.object(us_press, "poll", side_effect=RuntimeError("feeds file unreadable")), \
+                mock.patch.dict(os.environ, {"US_PRESS_POLL": "1"}):
+            us_press._last_poll["at"] = 0
+            with self.assertRaises(RuntimeError):
+                us_press.poll_if_due()
+            flags = us_press.health()[0]["shape_flags"]
+        self.assertTrue(any("last poll failed" in f and "feeds file unreadable" in f for f in flags), flags)
+
     def test_poll_if_due_waits_for_its_interval(self):
-        with mock.patch.dict(os.environ, {"US_PRESS_POLL": "1"}):
+        with mock.patch.dict(os.environ, {"US_PRESS_POLL": "1"}), \
+                mock.patch.object(us_press, "STATUS_PATH", pathlib.Path(self.tmp.name) / "status.json"):
             us_press._last_poll["at"] = 0
             self.assertIsNotNone(us_press.poll_if_due())
             self.assertIsNone(us_press.poll_if_due())

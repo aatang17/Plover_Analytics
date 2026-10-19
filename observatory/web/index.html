@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
-<title>Plover Analytics — Ask about US stocks and the US economy</title>
+<title>Plover Analytics — Ask about the US economy</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/front.css">
@@ -25,7 +25,9 @@
 </head>
 <body class="fp-body">
 
-<!-- The home page is the question box (2026-10-19), and answers appear here,
+<!-- 2026-10-19: US economy leads until the US company data is on the server (the stock
+     questions answered nothing there); put the stock examples back when it is.
+     The home page is the question box (2026-10-19), and answers appear here,
      under it, like a conversation: a follow-up ("and Microsoft?") reads the
      question before it. Signed out, a question shows the start of its answer;
      the full answer (chart, table, every source, follow-ups) is one sign-up
@@ -40,12 +42,12 @@
   <div id="stale-banner"></div>
 
   <div class="home-wrap">
-    <h1 class="fp-title home-only">Ask about US stocks and the US economy.</h1>
-    <p class="fp-sub home-only">Who owns a company, what it earns, what its CEO is paid, what insiders and funds are doing, and where inflation, wages and Treasury yields stand. Every number comes from official filings and statistics, with its source.</p>
+    <h1 class="fp-title home-only">Ask about the US economy.</h1>
+    <p class="fp-sub home-only">Where inflation, wages and Treasury yields stand, with the number, the chart and where it came from. Every number comes from official statistics. Questions about US stocks are coming soon.</p>
     <form class="fp-box" id="ask-form" role="search" action="/" method="get" autocomplete="off">
       <label for="q" class="fp-sr">Your question about a stock or the US economy</label>
       <input type="search" id="q" name="q" maxlength="300" spellcheck="false"
-             placeholder="Ask, e.g. who owns Nvidia"
+             placeholder="Ask, e.g. is US inflation falling"
              aria-label="Ask about a US stock or the US economy">
       <button type="submit" class="fp-go" id="ask-btn" aria-label="Ask">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
@@ -59,13 +61,12 @@
 
   <section id="home-note">
     <ul class="fp-examples" id="examples" aria-label="Example questions">
-      <li><a href="/?q=Who%20owns%20Nvidia%3F">Who owns Nvidia?</a></li>
-      <li><a href="/?q=Who%20were%20the%20top%2010%20paid%20CEOs%3F">Who were the top 10 paid CEOs?</a></li>
-      <li><a href="/?q=How%20much%20revenue%20does%20Apple%20get%20from%20China%3F">How much revenue does Apple get from China?</a></li>
-      <li><a href="/?q=Cheapest%20carmakers%20by%20P/E">Cheapest carmakers by P/E</a></li>
-      <li><a href="/?q=Insiders%20selling%20Meta">Insiders selling Meta</a></li>
+      <li><a href="/?q=What%20is%20US%20inflation%20now%3F">What is US inflation now?</a></li>
       <li><a href="/?q=Is%20US%20core%20inflation%20falling%3F">Is US core inflation falling?</a></li>
+      <li><a href="/?q=Are%20US%20wages%20rising%3F">Are US wages rising?</a></li>
       <li><a href="/?q=US%2010-year%20Treasury%20yield">US 10-year Treasury yield</a></li>
+      <li><a href="/?q=US%202-year%20Treasury%20yield">US 2-year Treasury yield</a></li>
+      <li><a href="/?q=US%2010-year%20real%20yield">US 10-year real yield</a></li>
     </ul>
     <p class="fp-note" id="gate-note" hidden>See the start of any answer free. Sign up to see all of it.</p>
   </section>

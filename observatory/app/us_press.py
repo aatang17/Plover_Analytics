@@ -754,7 +754,33 @@ def poll_if_due():
                 _last_poll["at"] = time.time() - age
                 return None
     _last_poll["at"] = time.time()
-    return poll()
+    try:
+        out = poll()
+    except Exception as exc:  # noqa: BLE001 — kept for the health report, then raised to the loop's log
+        _write_status({"at": _now(), "error": "%s: %s" % (type(exc).__name__, str(exc)[:300])})
+        raise
+    _write_status({"at": _now(), "error": None})
+    return out
+
+
+STATUS_PATH = DB_PATH.with_name("us-press-status.json")
+
+
+def _write_status(rec):
+    """The last poll's outcome, readable by the health report: a poll that
+    fails is otherwise only a line in a log nobody reads."""
+    try:
+        STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        STATUS_PATH.write_text(json.dumps(rec), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _read_status():
+    try:
+        return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 # ---------------------------------------------------------------- reading the store
@@ -810,7 +836,7 @@ def health():
     feeds = load_feeds()
     with_feed = sum(1 for r in feeds.values() if r.get("feed"))
     con = connect(readonly=True)
-    last, newest, failed = None, None, []
+    last, newest, failed, running = None, None, [], None
     if con is not None:
         try:
             row = con.execute("SELECT finished_at, feeds_failed FROM press_polls WHERE finished_at IS NOT NULL "
@@ -818,6 +844,7 @@ def health():
             if row:
                 last, failed = row[0], json.loads(row[1] or "[]")
             newest = con.execute("SELECT max(published) FROM press_releases").fetchone()[0]
+            running = con.execute("SELECT max(started_at) FROM press_polls WHERE finished_at IS NULL").fetchone()[0]
         except sqlite3.Error:
             pass
         con.close()
@@ -825,6 +852,7 @@ def health():
     if last:
         days = (dt.datetime.utcnow() - dt.datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ")).days
     stale = days is None or days > STALE_AFTER_DAYS
+    status = _read_status()
     sec_failed = [f for f in failed if str(f).startswith("8-K:")]
     feed_failed = [f for f in failed if not str(f).startswith("8-K:")]
     return [{
@@ -838,7 +866,10 @@ def health():
         "shape_flags": (["%d of %d S&P 500 members have a news feed" % (with_feed, len(feeds))]
                         + (["%d news feeds failed in the last poll" % len(feed_failed)] if feed_failed else [])
                         + (["%d 8-K filings could not be read in the last poll" % len(sec_failed)]
-                           if sec_failed else [])),
+                           if sec_failed else [])
+                        + (["a poll started at %s has not finished" % running] if running else [])
+                        + (["last poll failed at %s: %s" % (status["at"], status["error"])]
+                           if status.get("error") else [])),
     }]
 
 
