@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """The step-by-step route's other tables: CEO pay, quarterly results,
-business segments, insider trades and 13F fund holdings.
+business segments, insider trades, 13F fund holdings and daily prices.
 
 app/us_steps.py answers open questions with one SQL query over a table of
-every stock (`stocks`). These five tables sit beside it, each keyed by the
+every stock (`stocks`). These tables sit beside it, each keyed by the
 same ticker, so a question can join them: "the ten best-paid CEOs", "S&P 500
 companies whose revenue grew fastest last quarter", "companies whose cloud
 segment is over half of revenue", "where insiders bought most in the past
-three months", "stocks funds added most last quarter".
+three months", "stocks funds added most last quarter", "how many months Microsoft beat the
+S&P 500".
 
 Every number comes from the same data the API serves, and nothing here is
 written by a model:
@@ -24,6 +25,9 @@ written by a model:
                    year, one row per transaction
   fund_holdings    13F: per stock, the latest quarter's holders, value and
                    shares against the quarter before
+  prices           every trading day's close for each stock and benchmark
+                   fund, split-adjusted like /api/v1/us/prices (monthly
+                   returns, worst days, drawdowns, "how many months ...")
 
 The tables are built once per database version into a shared in-memory
 DuckDB (sandbox()); each question gets its own cursor on it, so the query
@@ -111,7 +115,17 @@ TABLES = {
         ("shares_held_prior", "DOUBLE", "the same the quarter before, adjusted for any stock split in between"),
         ("shares_change_pct", "DOUBLE", "change in shares held across all managers, % (positive = funds added); blank when the security's identifier changed between the quarters"),
     ]),
+    "prices": ("Daily closing prices, one row per stock per trading day, for every ticker in stocks and every "
+               "benchmarks.fund_ticker (SPY for the S&P 500, DIA for the Dow ...).", [
+        ("ticker", "VARCHAR", "joins stocks.ticker, or benchmarks.fund_ticker"),
+        ("date", "DATE", "the trading day"),
+        ("close_usd", "DOUBLE", "the close as traded that day, US$"),
+        ("adj_close_usd", "DOUBLE", "the close adjusted for later stock splits, US$: use this for any change between two days"),
+        ("volume", "BIGINT", "shares traded that day, as traded (not split-adjusted)"),
+    ]),
 }
+# tables built by their own route (not from row dicts): see price_table()
+_DIRECT = {"prices"}
 
 
 def sources():
@@ -122,6 +136,7 @@ def sources():
             "segments": {"name": "Segment revenue (10-K)", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (10-K segment disclosures)."},
             "insider_trades": {"name": "Insider trades", "credit": sec_insiders_api.PROVENANCE["credit"]},
             "fund_holdings": {"name": "13F holdings", "credit": sec_13f_api.PROVENANCE["credit"]}}
+    # prices: every step answer already names the daily-price source (stock_recipes.PRICE_SOURCE)
 
 
 def doc():
@@ -496,12 +511,98 @@ def _load(con, table, cols, rows):
 
 
 def build(cur):
-    """{table: rows} for the five tables; a table whose source is missing is empty."""
-    return {name: (BUILDERS[name](cur) or []) for name in TABLES}
+    """{table: rows} for the row-built tables; a table whose source is missing is empty."""
+    return {name: (BUILDERS[name](cur) or []) for name in TABLES if name not in _DIRECT}
+
+
+# ---------------------------------------------------------------- prices
+def _price_pieces(cur, tickers):
+    """[(feed symbol, ticker, from, before)] and [(ticker, split day, ratio)]:
+    which bars make up each ticker's clean history (app/us_prices_api.py:
+    a reused ticker starts at its break, a ticker change is joined to the old
+    symbol) and the splits inside it."""
+    from . import us_prices_api
+    feed = {r[0] for r in cur.execute("SELECT DISTINCT symbol FROM us_px_daily").fetchall()}
+    ev = us_prices_api._events(cur)
+    pieces, splits = [], []
+    for t in sorted(set(tickers)):
+        sym = next((s for s in (_sym(t), t, t.replace(".", "-")) if s in feed), None)
+        if not sym:
+            continue
+        parts = [(sym, None, None)]
+        brk = ev["breaks"].get(sym)
+        if brk:
+            if sym in ev["links"]:
+                old, d = ev["links"][sym]
+                parts = [(old, None, d), (sym, d, None)]
+            else:
+                parts = [(sym, brk[0], None)]
+        for src, lo, hi in parts:
+            pieces.append((src, t, lo, hi))
+            splits += [(t, d, ratio) for d, ratio in ev["splits"].get(src, [])
+                       if (lo is None or d >= lo) and (hi is None or d < hi)]
+    return pieces, splits
+
+
+def price_table(cur, db, tickers):
+    """The `prices` table in `db`: one row per ticker per trading day,
+    split-adjusted the same way as /api/v1/us/prices. Three million rows do not
+    travel as JSON, so they go through a temporary Parquet file, deleted
+    straight after. Returns the row count."""
+    import os
+    import tempfile
+    pieces, splits = _price_pieces(cur, tickers)
+    if not pieces:
+        _empty_prices(db)
+        return 0
+    cur.execute("CREATE OR REPLACE TEMP TABLE _px_pieces (src VARCHAR, ticker VARCHAR, lo DATE, hi DATE)")
+    cur.executemany("INSERT INTO _px_pieces VALUES (?, ?, ?, ?)", pieces)
+    cur.execute("CREATE OR REPLACE TEMP TABLE _px_splits (ticker VARCHAR, d DATE, ratio DOUBLE)")
+    if splits:
+        cur.executemany("INSERT INTO _px_splits VALUES (?, ?, ?)", splits)
+    fd, path = tempfile.mkstemp(suffix=".parquet", prefix="plover-prices-")
+    os.close(fd)
+    try:
+        cur.execute("""
+            COPY (
+                WITH bars AS (
+                    SELECT pc.ticker, p.date, p.close, p.volume
+                    FROM us_px_daily p JOIN _px_pieces pc ON p.symbol = pc.src
+                     AND (pc.lo IS NULL OR p.date >= pc.lo) AND (pc.hi IS NULL OR p.date < pc.hi)
+                    WHERE p.close > 0),
+                f AS (
+                    SELECT b.ticker, b.date, exp(sum(ln(s.ratio))) AS factor
+                    FROM bars b JOIN _px_splits s ON s.ticker = b.ticker AND s.d > b.date
+                    GROUP BY b.ticker, b.date)
+                SELECT b.ticker, b.date, b.close AS close_usd, b.close / coalesce(f.factor, 1.0) AS adj_close_usd,
+                       b.volume::BIGINT AS volume
+                FROM bars b LEFT JOIN f USING (ticker, date)
+                ORDER BY b.ticker, b.date
+            ) TO '%s' (FORMAT PARQUET)""" % path.replace("'", "''"))
+        db.execute("CREATE TABLE prices AS SELECT * FROM read_parquet('%s')" % path.replace("'", "''"))
+    finally:
+        cur.execute("DROP TABLE IF EXISTS _px_pieces")
+        cur.execute("DROP TABLE IF EXISTS _px_splits")
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    return db.execute("SELECT count(*) FROM prices").fetchone()[0]
+
+
+def _empty_prices(db):
+    db.execute("CREATE TABLE prices AS SELECT %s WHERE false" % ", ".join(
+        "NULL::%s AS %s" % (t, c) for c, t, _ in TABLES["prices"][1]))
+
+
+def _price_tickers(cur):
+    """The tickers of `stocks` (app/us_steps.py) and every benchmark's fund."""
+    from . import us_benchmarks, us_steps
+    return [r["ticker"] for r in us_steps.base_rows(cur)] + [b["etf"] for b in us_benchmarks.BENCHMARKS.values()]
 
 
 def sandbox(cur):
-    """The shared in-memory database holding the five tables, built once per
+    """The shared in-memory database holding the tables, built once per
     database version. Each question opens its own cursor on it."""
     import duckdb
     v = sec_api.file_version()
@@ -511,14 +612,20 @@ def sandbox(cur):
     data = build(cur)
     db = duckdb.connect(":memory:")
     for name, (_, cols) in TABLES.items():
-        _load(db, name, cols, data[name])
+        if name not in _DIRECT:
+            _load(db, name, cols, data[name])
+    n_prices = 0
+    if cur is not None and _has(cur, "us_px_daily"):
+        n_prices = price_table(cur, db, _price_tickers(cur))
+    else:
+        _empty_prices(db)
     # nothing outside these tables from here on, and no query can undo it
     db.execute("SET memory_limit='%s'" % MEMORY_LIMIT)
     db.execute("SET threads=2")
     db.execute("SET enable_external_access=false")
     db.execute("SET lock_configuration=true")
     with _LOCK:
-        _STATE.update(v=v, db=db, counts={k: len(r) for k, r in data.items()})
+        _STATE.update(v=v, db=db, counts=dict({k: len(r) for k, r in data.items()}, prices=n_prices))
     return db
 
 

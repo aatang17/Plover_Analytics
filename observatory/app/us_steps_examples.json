@@ -750,5 +750,97 @@
       "value": "shares_change_pct"
     },
     "cannot": null
+  },
+  {
+    "question": "In how many months this year did Microsoft beat the S&P 500?",
+    "steps": [
+      "Microsoft is named, so the stock is Microsoft; the S&P 500 is only the thing to beat, through the fund that tracks it.",
+      "Take each month's last closing price, adjusted for splits, for both, starting from last December so January has a month to compare with.",
+      "Work out each month's change for both and compare them month by month.",
+      "Count the months Microsoft's change was bigger, out of the months this year."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH m AS (SELECT ticker, date_trunc('month', date) AS month, arg_max(adj_close_usd, date) AS close FROM prices WHERE ticker IN ('MSFT', 'SPY') AND date >= DATE 'LAST_YEAR-12-01' GROUP BY ticker, month), r AS (SELECT ticker, month, 100 * (close / lag(close) OVER (PARTITION BY ticker ORDER BY month) - 1) AS change_pct FROM m) SELECT strftime(s.month, '%Y-%m') AS month, s.change_pct AS stock_change_pct, b.change_pct AS index_change_pct, s.change_pct > b.change_pct AS ahead, count(*) FILTER (WHERE s.change_pct > b.change_pct) OVER () AS beat, count(*) OVER () AS months FROM r s JOIN r b ON b.month = s.month AND b.ticker = 'SPY' WHERE s.ticker = 'MSFT' AND s.month >= DATE 'YEAR-01-01' ORDER BY s.month",
+    "headline": "Microsoft beat the S&P 500 in {beat} of {months} months {period}, including this month to date.",
+    "chart": {
+      "label": "month",
+      "value": "stock_change_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "What was Nvidia's worst day this year?",
+    "steps": [
+      "Nvidia is ticker NVDA.",
+      "Take its daily closing prices, adjusted for splits, from the last days of last year so the first day of this year has one before it.",
+      "Work out each day's change on the day before, and list the biggest falls this year."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH d AS (SELECT date, 100 * (adj_close_usd / lag(adj_close_usd) OVER (ORDER BY date) - 1) AS day_change_pct FROM prices WHERE ticker = 'NVDA' AND date >= DATE 'LAST_YEAR-12-01') SELECT date, day_change_pct FROM d WHERE date >= DATE 'YEAR-01-01' ORDER BY day_change_pct LIMIT 5",
+    "headline": "Nvidia's worst day {period} was {date}, when it changed {day_change_pct}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "How far is Tesla below its high this year?",
+    "steps": [
+      "Tesla is ticker TSLA.",
+      "Find its highest closing price this year, adjusted for splits, and the day it was set.",
+      "Compare the latest close with that high."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT arg_max(date, adj_close_usd) AS high_date, max(adj_close_usd) AS high_usd, arg_max(adj_close_usd, date) AS latest_usd, 100 * (arg_max(adj_close_usd, date) / max(adj_close_usd) - 1) AS from_high_pct FROM prices WHERE ticker = 'TSLA' AND date >= DATE 'YEAR-01-01'",
+    "headline": "Tesla's latest close is {from_high_pct} from its high {period}, set on {high_date}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which S&P 500 stocks rose in the most months this year?",
+    "steps": [
+      "The S&P 500 is named, so the stocks are its members.",
+      "Take each member's last closing price in each month, adjusted for splits, from last December.",
+      "Work out each month's change and count the months each stock rose.",
+      "Rank the members by months up, then by this year's change."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH m AS (SELECT p.ticker, date_trunc('month', p.date) AS month, arg_max(p.adj_close_usd, p.date) AS close FROM prices p JOIN stocks s ON s.ticker = p.ticker AND s.in_sp500 WHERE p.date >= DATE 'LAST_YEAR-12-01' GROUP BY p.ticker, month), r AS (SELECT ticker, month, close / lag(close) OVER (PARTITION BY ticker ORDER BY month) - 1 AS ch FROM m) SELECT s.ticker, s.name, count(*) FILTER (WHERE r.ch > 0) AS months_up, count(r.ch) AS months, s.change_period_pct FROM r JOIN stocks s USING (ticker) WHERE r.month >= DATE 'YEAR-01-01' GROUP BY s.ticker, s.name, s.change_period_pct ORDER BY months_up DESC, s.change_period_pct DESC LIMIT 10",
+    "headline": "{name} rose in {months_up} of {months} months {period}, the most of any S&P 500 member, and changed {change_period_pct}.",
+    "chart": {
+      "label": "ticker",
+      "value": "months_up"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Which Dow stock had the biggest drawdown this year?",
+    "steps": [
+      "The Dow is named, so the stocks are its members.",
+      "A drawdown is the fall from the highest close so far to a later close, so follow each member's daily closes, adjusted for splits, through the year.",
+      "Take each member's deepest fall from its high, and the day it hit bottom.",
+      "Rank the members by that fall, deepest first."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "WITH p AS (SELECT p.ticker, p.date, p.adj_close_usd / max(p.adj_close_usd) OVER (PARTITION BY p.ticker ORDER BY p.date ROWS UNBOUNDED PRECEDING) - 1 AS below_high FROM prices p JOIN stocks s ON s.ticker = p.ticker AND s.in_dow WHERE p.date >= DATE 'YEAR-01-01'), d AS (SELECT ticker, 100 * min(below_high) AS drawdown_pct, arg_min(date, below_high) AS low_date FROM p GROUP BY ticker) SELECT s.ticker, s.name, d.drawdown_pct, d.low_date, s.change_period_pct FROM d JOIN stocks s USING (ticker) ORDER BY d.drawdown_pct LIMIT 10",
+    "headline": "{name} had the deepest fall from a high among Dow members {period}: {drawdown_pct}, at its low on {low_date}.",
+    "chart": {
+      "label": "ticker",
+      "value": "drawdown_pct"
+    },
+    "cannot": null
   }
 ]

@@ -311,9 +311,11 @@ def review_prompt(question, plan, headline, rows, cols):
             "Reply with one JSON object: {\"verdict\": \"ok\" | \"revise\" | \"note\", \"reason\": \"one sentence\"}.\n"
             "\"revise\" means the steps should be redone (wrong group of companies, wrong period, wrong figure, a "
             "headline that does not answer the question); the reason tells the analyst what to change. \"note\" means "
-            "the answer stands but the reader should be told one thing (a caveat in plain words). \"ok\" otherwise.\n\n"
-            "QUESTION: %s\nSTEPS: %s\nHEADLINE: %s\nRESULT (%d rows, first %d): %s"
-            % (question, json.dumps(plan.get("steps") or [], ensure_ascii=False), headline, len(rows),
+            "the answer stands but the reader should be told one thing the headline does not already say; the reason is "
+            "then printed under the answer as it stands, so write it to the reader (\"The latest month is not over, so "
+            "the count can still change.\"), never about the reader or the analyst. \"ok\" otherwise.\n\n"
+            "TODAY: %s\nQUESTION: %s\nSTEPS: %s\nHEADLINE: %s\nRESULT (%d rows, first %d): %s"
+            % (datetime.date.today().isoformat(), question, json.dumps(plan.get("steps") or [], ensure_ascii=False), headline, len(rows),
                len(sample), json.dumps(sample, ensure_ascii=False, default=str)[:1500]))
 
 

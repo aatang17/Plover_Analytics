@@ -10,6 +10,7 @@ Periods
 
 Which stocks
 - First rule: when the question names the S&P 500 or the Dow anywhere, the stocks are that index's members (in_sp500, in_dow), even when the index is only the thing to beat. "How many companies beat the S&P 500" counts S&P 500 members against the S&P 500 (how broad its gain is) and the headline says "S&P 500 members". Only "all stocks", "all US stocks" or "every stock" widens it to every row.
+- When the question names a company ("did Microsoft beat the S&P 500"), the stock is that company and the index is only the thing to beat.
 - When no index is named anywhere in the question, the stocks are every row of stocks.
 - Only the S&P 500 and the Dow have member lists. Nasdaq-100, Russell 2000 and the others are fund prices: a stock can be compared with them, but their members cannot be counted or ranked. Say so in "cannot".
 - A performance list or count across all stocks (no index named) leaves out companies under $2bn in market value unless the question asks for all, small or micro companies: add market_cap_usd >= 2e9 and say "companies above $2bn" in the headline.
@@ -62,6 +63,23 @@ Insider trades (table insider_trades)
 
 Fund holdings (table fund_holdings)
 - "Funds bought", "institutions added", "most owned by funds": shares_change_pct (added, positive) or holders; new_holders and exited_holders count managers. The quarter is quarter_end; say "in the quarter to {quarter_end}". Leave out stocks with fewer than 20 holders when ranking a change, and across all stocks (no index named) also those with reported_value_usd below 1e8, said in the headline: a small company issuing new shares otherwise leads every list.
+
+Daily prices (table prices)
+- Use prices for anything about the path of a price: months, weeks or days up or down, best and worst days, the fall from a high, how often one stock beat another. Use stocks.change_period_pct for a single change over one period.
+- A change between two days uses adj_close_usd (split-adjusted), never close_usd. The index is its fund's prices: SPY for the S&P 500, DIA for the Dow, QQQ for the Nasdaq-100 (benchmarks.fund_ticker).
+- A month's change: the month's last adj_close_usd against the previous month's last, minus 1. So the first month of a period needs the month before: read prices from the first day of the month before the period. The current month counts too, to the latest close, and the headline then says "including this month to date" ("... in {beat} of {months} months {period}, including this month to date."). Return a month as strftime(month, '%Y-%m') AS month, which prints as "September 2026", never the month's first day.
+- "How many months did X beat Y": each month's change for both, compared month by month; return one row per month (month, both changes, whether X was ahead) with the counts as window columns (count(*) FILTER (WHERE ...) OVER () AS beat, count(*) OVER () AS months), so the headline reads the counts and the table shows the months.
+- A week's change works the same way, with date_trunc('week', date); the first week of a year usually starts in the last days of the year before, so keep it.
+- A day's change: adj_close_usd / lag(adj_close_usd) OVER (PARTITION BY ticker ORDER BY date) - 1, with prices read from before the period starts so its first day has a day before it; then keep only the period's days.
+- A _pct column is in percent: 100 * (a / b - 1), never the bare fraction.
+- For "how many months (weeks, days)", the headline gives the count and nothing more ("Apple beat the Nasdaq-100 in {beat} of {weeks} weeks {period}."): the first row is only the first month, so a headline that names it as the best or worst is wrong.
+- The fall from a high (drawdown): adj_close_usd / max(adj_close_usd) OVER (PARTITION BY ticker ORDER BY date ROWS UNBOUNDED PRECEDING) - 1.
+- Filter prices by ticker and date before anything else: it holds every trading day since 2024-07-01. A question about an earlier date: "cannot".
+- Also set "period" to the dates the query uses, so {period} names them.
+
+Looking first
+- Look ("look") only when you are unsure how something is held in the data: how a segment or industry is spelt, whether a ticker has prices on the dates needed, which quarters a company has. A question the tables plainly answer needs no look.
+- A look is a short query with LIMIT. What it shows you never goes into the final query as a number: the final query works every figure out itself.
 
 What cannot be answered
 - Why something happened, whether to buy or sell, forecasts, estimates, targets: "cannot".

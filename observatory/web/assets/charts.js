@@ -721,7 +721,19 @@ function rankOptions(cfg, pal, narrow) {
   const items = cfg.items;
   const dp = cfg.dp === undefined ? 0 : cfg.dp;
   const suffix = cfg.unit ? " " + cfg.unit : "";
-  const fmt = v => (v === null || v === undefined ? MISSING : fmtNum(v, dp) + suffix);
+  // A list with a value below zero (monthly changes, falls from a high) is
+  // diverging: the axis runs through zero, falls are drawn to its left in the
+  // cool colour and rises to its right in the warm one, each label carries
+  // its sign, and a zero rule marks the baseline. A list with no negative
+  // value is drawn exactly as before (axis from zero, one series colour).
+  const vals = items.map(i => i.value).filter(v => v !== null && v !== undefined && !Number.isNaN(v));
+  const hasNeg = vals.some(v => v < 0);
+  const fmt = v => (v === null || v === undefined ? MISSING
+    : hasNeg ? fmtSigned(v, dp, "") + suffix : fmtNum(v, dp) + suffix);
+  // Room left of the longest fall for its label, so the label never prints
+  // over the names; the label lane on the right is already reserved by grid.right.
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const axisMin = hasNeg && !narrow ? lo - (hi - lo) * 0.16 : (hasNeg ? lo : 0);
   // The label lane is measured, not left to ECharts' containLabel, which
   // under-measured it: a 97px name got a 65px lane and was cut off at its
   // left edge — silently, no ellipsis, so "Tottori & Shimane" read
@@ -761,10 +773,11 @@ function rankOptions(cfg, pal, narrow) {
     },
     xAxis: Object.assign(axisCommon(pal), {
       type: "value",
-      min: 0,
+      min: hasNeg ? axisMin : 0,
+      max: hasNeg && hi === 0 ? 0 : undefined,
       splitLine: { show: true, lineStyle: { color: pal.grid, width: 1 } },
       axisLine: { show: false },
-      axisLabel: { color: pal.muted, fontSize: 11,
+      axisLabel: { color: pal.muted, fontSize: 11, showMinLabel: !hasNeg,
                    formatter: v => fmtNum(v, dp) },
       name: cfg.xAxisName || "",
       nameLocation: "middle",
@@ -816,7 +829,13 @@ function rankOptions(cfg, pal, narrow) {
       barMaxWidth: 14,
       itemStyle: { color: pal.series[0] },
       emphasis: { focus: "none" },
-      data: items.map(i => i.value).slice().reverse(),
+      data: hasNeg
+        ? items.map(i => ({
+            value: i.value,
+            itemStyle: { color: (i.value ?? 0) < 0 ? pal.divergeNeg : pal.divergePos },
+            label: { position: (i.value ?? 0) < 0 ? "left" : "right" },
+          })).slice().reverse()
+        : items.map(i => i.value).slice().reverse(),
       label: {
         show: !narrow,
         position: "right",
@@ -825,8 +844,10 @@ function rankOptions(cfg, pal, narrow) {
         fontWeight: 600,
         formatter: p => fmt(p.value),
       },
-      markLine: rules.length
-        ? { silent: true, symbol: "none", data: rules }
+      markLine: (rules.length || hasNeg)
+        ? { silent: true, symbol: "none",
+            data: rules.concat(hasNeg ? [{ xAxis: 0, label: { show: false },
+                                           lineStyle: { color: pal.muted, width: 1, type: "solid" } }] : []) }
         : undefined,
     }],
   };

@@ -21,6 +21,12 @@ into steps, run them on the data, read off the result.
      in-memory DuckDB that can reach no file, network or other database, and
      runs the query under the Studies runner's guard (app/analysis.py): one
      read-only statement, no blank turned into zero, a time limit.
+  Before its final query the model may look: send one exploratory query
+     ("look") and see up to twenty rows of its result, at most three times,
+     to learn how a segment is spelt, which months a stock has, what a
+     column holds. What it saw never reaches the answer: the headline is
+     filled only from the final query's result, and a final query that
+     copies a figure it saw as a number is sent back.
   4. A query that fails, or finds nothing, goes back to the model once with
      the error. What it still cannot answer is logged (data/us_ask_log.jsonl)
      so each miss can become a new worked example.
@@ -46,6 +52,8 @@ LOG_FILE = os.path.join(HERE, "..", "data", "us_ask_log.jsonl")
 EXAMPLES_SHOWN = 6
 RESULT_ROWS_MAX = 200
 SECONDS_MAX = 8
+LOOKS_MAX = 3
+LOOK_ROWS_SHOWN = 20
 
 
 class StepsError(Exception):
@@ -295,8 +303,9 @@ def _connect(stocks, benches, cur=None):
     return con
 
 
-def run(cur, sql, start, end=None):
-    """(rows, columns) of the model's query over this period's tables."""
+def run(cur, sql, start, end=None, look=False):
+    """(rows, columns) of the model's query over this period's tables. A look
+    returns its first rows and never fails for having more."""
     try:
         sql = analysis._check_query(sql)
     except analysis.AnalysisError as exc:
@@ -311,7 +320,7 @@ def run(cur, sql, start, end=None):
     try:
         res = con.execute(sql)
         cols = [d[0] for d in res.description]
-        rows = res.fetchmany(RESULT_ROWS_MAX + 1)
+        rows = res.fetchmany((LOOK_ROWS_SHOWN if look else RESULT_ROWS_MAX) + 1)
     except Exception as exc:                                      # noqa: BLE001 — DuckDB's words are what the model needs
         msg = str(exc).split("\n")[0]
         if "interrupt" in msg.lower():
@@ -320,9 +329,51 @@ def run(cur, sql, start, end=None):
     finally:
         timer.cancel()
         con.close()
-    if len(rows) > RESULT_ROWS_MAX:
+    if len(rows) > RESULT_ROWS_MAX and not look:
         raise StepsError("The query returns more than %d rows; add LIMIT or aggregate." % RESULT_ROWS_MAX)
     return [[analysis._plain(v) for v in r] for r in rows], cols
+
+
+# ---------------------------------------------------------------- looking first
+def _look(cur, plan):
+    """Run the plan's exploratory query: (what to tell the model, the numbers it saw, a record for the reader)."""
+    start, end = _period(plan)
+    sql = str(plan.get("look") or "")
+    try:
+        rows, cols = run(cur, sql, start, end, look=True)
+    except StepsError as exc:
+        return "%s Fix it, or answer without looking." % exc, [], {"query": sql, "rows": None, "error": str(exc)}
+    more = len(rows) > LOOK_ROWS_SHOWN
+    rows = rows[:LOOK_ROWS_SHOWN]
+    seen = [v for r in rows for v in r if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    text = ("Result of your look (%s%d rows):\n%s\nNow reply with the JSON object again: another \"look\" if you "
+            "must, or the final \"sql\" and headline. Compute every figure inside the final query; never copy a "
+            "number you see here into it." % ("first " if more else "", len(rows),
+                                              json.dumps({"columns": cols, "rows": rows}, ensure_ascii=False, default=str)[:6000]))
+    return text, seen, {"query": sql, "rows": len(rows), "more": more}
+
+
+_LITERAL = re.compile(r"(?<![\w.'-])-?\d+(?:\.\d+)?(?![\w.'-])")
+
+
+def copied_figures(sql, seen, question=""):
+    """Numbers in the final query that are figures the model saw in a look
+    (three or more significant digits, not a year, not in the question)."""
+    if not seen or not sql:
+        return []
+    asked = set(re.findall(r"\d+(?:\.\d+)?", question or ""))
+    out = []
+    for lit in _LITERAL.findall(re.sub(r"'[^']*'", "''", sql)):        # dates and names in quotes are not figures
+        digits = lit.lstrip("-").replace(".", "").lstrip("0")
+        if len(digits.rstrip("0") if "." not in lit else digits) < 3 or lit.lstrip("-") in asked:
+            continue
+        v = float(lit)
+        if v.is_integer() and 1900 <= v <= 2100:
+            continue
+        k = len(lit.split(".")[1]) if "." in lit else 0
+        if any(abs(round(float(x), k) - v) < 1e-9 for x in seen):
+            out.append(lit)
+    return out
 
 
 # ---------------------------------------------------------------- the prompt
@@ -385,7 +436,9 @@ def prompt(question, last_price_date=None, today=None):
             "columns in {braces} for the server to fill in.\n"
             "Today is %s. Daily prices run to %s.\n\n"
             "Reply with one JSON object:\n"
-            "{\"steps\": [2 to 5 short plain-English steps],\n"
+            "{\"look\": null, or one exploratory SELECT to run before you answer; leave \"sql\" empty and you are "
+            "shown up to %d rows of its result, then you reply again (at most %d looks)\n"
+            " \"steps\": [2 to 5 short plain-English steps],\n"
             " \"period\": {\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\" or null} (the price period the question "
             "means; it fills change_period_pct),\n"
             " \"sql\": \"one SELECT or WITH ... SELECT\",\n"
@@ -393,7 +446,8 @@ def prompt(question, last_price_date=None, today=None):
             " \"chart\": null or {\"label\": <result column>, \"value\": <result column>} for a list worth drawing as bars,\n"
             " \"cannot\": null, or one sentence saying what the tables do not hold}\n\n"
             "TABLES\n%s\n\nRULES\n%s\n\nWORKED EXAMPLES\n%s"
-            % (today.isoformat(), (last_price_date or today).isoformat(), _table_doc(), rules, "\n\n".join(shown)))
+            % (today.isoformat(), (last_price_date or today).isoformat(), LOOK_ROWS_SHOWN, LOOKS_MAX, _table_doc(), rules,
+               "\n\n".join(shown)))
 
 
 # ---------------------------------------------------------------- the model
@@ -490,6 +544,8 @@ def fmt_value(col, v):
         return "{:,.2f}".format(v)
     if re.match(r"^\d{4}-\d{2}-\d{2}$", str(v)):
         return date_words(str(v))
+    if re.match(r"^\d{4}-(0[1-9]|1[0-2])$", str(v)):                 # a month: "2026-09" -> "September 2026"
+        return datetime.date(int(str(v)[:4]), int(str(v)[5:]), 1).strftime("%B %Y")
     return str(v)
 
 
@@ -609,6 +665,7 @@ def answer(cur, question):
                 {"role": "user", "content": (question or "").strip()[:300]}]
     plan, rows, cols, start, end, headline = None, None, None, None, None, None
     findings, verdict, reviewed = [], None, False
+    looks, seen = [], []
     cached = _PLANS.get(_plan_key(question))
     # Plan, run, check, revise: a result that comes back is checked the way
     # an analyst reads a printout before quoting it (app/us_checks.py), and
@@ -622,6 +679,15 @@ def answer(cur, question):
             if attempt == 1:
                 ask_progress.say("Writing the steps to answer it…")
             plan, raw = _ask_model(messages)
+            while plan.get("look") and not plan.get("sql") and len(looks) < LOOKS_MAX:
+                ask_progress.say("Looking at the data first (%d of at most %d)…" % (len(looks) + 1, LOOKS_MAX))
+                told, saw, rec = _look(cur, plan)
+                seen += saw
+                looks.append(rec)
+                if len(looks) == LOOKS_MAX:
+                    told += " That was your last look: reply with the final sql now."
+                messages += [{"role": "assistant", "content": raw}, {"role": "user", "content": told}]
+                plan, raw = _ask_model(messages)
         if plan.get("cannot") and not plan.get("sql"):
             log(question, "cannot", plan["cannot"])
             raise HTTPException(422, str(plan["cannot"])[:400])
@@ -631,6 +697,10 @@ def answer(cur, question):
             ask_progress.say("Running %s: %s" % ("the steps" if len(todo) > 1 else "it",
                                                  " ".join("%d. %s" % (i + 1, x) for i, x in enumerate(todo))[:320]))
         try:
+            copied = copied_figures(plan.get("sql"), seen, question)
+            if copied:
+                raise StepsError("The query writes %s, a figure from what you looked at. Work it out inside the query "
+                                 "instead." % ", ".join(copied[:3]))
             rows, cols = run(cur, plan.get("sql"), start, end)
         except StepsError as exc:
             if attempt == 3:
@@ -697,7 +767,11 @@ def answer(cur, question):
                                      _unit(c) or ("count" if isinstance(v, int) else ""), as_of)
                    for c, v in zip(cols, row0) if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if rows and (len(rows) > 1 or len(cols) > 4):
-        table = {"columns": [label(c) for c in cols], "rows": rows}
+        # a count the headline already gives, repeated on every row (beat, months), is left out of the table
+        named = set(re.findall(r"\{([^}]*)\}", plan.get("headline") or ""))
+        keep = [i for i, c in enumerate(cols)
+                if not (len(rows) > 1 and c in named and len({json.dumps(r[i], default=str) for r in rows}) == 1)] or list(range(len(cols)))
+        table = {"columns": [label(cols[i]) for i in keep], "rows": [[r[i] for i in keep] for r in rows]}
     ch = plan.get("chart") or {}
     if isinstance(ch, dict) and ch.get("label") in cols and ch.get("value") in cols and len(rows) >= 2:
         li, vi = cols.index(ch["label"]), cols.index(ch["value"])
@@ -739,6 +813,7 @@ def answer(cur, question):
                             {"steps": steps, "query": sql, "period": {"from": _d(start), "to": _d(end)}}, {}, notes)
     out["steps"] = steps
     out["query"] = sql
+    out["looks"] = looks          # the exploratory queries run first, shown so the reader sees every query
     if re.search(r"change_(period|ytd|1y)", sql):
         out["period"] = stock_recipes.period_span(start, end or last)
     out["checks"] = [{"check": f["check"], "severity": f["severity"], "note": f["note"]} for f in findings]

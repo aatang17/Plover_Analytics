@@ -123,6 +123,9 @@ Rules:
 - Rank or list stocks within an index: shape market_rank with universe set; within an industry: industry_rank.
 - Use a shape only when it answers the whole question. Counts ("how many"), shares ("what percentage"), averages and
   medians, sectors, lists filtered on two or more conditions, and anything else no shape answers: shape "steps".
+- The path of a price, not just its change over one period, is shape "steps", even when it names a stock or an index:
+  months, weeks or days up or down, how many months one stock beat another, best or worst days, the biggest fall from
+  a high (drawdown), the highest or lowest close.
 Shapes:
 %(shapes)s"""
 

@@ -60,6 +60,19 @@ class PlainTest(unittest.TestCase):
         self.assertEqual(us_steps.fmt_value("n", 1589), "1,589")
         self.assertEqual(us_steps.fmt_value("x_pct", None), "—")
 
+    def test_a_figure_seen_in_a_look_cannot_be_copied_into_the_query(self):
+        seen = [433.5, 5, 2026, -11.027252801786524]
+        self.assertEqual(us_steps.copied_figures("SELECT 1 FROM prices WHERE adj_close_usd > 433.5", seen), ["433.5"])
+        self.assertEqual(us_steps.copied_figures("SELECT -11.03 AS x", seen), ["-11.03"])
+        # thresholds, years, quoted dates and the question's own numbers are not copies
+        self.assertEqual(us_steps.copied_figures("SELECT 1 FROM prices WHERE date >= DATE '2026-01-01' AND year = 2026 "
+                                                 "AND volume > 5 AND x > 1e8", seen), [])
+        self.assertEqual(us_steps.copied_figures("SELECT 1 WHERE x > 433.5", seen, "above 433.5?"), [])
+        self.assertEqual(us_steps.copied_figures("SELECT 1 WHERE x > 433.5", []), [])
+
+    def test_months_print_in_words(self):
+        self.assertEqual(us_steps.fmt_value("month", "2026-09"), "September 2026")
+
     def test_sectors(self):
         self.assertEqual(us_steps.sector_for(3674), "Technology")
         self.assertEqual(us_steps.sector_for(6022), "Financials")
@@ -172,6 +185,32 @@ class LiveTest(unittest.TestCase):
         self.assertIn("%s of %s" % (rows[0][0], rows[0][1]), d["headline"])
         # the model never sees a number from the data
         self.assertNotIn(str(rows[0][1]), calls[1][0]["content"].split("WORKED EXAMPLES")[0])
+
+    def test_daily_prices_are_split_adjusted_like_the_price_api(self):
+        from app import us_prices_api, us_tables
+        c = us_tables.sandbox(self.cur).cursor()
+        self.assertGreater(us_tables.counts().get("prices", 0), 1000000)
+        for t in ("MSFT", "SPY", "DIA"):
+            self.assertTrue(c.execute("SELECT count(*) FROM prices WHERE ticker = ?", [t]).fetchone()[0], t)
+        got = c.execute("SELECT date, adj_close_usd FROM prices WHERE ticker = 'AVGO' AND date BETWEEN "
+                        "DATE '2024-07-08' AND DATE '2024-07-19' ORDER BY date").fetchall()
+        api, _ = us_prices_api.adjusted_closes(self.cur, "AVGO", datetime.date(2024, 7, 8), datetime.date(2024, 7, 19))
+        self.assertEqual(len(got), len(api))
+        for (d, a), (d2, _, b) in zip(got, api):
+            self.assertEqual(d, d2)
+            self.assertAlmostEqual(a, b, places=6)
+
+    def test_a_look_runs_first_and_is_shown(self):
+        final = next(x for x in us_steps.examples() if x["question"].startswith("In how many months"))
+        look = {"look": "SELECT ticker, min(date) AS first_day, count(*) AS days FROM prices WHERE ticker IN ('MSFT', 'SPY') "
+                        "GROUP BY ticker LIMIT 5", "sql": ""}
+        r, calls = self._mocked([look, final], "How many months has Microsoft outperformed S&P in 2026")
+        self.assertEqual(r.status_code, 200, r.text[:300])
+        d = r.json()
+        self.assertEqual(len(d["looks"]), 1)
+        self.assertEqual(d["looks"][0]["rows"], 2)
+        self.assertIn("Result of your look", calls[2][-1]["content"])
+        self.assertRegex(d["headline"], r"^Microsoft beat the S&P 500 in \d+ of \d+ months")
 
     def test_other_markets_point_elsewhere(self):
         for q in ("which Japanese banks are cheapest", "best Hong Kong stocks this year"):
