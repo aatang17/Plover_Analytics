@@ -106,6 +106,14 @@ def _ready():
         return False
 
 
+def load_tests(loader, tests, pattern):
+    """Opt-in: collected only with US_ASK_EVAL=1, as it asks the real model.
+    Not a skip, because a skip must be for want of data (tests/_data.py)."""
+    if os.environ.get("US_ASK_EVAL", "") not in ("1", "true", "yes"):
+        return unittest.TestSuite()
+    return tests
+
+
 @unittest.skipUnless(_ready(), "US_ASK_EVAL=1 with the model on and data/sec.duckdb holding prices and index members")
 class EvalTest(unittest.TestCase):
     @classmethod

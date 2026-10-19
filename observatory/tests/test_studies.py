@@ -23,6 +23,7 @@ os.environ["ASSISTANT_SECRET"] = "test-secret-not-for-production"
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from tests import _data  # noqa: E402
 from app import accounts, analysis, recipes  # noqa: E402
 from app.assistant import api as aapi  # noqa: E402
 from app.assistant import desk_mcp, gateway, runner, specialists, store  # noqa: E402
@@ -401,7 +402,9 @@ class LowTokenTests(_Base):
             self.assertTrue(s.rstrip(".").endswith(datetime.date.today().isoformat()), spec["slug"])
         self.assertNotIn("get_series", runner._system_prompt(specialists.STUDY, [], None))
 
+    @unittest.skipUnless(_data.MACRO, _data.NO_MACRO)
     def test_compact_catalogue_names_every_dataset_in_a_line(self):
+        # without the data the full catalogue is a stub, so the ratio says nothing
         full, short = self._orig[2](), self._orig[2](compact=True)
         self.assertLess(len(short), len(full) / 3)
         for ds in ("cpi-jp", "jgb-yields"):

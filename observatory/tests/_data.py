@@ -71,6 +71,18 @@ PARTIAL = {
         "python equity/class_extract.py  (JPX segments and TOPIX scale bands)",
     "no published population-jp release":
         "python -m app.ingest population-jp",
+    # The US shelf (data/sec.duckdb) without one of its slices. CI has no
+    # data/sec.duckdb at all; the machine with the data builds each slice so.
+    "data/sec.duckdb without the universe tables":
+        "python equity/sec_universe.py --db data/sec.work.duckdb  (then swap it in)",
+    "data/sec.duckdb without insider, 13F and universe tables":
+        "python equity/sec_universe.py, equity/sec_insiders_extract.py and equity/sec_13f_extract.py",
+    "data/sec.duckdb without US prices":
+        "python equity/us_prices_databento.py --quote, then with --max-cost-usd (it costs money)",
+    "data/sec.duckdb without prices and index members":
+        "python equity/us_prices_databento.py and equity/us_index_members.py",
+    "data/sec.duckdb without the full US set":
+        "the universe, prices, index members, insider and 13F slices above",
 }
 
 # Every reason a skip may carry for want of data. Add a string here only if it
