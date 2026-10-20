@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
-from . import ask_progress, sec_api, stock_recipes
+from . import ask_log, ask_progress, sec_api, stock_recipes
 
 router = APIRouter(prefix="/api/v1/us/ask", tags=["US ask"])
 
@@ -34,7 +34,19 @@ def ask(q: str = Query(..., min_length=2, max_length=300, description="a questio
                                                             "(\"and Microsoft?\") is read whole")):
     """Answer a stock question from the data, by code."""
     cur = sec_api._require()
-    return stock_recipes.answer(cur, q.strip(), prev.strip() or None)
+    return _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None))
+
+
+def _noted(path, q, work):
+    """Run the answer and note how it went for the Ask Box log (app/ask_log.py)."""
+    try:
+        out = work()
+    except HTTPException:
+        ask_log.note(path, q, False)
+        raise
+    m = (out or {}).get("match") or {}
+    ask_log.note(path, q, bool(out and out.get("headline")), m.get("via"), out.get("recipe") if out else None)
+    return out
 
 
 @router.get("/stream")
@@ -52,10 +64,12 @@ async def ask_stream(q: str = Query(..., min_length=2, max_length=300, descripti
     def work():
         ask_progress.listen(lambda text: put({"say": text}))
         try:
-            put({"answer": stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None)})
+            put({"answer": _noted("/api/v1/us/ask/stream", q,
+                                  lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None))})
         except HTTPException as exc:
             put({"error": {"status": exc.status_code, "detail": exc.detail}})
         except Exception:                                          # noqa: BLE001 — the page must hear that it failed
+            ask_log.note("/api/v1/us/ask/stream", q, False, "error")
             put({"error": {"status": 500, "detail": "Something went wrong working that out. Try again, or ask it another way."}})
         finally:
             ask_progress.listen(None)

@@ -44,7 +44,7 @@ import os
 import time
 from threading import Lock
 
-from . import db, geoip
+from . import ask_log, db, geoip
 
 ANALYTICS_DIR = db.DATA_DIR / "analytics"
 SALT_PATH = ANALYTICS_DIR / "salt"
@@ -585,9 +585,11 @@ def _confirm_browser(visitor, day):
         return True
 
 
-def observe(scope, status):
+def observe(scope, status, seconds=None):
     """Note one finished request. Called from the middleware's finally block,
-    so every exit path is counted and none can raise into the response."""
+    so every exit path is counted and none can raise into the response. A
+    question to the box is also written, without the visitor, to the ask log
+    (app/ask_log.py); `seconds` is how long the answer took."""
     if scope.get("obs_synthetic"):
         return  # the cache warm-up driving the app at boot, not a reader
     method = scope.get("method")
@@ -657,6 +659,8 @@ def observe(scope, status):
     _record(event)
     if not bot:
         _touch_live(visitor, path if kind == "page" else None, country, network)
+        if path in ask_log.PATHS:
+            ask_log.record(scope, status, seconds, now)
 
 
 class VisitCounter(object):
@@ -672,6 +676,7 @@ class VisitCounter(object):
             await self.app(scope, receive, send)
             return
         seen = {"status": 0}
+        began = time.monotonic()
 
         async def watched(message):
             if message["type"] == "http.response.start":
@@ -682,7 +687,7 @@ class VisitCounter(object):
             await self.app(scope, receive, watched)
         finally:
             try:
-                observe(scope, seen["status"])
+                observe(scope, seen["status"], time.monotonic() - began)
             except Exception as exc:  # noqa: BLE001 — counting is never fatal
                 print("VISIT COUNT FAILED (%s)" % exc)
 
@@ -809,6 +814,7 @@ def summary(days=30, top=15):
     direct_networks, direct_pages = {}, {}
     located, unlocated = 0, 0
     visitors, bot_hits, api_calls, mcp_calls = set(), 0, 0, 0
+    ask_hits = []  # (at, visitor) for each question to the box (the questions themselves are in ask_log)
     # Automated traffic that belongs to an AI product, kept apart from the rest
     # of it: which assistant, what it was doing, and which page it wanted.
     ai_agents = {}
@@ -890,6 +896,8 @@ def summary(days=30, top=15):
                     continue
 
                 kind = event.get("kind")
+                if event.get("path") in ask_log.PATHS and event.get("visitor"):
+                    ask_hits.append((at, event["visitor"]))
                 # Not traffic, just the note that this visitor rendered a page.
                 if kind == "browser":
                     if event.get("visitor"):
@@ -1083,6 +1091,9 @@ def summary(days=30, top=15):
 
     files = _log_files()
     return {
+        # The front page's question box: searches and questions from its own
+        # log, which holds no visitor; people per day from this one.
+        "ask": ask_log.summary(days, start, today, ask_hits),
         "window_days": days,
         "from": start.isoformat(),
         "to": today.isoformat(),

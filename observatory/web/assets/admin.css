@@ -718,3 +718,6 @@ tr.clickable { cursor: pointer; }
 }
 .undo-bar { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--obs-ink);
   background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 3px; padding: 8px 12px; margin: 0 0 12px; }
+
+/* Ask Box tables (admin.js trafficAsk): a date or time stays on one line on a phone; the table scrolls instead */
+.ask-when { white-space: nowrap; font-variant-numeric: tabular-nums; }

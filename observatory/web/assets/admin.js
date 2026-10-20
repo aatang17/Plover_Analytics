@@ -1061,9 +1061,94 @@ function trafficMarkup(d, days) {
     "window</span></div>" +
     trafficTable(d.top_pages, "Page",
       { link: true, dwell: true, empty: "No page views recorded in this window." }) +
+    trafficAsk(d.ask) +
     '<div class="admin-section">How Readers Arrived <span class="note">only the sending ' +
     "site is recorded, never the page a reader came from</span></div>" +
     trafficArrivals(d) + trafficDirect(d) + trafficAI(d) + trafficPlaces(d);
+}
+
+/* The front page's question box: how often it was asked, by how many
+   people, and what. The questions come from a log that holds nothing about
+   who asked (app/ask_log.py); people per day come from the visit log. */
+var ASK_ROUTE = {
+  steps: "Worked Out Step by Step", reader: "Question Type Read", patterns: "Word Patterns",
+  stock: "Stock Answer", macro: "US Economy Answer", error: "Failed",
+};
+var ASK_WHERE = { full: "Full Answer", preview: "Signed-Out Preview" };
+
+function askResult(answered) {
+  if (answered === true) return '<span class="badge badge-ok">Answered</span>';
+  if (answered === false) return '<span class="badge badge-warn">Not Answered</span>';
+  return MISSING;
+}
+
+function askLabel(map, key) {
+  if (!key) return MISSING;
+  return escapeHtml(map[key] || String(key).replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); }));
+}
+
+function trafficAsk(a) {
+  var head = '<div class="admin-section">Ask Box <span class="note">questions typed into the ' +
+    "front page\u2019s box, kept without anything about who asked</span></div>";
+  if (!a) return head + '<p class="table-empty">The ask log is not available on this server.</p>';
+  if (!a.searches) {
+    return head + '<p class="table-empty">Nobody asked the box a question in this window. ' +
+      "Questions are recorded from the day this section was added; earlier searches were not kept.</p>";
+  }
+  var share = a.judged ? Math.round((a.answered / a.judged) * 100) + "%" : MISSING;
+  var kpis =
+    kpi(fmtCount(a.searches), "Searches", "") +
+    kpi(fmtCount(a.people), "People", "") +
+    kpi(fmtCount(a.distinct_questions), "Different Questions", "") +
+    kpi(share, "Answered", "") +
+    kpi(fmtDuration(a.median_seconds), "Median Time", "");
+
+  var days = (a.daily || []).filter(function (r) { return r.searches; }).slice().reverse();
+  var daily = '<div class="table-wrap"><table class="data"><thead><tr><th>Day</th>' +
+    '<th class="num">Searches</th><th class="num">People</th><th class="num">Answered</th>' +
+    '<th class="num">Not Answered</th></tr></thead><tbody>' +
+    days.map(function (r) {
+      return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.day) + '">' + escapeHtml(fmtDay(r.day)) + "</td>" +
+        '<td class="num">' + fmtCount(r.searches) + "</td>" +
+        '<td class="num">' + fmtCount(r.people) + "</td>" +
+        '<td class="num">' + fmtCount(r.answered) + "</td>" +
+        '<td class="num">' + fmtCount(r.not_answered) + "</td></tr>";
+    }).join("") + "</tbody></table></div>";
+
+  var most = (a.most_asked || []).length
+    ? '<div class="admin-section">Most-Asked Questions <span class="note">asked more than ' +
+      "once in this window</span></div>" +
+      '<div class="table-wrap"><table class="data"><thead><tr><th>Question</th>' +
+      '<th class="num">Times Asked</th><th class="num">Answered</th><th class="num">Last Asked</th>' +
+      "</tr></thead><tbody>" +
+      a.most_asked.map(function (r) {
+        return "<tr><td>" + escapeHtml(r.q) + "</td>" +
+          '<td class="num">' + fmtCount(r.times) + "</td>" +
+          '<td class="num">' + fmtCount(r.answered) + "</td>" +
+          '<td class="num ask-when" data-sort="' + escapeHtml(r.last) + '">' + escapeHtml(fmtStamp(r.last)) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : "";
+
+  var recent = '<div class="admin-section">Latest Questions <span class="note">newest first, ' +
+    "the last " + fmtCount((a.recent || []).length) + "</span></div>" +
+    '<div class="table-wrap"><table class="data"><thead><tr><th>Asked</th><th>Question</th>' +
+    "<th>Result</th><th>Answered By</th><th>Seen As</th><th class=\"num\">Time</th></tr></thead><tbody>" +
+    (a.recent || []).map(function (r) {
+      return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.at) + '">' + escapeHtml(fmtStamp(r.at)) + "</td>" +
+        "<td>" + escapeHtml(r.q) + "</td>" +
+        "<td>" + askResult(r.answered) + "</td>" +
+        "<td>" + askLabel(ASK_ROUTE, r.route) + "</td>" +
+        "<td>" + askLabel(ASK_WHERE, r.where) + "</td>" +
+        '<td class="num" data-sort="' + (r.seconds == null ? "" : r.seconds) + '">' + fmtDuration(r.seconds) + "</td></tr>";
+    }).join("") + "</tbody></table></div>";
+
+  return head + '<div class="kpi-row">' + kpis + "</div>" +
+    '<div class="admin-section">Searches by Day <span class="note">days with at least one ' +
+    "search</span></div>" + daily + most + recent +
+    '<p class="source-line">Searches and questions from the ask log; people from the visit ' +
+    "log, counted as visitors per day, so one person on two days is two. Robots are left out. " +
+    "A repeated question answered from the server\u2019s cache is still counted. Answered " +
+    "means the box gave an answer, not that the answer was what the reader wanted.</p>";
 }
 
 /* What each AI fetcher was doing. Three different facts, so three labels:

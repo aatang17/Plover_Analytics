@@ -204,10 +204,13 @@ def preview(q: str = Query(..., min_length=2, max_length=300),
     out, _refusal = _stock(q, prev or None)
     if out is None:
         out = _macro(q)
+    from .. import ask_log
     if out is None:
+        ask_log.note("/api/v1/assistant/preview", q, False)
         # the stock box's own refusal is worded for its page ("the tables ..."):
         # one plain sentence here, and what Plover does hold
         return {"kind": "none", "question": q, "message": "That is not in what Plover can answer yet.",
                 "holds": HOLDS}
+    ask_log.note("/api/v1/assistant/preview", q, True, out.get("kind"))
     out.setdefault("question", q)
     return out
