@@ -17,8 +17,8 @@ Guard rails, because this runs on Plover's own key for the public page:
 
   * off unless a provider key is set and US_ASK_MODEL is not "0";
   * at most US_ASK_MODEL_DAILY_MAX calls a day (default 2000);
-  * 300 output tokens, an 8-second limit, temperature 0, the question cut
-    at 300 characters;
+  * 300 output tokens, a 15-second limit, temperature 0 (or, for a model
+    that reasons, no reasoning), the question cut at 300 characters;
   * one call per distinct question a day: readings are cached;
   * every call is counted, with its tokens, for /api/v1/us/ask/recipes.
 
@@ -35,7 +35,10 @@ carries a prompt_cache_key so OpenAI routes it to the same cache; and the
 cached share is counted in tokens_cached. Models that reason (OpenAI's
 GPT-5 and later) refuse `temperature` and `max_tokens`: on that refusal the
 call is sent again the way they want it, with reasoning kept low, and the
-model's way is remembered for the day.
+model's way is remembered. Models known to reason (gpt-5 and later, the o
+series) are sent their way from the first call, so no call is wasted on a
+refusal; the reader, which only fills in a form, asks for no reasoning at
+all (2-3 s with gpt-6-luna against 3-5 s with low, the same form).
 """
 import datetime
 import json
@@ -106,7 +109,10 @@ def under_cap():
         return STATS["day"] != today or STATS["calls"] < daily_max()
 
 
-TIMEOUT_SECONDS = 8
+# A reader that times out falls back to word patterns, which can answer a
+# different question ("Tesla is worth $1.40tn" for "how many days did Tesla
+# fall"), so a few more seconds of waiting is the better trade.
+TIMEOUT_SECONDS = 15
 _CACHE = OrderedDict()
 _CACHE_MAX = 5000
 FORM_KEYS = ("shape", "companies", "industry", "manager", "figure", "rank_by", "order", "universe", "benchmark",
@@ -158,7 +164,19 @@ _WAYS = {}
 REASONING_HEADROOM = 800          # output tokens a reasoning model may spend thinking before it writes
 
 
-def _body(prov, model, messages, max_tokens, cache_key, way):
+_REASONING_MODELS = re.compile(r"^(gpt-[5-9]|gpt-\d{2}|o\d)", re.I)
+
+
+def _way(prov, model):
+    """How to call `model`: what it taught us, else a guess from its name."""
+    if model in _WAYS:
+        return dict(_WAYS[model])
+    if prov != "deepseek" and _REASONING_MODELS.match(model or ""):
+        return {"temperature": False}
+    return {}
+
+
+def _body(prov, model, messages, max_tokens, cache_key, way, effort="low"):
     body = {"model": model, "messages": messages, "response_format": {"type": "json_object"}}
     if prov == "deepseek":
         body.update(max_tokens=max_tokens, temperature=0)
@@ -171,7 +189,7 @@ def _body(prov, model, messages, max_tokens, cache_key, way):
     else:
         body["max_completion_tokens"] = max_tokens + REASONING_HEADROOM
         if way.get("reasoning", True):
-            body["reasoning_effort"] = "low"
+            body["reasoning_effort"] = effort
     return body
 
 
@@ -183,23 +201,26 @@ def _post(url, key, body, timeout):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _complete(prov, key, model, messages, max_tokens=300, timeout=None, cache_key=None):
+def _complete(prov, key, model, messages, max_tokens=300, timeout=None, cache_key=None, effort="low"):
     """One short JSON-mode call; {"text", "usage": {in, out, cached}}. Raises on any failure.
-    `cache_key` names the kind of prompt (reader, steps, review) for the provider's cache."""
+    `cache_key` names the kind of prompt (reader, steps, review) for the provider's cache;
+    `effort` is the reasoning a model that reasons may spend ("none" for filling in a form)."""
     url = gateway.PROVIDERS["deepseek" if prov == "deepseek" else "openai"]["base_url"].rstrip("/") + "/chat/completions"
-    way = dict(_WAYS.get(model) or {})
+    way = _way(prov, model)
     for _ in range(3):
         try:
-            out = _post(url, key, _body(prov, model, messages, max_tokens, cache_key, way), timeout or TIMEOUT_SECONDS)
+            out = _post(url, key, _body(prov, model, messages, max_tokens, cache_key, way, effort), timeout or TIMEOUT_SECONDS)
             break
         except urllib.error.HTTPError as exc:
             if exc.code != 400 or prov == "deepseek":
                 raise
             text = exc.read().decode("utf-8", "replace")[:600]
             # a reasoning model: no temperature, no max_tokens; then, if it has no reasoning setting, none
+            # (a model guessed from its name to reason that does not refuses reasoning_effort, and is then
+            # called with neither temperature nor reasoning, which every model accepts)
             if way.get("temperature", True) and re.search(r"temperature|max_tokens", text):
                 way["temperature"] = False
-            elif way.get("reasoning", True) and "reasoning" in text:
+            elif not way.get("temperature", True) and way.get("reasoning", True) and "reasoning" in text:
                 way["reasoning"] = False
             else:
                 raise
@@ -249,7 +270,7 @@ def read(question, system_prompt, prev=None):
                 {"role": "user", "content": user_message(question, prev)}]
     _tick("calls")
     try:
-        out = _complete(prov, key, model, messages, cache_key="plover-us-reader")
+        out = _complete(prov, key, model, messages, cache_key="plover-us-reader", effort="none")
     except Exception:                                             # noqa: BLE001 — a timeout, a refusal, a bad reply
         _tick("failed")
         return None

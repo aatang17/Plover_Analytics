@@ -39,7 +39,7 @@ class CompleteTest(unittest.TestCase):
                 raise _refusal("Unsupported parameter: 'temperature' is not supported with this model.")
             return _reply(cached=90)
         with mock.patch.object(us_ask_model, "_post", post):
-            out = us_ask_model._complete("openai", "k", "gpt-6-luna", [{"role": "user", "content": "q"}],
+            out = us_ask_model._complete("openai", "k", "luna-next", [{"role": "user", "content": "q"}],
                                          max_tokens=300, cache_key="plover-us-reader")
             self.assertEqual(out["usage"], {"in": 100, "out": 20, "cached": 90})
             self.assertEqual(len(bodies), 2)
@@ -52,7 +52,7 @@ class CompleteTest(unittest.TestCase):
             self.assertEqual(second["reasoning_effort"], "low")
             self.assertEqual(second["max_completion_tokens"], 300 + us_ask_model.REASONING_HEADROOM)
             # the next call goes straight to the way that worked
-            us_ask_model._complete("openai", "k", "gpt-6-luna", [{"role": "user", "content": "q"}])
+            us_ask_model._complete("openai", "k", "luna-next", [{"role": "user", "content": "q"}])
             self.assertEqual(len(bodies), 3)
             self.assertNotIn("temperature", bodies[2])
 
@@ -71,6 +71,48 @@ class CompleteTest(unittest.TestCase):
         self.assertEqual([("temperature" in b, "reasoning_effort" in b) for b in bodies],
                          [(True, False), (False, True), (False, False)])
         self.assertEqual(us_ask_model._WAYS["o-something"], {"temperature": False, "reasoning": False})
+
+    def test_a_known_reasoning_model_is_called_its_way_from_the_first_call(self):
+        bodies = []
+
+        def post(url, key, body, timeout):
+            bodies.append(body)
+            return _reply()
+        with mock.patch.object(us_ask_model, "_post", post):
+            us_ask_model._complete("openai", "k", "gpt-6-luna", [], max_tokens=300, effort="none")
+        self.assertEqual(len(bodies), 1, "no call wasted on a refusal")
+        self.assertNotIn("temperature", bodies[0])
+        self.assertEqual(bodies[0]["reasoning_effort"], "none")
+        self.assertEqual(bodies[0]["max_completion_tokens"], 300 + us_ask_model.REASONING_HEADROOM)
+
+    def test_an_ordinary_model_guessed_to_reason_still_answers(self):
+        bodies = []
+
+        def post(url, key, body, timeout):
+            bodies.append(body)
+            if "reasoning_effort" in body:
+                raise _refusal("Unrecognized request argument supplied: reasoning_effort")
+            return _reply()
+        with mock.patch.object(us_ask_model, "_post", post):
+            us_ask_model._complete("openai", "k", "gpt-5-chat-latest", [])
+        self.assertEqual(len(bodies), 2)
+        self.assertNotIn("reasoning_effort", bodies[1])
+        self.assertNotIn("temperature", bodies[1])
+
+    def test_the_reader_asks_for_no_reasoning(self):
+        seen = {}
+
+        def fake(prov, key, model, messages, **kw):
+            seen.update(kw)
+            return {"text": "{\"shape\": \"steps\"}", "usage": {}}
+        us_ask_model._CACHE.clear()
+        with mock.patch.object(us_ask_model, "provider", return_value=("openai", "k", "gpt-6-luna")), \
+                mock.patch.object(us_ask_model, "under_cap", return_value=True), \
+                mock.patch.object(us_ask_model, "_tick"), mock.patch.object(us_ask_model, "_complete", side_effect=fake):
+            us_ask_model.read("how many days did tesla fall more than 5% this year", "sys")
+        us_ask_model._CACHE.clear()
+        self.assertEqual(seen.get("effort"), "none")
+        self.assertEqual(seen.get("cache_key"), "plover-us-reader")
 
     def test_any_other_refusal_is_raised(self):
         with mock.patch.object(us_ask_model, "_post", side_effect=_refusal("Invalid API key")):
