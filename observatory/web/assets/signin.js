@@ -40,20 +40,29 @@ const returnTo = safeReturnTo(params.get("returnTo"));
 
 function render(html) { card.innerHTML = html; }
 
+// Open sign-up, or the invite list (ACCOUNTS_ALLOWED_EMAILS): /me says which,
+// so a newcomer who clicked "Sign Up Free" is told plainly whether they can.
+let inviteOnly = false;
+
 function field(value, error) {
   return (error ? '<div class="auth-alert" role="alert">' + escapeHtml(error) + "</div>" : "") +
     '<label class="auth-label" for="email">Email address</label>' +
     '<input class="auth-input" id="email" type="email" name="email" autocomplete="email" ' +
     'inputmode="email" spellcheck="false" required value="' + escapeHtml(value || "") + '">' +
     '<button class="btn btn-primary auth-btn" type="submit" id="send">Email Me a Sign-in Link</button>' +
-    '<p class="auth-hint">An account saves the companies you follow. Everything else on the ' +
-    "platform stays free to read without one.</p>";
+    (inviteOnly
+      ? '<p class="auth-hint">Accounts are by invitation for now. Every answer still shows its ' +
+        "start without one.</p>"
+      : '<p class="auth-hint">A free account shows the full answer to every question: the chart, ' +
+        "the table and how each figure was worked out.</p>");
 }
 
 function askState(value, error) {
-  render('<h1 class="auth-title">Sign In</h1>' +
-    '<p class="auth-sub">Enter your email and we will send a single-use sign-in link. ' +
-    "There is no password.</p>" +
+  render('<h1 class="auth-title">' + (inviteOnly ? "Sign In" : "Sign In or Sign Up") + "</h1>" +
+    '<p class="auth-sub">' + (inviteOnly
+      ? "Enter your email and we will send a single-use sign-in link. There is no password."
+      : "Enter your email and we will send a single-use link. It signs you in, and creates your " +
+        "free account if you are new. There is no password.") + "</p>" +
     '<form id="form" novalidate>' + field(value, error) + "</form>");
   const form = document.getElementById("form");
   const input = document.getElementById("email");
@@ -162,7 +171,10 @@ document.addEventListener("DOMContentLoaded", function () {
           '<p class="auth-hint"><a href="' + escapeHtml(returnTo) + '">Continue</a></p>');
       });
       if (token) return redeemingState();
-      return askState("");
+      return r.json().catch(function () { return {}; }).then(function (b) {
+        inviteOnly = !!(b && b.invite_only);
+        askState("");
+      });
     })
     .catch(function () {
       if (token) return redeemingState();
