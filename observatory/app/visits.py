@@ -660,7 +660,8 @@ def observe(scope, status, seconds=None):
     if not bot:
         _touch_live(visitor, path if kind == "page" else None, country, network)
         if path in ask_log.PATHS:
-            ask_log.record(scope, status, seconds, now)
+            # whether it came from us is decided here, while the address is in hand
+            ask_log.record(scope, status, seconds, now, ours=ask_log.is_ours(ip))
 
 
 class VisitCounter(object):
@@ -790,6 +791,291 @@ def _sessions(activity):
     return lengths, pages, single
 
 
+# --- daily totals kept between loads -----------------------------------------
+#
+# The admin Traffic page used to re-read every line of the window on each load
+# (about 390,000 lines, 7 s on the server in October 2026). The log is
+# append-only and each line belongs to one UTC day, so the totals for a day are
+# folded once and kept here; a load reads only the lines written since the
+# last one, then adds up the days in its window. Everything a day holds can be
+# added to another day's: counts sum, visitor sets join, timestamps append.
+# Held in memory only: a restart reads the files again from the start.
+
+_DAY_KEEP = 400            # days of totals held; the window is at most 365
+_FOLD_LOCK = Lock()
+_FILES = {}                # str(path) -> {"offset", "tail", "lines", "unreadable"}
+_DAYS = {}                 # "YYYY-MM-DD" -> that day's totals (_new_day)
+
+
+def _new_day():
+    return {
+        "visitors": set(), "pageviews": 0, "api": 0, "bots": 0,
+        "pages": {}, "refs": {}, "countries": {}, "networks": {},
+        "direct": {"views": 0, "visitors": set()}, "direct_networks": {}, "direct_pages": {},
+        "located": 0, "unlocated": 0, "api_calls": 0, "mcp_calls": 0,
+        "ask_hits": [], "ai_agents": {}, "ai_referred": {"views": 0, "visitors": set()},
+        "api_in_page": 0, "api_external": 0, "browsers": set(), "scripted": set(),
+        "visitor_network": {}, "dwell_views": {}, "activity": {},
+        "stable_since": {}, "stable": set(),
+        "consent": {"granted": 0, "denied": 0, "unanswered": 0},
+        "first": None, "last": None,
+    }
+
+
+def _count(source, key, visitor):
+    row = source.setdefault(key, {"views": 0, "visitors": set()})
+    row["views"] += 1
+    if visitor:
+        row["visitors"].add(visitor)
+
+
+def _fold(d, event, at):
+    """Add one log line to its day's totals `d`."""
+    if d["first"] is None or at < d["first"]:
+        d["first"] = at
+    if d["last"] is None or at > d["last"]:
+        d["last"] = at
+    if event.get("bot"):
+        d["bots"] += 1
+        label = event.get("agent")
+        if label:
+            row = d["ai_agents"].setdefault(label, {
+                "views": 0, "visitors": set(),
+                "purpose": event.get("agent_purpose") or "",
+                "pages": {}, "last": ""})
+            row["views"] += 1
+            if event.get("visitor"):
+                row["visitors"].add(event["visitor"])
+            page = event.get("path")
+            if page:
+                row["pages"][page] = row["pages"].get(page, 0) + 1
+            if at > row["last"]:
+                row["last"] = at
+        return
+
+    kind = event.get("kind")
+    if event.get("path") in ask_log.PATHS and event.get("visitor"):
+        d["ask_hits"].append((at, event["visitor"]))
+    # Not traffic, just the note that this visitor rendered a page.
+    if kind == "browser":
+        if event.get("visitor"):
+            d["browsers"].add(event["visitor"])
+            if event.get("network"):
+                d["visitor_network"][event["visitor"]] = event["network"]
+        return
+    # Nor is a closing page report traffic: the page view it belongs to was
+    # counted when the page was asked for.
+    if kind == "dwell":
+        if event.get("visitor"):
+            d["scripted"].add(event["visitor"])
+        seconds = event.get("seconds")
+        if isinstance(seconds, (int, float)) and seconds > 0:
+            key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
+            held = d["dwell_views"].get(key)
+            if not held or seconds > held[1]:
+                d["dwell_views"][key] = (event.get("path") or "/", seconds)
+        return
+    visitor = event.get("visitor")
+    if visitor:
+        d["visitors"].add(visitor)
+        if event.get("network"):
+            d["visitor_network"][visitor] = event["network"]
+    # Older records predate the in-page flag and cannot be told apart; they
+    # are left out of both splits rather than guessed at.
+    knows_origin = "internal" in event
+    in_page = bool(event.get("internal"))
+
+    # A reader is somebody moving around the site: pages they asked for, and
+    # the chart data their own page fetched, which is the only proof a tab is
+    # still being used. Somebody pulling the API from a terminal is not
+    # sitting in a session and would otherwise invent hours-long ones.
+    if visitor and (kind == "page" or (kind == "api" and in_page)):
+        d["activity"].setdefault(visitor, []).append(_epoch(at))
+    if visitor and event.get("since"):
+        d["stable_since"].setdefault(visitor, event["since"])
+        d["stable"].add(visitor)
+
+    if kind in ("api", "mcp"):
+        if kind == "api":
+            d["api_calls"] += 1
+        else:
+            d["mcp_calls"] += 1
+        d["api"] += 1
+        if knows_origin:
+            if in_page:
+                d["api_in_page"] += 1
+            else:
+                d["api_external"] += 1
+    elif kind == "page" and (event.get("status") or 0) < 400:
+        d["pageviews"] += 1
+        choice = event.get("consent") or "unanswered"
+        if choice in d["consent"]:
+            d["consent"][choice] += 1
+        _count(d["pages"], event.get("path") or "/", visitor)
+    # How a page was reached. Page reads only: a referrer answers "how did
+    # someone get here", and in-page chart fetches would otherwise drown it.
+    sender = event.get("ref")
+    is_read = kind == "page" and (event.get("status") or 0) < 400
+    if is_read and sender:
+        _count(d["refs"], sender, visitor)
+        if is_ai_referrer(sender):
+            d["ai_referred"]["views"] += 1
+            if visitor:
+                d["ai_referred"]["visitors"].add(visitor)
+    elif is_read and knows_origin and not in_page:
+        # No referring link: typed, bookmarked, or opened from a mail or
+        # messaging app, which strip the header.
+        d["direct"]["views"] += 1
+        if visitor:
+            d["direct"]["visitors"].add(visitor)
+        for source, key in ((d["direct_networks"], event.get("network")),
+                            (d["direct_pages"], event.get("path"))):
+            if key:
+                _count(source, key, visitor)
+
+    # Location covers page reads AND API calls: an institution pulling the API
+    # is the readership worth knowing about, and a page-only cut would hide it.
+    place = event.get("country")
+    operator = event.get("network")
+    if place or operator:
+        d["located"] += 1
+    else:
+        d["unlocated"] += 1
+    for source, key in ((d["countries"], place), (d["networks"], operator)):
+        if key:
+            _count(source, key, visitor)
+
+
+def _reset_folds():
+    _FILES.clear()
+    _DAYS.clear()
+
+
+def _read_new(paths, budget):
+    """Fold the lines written to `paths` since the last read, newest file
+    first, at most `budget` lines in all. Returns True when a file still has
+    lines left unread. A file that shrank or changed under an earlier read
+    sends everything back to the start, never a partly wrong total."""
+    left = False
+    for path in sorted(paths, reverse=True):
+        key = str(path)
+        state = _FILES.get(key)
+        try:
+            with open(key, "rb") as f:
+                if state:
+                    f.seek(0, 2)
+                    size = f.tell()
+                    tail = state["tail"]
+                    ok = size >= state["offset"]
+                    if ok and tail:
+                        f.seek(state["offset"] - len(tail))
+                        ok = f.read(len(tail)) == tail
+                    if not ok:
+                        _reset_folds()
+                        return _read_new(paths, budget)
+                else:
+                    state = _FILES[key] = {"offset": 0, "tail": b"", "lines": 0, "unreadable": 0}
+                f.seek(state["offset"])
+                while True:
+                    if budget <= 0:
+                        left = left or bool(f.read(1))
+                        break
+                    raw = f.readline()
+                    if not raw:
+                        break
+                    if not raw.endswith(b"\n"):
+                        break               # a line still being written: the next read takes it
+                    state["offset"] += len(raw)
+                    state["tail"] = raw[-64:]
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    state["lines"] += 1
+                    budget -= 1
+                    try:
+                        event = json.loads(line)
+                        at = event["at"]
+                        day = at[:10]
+                    except (ValueError, KeyError, TypeError):
+                        state["unreadable"] += 1
+                        continue
+                    d = _DAYS.get(day)
+                    if d is None:
+                        d = _DAYS[day] = _new_day()
+                    _fold(d, event, at)
+        except OSError:
+            continue
+    return left
+
+
+def _join(into, row):
+    into["views"] += row["views"]
+    into["visitors"] |= row["visitors"]
+
+
+def _window_totals(start, today, wanted):
+    """The window's totals, added up from the days in it."""
+    with _FOLD_LOCK:
+        paths = [p for p in _log_files()
+                 if p.name[len("visits-"):-len(".jsonl")] in wanted]
+        truncated = _read_new(paths, MAX_LINES)
+        oldest = (today - datetime.timedelta(days=_DAY_KEEP)).isoformat()
+        for day in [k for k in _DAYS if k < oldest]:
+            del _DAYS[day]
+        w = _new_day()
+        w["daily"] = {}
+        w["stable_days"] = {}
+        cursor = start
+        while cursor <= today:
+            day = cursor.isoformat()
+            cursor += datetime.timedelta(days=1)
+            d = _DAYS.get(day)
+            if d is None:
+                continue
+            w["daily"][day] = {"visitors": set(d["visitors"]), "pageviews": d["pageviews"],
+                               "api": d["api"], "bots": d["bots"]}
+            for k in ("pageviews", "api", "bots", "located", "unlocated", "api_calls",
+                      "mcp_calls", "api_in_page", "api_external"):
+                w[k] += d[k]
+            for k in ("visitors", "browsers", "scripted"):
+                w[k] |= d[k]
+            for k in ("pages", "refs", "countries", "networks", "direct_networks", "direct_pages"):
+                for key, row in d[k].items():
+                    _join(w[k].setdefault(key, {"views": 0, "visitors": set()}), row)
+            _join(w["direct"], d["direct"])
+            _join(w["ai_referred"], d["ai_referred"])
+            for label, row in d["ai_agents"].items():
+                into = w["ai_agents"].setdefault(label, {
+                    "views": 0, "visitors": set(), "purpose": row["purpose"], "pages": {}, "last": ""})
+                _join(into, row)
+                for page, n in row["pages"].items():
+                    into["pages"][page] = into["pages"].get(page, 0) + n
+                if row["last"] > into["last"]:
+                    into["last"] = row["last"]
+            w["ask_hits"].extend(d["ask_hits"])
+            w["visitor_network"].update(d["visitor_network"])    # the later day wins
+            for key, held in d["dwell_views"].items():
+                have = w["dwell_views"].get(key)
+                if not have or held[1] > have[1]:
+                    w["dwell_views"][key] = held
+            for v, stamps in d["activity"].items():
+                w["activity"].setdefault(v, []).extend(stamps)
+            for v, since in d["stable_since"].items():
+                w["stable_since"].setdefault(v, since)
+            for v in d["stable"]:
+                w["stable_days"].setdefault(v, set()).add(day)
+            for k in w["consent"]:
+                w["consent"][k] += d["consent"][k]
+            if d["first"] and (w["first"] is None or d["first"] < w["first"]):
+                w["first"] = d["first"]
+            if d["last"] and (w["last"] is None or d["last"] > w["last"]):
+                w["last"] = d["last"]
+        w["lines_read"] = sum(_FILES[str(p)]["lines"] for p in paths if str(p) in _FILES)
+        w["unreadable"] = sum(_FILES[str(p)]["unreadable"] for p in paths if str(p) in _FILES)
+        w["truncated"] = truncated
+        return w
+
+
 def summary(days=30, top=15):
     """Traffic over the last `days` UTC days, aggregated for the admin page.
 
@@ -808,204 +1094,20 @@ def summary(days=30, top=15):
     start = today - datetime.timedelta(days=days - 1)
     wanted = _months_in_window(start, today)
 
-    daily = {}
-    pages, refs, countries, networks = {}, {}, {}, {}
-    direct = {"views": 0, "visitors": set()}
-    direct_networks, direct_pages = {}, {}
-    located, unlocated = 0, 0
-    visitors, bot_hits, api_calls, mcp_calls = set(), 0, 0, 0
-    ask_hits = []  # (at, visitor) for each question to the box (the questions themselves are in ask_log)
-    # Automated traffic that belongs to an AI product, kept apart from the rest
-    # of it: which assistant, what it was doing, and which page it wanted.
-    ai_agents = {}
-    # Page reads that arrived from an assistant's answer — a person, not a
-    # fetcher — counted separately because they are the only evidence that any
-    # of the fetching ever reaches a reader.
-    ai_referred = {"views": 0, "visitors": set()}
-    api_in_page, api_external = 0, 0
-    browsers = set()
-    # Visitors whose page reported how long it was open. That report is sent
-    # by a script running in the page, which a scraper taking the HTML never
-    # runs — so it is the evidence that a real browser rendered the page.
-    scripted = set()
-    # The network each visitor was placed on. A visitor is one address on one
-    # day, so this is constant for them; a cookie reader who changes networks
-    # keeps the last one seen.
-    visitor_network = {}
-    # How long pages were open, as reported by the pages themselves, one entry
-    # per page view rather than per report.
-    dwell_views = {}
-    # When each visitor asked for something, so sessions can be cut out of it.
-    activity = {}
-    # Readers carrying a cookie: the day theirs was issued, and the days they
-    # have appeared on. The only two facts here that outlive a single day.
-    stable_since, stable_days = {}, {}
-    consent = {"granted": 0, "denied": 0, "unanswered": 0}
-    first_event, last_event = None, None
-    lines_read, unreadable = 0, 0
-
-    for path in _log_files():
-        month = path.name[len("visits-"):-len(".jsonl")]
-        if month not in wanted:
-            continue
-        try:
-            handle = open(str(path), encoding="utf-8")
-        except OSError:
-            continue
-        with handle as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                lines_read += 1
-                if lines_read > MAX_LINES:
-                    break
-                try:
-                    event = json.loads(line)
-                    at = event["at"]
-                    day = at[:10]
-                except (ValueError, KeyError, TypeError):
-                    unreadable += 1
-                    continue
-                if day < start.isoformat():
-                    continue
-                if first_event is None or at < first_event:
-                    first_event = at
-                if last_event is None or at > last_event:
-                    last_event = at
-
-                bucket = daily.setdefault(
-                    day, {"visitors": set(), "pageviews": 0, "api": 0, "bots": 0})
-                if event.get("bot"):
-                    bot_hits += 1
-                    bucket["bots"] += 1
-                    label = event.get("agent")
-                    if label:
-                        row = ai_agents.setdefault(label, {
-                            "views": 0, "visitors": set(),
-                            "purpose": event.get("agent_purpose") or "",
-                            "pages": {}, "last": ""})
-                        row["views"] += 1
-                        if event.get("visitor"):
-                            row["visitors"].add(event["visitor"])
-                        page = event.get("path")
-                        if page:
-                            row["pages"][page] = row["pages"].get(page, 0) + 1
-                        if at > row["last"]:
-                            row["last"] = at
-                    continue
-
-                kind = event.get("kind")
-                if event.get("path") in ask_log.PATHS and event.get("visitor"):
-                    ask_hits.append((at, event["visitor"]))
-                # Not traffic, just the note that this visitor rendered a page.
-                if kind == "browser":
-                    if event.get("visitor"):
-                        browsers.add(event["visitor"])
-                        if event.get("network"):
-                            visitor_network[event["visitor"]] = event["network"]
-                    continue
-                # Nor is a closing page report traffic: the page view it
-                # belongs to was counted when the page was asked for.
-                if kind == "dwell":
-                    if event.get("visitor"):
-                        scripted.add(event["visitor"])
-                    seconds = event.get("seconds")
-                    if isinstance(seconds, (int, float)) and seconds > 0:
-                        key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
-                        held = dwell_views.get(key)
-                        if not held or seconds > held[1]:
-                            dwell_views[key] = (event.get("path") or "/", seconds)
-                    continue
-                visitor = event.get("visitor")
-                if visitor:
-                    bucket["visitors"].add(visitor)
-                    visitors.add(visitor)
-                    if event.get("network"):
-                        visitor_network[visitor] = event["network"]
-                # Older records predate the in-page flag and cannot be told
-                # apart; they are left out of both splits rather than guessed at.
-                knows_origin = "internal" in event
-                in_page = bool(event.get("internal"))
-
-                # A reader is somebody moving around the site: pages they
-                # asked for, and the chart data their own page fetched, which
-                # is the only proof a tab is still being used. Somebody pulling
-                # the API from a terminal is not sitting in a session and would
-                # otherwise invent hours-long ones.
-                if visitor and (kind == "page"
-                                or (kind == "api" and in_page)):
-                    activity.setdefault(visitor, []).append(_epoch(at))
-                if visitor and event.get("since"):
-                    stable_since.setdefault(visitor, event["since"])
-                    stable_days.setdefault(visitor, set()).add(day)
-
-                if kind in ("api", "mcp"):
-                    if kind == "api":
-                        api_calls += 1
-                    else:
-                        mcp_calls += 1
-                    bucket["api"] += 1
-                    if knows_origin:
-                        if in_page:
-                            api_in_page += 1
-                        else:
-                            api_external += 1
-                elif kind == "page" and (event.get("status") or 0) < 400:
-                    bucket["pageviews"] += 1
-                    choice = event.get("consent") or "unanswered"
-                    if choice in consent:
-                        consent[choice] += 1
-                    page = pages.setdefault(
-                        event.get("path") or "/", {"views": 0, "visitors": set()})
-                    page["views"] += 1
-                    if visitor:
-                        page["visitors"].add(visitor)
-                # How a page was reached. Page reads only: a referrer answers
-                # "how did someone get here", and in-page chart fetches would
-                # otherwise drown the answer.
-                sender = event.get("ref")
-                is_read = kind == "page" and (event.get("status") or 0) < 400
-                if is_read and sender:
-                    ref = refs.setdefault(sender, {"views": 0, "visitors": set()})
-                    ref["views"] += 1
-                    if visitor:
-                        ref["visitors"].add(visitor)
-                    if is_ai_referrer(sender):
-                        ai_referred["views"] += 1
-                        if visitor:
-                            ai_referred["visitors"].add(visitor)
-                elif is_read and knows_origin and not in_page:
-                    # No referring link: typed, bookmarked, or opened from a
-                    # mail or messaging app, which strip the header.
-                    direct["views"] += 1
-                    if visitor:
-                        direct["visitors"].add(visitor)
-                    for source, key in ((direct_networks, event.get("network")),
-                                        (direct_pages, event.get("path"))):
-                        if not key:
-                            continue
-                        row = source.setdefault(key, {"views": 0, "visitors": set()})
-                        row["views"] += 1
-                        if visitor:
-                            row["visitors"].add(visitor)
-
-                # Location covers page reads AND API calls: an institution
-                # pulling the API is the readership worth knowing about, and a
-                # page-only cut would hide it.
-                place = event.get("country")
-                operator = event.get("network")
-                if place or operator:
-                    located += 1
-                else:
-                    unlocated += 1
-                for source, key in ((countries, place), (networks, operator)):
-                    if not key:
-                        continue
-                    row = source.setdefault(key, {"views": 0, "visitors": set()})
-                    row["views"] += 1
-                    if visitor:
-                        row["visitors"].add(visitor)
+    w = _window_totals(start, today, wanted)
+    daily = w["daily"]
+    pages, refs, countries, networks = w["pages"], w["refs"], w["countries"], w["networks"]
+    direct, direct_networks, direct_pages = w["direct"], w["direct_networks"], w["direct_pages"]
+    located, unlocated = w["located"], w["unlocated"]
+    visitors, bot_hits, api_calls, mcp_calls = w["visitors"], w["bots"], w["api_calls"], w["mcp_calls"]
+    ask_hits = w["ask_hits"]  # (at, visitor) for each question to the box (the questions themselves are in ask_log)
+    ai_agents, ai_referred = w["ai_agents"], w["ai_referred"]
+    api_in_page, api_external = w["api_in_page"], w["api_external"]
+    browsers, scripted, visitor_network = w["browsers"], w["scripted"], w["visitor_network"]
+    dwell_views, activity = w["dwell_views"], w["activity"]
+    stable_since, stable_days, consent = w["stable_since"], w["stable_days"], w["consent"]
+    first_event, last_event = w["first"], w["last"]
+    lines_read, unreadable = w["lines_read"], w["unreadable"]
 
     # A person, for the purposes of this page: a visit whose page reported its
     # reading time (so a script ran in a real browser) from a network that is
@@ -1176,5 +1278,5 @@ def summary(days=30, top=15):
         "log_bytes": sum(p.stat().st_size for p in files if p.exists()),
         "lines_read": lines_read,
         "unreadable_lines": unreadable,
-        "truncated": lines_read > MAX_LINES,
+        "truncated": w["truncated"],
     }

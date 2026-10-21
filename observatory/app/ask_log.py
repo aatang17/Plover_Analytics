@@ -18,11 +18,21 @@ which sees every request. The routers leave a note of how they answered
 (note()), and the counter picks it up when it writes the line (record());
 a cached repeat finds the note its first asking left.
 
+Each line says who it came from in one word, never more ("from"): "us" for
+our own checks (an address in OUR_ADDRESSES, or a private one, which no
+reader behind the proxy ever has; the address itself is not kept), "example"
+for a click on one of the page's own example questions (the page adds
+via=example), and "reader" for a question somebody typed. The admin page
+counts the last, week by week: the one number that says whether strangers use
+the box. Lines written before 2026-10-21 carry no "from" and are shown as
+not marked.
+
 Append-only JSONL under data/analytics/, one file a month, no DuckDB write
 path (CLAUDE.md, Ingest Guardrails 5); a failure to write never reaches a
 response. Robots are left out, as in the visit counts.
 """
 import datetime
+import ipaddress
 import json
 import os
 import threading
@@ -36,6 +46,12 @@ QUESTION_CHARS = 300
 
 # the box's three doors: the full answer, its streamed form, and the signed-out preview
 PATHS = {"/api/v1/us/ask": "full", "/api/v1/us/ask/stream": "full", "/api/v1/assistant/preview": "preview"}
+
+# Addresses that are never a reader: the loopback and the private ranges (a
+# check run inside the server or the container network; a reader behind the
+# proxy always arrives with a public address).
+_PRIVATE = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7")]
+_OURS_CACHE = {}
 
 _LOCK = threading.Lock()
 _NOTES = OrderedDict()
@@ -66,13 +82,53 @@ def _question(scope):
     return _norm(values[0]) if values else ""
 
 
+def _our_networks():
+    """OUR_ADDRESSES: comma-separated addresses or ranges we ask from (the
+    team's own machines). A malformed entry is skipped, never fatal."""
+    raw = os.environ.get("OUR_ADDRESSES", "")
+    nets = _OURS_CACHE.get(raw)
+    if nets is None:
+        nets = []
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                nets.append(ipaddress.ip_network(part, strict=False))
+            except ValueError:
+                print("OUR_ADDRESSES: skipped %r, not an address or range" % part)
+        _OURS_CACHE.clear()
+        _OURS_CACHE[raw] = nets
+    return nets
+
+
+def is_ours(ip):
+    """True when a request came from us. Takes the address only to decide
+    this; nothing about it is written."""
+    try:
+        addr = ipaddress.ip_address((ip or "").strip())
+    except ValueError:
+        return False
+    if addr.is_loopback or any(addr in n for n in _PRIVATE if n.version == addr.version):
+        return True
+    return any(addr in n for n in _our_networks() if n.version == addr.version)
+
+
+def _via(scope):
+    raw = scope.get("query_string") or b""
+    if isinstance(raw, bytes):
+        raw = raw.decode("latin-1")
+    return (urllib.parse.parse_qs(raw).get("via") or [""])[0]
+
+
 def _path_of(month):
     return ANALYTICS_DIR / ("ask-%s.jsonl" % month)
 
 
-def record(scope, status, seconds=None, now=None):
+def record(scope, status, seconds=None, now=None, ours=False):
     """Write one line for a question the box was asked. Called by the visit
-    counter for a request on one of PATHS that is not a robot's."""
+    counter for a request on one of PATHS that is not a robot's; `ours` is
+    is_ours() of the request's address, worked out there."""
     path = scope.get("path") or ""
     if path not in PATHS:
         return
@@ -92,7 +148,8 @@ def record(scope, status, seconds=None, now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     line = {"at": now.isoformat(timespec="seconds") + "Z", "q": q, "where": PATHS[path],
             "answered": answered, "route": (got or {}).get("route"), "shape": (got or {}).get("shape"),
-            "status": status, "seconds": round(seconds, 1) if isinstance(seconds, (int, float)) else None}
+            "status": status, "seconds": round(seconds, 1) if isinstance(seconds, (int, float)) else None,
+            "from": "us" if ours else ("example" if _via(scope) == "example" else "reader")}
     try:
         os.makedirs(str(ANALYTICS_DIR), exist_ok=True)
         with _LOCK:
@@ -110,11 +167,8 @@ def _median(values):
     return v[m] if len(v) % 2 else (v[m - 1] + v[m]) / 2.0
 
 
-def summary(days, start, today, hits=None, recent=50, top=15):
-    """The Ask Box section: totals, one row per day, the latest questions and
-    the ones asked most. `hits` comes from the visit log: [(at, visitor)] for
-    each request to the box; only those from the first logged question on are
-    counted, so people are never counted for searches this log never saw."""
+def _read(start, today):
+    """Every logged line from `start` to `today`, oldest month first."""
     months = set()
     d = start
     while d <= today:
@@ -134,10 +188,54 @@ def summary(days, start, today, hits=None, recent=50, top=15):
                         e = json.loads(raw)
                     except ValueError:
                         continue
-                    if str(e.get("at", ""))[:10] >= start.isoformat():
+                    if start.isoformat() <= str(e.get("at", ""))[:10] <= today.isoformat():
                         lines.append(e)
         except OSError:
             continue
+    return lines
+
+
+FROM_KEYS = ("reader", "example", "us")
+
+
+def weekly(today, weeks=8):
+    """Questions by week (weeks start on Monday, UTC), newest first: how many
+    readers typed, how many of those were answered, example clicks, our own
+    checks, and lines from before the marking began. Weeks before the first
+    logged question are left out rather than shown as zero."""
+    monday = today - datetime.timedelta(days=today.weekday())
+    first = monday - datetime.timedelta(weeks=weeks - 1)
+    lines = _read(first, today)
+    if not lines:
+        return []
+    begun = min(e["at"] for e in lines)[:10]
+    rows = {}
+    for e in lines:
+        d = datetime.date.fromisoformat(e["at"][:10])
+        wk = (d - datetime.timedelta(days=d.weekday())).isoformat()
+        row = rows.setdefault(wk, {"reader": 0, "reader_answered": 0, "example": 0, "us": 0, "unmarked": 0})
+        who = e.get("from")
+        row[who if who in FROM_KEYS else "unmarked"] += 1
+        if who == "reader" and e.get("answered") is True:
+            row["reader_answered"] += 1
+    out = []
+    wk = monday
+    while wk >= first:
+        end = wk + datetime.timedelta(days=6)
+        if end.isoformat() < begun:
+            break
+        row = rows.get(wk.isoformat(), {"reader": 0, "reader_answered": 0, "example": 0, "us": 0, "unmarked": 0})
+        out.append(dict(row, week=wk.isoformat(), partial=wk == monday))
+        wk -= datetime.timedelta(weeks=1)
+    return out
+
+
+def summary(days, start, today, hits=None, recent=50, top=15):
+    """The Ask Box section: totals, one row per day, the latest questions and
+    the ones asked most. `hits` comes from the visit log: [(at, visitor)] for
+    each request to the box; only those from the first logged question on are
+    counted, so people are never counted for searches this log never saw."""
+    lines = _read(start, today)
     since = min((e["at"] for e in lines), default=None)
     people = {}
     for at, visitor in hits or []:
@@ -179,7 +277,8 @@ def summary(days, start, today, hits=None, recent=50, top=15):
         "median_seconds": _median([e.get("seconds") for e in lines]),
         "distinct_questions": len(asked),
         "daily": series,
-        "recent": [{k: e.get(k) for k in ("at", "q", "where", "answered", "route", "shape", "seconds")}
+        "weekly": weekly(today),
+        "recent": [{k: e.get(k) for k in ("at", "q", "where", "answered", "route", "shape", "seconds", "from")}
                    for e in sorted(lines, key=lambda e: e["at"], reverse=True)[:recent]],
         "most_asked": most,
     }

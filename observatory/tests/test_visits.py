@@ -12,6 +12,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -384,6 +385,85 @@ class ProxiedSchemeTest(unittest.TestCase):
         got = client.post("/api/v1/visit/consent", json={"choice": "granted"})
         for cookie in got.headers.get_list("set-cookie"):
             self.assertNotIn("Secure", cookie, cookie)
+
+
+class DailyTotalsTest(unittest.TestCase):
+    """The Traffic page keeps each day's totals and reads only the lines
+    written since its last load. Whatever happens to the file, a load must
+    give exactly what a fresh count of the whole log gives."""
+
+    def setUp(self):
+        import pathlib
+        self.real = visits.ANALYTICS_DIR
+        self.dir = pathlib.Path(tempfile.mkdtemp(prefix="visits-folds-"))
+        visits.ANALYTICS_DIR = self.dir
+        visits._reset_folds()
+        now = datetime.datetime.utcnow()
+        self.path = self.dir / ("visits-%s.jsonl" % now.strftime("%Y-%m"))
+        self.today = now.strftime("%Y-%m-%d")
+
+    def tearDown(self):
+        visits.ANALYTICS_DIR = self.real
+        visits._reset_folds()
+        shutil.rmtree(str(self.dir), ignore_errors=True)
+
+    def lines(self, rows, mode="a"):
+        with open(str(self.path), mode, encoding="utf-8") as f:
+            for at, extra in rows:
+                event = {"at": "%sT%s" % (self.today, at), "kind": "page", "path": "/", "status": 200,
+                         "internal": False, "country": "SG", "network": "Singtel", "bot": False}
+                event.update(extra)
+                f.write(json.dumps(event) + "\n")
+
+    def fresh(self, days=30):
+        visits._reset_folds()
+        return visits.summary(days)
+
+    def same(self, a, b):
+        norm = lambda x: json.loads(json.dumps(x, sort_keys=True, default=str))
+        a, b = norm(a), norm(b)
+        self.assertEqual([k for k in set(a) | set(b) if a.get(k) != b.get(k)], [])
+
+    def test_a_second_load_reads_only_new_lines_and_matches_a_fresh_count(self):
+        self.lines([("01:00:00Z", {"visitor": "a", "ref": "substack.com"}),
+                    ("01:10:00Z", {"visitor": "a", "path": "/cpi.html"}),
+                    ("02:00:00Z", {"visitor": "bot1", "bot": True, "agent": "GPTBot", "agent_purpose": "training"}),
+                    ("03:00:00Z", {"visitor": "b", "kind": "api", "path": "/api/v1/us/ask", "internal": True})])
+        first = visits.summary(30)
+        self.assertEqual(first["pageviews"], 2)
+        self.lines([("04:00:00Z", {"visitor": "a", "path": "/macro.html", "since": "2026-09-01"}),
+                    ("04:05:00Z", {"visitor": "a", "kind": "dwell", "seconds": 40, "view": "v1"}),
+                    ("05:00:00Z", {"visitor": "c", "kind": "browser"})])
+        with open(str(self.path), "a", encoding="utf-8") as f:
+            f.write('{"at": "%sT06:00:00Z", "kind": "pa' % self.today)   # still being written
+        again = visits.summary(30)
+        self.assertEqual((again["pageviews"], again["visitors"], again["bot_hits"]), (3, 2, 1))
+        self.same(again, self.fresh())
+        with open(str(self.path), "a", encoding="utf-8") as f:
+            f.write('ge", "path": "/", "status": 200, "visitor": "d", "bot": false}\n')
+        done = visits.summary(30)
+        self.assertEqual(done["pageviews"], 4, "the finished line is read once, whole")
+        self.same(done, self.fresh())
+
+    def test_a_rewritten_log_is_read_again_from_the_start(self):
+        self.lines([("01:00:00Z", {"visitor": "a"}), ("02:00:00Z", {"visitor": "b"})])
+        self.assertEqual(visits.summary(30)["visitors"], 2)
+        self.lines([("01:00:00Z", {"visitor": "z"}), ("02:00:00Z", {"visitor": "z", "path": "/x.html"}),
+                    ("03:00:00Z", {"visitor": "y"})], mode="w")
+        got = visits.summary(30)
+        self.assertEqual((got["visitors"], got["pageviews"]), (2, 3))
+        self.same(got, self.fresh())
+
+    def test_a_long_log_is_read_over_several_loads(self):
+        self.lines([("01:%02d:00Z" % i, {"visitor": "v%d" % i}) for i in range(10)])
+        with mock.patch.object(visits, "MAX_LINES", 4):
+            first = visits.summary(30)
+            self.assertTrue(first["truncated"])
+            visits.summary(30)
+            last = visits.summary(30)
+        self.assertFalse(last["truncated"])
+        self.assertEqual(last["pageviews"], 10)
+        self.same(last, self.fresh())
 
 
 def _events():

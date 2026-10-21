@@ -337,7 +337,9 @@
     document.title = a.headline.slice(0, 70) + " · Plover Analytics";
   }
 
-  function ask(q, push) {
+  // via: "example" when the question is one of the page's own suggestions,
+  // so the ask log can tell a click from a question somebody typed (app/ask_log.py)
+  function ask(q, push, via) {
     var el = $("answer");
     el.hidden = false;
     $("stock").hidden = true;
@@ -352,7 +354,8 @@
     // The previous question in this tab goes with the new one, so a follow-up
     // ("and Microsoft?") is read as a whole question; the answer shows that reading.
     var prev = prevQuestion();
-    var tail = prev && prev !== q ? "&prev=" + encodeURIComponent(prev) : "";
+    var tail = (prev && prev !== q ? "&prev=" + encodeURIComponent(prev) : "") +
+      (via ? "&via=" + encodeURIComponent(via) : "");
     function full() {
       return askStream("/ask?q=" + encodeURIComponent(q) + tail, function (text) {
         if (lastAsked === q) $("status").textContent = text;
@@ -363,7 +366,7 @@
       }, function (e) {
         // not a stock question the box answers: the US economy may (inflation, wages, Treasury yields)
         if (e.status !== 422 && e.status !== 404) throw e;
-        return getJSON(PREVIEW + "?q=" + encodeURIComponent(q)).then(function (p) {
+        return getJSON(PREVIEW + "?q=" + encodeURIComponent(q) + (via ? "&via=" + encodeURIComponent(via) : "")).then(function (p) {
           if (p.kind !== "macro") throw e;
           $("status").hidden = true;
           renderPreview(p, q);
@@ -415,7 +418,7 @@
         var nq = new URL(a.href, location.href).searchParams.get("q");
         if (!nq) return;
         ev.preventDefault();
-        ask(nq, true);
+        ask(nq, true, "example");
       });
     });
     var retry = $("miss-retry");
@@ -692,7 +695,7 @@
       var q = new URL(a.href, location.href).searchParams.get("q");
       if (!q) return;
       ev.preventDefault();
-      ask(q, true);
+      ask(q, true, "example");
     });
   });
   // who is reading decides how much of an answer shows, so the page waits for that first

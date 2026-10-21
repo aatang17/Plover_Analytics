@@ -13,9 +13,9 @@ from unittest import mock
 from app import ask_log, visits
 
 
-def _scope(path, q, client=("203.0.113.9", 4000), ua=b"Mozilla/5.0 (Macintosh)"):
+def _scope(path, q, client=("203.0.113.9", 4000), ua=b"Mozilla/5.0 (Macintosh)", **extra):
     from urllib.parse import urlencode
-    return {"type": "http", "method": "GET", "path": path, "query_string": urlencode({"q": q}).encode("latin-1"),
+    return {"type": "http", "method": "GET", "path": path, "query_string": urlencode(dict({"q": q}, **extra)).encode("latin-1"),
             "client": client, "headers": [(b"user-agent", ua), (b"host", b"ploveranalytics.com")]}
 
 
@@ -90,6 +90,59 @@ class LogTest(unittest.TestCase):
         self.assertEqual(len(s["daily"]), 7, "every day in the window, a quiet day as a zero row")
         self.assertEqual([(r["q"], r["times"], r["answered"]) for r in s["most_asked"]], [("What is Apple worth", 2, 2)])
         self.assertEqual([r["q"] for r in s["recent"]], ["most employees", "What is Apple worth", "what is apple worth"])
+
+    def test_each_line_says_whether_a_reader_typed_it_clicked_an_example_or_we_asked(self):
+        real = visits.ANALYTICS_DIR, visits.SALT_PATH
+        visits.ANALYTICS_DIR, visits.SALT_PATH = self.dir, self.dir / "salt"
+        try:
+            with mock.patch.dict("os.environ", {"OUR_ADDRESSES": "198.51.100.0/24, not-an-address"}):
+                visits.observe(_scope("/api/v1/us/ask", "typed by a reader"), 200, 1.0)
+                visits.observe(_scope("/api/v1/assistant/preview", "Who owns Nvidia?", via="example"), 200, 1.0)
+                visits.observe(_scope("/api/v1/us/ask", "from our machine", client=("198.51.100.7", 1)), 200, 1.0)
+                visits.observe(_scope("/api/v1/us/ask", "inside the server", client=("127.0.0.1", 1)), 200, 1.0)
+                visits.observe(_scope("/api/v1/us/ask", "container network", client=("172.18.0.4", 1)), 200, 1.0)
+                visits.observe(_scope("/api/v1/us/ask", "our example click", client=("198.51.100.7", 1), via="example"), 200, 1.0)
+                visits.flush()
+        finally:
+            visits.ANALYTICS_DIR, visits.SALT_PATH = real
+        self.assertEqual([(x["q"], x["from"]) for x in self.lines()],
+                         [("typed by a reader", "reader"), ("Who owns Nvidia?", "example"), ("from our machine", "us"),
+                          ("inside the server", "us"), ("container network", "us"), ("our example click", "us")])
+        for line in self.lines():
+            for k in ("visitor", "country", "network", "ip", "client", "via"):
+                self.assertNotIn(k, line)
+
+    def test_is_ours_without_the_setting(self):
+        with mock.patch.dict("os.environ", {"OUR_ADDRESSES": ""}):
+            self.assertEqual([ask_log.is_ours(x) for x in ("8.8.8.8", "203.0.113.9", "::1", "10.1.2.3", "unknown", "")],
+                             [False, False, True, True, False, False])
+
+    def test_weekly_counts_typed_questions_apart(self):
+        day = datetime.date(2026, 10, 28)                  # a Wednesday
+        def put(when, q, answered=True, **kw):
+            ask_log.note("/api/v1/us/ask", q, answered)
+            ask_log.record(_scope("/api/v1/us/ask", q, **kw), 200, 1.0, now=when)
+        # last week: one unmarked line from before the marking began, one typed
+        with open(str(self.dir / "ask-2026-10.jsonl"), "w") as f:
+            f.write(json.dumps({"at": "2026-10-20T16:09:43Z", "q": "old", "where": "full", "answered": True}) + "\n")
+        put(datetime.datetime(2026, 10, 22, 9), "nvidia margins")
+        # this week: two typed (one not answered), one example click, one of ours
+        put(datetime.datetime(2026, 10, 26, 1), "apple buyback 2026")
+        put(datetime.datetime(2026, 10, 27, 1), "most employees", answered=False)
+        put(datetime.datetime(2026, 10, 27, 2), "Apple buybacks", via="example")
+        ask_log.note("/api/v1/us/ask", "our check", True)
+        ask_log.record(_scope("/api/v1/us/ask", "our check"), 200, 1.0, now=datetime.datetime(2026, 10, 28, 3), ours=True)
+        rows = ask_log.weekly(day)
+        self.assertEqual([r["week"] for r in rows], ["2026-10-26", "2026-10-19"],
+                         "weeks before the first logged question are left out, not zeros")
+        self.assertEqual(rows[0], {"week": "2026-10-26", "partial": True, "reader": 2, "reader_answered": 1,
+                                   "example": 1, "us": 1, "unmarked": 0})
+        self.assertEqual(rows[1], {"week": "2026-10-19", "partial": False, "reader": 1, "reader_answered": 1,
+                                   "example": 0, "us": 0, "unmarked": 1})
+        s = ask_log.summary(7, day - datetime.timedelta(days=6), day)
+        self.assertEqual(s["weekly"], rows)
+        self.assertEqual([r["from"] for r in s["recent"]], ["us", "example", "reader", "reader", "reader"])
+
 
 
 class EndpointNoteTest(unittest.TestCase):

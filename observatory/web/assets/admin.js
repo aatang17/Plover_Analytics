@@ -1078,6 +1078,8 @@ var ASK_ROUTE = {
   other_market: "Another Market",
 };
 var ASK_WHERE = { full: "Full Answer", preview: "Signed-Out Preview" };
+// who a question came from (app/ask_log.py): never more than this one word
+var ASK_FROM = { reader: "Reader", example: "Example Click", us: "Us" };
 
 function askResult(answered) {
   if (answered === true) return '<span class="badge badge-ok">Answered</span>';
@@ -1099,12 +1101,34 @@ function trafficAsk(a) {
       "Questions are recorded from the day this section was added; earlier searches were not kept.</p>";
   }
   var share = a.judged ? Math.round((a.answered / a.judged) * 100) + "%" : MISSING;
+  var weeks = a.weekly || [];
+  var thisWeek = weeks.length && weeks[0].partial ? weeks[0] : null;
   var kpis =
+    kpi(thisWeek ? fmtCount(thisWeek.reader) : MISSING, "Typed by Readers This Week", "") +
     kpi(fmtCount(a.searches), "Searches", "") +
     kpi(fmtCount(a.people), "People", "") +
     kpi(fmtCount(a.distinct_questions), "Different Questions", "") +
     kpi(share, "Answered", "") +
     kpi(fmtDuration(a.median_seconds), "Median Time", "");
+
+  var unmarked = weeks.some(function (r) { return r.unmarked; });
+  var weekly = weeks.length
+    ? '<div class="admin-section">Questions Typed by Readers, by Week <span class="note">weeks ' +
+      "start Monday (UTC); example clicks and our own checks are counted apart</span></div>" +
+      '<div class="table-wrap"><table class="data"><thead><tr><th>Week Starting</th>' +
+      '<th class="num">Typed by Readers</th><th class="num">Answered</th>' +
+      '<th class="num">Example Clicks</th><th class="num">Our Own Checks</th>' +
+      (unmarked ? '<th class="num">Not Marked</th>' : "") + "</tr></thead><tbody>" +
+      weeks.map(function (r) {
+        return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.week) + '">' +
+          escapeHtml(fmtDay(r.week)) + (r.partial ? " (so far)" : "") + "</td>" +
+          '<td class="num">' + fmtCount(r.reader) + "</td>" +
+          '<td class="num">' + fmtCount(r.reader_answered) + "</td>" +
+          '<td class="num">' + fmtCount(r.example) + "</td>" +
+          '<td class="num">' + fmtCount(r.us) + "</td>" +
+          (unmarked ? '<td class="num">' + fmtCount(r.unmarked) + "</td>" : "") + "</tr>";
+      }).join("") + "</tbody></table></div>"
+    : "";
 
   var days = (a.daily || []).filter(function (r) { return r.searches; }).slice().reverse();
   var daily = '<div class="table-wrap"><table class="data"><thead><tr><th>Day</th>' +
@@ -1135,23 +1159,27 @@ function trafficAsk(a) {
   var recent = '<div class="admin-section">Latest Questions <span class="note">newest first, ' +
     "the last " + fmtCount((a.recent || []).length) + "</span></div>" +
     '<div class="table-wrap"><table class="data"><thead><tr><th>Asked</th><th>Question</th>' +
-    "<th>Result</th><th>Answered By</th><th>Seen As</th><th class=\"num\">Time</th></tr></thead><tbody>" +
+    "<th>From</th><th>Result</th><th>Answered By</th><th>Seen As</th><th class=\"num\">Time</th></tr></thead><tbody>" +
     (a.recent || []).map(function (r) {
       return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.at) + '">' + escapeHtml(fmtStamp(r.at)) + "</td>" +
         "<td>" + escapeHtml(r.q) + "</td>" +
+        "<td>" + (r.from ? askLabel(ASK_FROM, r.from) : "Not Marked") + "</td>" +
         "<td>" + askResult(r.answered) + "</td>" +
         "<td>" + askLabel(ASK_ROUTE, r.route) + "</td>" +
         "<td>" + askLabel(ASK_WHERE, r.where) + "</td>" +
         '<td class="num" data-sort="' + (r.seconds == null ? "" : r.seconds) + '">' + fmtDuration(r.seconds) + "</td></tr>";
     }).join("") + "</tbody></table></div>";
 
-  return head + '<div class="kpi-row">' + kpis + "</div>" +
+  return head + '<div class="kpi-row">' + kpis + "</div>" + weekly +
     '<div class="admin-section">Searches by Day <span class="note">days with at least one ' +
     "search</span></div>" + daily + most + recent +
     '<p class="source-line">Searches and questions from the ask log; people from the visit ' +
     "log, counted as visitors per day, so one person on two days is two. Robots are left out. " +
     "A repeated question answered from the server\u2019s cache is still counted. Answered " +
-    "means the box gave an answer, not that the answer was what the reader wanted.</p>";
+    "means the box gave an answer, not that the answer was what the reader wanted. Typed by " +
+    "readers leaves out clicks on the page\u2019s own example questions and our own checks " +
+    "(our addresses, set on the server); questions asked before 21 October 2026 were not " +
+    "marked.</p>";
 }
 
 /* What each AI fetcher was doing. Three different facts, so three labels:
