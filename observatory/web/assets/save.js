@@ -71,7 +71,7 @@
       '<div id="sv-sum"></div>' +
       '<p class="sv-acts">' +
       '<button type="button" class="btn btn-primary sv-btn" id="sv-summarise">Summarize It</button>' +
-      '<a class="btn sv-btn" href="my.html#reading">Open Your Reading</a>' +
+      '<a class="btn sv-btn" href="my.html#reading">Open Reading</a>' +
       '<button type="button" class="btn sv-btn" id="sv-close">Close</button></p>';
     show("ok", html);
     document.getElementById("sv-close").addEventListener("click", function () { window.close(); });
@@ -137,7 +137,7 @@
   }
   if (!page || !page.url) {
     show("bad", "<p>Nothing arrived. This page opens when you click the Plover button or the Save to Plover bookmark on an article.</p>" +
-      '<p>Both are on <a href="my.html#reading">Your Plover</a>, under Your Reading.</p>');
+      '<p>Both are kept under <a href="my.html#reading">Reading</a> on Plover.</p>');
     return;
   }
   if (!page.blocks || !page.blocks.length) {

@@ -5,69 +5,102 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
-<title>Your Plover · Plover Analytics</title>
+<title>Plover · Plover Analytics</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/my.css">
 </head>
-<body>
+<body class="no-toc my-page">
 
 <header class="site-header" data-section="" data-page=""></header>
 <script src="assets/nav.js"></script>
 
 <main class="container">
   <div class="my">
-    <h1 class="my-title">Your Plover</h1>
-
     <!-- Shown until the account is known: signed out, or accounts not on. -->
     <div id="my-gate" class="my-gate" role="status" aria-live="polite">
-      <p>Loading your Plover…</p>
+      <p>Loading…</p>
     </div>
 
     <div id="my-app" hidden>
-      <form id="my-ask" class="my-box" autocomplete="off">
-        <label for="my-q" class="my-sr">Ask a question about the data</label>
-        <input id="my-q" type="text" maxlength="600" placeholder="Ask a question about the data">
-        <button type="submit" class="btn btn-primary my-go" id="my-go">Ask</button>
-      </form>
-      <div id="my-tries" class="my-tries" aria-label="Example questions"></div>
-      <div id="my-keynote" class="my-note" hidden></div>
-      <div id="my-answer" class="my-answer" aria-live="polite"></div>
+      <nav class="my-tabs" role="tablist" aria-label="Plover">
+        <a role="tab" href="#chat" data-tab="chat" id="tab-chat">Chat</a>
+        <a role="tab" href="#companies" data-tab="companies" id="tab-companies">Companies <span class="my-count" id="my-cos-n"></span></a>
+        <!-- Reading is off until the browser extension is published (READING_ON in my.js) -->
+        <a role="tab" href="#reading" data-tab="reading" id="tab-reading" hidden>Reading <span class="my-count" id="my-read-n"></span></a>
+        <a role="tab" href="#key" data-tab="key" id="tab-key">AI Key <span class="my-count" id="my-key-n"></span></a>
+      </nav>
 
-      <h2 id="answers">Your Answers <span class="h2-note" id="my-answers-n"></span></h2>
-      <ul id="my-answers" class="my-list"></ul>
-
-      <h2 id="companies">Your Companies <span class="h2-note" id="my-cos-n"></span></h2>
-      <div class="my-add">
-        <label for="my-co-q" class="my-sr">Add a company by name or code</label>
-        <input id="my-co-q" type="text" autocomplete="off" spellcheck="false"
-               placeholder="Name or code, e.g. Toyota, 7203">
-        <ul id="my-co-hits" class="my-hits" hidden></ul>
-      </div>
-      <ul id="my-cos" class="my-list"></ul>
-
-      <h2 id="reading">Your Reading <span class="h2-note" id="my-read-n"></span></h2>
-      <div class="my-save">
-        <p>Save any article you are reading to Plover, with a summary. Pages you can read behind a
-        paywall are saved too, as text, and only you can see them.</p>
-        <div class="my-save-ways">
-          <div>
-            <p class="my-label">Chrome extension</p>
-            <p><a class="btn btn-primary" id="my-ext" href="/api/v1/assistant/reading/extension.zip">Download the Extension</a></p>
-            <ol class="my-steps">
-              <li>Unzip the download.</li>
-              <li>In Chrome, open <code>chrome://extensions</code> and switch on Developer mode.</li>
-              <li>Click Load unpacked and choose the unzipped folder. Then click the Plover button on any article.</li>
-            </ol>
+      <!-- Chat: past chats down the side, the conversation, the box at the bottom -->
+      <section class="my-panel my-chat" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
+        <aside class="my-side" id="my-side" aria-label="Chats">
+          <a class="btn my-new" href="#chat" id="my-new">New Chat</a>
+          <button type="button" class="my-side-toggle" id="my-side-toggle" aria-expanded="false" aria-controls="my-chats">Past Chats</button>
+          <ul class="my-chats" id="my-chats"></ul>
+        </aside>
+        <div class="my-convo">
+          <div class="my-hello" id="my-hello">
+            <p class="my-hello-head">What would you like to know?</p>
+            <p class="my-hello-sub">Ask about US stocks, or about prices, yields and wages in the US and Japan. Each answer shows its figures, a chart and the source.</p>
           </div>
-          <div>
-            <p class="my-label">Any browser: a bookmark</p>
-            <p><a class="btn my-bm" id="my-bm" href="#" title="Drag me to your bookmarks bar">Save to Plover</a></p>
-            <p class="my-hint">Drag this button to your bookmarks bar once. Then click the bookmark on an article.</p>
-          </div>
+          <div class="my-thread" id="my-thread" aria-live="polite"></div>
+          <form id="my-ask" class="my-composer" autocomplete="off">
+            <div class="my-box">
+              <label for="my-q" class="my-sr">Message Plover</label>
+              <textarea id="my-q" rows="2" maxlength="600" placeholder="Ask a question about the data"></textarea>
+              <div class="my-box-foot">
+                <span class="my-hint-keys">Enter to send · Shift+Enter for a new line</span>
+                <button type="submit" class="btn btn-primary my-go" id="my-go">Send</button>
+              </div>
+            </div>
+            <p class="my-note" id="my-keynote" hidden></p>
+          </form>
+          <ul id="my-tries" class="my-tries" aria-label="Example questions"></ul>
         </div>
-      </div>
-      <ul id="my-reading" class="my-list"></ul>
+      </section>
+
+      <section class="my-panel" id="panel-companies" role="tabpanel" aria-labelledby="tab-companies" hidden>
+        <p class="my-intro">Keep a list of the companies you follow, in the US or Japan. Each one shows when its
+        next results are due. Click a company to open its page with financial statements and filings.</p>
+        <div class="my-add">
+          <label for="my-co-q" class="my-sr">Add a company by name or code</label>
+          <input id="my-co-q" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="Name or ticker, e.g. Apple, NVDA, Toyota, 7203">
+          <ul id="my-co-hits" class="my-hits" hidden></ul>
+        </div>
+        <ul id="my-cos" class="my-list"></ul>
+      </section>
+
+      <section class="my-panel" id="panel-reading" role="tabpanel" aria-labelledby="tab-reading" hidden>
+        <ul id="my-reading" class="my-list"></ul>
+        <details id="my-howto" class="my-howto">
+          <summary>How to Save Articles</summary>
+          <p>Save any article you are reading to Plover, with a summary. Pages you can read behind a
+          paywall are saved too, as text, and only you can see them.</p>
+          <div class="my-save-ways">
+            <div>
+              <p class="my-label">Chrome extension</p>
+              <p><a class="btn" id="my-ext" href="/api/v1/assistant/reading/extension.zip">Download the Extension</a></p>
+              <ol class="my-steps">
+                <li>Unzip the download.</li>
+                <li>In Chrome, open <code>chrome://extensions</code> and switch on Developer mode.</li>
+                <li>Click Load unpacked and choose the unzipped folder. Then click the Plover button on any article.</li>
+              </ol>
+            </div>
+            <div>
+              <p class="my-label">Any browser: a bookmark</p>
+              <p><a class="btn my-bm" id="my-bm" href="#" title="Drag me to your bookmarks bar">Save to Plover</a></p>
+              <p class="my-hint">Drag this button to your bookmarks bar once. Then click the bookmark on an article.</p>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="my-panel" id="panel-key" role="tabpanel" aria-labelledby="tab-key" hidden>
+        <div id="my-key" class="my-key">
+          <p class="my-wait">Loading your key settings…</p>
+        </div>
+      </section>
     </div>
 
     <div id="my-toast" class="my-toast" role="status" aria-live="polite" hidden></div>
@@ -76,7 +109,7 @@
 
 <footer class="site-footer">
   <div class="inner">
-    Your answers, companies and saved articles are private to you.
+    Your chats, companies and AI key are private to you.
     <a href="methodology.html">Methodology</a>
   </div>
 </footer>

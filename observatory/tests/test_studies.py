@@ -72,7 +72,9 @@ class _Base(unittest.TestCase):
         accounts._conn = None
         store.reset_for_tests(path)
         cls._orig = (runner.tools_v2.descriptors, runner.tools_v2.run_tool,
-                     runner.tools_v2.instructions, aapi.tools_v2.search, analysis.load)
+                     runner.tools_v2.instructions, aapi.tools_v2.search, analysis.load, aapi._stock_answer)
+        # the US stock box answers stock questions first; these tests are about the data series
+        aapi._stock_answer = lambda q, prev: None
         cls._complete = gateway.complete
         runner.tools_v2.descriptors = lambda: TOOLS
         runner.tools_v2.run_tool = fake_run_tool
@@ -98,7 +100,7 @@ class _Base(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         (runner.tools_v2.descriptors, runner.tools_v2.run_tool, runner.tools_v2.instructions,
-         aapi.tools_v2.search, analysis.load) = cls._orig
+         aapi.tools_v2.search, analysis.load, aapi._stock_answer) = cls._orig
         gateway.complete = cls._complete
         accounts.DB_PATH, store_path = cls._paths
         accounts._conn = None
@@ -501,3 +503,61 @@ class LowTokenTests(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StockRouteTests(_Base):
+    """A stock question goes to the US stock box first (Your Plover's chat):
+    answered with no key and no free try, kept as a run, and its follow-up
+    hears the question before it. A data-series chat never asks it."""
+
+    def setUp(self):
+        self.asked = []
+        self._env = os.environ.get("FREE_TRIES")
+        os.environ["FREE_TRIES"] = "0"
+
+        def fake(q, prev):
+            self.asked.append((q, prev))
+            if "Nvidia" not in q and "And" not in q:
+                return None
+            return {"headline": "Nvidia Corp's largest reported holder is Blackrock, Inc.", "answer": "5969 managers.",
+                    "figures": [{"label": "Holders reporting", "value": 5969, "unit": "count"}],
+                    "sources": [{"name": "13F holdings", "credit": "Source: SEC."}], "recipe": "company_holders"}
+        aapi._stock_answer = fake
+
+    def tearDown(self):
+        aapi._stock_answer = lambda q, prev: None
+        if self._env is None:
+            os.environ.pop("FREE_TRIES", None)
+        else:
+            os.environ["FREE_TRIES"] = self._env
+        super(StockRouteTests, self).tearDown()
+
+    def test_a_stock_question_needs_no_key_and_is_kept(self):
+        c = self.client()
+        st = c.post("/api/v1/assistant/studies", json={"question": "Who owns Nvidia?"}).json()["study"]
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": "Who owns Nvidia?", "stocks": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        run = r.json()["run"]
+        self.assertTrue(run["stock"]["headline"].startswith("Nvidia"))
+        self.assertEqual(r.json()["study"]["title"][:3], "Who")
+        # the follow-up hears the question before it
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": "And Apple?", "stocks": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.asked[-1], ("And Apple?", "Who owns Nvidia?"))
+        # reopened, both answers are there
+        view = c.get("/api/v1/assistant/studies/%d" % st["id"]).json()
+        self.assertEqual(len(view["study"]["runs"]), 2)
+
+    def test_the_desks_studies_never_ask_the_stock_box(self):
+        c = self.client()
+        st = c.post("/api/v1/assistant/studies", json={"question": "Who owns Nvidia?"}).json()["study"]
+        c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": "Who owns Nvidia?"})
+        self.assertEqual(self.asked, [])
+
+    def test_a_declined_question_falls_through_and_says_what_to_do(self):
+        c = self.client("tok2")
+        st = c.post("/api/v1/assistant/studies", json={"question": "Japan's core inflation?"}).json()["study"]
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": "Japan's core inflation?", "stocks": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("AI Key", r.json()["detail"])
+        self.assertEqual(self.asked, [("Japan's core inflation?", None)])

@@ -201,9 +201,21 @@ class CoverageSearchExamples(unittest.TestCase):
     def test_your_plover_box_shows_examples(self):
         self.assertTrue(self._my_examples())
 
-    @unittest.skipUnless(_data.EQUITY, _data.NO_EQUITY)
+    @unittest.skipUnless(_data.EQUITY and _data.SEC, "equity and SEC databases not both present")
     def test_your_plover_examples_find_companies(self):
-        from app.assistant.api import find_companies
-        for q in self._my_examples() + ["Toyota", "7203", "Sony", "MUFG"]:
+        # the box searches Japan and the US together (/companies?markets=all)
+        from app.assistant.api import find_companies, find_us_companies
+        for q in self._my_examples() + ["Toyota", "7203", "Sony", "MUFG", "Microsoft", "TSLA"]:
             with self.subTest(q=q):
-                self.assertTrue(find_companies(q), "Your Plover's company box finds nothing for %r" % q)
+                self.assertTrue(find_companies(q) or find_us_companies(q),
+                                "Your Plover's company box finds nothing for %r" % q)
+
+    @unittest.skipUnless(_data.SEC, "SEC database not present")
+    def test_us_names_find_the_company_people_mean(self):
+        from app.assistant.api import find_us_companies
+        for q, ticker in (("Apple", "AAPL"), ("apple", "AAPL"), ("NVDA", "NVDA"), ("Nvidia", "NVDA"),
+                          ("Tesla", "TSLA"), ("Amazon", "AMZN")):
+            with self.subTest(q=q):
+                hits = find_us_companies(q)
+                self.assertTrue(hits and hits[0]["ticker"] == ticker,
+                                "%r should find %s first, found %r" % (q, ticker, [h["ticker"] for h in hits[:3]]))

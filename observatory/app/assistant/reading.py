@@ -40,7 +40,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from .. import accounts, research_clips
-from . import codex, gateway, keychain, store
+from . import codex, free, gateway, keychain, store
 
 KEEP = 200
 SUMMARY_INPUT_MAX = 14000      # characters of article sent to the model
@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS ia_reading_by_account ON ia_reading (account_id, crea
 
 _ready = set()
 
-NO_KEY = ("Summaries run on your own AI key. Add one under Settings, then try again.")
+NO_KEY = ("Summaries run on your own AI key. Add one in the AI Key section, then try again.")
 
 
 class ReadingError(ValueError):
@@ -187,24 +187,28 @@ def _article_text(item):
     return "\n\n".join(p for p in parts if p)
 
 
-def summarise(account_id, item_id):
-    """Summarise a saved article on the account's own model key. Returns the
-    item with its summary; raises ReadingError worded for the reader."""
+def summarise(account_id, item_id, house=None):
+    """Summarise a saved article on the account's own model key, or on the
+    server's for a free try (`house`, from free.take). Returns the item with
+    its summary; raises ReadingError worded for the reader."""
     item = get(account_id, item_id)
     if item is None:
         raise LookupError(item_id)
-    desk = store.desk(account_id)
-    provider = desk.get("model_provider")
-    if not provider or not desk.get("model_key_set"):
-        raise ReadingError(NO_KEY)
-    if provider == codex.PROVIDER:
-        raise ReadingError("Summaries need an AI key; a ChatGPT plan through Codex cannot make "
-                           "them yet. Add a key under Settings.")
-    try:
-        key = keychain.open_(store.desk_secrets(account_id)["model_key_ct"])
-    except (ValueError, TypeError):
-        raise ReadingError("Your AI key could not be read. Add it again under Settings.")
-    model = desk.get("study_model") or desk.get("model_name") or gateway.default_model(provider)
+    if house:
+        provider, key, model = house["provider"], house["key"], house["model"]
+    else:
+        desk = store.desk(account_id)
+        provider = desk.get("model_provider")
+        if not provider or not desk.get("model_key_set"):
+            raise ReadingError(NO_KEY)
+        if provider == codex.PROVIDER:
+            raise ReadingError("Summaries need an AI key; a ChatGPT plan through Codex cannot make "
+                               "them yet. Add a key in the AI Key section.")
+        try:
+            key = keychain.open_(store.desk_secrets(account_id)["model_key_ct"])
+        except (ValueError, TypeError):
+            raise ReadingError("Your AI key could not be read. Add it again in the AI Key section.")
+        model = desk.get("study_model") or desk.get("model_name") or gateway.default_model(provider)
     head = item["title"] + (" (" + item["site"] + ")" if item["site"] else "")
     messages = [{"role": "system", "content": SUMMARY_RULES},
                 {"role": "user", "content": head + "\n\n" + _article_text(item)}]
@@ -328,11 +332,27 @@ def delete_article(item_id: int, request: Request):
 @router.post("/{item_id}/summary")
 async def summarise_article(item_id: int, request: Request):
     aid = _account(request)["id"]
+    house = None
+    if not free.own_key(store.desk(aid)):
+        if get(aid, item_id) is None:
+            raise HTTPException(404, GONE)
+        try:
+            house = free.take(aid)
+        except free.NoTries as exc:
+            raise HTTPException(400, str(exc))
     try:
-        item = await run_in_threadpool(summarise, aid, item_id)
+        item = await run_in_threadpool(summarise, aid, item_id, house)
     except LookupError:
+        if house:
+            free.give_back(aid)
         raise HTTPException(404, GONE)
     except ReadingError as exc:
+        if house:
+            free.give_back(aid)
         raise HTTPException(400, str(exc))
+    except Exception:
+        if house:
+            free.give_back(aid)
+        raise
     item.pop("blocks", None)
     return item

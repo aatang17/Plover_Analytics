@@ -309,6 +309,16 @@ CREATE TABLE IF NOT EXISTS ia_analyses (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ia_analyses_run ON ia_analyses (run_id, id);
+-- free tries on the server's own key (free.py): per account, and per day for everyone
+CREATE TABLE IF NOT EXISTS ia_free_uses (
+  account_id INTEGER PRIMARY KEY,
+  used INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ia_free_days (
+  day TEXT PRIMARY KEY,
+  used INTEGER NOT NULL DEFAULT 0
+);
 """
 
 APPROVAL_TTL_SECONDS = 7 * 24 * 60 * 60

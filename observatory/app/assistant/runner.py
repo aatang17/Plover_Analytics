@@ -289,8 +289,11 @@ def _fail(msg):
 class Run(object):
     """State for one run; `execute` drives it."""
 
-    def __init__(self, account_id, hire, trigger, task, history=None, mode="desk", remember=False):
+    def __init__(self, account_id, hire, trigger, task, history=None, mode="desk", remember=False,
+                 house=None):
         self.account_id = account_id
+        # a free try (free.py): this one run uses the server's key, not the desk's
+        self.house = house
         self.hire = hire
         self.spec = specialists.get(hire["slug"])
         if self.spec is None:
@@ -460,10 +463,12 @@ class Run(object):
         model = (desk.get("monitor_model") if tier == "monitor" else None) or \
             (desk.get("study_model") if tier == "study" else None) or \
             desk["model_name"] or gateway.default_model(provider or "")
+        if self.house:
+            provider, model = self.house["provider"], self.house["model"]
         self.run_id = store.start_run(self.account_id, self.hire["id"], self.spec["slug"],
                                       self.hire["version"], self.trigger, self.task, model)
         try:
-            key = self._model_key(desk)
+            key = self.house["key"] if self.house else self._model_key(desk)
         except RunnerError as exc:
             store.end_run(self.run_id, "failed", error=str(exc))
             return self._result("failed", "", str(exc))
@@ -664,8 +669,9 @@ class Run(object):
                 "calls": store.calls(self.run_id) if self.run_id else []}
 
 
-def run(account_id, hire, trigger, task, history=None, mode="desk", remember=False):
-    return Run(account_id, hire, trigger, task, history=history, mode=mode, remember=remember).execute()
+def run(account_id, hire, trigger, task, history=None, mode="desk", remember=False, house=None):
+    return Run(account_id, hire, trigger, task, history=history, mode=mode, remember=remember,
+               house=house).execute()
 
 
 # --------------------------------------------------------------------- CLI

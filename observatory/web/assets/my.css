@@ -2,39 +2,98 @@
    only (tokens.css), so dark mode follows the theme. No shadows, corners at
    most 3px, outline buttons except the one primary action. */
 
-.my { max-width: 820px; margin: 0 auto; font-variant-numeric: tabular-nums; }
-.my-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--obs-ink); margin: 12px 0 18px; }
+.my { max-width: 1120px; margin: 0 auto; font-variant-numeric: tabular-nums; }
 .my-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.my-gate { font-size: 15px; color: var(--obs-text); line-height: 1.55; }
+.my-gate { max-width: 760px; margin: 24px auto 0; font-size: 15px; color: var(--obs-text); line-height: 1.55; }
 .my-gate p { margin: 0 0 12px; }
 .my-asked-out strong { color: var(--obs-ink); }
 .my-gate .btn { font-size: 14px; padding: 9px 16px; text-decoration: none; display: inline-flex; }
 
-/* the ask box */
-.my-box { display: flex; gap: 8px; align-items: center; border: 1px solid var(--obs-text-faint);
-  border-radius: 3px; padding: 5px 5px 5px 14px; background: var(--obs-surface); }
+/* the tab bar */
+.my-tabs { display: flex; gap: 4px; margin: 4px 0 24px; border-bottom: 1px solid var(--obs-border); overflow-x: auto;
+  scrollbar-width: none; }
+.my-tabs::-webkit-scrollbar { display: none; }
+.my-tabs a { flex: 0 0 auto; display: inline-flex; align-items: baseline; gap: 6px; padding: 12px 14px 11px; margin-bottom: -1px;
+  font-size: 15px; font-weight: 600; color: var(--obs-text-muted); text-decoration: none; border-bottom: 2px solid transparent; }
+.my-tabs a:hover { color: var(--obs-ink); }
+.my-tabs a[hidden] { display: none; }
+.my-tabs a.is-on { color: var(--obs-ink); border-bottom-color: var(--obs-primary); }
+.my-count { font-size: 12.5px; font-weight: 600; color: var(--obs-text-muted); }
+.my-count:empty { display: none; }
+.my-panel { max-width: 820px; margin: 0 auto; }
+.my-panel[hidden] { display: none; }
+
+/* chat: past chats down the side, the conversation beside them */
+.my-chat { max-width: none; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 40px; align-items: start; }
+.my-side { padding-right: 20px; border-right: 1px solid var(--obs-border); min-height: calc(100vh - 220px); }
+.my-chat[hidden] { display: none; }
+.my-side { position: sticky; top: 92px; display: flex; flex-direction: column; gap: 10px; }
+.my-new { justify-content: center; font-size: 14px; padding: 9px 14px; text-decoration: none; display: flex; }
+.my-side-toggle { display: none; }
+.my-chats { list-style: none; margin: 4px 0 0; padding: 0; max-height: calc(100vh - 200px); overflow-y: auto; }
+.my-chat-row { display: flex; align-items: center; gap: 4px; border-left: 2px solid transparent; }
+.my-chat-row a { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 8px 6px 8px 10px;
+  text-decoration: none; color: inherit; }
+.my-chat-row:hover, .my-chat-row.is-on { background: var(--obs-surface-subtle); }
+.my-chat-row.is-on { border-left-color: var(--obs-primary); }
+.my-chat-name { font-size: 14px; font-weight: 500; color: var(--obs-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.my-x-del { flex: 0 0 auto; font: inherit; font-size: 12px; color: var(--obs-text-muted); background: none; border: 0;
+  padding: 6px 6px; cursor: pointer; }
+.my-x-del:hover { color: var(--obs-trust-stale); text-decoration: underline; text-underline-offset: 2px; }
+.my-chats .my-empty { padding: 8px 10px; font-size: 13px; border-bottom: 0; }
+
+.my-convo { max-width: 760px; width: 100%; min-height: calc(100vh - 240px); display: flex; flex-direction: column; }
+.my-chat.is-empty .my-convo { justify-content: flex-start; padding-top: 8vh; }
+.my-hello { margin: 0 0 20px; }
+.my-hello[hidden] { display: none; }
+.my-hello-head { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--obs-ink); }
+.my-hello-sub { margin: 0; font-size: 15px; line-height: 1.5; color: var(--obs-text-muted); }
+.my-thread { flex: 1 1 auto; }
+.my-thread:empty { display: none; }
+.my-convo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 12px;
+  margin: 0 0 8px; border-bottom: 1px solid var(--obs-border); }
+.my-convo-title { margin: 0; min-width: 0; font-size: 15px; font-weight: 700; color: var(--obs-ink); overflow-wrap: anywhere; }
+.my-msg { margin: 0; }
+.my-me { width: fit-content; max-width: 80%; margin: 20px 0 14px auto; padding: 10px 14px; background: var(--obs-surface-subtle);
+  border: 1px solid var(--obs-border); border-radius: 3px; font-size: 15.5px; line-height: 1.5; color: var(--obs-ink); }
+.my-me p { margin: 0; overflow-wrap: anywhere; }
+/* an answer: one bordered panel, headed by who is speaking */
+.my-plover { margin: 0 0 8px; padding: 14px 20px 16px; background: var(--obs-surface); border: 1px solid var(--obs-border);
+  border-left: 3px solid var(--obs-primary); border-radius: 3px; }
+.my-plover-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; }
+.my-who { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--obs-primary); }
+.my-plover .my-wait, .my-plover .my-err { margin: 0; }
+.my-plover .my-acts { margin-bottom: 0; }
+.my-fail { border-left-color: var(--obs-trust-stale); }
+.my-thread > .my-wait, .my-thread > .my-err { margin: 6px 0 12px; }
+
+/* the message box: under the greeting when empty, pinned to the bottom in a chat */
+.my-composer { margin: 0; }
+.my-chat:not(.is-empty) .my-composer { position: sticky; bottom: 0; z-index: 4; padding: 12px 0 16px; background: var(--obs-surface); }
+.my-box { display: flex; flex-direction: column; border: 1px solid var(--obs-text-faint);
+  border-radius: 4px; padding: 10px 10px 10px 16px; background: var(--obs-surface); }
+.my-box-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.my-hint-keys { font-size: 12px; color: var(--obs-text-muted); }
 .my-box:focus-within { border-color: var(--obs-primary); box-shadow: 0 0 0 2px var(--obs-focus-soft); }
-.my-box input { flex: 1 1 auto; min-width: 0; height: 44px; border: 0; outline: none; background: transparent;
-  font: inherit; font-size: 17px; color: var(--obs-ink); }
-.my-box input, .my-box input:focus { border: 0; border-radius: 0; box-shadow: none; padding: 0; width: auto; }
-.my-box input::placeholder, .my-add input::placeholder { color: var(--obs-text-muted); }
-.my-go { flex: 0 0 auto; height: 44px; min-width: 88px; font-size: 15px; font-weight: 600; }
-.my-tries { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--obs-text-muted); }
-.my-try { font: inherit; font-size: 13.5px; color: var(--obs-primary); background: var(--obs-surface);
-  border: 1px solid var(--obs-border); border-radius: 3px; padding: 7px 11px; cursor: pointer; text-align: left; }
-.my-try:hover { border-color: var(--obs-primary); }
-.my-note { margin: 14px 0 0; padding: 10px 14px; border: 1px solid var(--obs-border); border-radius: 3px;
-  font-size: 14px; line-height: 1.5; color: var(--obs-text); background: var(--obs-surface-subtle); }
+.my-box textarea { flex: 1 1 auto; min-width: 0; min-height: 52px; max-height: 200px; resize: none; border: 0; outline: none;
+  background: transparent; font: inherit; font-size: 16px; line-height: 1.45; color: var(--obs-ink); padding: 9px 0; box-sizing: border-box; }
+.my-box textarea, .my-box textarea:focus { border: 0; border-radius: 0; box-shadow: none; width: auto; }
+.my-box textarea::placeholder, .my-add input::placeholder { color: var(--obs-text-muted); }
+.my-go { flex: 0 0 auto; height: 38px; min-width: 84px; font-size: 15px; font-weight: 600; }
+.my-note { margin: 8px 2px 0; font-size: 13px; line-height: 1.5; color: var(--obs-text-muted); }
+.my-note[hidden] { display: none; }
 .my-note a, .my-err a, .my-gate a:not(.btn) { color: var(--obs-primary); }
-.my-follow { margin: 10px 0 0; font-size: 14px; color: var(--obs-text); }
+/* example questions: one quiet list under the box */
+.my-tries { list-style: none; margin: 20px 0 0; padding: 0; }
+.my-tries[hidden] { display: none; }
+.my-try { display: block; width: 100%; padding: 11px 2px; font: inherit; font-size: 15px; line-height: 1.4; text-align: left;
+  color: var(--obs-primary); background: none; border: 0; border-bottom: 1px solid var(--obs-border); cursor: pointer; }
+.my-tries li:first-child .my-try { border-top: 1px solid var(--obs-border); }
+.my-try:hover { background: var(--obs-surface-subtle); text-decoration: underline; text-underline-offset: 2px; }
 .my-link { font: inherit; font-size: 14px; color: var(--obs-primary); background: none; border: 0; padding: 0;
   cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
 /* an answer */
-.my-answer { margin-top: 20px; }
-.my-answer:empty { display: none; }
-.my-ans { border-top: 1px solid var(--obs-border); padding-top: 18px; }
-.my-asked { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--obs-text-muted); }
 .my-note-text p { margin: 0 0 10px; font-size: 16px; line-height: 1.6; color: var(--obs-ink); }
 .my-figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px 20px; margin: 16px 0;
   padding: 12px 0; border-top: 1px solid var(--obs-border); border-bottom: 1px solid var(--obs-border); }
@@ -45,7 +104,7 @@
 .my-plot { width: 100%; height: 340px; }
 .my-src { margin: 8px 0 0; font-size: 12.5px; color: var(--obs-text-muted); }
 .my-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
-.my-acts .btn, .my-save .btn, .sv-btn { font-size: 14px; padding: 9px 14px; text-decoration: none; display: inline-flex; align-items: center; }
+.my-acts .btn, .sv-btn { font-size: 14px; padding: 9px 14px; text-decoration: none; display: inline-flex; align-items: center; }
 .my-wait { font-size: 14px; color: var(--obs-text-muted); margin: 0; }
 .my-err { font-size: 14px; line-height: 1.5; color: var(--obs-trust-stale); margin: 0 0 10px; }
 
@@ -59,7 +118,7 @@
 a.my-name { text-decoration: none; }
 a.my-name:hover { color: var(--obs-primary); text-decoration: underline; text-underline-offset: 2px; }
 .my-meta { font-size: 12.5px; color: var(--obs-text-muted); }
-.my-when { flex: 0 0 auto; width: 200px; font-size: 14px; color: var(--obs-ink); text-align: right; }
+.my-when { flex: 0 0 auto; width: 300px; font-size: 14px; color: var(--obs-ink); text-align: right; }
 .my-del { flex: 0 0 auto; font: inherit; font-size: 13px; color: var(--obs-text-muted); background: var(--obs-surface);
   border: 1px solid var(--obs-border); border-radius: 3px; padding: 7px 10px; cursor: pointer; }
 .my-del:hover { color: var(--obs-trust-stale); border-color: var(--obs-trust-stale); }
@@ -78,9 +137,12 @@ a.my-name:hover { color: var(--obs-primary); text-decoration: underline; text-un
 .my-hits li button:hover, .my-hits li button:focus { background: var(--obs-surface-subtle); outline: none; }
 .my-hits .my-empty { padding: 10px 12px; border-bottom: 0; }
 
-/* saving articles */
-.my-save { font-size: 14px; line-height: 1.55; color: var(--obs-text); margin: 0 0 16px; }
-.my-save > p { margin: 0 0 12px; }
+/* saving articles: the how-to sits under the list, open while it is empty */
+.my-howto { margin: 18px 0 0; font-size: 14px; line-height: 1.55; color: var(--obs-text); }
+.my-howto summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--obs-primary); padding: 4px 0; }
+.my-howto[open] summary { margin-bottom: 10px; }
+.my-howto > p { margin: 0 0 14px; }
+.my-howto .btn { font-size: 14px; padding: 9px 14px; text-decoration: none; display: inline-flex; align-items: center; }
 .my-save-ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 28px; }
 .my-save-ways p { margin: 0 0 8px; }
 .my-label { font-size: 12px; font-weight: 700; color: var(--obs-ink); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -95,6 +157,20 @@ a.my-name:hover { color: var(--obs-primary); text-decoration: underline; text-un
 .my-sum li { margin: 0 0 4px; }
 .my-art-sum .my-label { margin: 10px 0 0; }
 
+/* the AI key */
+.my-key { font-size: 14px; line-height: 1.55; color: var(--obs-text); }
+.my-key > p { margin: 0 0 12px; }
+.my-key strong { color: var(--obs-ink); }
+.my-key-form { display: flex; gap: 8px; align-items: stretch; }
+.my-key-form select, .my-key-form input { height: 42px; box-sizing: border-box; font: inherit; font-size: 14.5px; color: var(--obs-ink);
+  background: var(--obs-surface); border: 1px solid var(--obs-text-faint); border-radius: 3px; padding: 0 10px; }
+.my-key-form select { flex: 0 0 140px; }
+.my-key-form input { flex: 1 1 auto; min-width: 0; }
+.my-key-form select:focus, .my-key-form input:focus { outline: none; border-color: var(--obs-primary); box-shadow: 0 0 0 2px var(--obs-focus-soft); }
+.my-key-form .btn { flex: 0 0 auto; font-size: 14px; padding: 0 16px; }
+.my-key-msg { margin: 8px 0 0; min-height: 1.5em; font-size: 13.5px; color: var(--obs-text-muted); }
+.my-key-msg.my-err { color: var(--obs-trust-stale); }
+
 /* the message with Undo */
 .my-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; display: flex;
   align-items: center; gap: 14px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 8px 8px 8px 16px;
@@ -104,10 +180,28 @@ a.my-name:hover { color: var(--obs-primary); text-decoration: underline; text-un
   padding: 8px 6px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .my-x { font: inherit; font-size: 18px; line-height: 1; color: var(--obs-text-muted); background: none; border: 0; padding: 8px 8px; cursor: pointer; }
 
+@media (max-width: 900px) {
+  .my-chat { grid-template-columns: minmax(0, 1fr); }
+  .my-side { position: static; flex-direction: row; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding-right: 0; border-right: 0; min-height: 0; }
+  .my-new { flex: 1 1 0; }
+  .my-side-toggle { display: flex; flex: 1 1 0; justify-content: center; align-items: center; font: inherit; font-size: 14px;
+    color: var(--obs-primary); background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 3px;
+    padding: 9px 14px; cursor: pointer; }
+  .my-chats { display: none; flex: 1 1 100%; max-height: 50vh; margin: 0; border: 1px solid var(--obs-border); border-radius: 3px; }
+  .my-chats.is-open { display: block; }
+  .my-chat.is-empty .my-convo { padding-top: 2vh; }
+  .my-convo { min-height: 0; }
+}
 @media (max-width: 640px) {
-  .my-title { font-size: 22px; }
-  .my-box input { font-size: 16px; }
+  .my-hello-head { font-size: 22px; }
+  .my-me { max-width: 90%; }
+  .my-plover { padding: 12px 14px 14px; }
+  .my-hint-keys { display: none; }
+  .my-tabs a { padding: 12px 10px 11px; font-size: 14.5px; }
   .my-save-ways { grid-template-columns: minmax(0, 1fr); }
+  .my-key-form { flex-wrap: wrap; }
+  .my-key-form select { flex: 1 1 100%; }
+  .my-key-form .btn { height: 42px; }
   .my-row { flex-wrap: wrap; gap: 4px 10px; padding-bottom: 10px; }
   .my-row .my-open { flex-basis: 100%; padding-bottom: 2px; }
   .my-when { width: auto; text-align: left; flex: 1 1 auto; }
@@ -132,3 +226,43 @@ a.my-name:hover { color: var(--obs-primary); text-decoration: underline; text-un
 .sv-label { font-size: 12px; font-weight: 700; color: var(--obs-ink); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 14px; }
 .sv-err { font-size: 14px; color: var(--obs-trust-stale); }
 .sv-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px !important; }
+
+/* the Analyst's note: lists, tables and code inside an answer */
+.my-note-text ul { margin: 0 0 10px; padding-left: 20px; font-size: 16px; line-height: 1.6; color: var(--obs-ink); }
+.my-note-text code { font-size: 0.9em; padding: 0 3px; background: var(--obs-surface-subtle); border: 1px solid var(--obs-border); border-radius: 3px; }
+.my-tbl { overflow-x: auto; margin: 4px 0 12px; }
+.my-tbl table { border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.my-tbl th, .my-tbl td { padding: 7px 16px 7px 0; border-bottom: 1px solid var(--obs-border); text-align: left; white-space: nowrap; }
+.my-tbl th { font-size: 12px; font-weight: 600; color: var(--obs-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.my-tbl td { color: var(--obs-ink); }
+.my-tbl .num { text-align: right; }
+
+/* the cookie banner sits on the bottom edge until answered: keep the box above it */
+body.has-consent-bar .my-chat:not(.is-empty) .my-composer { bottom: 76px; }
+@media (max-width: 720px) {
+  body.has-consent-bar .my-chat:not(.is-empty) .my-composer { bottom: 168px; }
+}
+
+/* a few lines on what a tab is for */
+.my-intro { margin: 0 0 16px; font-size: 15px; line-height: 1.55; color: var(--obs-text); }
+
+.my-box-foot .my-go { margin-left: auto; }
+/* in a chat the box starts one line high, so it hides less of the answer */
+.my-chat:not(.is-empty) .my-box textarea { min-height: 30px; padding: 4px 0; }
+.my-chat:not(.is-empty) .my-box { padding-top: 8px; padding-bottom: 8px; }
+.my-chat:not(.is-empty) .my-composer { padding: 10px 0 12px; }
+
+/* a stock answer: the headline first, the working behind a fold */
+.my-head-line { margin: 0 0 8px; font-size: 17px; font-weight: 700; line-height: 1.45; color: var(--obs-ink); }
+.my-quote { margin: 10px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--obs-border); font-size: 15px; line-height: 1.55; color: var(--obs-text); }
+.my-quote p { margin: 0 0 6px; }
+.my-chart .my-label { margin: 0 0 6px; }
+.my-calc { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--obs-text-muted); }
+.my-calc summary { cursor: pointer; color: var(--obs-primary); font-weight: 600; }
+.my-calc ul { margin: 8px 0 0; padding-left: 18px; }
+.my-calc li { margin: 0 0 4px; overflow-wrap: anywhere; }
+/* example questions in two groups */
+.my-tries-group { margin: 16px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--obs-text-muted); }
+.my-tries li.my-tries-group:first-child { margin-top: 0; }
+.my-tries li.my-tries-group + li .my-try { border-top: 1px solid var(--obs-border); }
+.my-tbl th { white-space: normal; vertical-align: bottom; }

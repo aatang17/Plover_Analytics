@@ -78,6 +78,7 @@ class Reading(unittest.TestCase):
         db.execute("DELETE FROM ia_desks")
         db.commit()
         gateway.complete = self._complete
+        os.environ["FREE_TRIES"] = "0"      # free tries on the server's key: tests/test_free_tries.py
 
     def client(self, token="tok-a"):
         c = TestClient(self.app)
@@ -131,7 +132,7 @@ class Reading(unittest.TestCase):
         gateway.complete = lambda *a, **k: calls.append(a) or {"text": "- x"}
         r = self.client().post("/api/v1/assistant/reading/%d/summary" % iid)
         self.assertEqual(r.status_code, 400)
-        self.assertIn("Settings", r.json()["detail"])
+        self.assertIn("AI Key section", r.json()["detail"])
         self.assertEqual(calls, [])
 
     def test_summary_with_a_key_is_kept(self):

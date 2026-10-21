@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from .. import accounts, analysis, recipes, tools_v2
-from . import (codex, delivery, drive, gateway, keychain, market_data, mcp_client, memory, runner,
+from . import (codex, delivery, drive, free, gateway, keychain, market_data, mcp_client, memory, runner,
                specialists, store, study_export)
 
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
@@ -129,6 +129,55 @@ def find_companies(q, limit=8):
             continue
         out.append({"code": code, "name_en": (r.get("name_en") or "").strip() or None,
                     "name_ja": _clean_ja(r.get("name")) or None})
+        if len(out) >= limit:
+            break
+    return out
+
+
+_US_CODE = re.compile(r"^cik:(\d{1,10})$", re.I)
+_US_FORMS = set("inc corp corporation co company ltd plc holdings group sa nv ag the".split())
+
+
+def find_us_companies(q, limit=8):
+    """US listed companies by ticker or name, from the SEC filings the
+    platform holds (sec_api.companies), best match first: the exact ticker,
+    then a name starting with the query, then the rest. Each is keyed by
+    its cik: code, the platform's US namespace. Empty when there is no SEC
+    database or no match."""
+    q = (q or "").strip()
+    if not q:
+        return []
+    try:
+        from .. import sec_api
+        rows = sec_api.companies(q=q, exchange="", sic="", limit=60).get("companies") or []
+    except Exception:  # noqa: BLE001 — no SEC database here
+        return []
+    qt, ql = q.upper().replace(".", "-"), _bare(q)
+
+    def plain(name):
+        # "APPLE INC" and "NVIDIA CORP/" are what a person calls Apple and Nvidia
+        words = re.sub(r"[^a-z0-9 ]+", " ", (name or "").lower()).split()
+        while words and words[-1] in _US_FORMS:
+            words.pop()
+        return "".join(words)
+
+    def rank(i_r):
+        i, r = i_r
+        if (r.get("ticker") or "").upper() == qt or r.get("sec_code") == q.lower():
+            return (0, i)
+        if plain(r.get("name")) == ql:
+            return (0.5, i)
+        if _bare(r.get("name")).startswith(ql):
+            return (1, -(r.get("filings") or 0), i)
+        return (2, -(r.get("filings") or 0), i)
+    out = []
+    for i_r in sorted(enumerate(rows), key=rank):
+        r = i_r[1]
+        if not r.get("ticker"):
+            continue                      # a filer with no listed shares
+        out.append({"code": r["sec_code"], "name_en": (r.get("name") or "").strip() or None,
+                    "name_ja": None, "ticker": r["ticker"], "exchange": r.get("exchange"),
+                    "market": "US", "exact": rank(i_r)[0] <= 0.5})
         if len(out) >= limit:
             break
     return out
@@ -246,12 +295,24 @@ class CoverageRequest(BaseModel):
 
 
 @router.get("/companies")
-def companies(request: Request, q: str = "", list_id: int = 0):
+def companies(request: Request, q: str = "", list_id: int = 0, markets: str = ""):
     """Type-ahead for the coverage box: name (English or Japanese), code or
-    nickname in, up to eight companies out, each marked if already on the list."""
+    nickname in, up to eight companies out, each marked if already on the list.
+    markets=all adds US listed companies (Your Plover's box); the desk's own
+    coverage tools stay Japanese."""
     aid = _account(request)["id"]
     covered = set(c["sec_code"] for c in store.coverage(aid, list_id or None))
     out = find_companies(q)
+    if markets == "all":
+        for c in out:
+            c["market"] = "JP"
+        us = find_us_companies(q)
+        exact = [c for c in us if c.pop("exact")]
+        for c in us:
+            c.pop("exact", None)
+        # the US company the words name exactly (AAPL, "Apple") first, then
+        # Japan's best, then the rest of the US
+        out = (exact + out + [c for c in us if c not in exact])[:8]
     for c in out:
         c["covered"] = c["code"] in covered
     return {"companies": out}
@@ -281,7 +342,7 @@ def coverage(request: Request, list_id: int = 0):
     rows = store.coverage(aid, lid)
     # Entries saved before Japanese names were kept get theirs once, here.
     for r in rows:
-        if not r.get("name_ja"):
+        if not r.get("name_ja") and not str(r["sec_code"]).startswith("cik:"):
             _en, ja = _company(r["sec_code"])
             if ja:
                 store.set_name_ja(lid, r["sec_code"], ja)
@@ -294,6 +355,13 @@ def add_coverage(payload: CoverageRequest, request: Request):
     aid = _account(request)["id"]
     lid = _list_or_404(aid, payload.list_id)
     code = (payload.code or "").strip().upper()
+    us = _US_CODE.match(code)
+    if us:
+        code = "cik:%d" % int(us.group(1))
+        hit = [c for c in find_us_companies(code, limit=3) if c["code"] == code]
+        if not hit:
+            raise HTTPException(404, "The platform holds no SEC filings for that company.")
+        return {"coverage": store.add_coverage(aid, code, hit[0]["name_en"], lid, None)}
     if not _CODE.match(code):
         raise HTTPException(400, "A securities code is four characters, such as 7203.")
     name, name_ja = _company(code)
@@ -305,7 +373,9 @@ def add_coverage(payload: CoverageRequest, request: Request):
 @router.delete("/coverage/{code}")
 def remove_coverage(code: str, request: Request, list_id: int = 0):
     aid = _account(request)["id"]
-    return {"coverage": store.remove_coverage(aid, code.upper(), _list_or_404(aid, list_id))}
+    us = _US_CODE.match(code.strip())
+    code = "cik:%d" % int(us.group(1)) if us else code.upper()
+    return {"coverage": store.remove_coverage(aid, code, _list_or_404(aid, list_id))}
 
 
 # ---------------------------------------------------------- coverage lists
@@ -595,6 +665,7 @@ def settings(request: Request):
     if d["codex"]["available"]:
         d["providers"].append({"id": codex.PROVIDER, "label": codex.LABEL, "default_model": ""})
     d["keychain"] = keychain.enabled()
+    d["free"] = free.status(aid)
     return d
 
 
@@ -1134,6 +1205,9 @@ class StudyRun(BaseModel):
 
 class StudyAsk(BaseModel):
     question: str
+    # Your Plover's chat asks the US stock box first; the desk's Studies,
+    # which draw a query's rows, do not
+    stocks: bool = False
 
 
 class StudyRecipe(BaseModel):
@@ -1182,7 +1256,8 @@ def _run_view(run):
            "rows_total": res.get("rows_total", len(res.get("rows") or [])),
            "sources": [dict((k, s.get(k)) for k in ("name", "series", "title", "unit", "release", "credit"))
                        for s in res.get("sources") or []],
-           "summary": res.get("summary"), "ran_at": res.get("ran_at"), "chart": None, "chart_error": None}
+           "summary": res.get("summary"), "ran_at": res.get("ran_at"), "chart": None, "chart_error": None,
+           "stock": res.get("stock")}
     try:
         out["chart"] = analysis.chart_spec(res) if out["rows"] else None
     except analysis.AnalysisError as exc:
@@ -1328,21 +1403,25 @@ _NOT_A_RECIPE = re.compile(r"volatil|standard deviation|std ?dev|variance|correl
 NO_MATCH = "no"
 
 
-def _match_recipe(aid, desk, question, hints):
+def _match_recipe(aid, desk, question, hints, house=None):
     """One short AI call, no tools: the question matched to a recipe and its
     blanks. Returns (spec, tokens, matched_id); NO_MATCH when the model said
     nothing fits; None when the match was not tried (no usable model, no
-    hints, or a question no recipe computes)."""
-    provider = desk.get("model_provider")
-    if not provider or provider == codex.PROVIDER or not desk.get("model_key_set") or not hints:
+    hints, or a question no recipe computes). `house` is a free try's key
+    (free.take), used instead of the desk's."""
+    if _NOT_A_RECIPE.search(question or "") or not hints:
         return None
-    if _NOT_A_RECIPE.search(question or ""):
-        return None
-    try:
-        key = keychain.open_(store.desk_secrets(aid)["model_key_ct"])
-    except (ValueError, TypeError):
-        return None
-    model = desk.get("study_model") or desk["model_name"] or gateway.default_model(provider)
+    if house:
+        provider, key, model = house["provider"], house["key"], house["model"]
+    else:
+        provider = desk.get("model_provider")
+        if not provider or provider == codex.PROVIDER or not desk.get("model_key_set"):
+            return None
+        try:
+            key = keychain.open_(store.desk_secrets(aid)["model_key_ct"])
+        except (ValueError, TypeError):
+            return None
+        model = desk.get("study_model") or desk["model_name"] or gateway.default_model(provider)
     cat = "; ".join("%s (%s; slots %s%s)" % (r["id"], r["label"], ", ".join(
         s["name"] + ("?" if s["optional"] else "") for s in r["slots"]),
         "; options " + json.dumps(r["options"]) if r["options"] else "") for r in recipes.catalogue())
@@ -1385,14 +1464,59 @@ async def ask_study(study_id: int, payload: StudyAsk, request: Request):
     q = (payload.question or "").strip()
     if not q:
         raise HTTPException(400, "Ask something: e.g. how far apart are US and Japanese 10-year yields?")
-    hints = await run_in_threadpool(analysis.suggest_series, q)
     desk = store.desk(aid)
+    # A stock question goes to the US stock box first (stock_recipes, as the
+    # front page serves it): answered by code, on the server's own reader,
+    # free and without a key, so it takes no free try. A chat that is already
+    # a data-series study keeps to that; a declined question falls through.
+    if payload.stocks and not st["spec"]:
+        runs = [r for r in st.get("runs") or [] if r.get("question")]
+        prev = runs[0]["question"] if runs else None
+        a = await run_in_threadpool(_stock_answer, q, prev)
+        if a:
+            if not st["question"] or st["title"] == "Untitled study":
+                store.update_study(aid, study_id, question=q,
+                                   title=st["title"] if st["title"] != "Untitled study" else _title_from(q))
+            rid = store.add_study_run(aid, study_id, "stocks", {"stock": a, "spec": {}, "rows": [], "columns": []},
+                                      question=q, note=a.get("headline") or "")
+            return _study_view(aid, study_id, rid)
+    # no key of their own: one of the free tries on the server's key, given
+    # back if no answer comes of it
+    house = None
+    if not free.own_key(desk):
+        try:
+            house = free.take(aid)
+        except free.NoTries as exc:
+            raise HTTPException(400, str(exc))
+    try:
+        return await _answer_study(aid, study_id, st, q, desk, house)
+    except BaseException:
+        if house:
+            free.give_back(aid)
+        raise
+
+
+def _stock_answer(q, prev):
+    """The US stock box's answer to a question, or None when it declines
+    (not a stock question, or no SEC database here)."""
+    try:
+        from .. import sec_api, stock_recipes
+        a = stock_recipes.answer(sec_api._require(), q, prev)
+    except HTTPException:
+        return None
+    except Exception:  # noqa: BLE001 — a failure here must not stop the data-series route
+        return None
+    return a if a and a.get("headline") else None
+
+
+async def _answer_study(aid, study_id, st, q, desk, house):
+    hints = await run_in_threadpool(analysis.suggest_series, q)
     if not st["spec"]:                      # a follow-up changes a query; a fresh question may match a recipe
-        matched = await run_in_threadpool(_match_recipe, aid, desk, q, hints)
+        matched = await run_in_threadpool(_match_recipe, aid, desk, q, hints, house)
         if matched == NO_MATCH:
             # a miss is usually a missing series: once more, with a wider search
             wider = await run_in_threadpool(analysis.suggest_series, q, 16, 5)
-            matched = await run_in_threadpool(_match_recipe, aid, desk, q, wider) if len(wider) > len(hints) else None
+            matched = await run_in_threadpool(_match_recipe, aid, desk, q, wider, house) if len(wider) > len(hints) else None
             if matched == NO_MATCH:
                 matched = None
             elif matched:
@@ -1418,7 +1542,7 @@ async def ask_study(study_id: int, payload: StudyAsk, request: Request):
         task += ("\n\nThe study's current analysis, to change or build on if the question is a "
                  "follow-up:\n" + json.dumps(st["spec"], ensure_ascii=False))
     h = _study_hire(aid)
-    out = await run_in_threadpool(runner.run, aid, h, "study", task, None, "thread", False)
+    out = await run_in_threadpool(runner.run, aid, h, "study", task, None, "thread", False, house)
     made = store.analyses_for_run(aid, out["run_id"]) if out.get("run_id") else []
     if not made:
         why = out.get("error") or out.get("text") or out.get("outcome") or "it stopped early"
