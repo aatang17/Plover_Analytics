@@ -20,9 +20,9 @@ import threading
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-from . import ask_log, ask_progress, sec_api, stock_recipes
+from . import ask_log, ask_miss, ask_progress, sec_api, stock_recipes
 
 router = APIRouter(prefix="/api/v1/us/ask", tags=["US ask"])
 
@@ -32,17 +32,29 @@ router = APIRouter(prefix="/api/v1/us/ask", tags=["US ask"])
 def ask(q: str = Query(..., min_length=2, max_length=300, description="a question in plain words"),
         prev: str = Query("", max_length=300, description="the reader's previous question, so a follow-up "
                                                             "(\"and Microsoft?\") is read whole")):
-    """Answer a stock question from the data, by code."""
-    cur = sec_api._require()
-    return _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None))
+    """Answer a stock question from the data, by code. A question it cannot
+    answer gets {"detail": one plain sentence, "miss": its kind, "try":
+    questions it does answer} (app/ask_miss.py), never a bare error."""
+    cur = None
+    try:
+        cur = sec_api._require()
+        return _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None))
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content=ask_miss.reply(q, exc, cur))
+    except Exception:                                              # noqa: BLE001 — the reader hears it was ours
+        ask_log.note("/api/v1/us/ask", q, False, "error")
+        return JSONResponse(status_code=500, content=ask_miss.reply(q, None))
 
 
 def _noted(path, q, work):
-    """Run the answer and note how it went for the Ask Box log (app/ask_log.py)."""
+    """Run the answer and note how it went for the Ask Box log (app/ask_log.py);
+    a miss is noted with its kind."""
     try:
         out = work()
-    except HTTPException:
-        ask_log.note(path, q, False)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else ""
+        ask_log.note(path, q, False, getattr(exc, "miss", None) or
+                     ("error" if exc.status_code >= 500 else ask_miss.classify(detail)))
         raise
     m = (out or {}).get("match") or {}
     ask_log.note(path, q, bool(out and out.get("headline")), m.get("via"), out.get("recipe") if out else None)
@@ -67,10 +79,15 @@ async def ask_stream(q: str = Query(..., min_length=2, max_length=300, descripti
             put({"answer": _noted("/api/v1/us/ask/stream", q,
                                   lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None))})
         except HTTPException as exc:
-            put({"error": {"status": exc.status_code, "detail": exc.detail}})
+            cur = None
+            try:
+                cur = sec_api._require()
+            except Exception:                                      # noqa: BLE001 — suggestions without names
+                cur = None
+            put({"error": dict(ask_miss.reply(q, exc, cur), status=exc.status_code)})
         except Exception:                                          # noqa: BLE001 — the page must hear that it failed
             ask_log.note("/api/v1/us/ask/stream", q, False, "error")
-            put({"error": {"status": 500, "detail": "Something went wrong working that out. Try again, or ask it another way."}})
+            put({"error": dict(ask_miss.reply(q, None), status=500)})
         finally:
             ask_progress.listen(None)
             put(None)

@@ -1072,7 +1072,10 @@ function trafficMarkup(d, days) {
    who asked (app/ask_log.py); people per day come from the visit log. */
 var ASK_ROUTE = {
   steps: "Worked Out Step by Step", reader: "Question Type Read", patterns: "Word Patterns",
-  stock: "Stock Answer", macro: "US Economy Answer", error: "Failed",
+  stock: "Stock Answer", macro: "US Economy Answer", error: "Failed on Our Side",
+  // why a question was not answered (app/ask_miss.py)
+  not_held: "Not in Plover's Data", policy: "Outside What Plover Does", unclear: "Not Understood",
+  other_market: "Another Market",
 };
 var ASK_WHERE = { full: "Full Answer", preview: "Signed-Out Preview" };
 

@@ -2596,7 +2596,18 @@ def run_explicit(cur, recipe_id, blanks):
 
 _REFUSALS = {"why": _UNANSWERABLE[0][1], "advice": _UNANSWERABLE[1][1], "forecast": _UNANSWERABLE[2][1],
              "fragment": ("That reads as a follow-up to an earlier question, and none came with it, so I would only be "
-                          "guessing what it follows. Ask the whole question, e.g. \u201cwhat is Microsoft worth\u201d.")}
+                          "guessing what it follows. Ask the whole question, e.g. \u201cwhat is Microsoft worth\u201d."),
+             "unclear": None}
+# what each refusal is, for the reader-facing reply (app/ask_miss.py)
+_REFUSAL_KIND = {"why": "policy", "advice": "policy", "forecast": "policy", "fragment": "unclear", "unclear": "unclear"}
+
+
+# a message that is plainly not a question, answered "not understood" before
+# anything runs (no model call); "hello" and "test" otherwise find companies
+# named Hello Group and Aehr Test Systems
+_NOT_A_QUESTION = re.compile(
+    r"(hi|hello|hey|hiya|yo|test(ing)?( \d+)?|thanks?( you)?|thx|ok(ay)?|help|start|menu|ping|\?+|"
+    r"[^a-z0-9]*|(asdf|qwer|zxcv|jkl)\w*( \w+)?)", re.I)     # never letters alone: "GM", "F" and "GE" are tickers
 
 
 def answer(cur, question, prev=None):
@@ -2606,8 +2617,10 @@ def answer(cur, question, prev=None):
     the word patterns answer. A refusal from the data (an index whose
     members we do not hold, a figure not filed) is returned as is, never
     swapped for a different question."""
-    from . import ask_progress, us_ask_model
+    from . import ask_miss, ask_progress, us_ask_model
     ql = (question or "").lower()
+    if _NOT_A_QUESTION.fullmatch(ql.strip(" ?!.,")):
+        raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
     for pat, msg in _UNANSWERABLE:
         if re.search(pat, ql):
             raise HTTPException(422, msg)
@@ -2620,7 +2633,14 @@ def answer(cur, question, prev=None):
     form = us_ask_model.read(question, reader_prompt(), prev)
     if form:
         if form.get("refuse") in _REFUSALS and not form.get("shape"):
-            raise HTTPException(422, _REFUSALS[form["refuse"]])
+            from . import ask_miss
+            kind = _REFUSAL_KIND[form["refuse"]]
+            us_steps.log(question, "refused: " + form["refuse"])
+            # "not understood" from the reader is checked against the words: a question that names a
+            # company ("Apple revenue history") goes to the word patterns instead of being refused
+            if kind == "unclear" and us_link.find_companies(cur, _without_benchmarks(question)):
+                return _pattern_answer(cur, question)
+            raise ask_miss.miss(_REFUSALS[form["refuse"]] or ask_miss.UNCLEAR, kind)
         # a follow-up ("and Microsoft?") is answered as the whole question the
         # reader wrote from it and the previous one; the page shows that reading
         whole = str(form.get("question") or "").strip()

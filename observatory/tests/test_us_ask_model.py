@@ -99,7 +99,7 @@ class CompleteTest(unittest.TestCase):
         self.assertNotIn("reasoning_effort", bodies[1])
         self.assertNotIn("temperature", bodies[1])
 
-    def test_the_reader_asks_for_no_reasoning(self):
+    def test_the_reader_asks_for_low_reasoning(self):
         seen = {}
 
         def fake(prov, key, model, messages, **kw):
@@ -111,7 +111,7 @@ class CompleteTest(unittest.TestCase):
                 mock.patch.object(us_ask_model, "_tick"), mock.patch.object(us_ask_model, "_complete", side_effect=fake):
             us_ask_model.read("how many days did tesla fall more than 5% this year", "sys")
         us_ask_model._CACHE.clear()
-        self.assertEqual(seen.get("effort"), "none")
+        self.assertEqual(seen.get("effort"), "low")
         self.assertEqual(seen.get("cache_key"), "plover-us-reader")
 
     def test_any_other_refusal_is_raised(self):

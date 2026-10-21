@@ -77,3 +77,5 @@
   .fp-head { font-size: 19px; }
   .fp-cta { width: 100%; justify-content: center; text-align: center; box-sizing: border-box; }
 }
+/* the Try Again button on a miss (us-stocks.js renderMiss): the call-to-action look, on a <button> */
+.fp-retry { border: 0; cursor: pointer; font-family: inherit; }

@@ -554,7 +554,7 @@
     "sql": "",
     "headline": "",
     "chart": null,
-    "cannot": "I don't hold employee numbers, so I cannot rank companies by them."
+    "cannot": "Plover's data doesn't include employee counts, so it can't rank companies by them."
   },
   {
     "question": "Why did Intel go up this year?",
@@ -842,5 +842,19 @@
       "value": "drawdown_pct"
     },
     "cannot": null
+  },
+  {
+    "question": "asdf qwerty",
+    "steps": [
+      "These words are not a question about companies, shares or prices."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "",
+    "headline": null,
+    "chart": null,
+    "cannot": "unclear"
   }
 ]

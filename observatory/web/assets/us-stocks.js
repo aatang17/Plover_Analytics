@@ -25,8 +25,10 @@
     return fetch(url).then(function (r) {
       if (!r.ok) {
         return r.json().catch(function () { return {}; }).then(function (b) {
-          var e = new Error(b.detail || (url + " -> " + r.status));
+          var e = new Error(typeof b.detail === "string" ? b.detail : "");
           e.status = r.status;
+          e.miss = b.miss;            // what kind of miss, and questions that do answer (app/ask_miss.py)
+          e.tries = b.try;
           throw e;
         });
       }
@@ -58,8 +60,10 @@
               if (ev.say) onSay(ev.say);
               else if (ev.answer) { resolve(ev.answer); return; }
               else if (ev.error) {
-                var err = new Error(ev.error.detail || "Something went wrong. Ask again.");
+                var err = new Error(ev.error.detail || "");
                 err.status = ev.error.status;
+                err.miss = ev.error.miss;
+                err.tries = ev.error.try;
                 reject(err);
                 return;
               }
@@ -379,10 +383,44 @@
       });
     }).catch(function (e) {
       $("status").hidden = true;
-      el.innerHTML = "<p class='state-error'>" + esc(e.message) + "</p>" +
-        "<p class='sec-note'>Try a company name or ticker, an industry in words (carmakers, banks, semiconductors), a manager (Berkshire), or a list such as “largest US companies by market value”.</p>";
-      $("home-note").hidden = false;
+      // a miss the server worded carries its kind; anything else (the network
+      // dropped, a server error with no words) is ours, and says so
+      var ours = !e.miss && (!e.status || e.status >= 500 || !e.message);
+      renderMiss(ours ? MISS_ERROR : e.message, ours ? [] : e.tries, ours ? "error" : (e.miss || "not_held"), q);
     });
+  }
+
+  /* ---- when the box cannot answer -------------------------------------- */
+  // Never a code or a blank: one plain sentence, the questions that come
+  // closest, and, when the fault is ours, Try Again with the question still in
+  // the box. The words come from the server (app/ask_miss.py).
+  var MISS_ERROR = "That didn't work on our side. Try again in a moment; your question is still in the box.";
+
+  function renderMiss(text, tries, kind, q) {
+    disposeCharts();
+    var el = $("answer");
+    el.hidden = false;
+    $("stock").hidden = true;
+    var list = (tries || []).map(function (t) {
+      return "<li><a href='/?q=" + encodeURIComponent(t) + "'>" + esc(t) + "</a></li>";
+    }).join("");
+    el.innerHTML = "<div class='fp-card fp-miss'><p class='fp-head'>" + esc(text || MISS_ERROR) + "</p>" +
+      (kind === "error" ? "<p><button type='button' class='fp-cta fp-retry' id='miss-retry'>Try Again</button></p>" : "") +
+      (list ? "<p class='fp-lead'>Try instead:</p><ul class='fp-examples' id='miss-try' aria-label='Questions Plover can answer'>" +
+        list + "</ul>" : "") + "</div>";
+    // the front page's examples, when there is nothing closer to offer
+    $("home-note").hidden = !!list || kind === "error";
+    Array.prototype.forEach.call(el.querySelectorAll("#miss-try a"), function (a) {
+      a.addEventListener("click", function (ev) {
+        var nq = new URL(a.href, location.href).searchParams.get("q");
+        if (!nq) return;
+        ev.preventDefault();
+        ask(nq, true);
+      });
+    });
+    var retry = $("miss-retry");
+    if (retry) retry.addEventListener("click", function () { ask(q, true); });
+    document.title = "Plover Analytics";
   }
 
   /* ---- who is reading: the start of an answer, or all of it ----------- */
@@ -426,9 +464,7 @@
     el.hidden = false;
     $("stock").hidden = true;
     if (p.kind === "none") {
-      el.innerHTML = "<div class='fp-card'><p class='fp-head'>" + esc(p.message) + "</p>" +
-        "<p class='fp-lead'>" + esc(p.holds || "") + " Try one of the questions below.</p></div>";
-      $("home-note").hidden = false;
+      renderMiss(p.message, p.try, p.miss || "not_held", q);
       return;
     }
     var signedIn = !gated();

@@ -18,7 +18,7 @@ Guard rails, because this runs on Plover's own key for the public page:
   * off unless a provider key is set and US_ASK_MODEL is not "0";
   * at most US_ASK_MODEL_DAILY_MAX calls a day (default 2000);
   * 300 output tokens, a 15-second limit, temperature 0 (or, for a model
-    that reasons, no reasoning), the question cut at 300 characters;
+    that reasons, low reasoning), the question cut at 300 characters;
   * one call per distinct question a day: readings are cached;
   * every call is counted, with its tokens, for /api/v1/us/ask/recipes.
 
@@ -37,8 +37,8 @@ GPT-5 and later) refuse `temperature` and `max_tokens`: on that refusal the
 call is sent again the way they want it, with reasoning kept low, and the
 model's way is remembered. Models known to reason (gpt-5 and later, the o
 series) are sent their way from the first call, so no call is wasted on a
-refusal; the reader, which only fills in a form, asks for no reasoning at
-all (2-3 s with gpt-6-luna against 3-5 s with low, the same form).
+refusal; the reader asks for low reasoning (3-5 s with gpt-6-luna). It
+once asked for none (2-3 s), which misread short questions as not questions.
 """
 import datetime
 import json
@@ -134,7 +134,7 @@ Reply with one JSON object, these keys only:
  "years": <years of history asked for, or null>,
  "count": <how many to list, or null>,
  "min_value": <a dollar market-value floor as a number, or null>,
- "refuse": null, or "why" (asks why something happened), "advice" (whether to buy or sell), "forecast" (estimates, targets, the future), "fragment" (a follow-up that leans on a previous question, and none is given), "no_fit" (nothing below answers it),
+ "refuse": null, or "why" (asks why something happened), "advice" (whether to buy or sell), "forecast" (estimates, targets, the future), "fragment" (a follow-up that leans on a previous question, and none is given), "unclear" (not a question at all: random letters, a greeting, a test, a lone word naming no company, figure, index or market), "no_fit" (nothing below answers it),
  "read_as": <one short plain sentence saying what will be shown, naming the period>}
 Rules:
 - A follow-up names only what changes ("and Microsoft?", "what about last year?") and leans on the previous question, which is given with it when there is one. Write the whole question in "question" and fill the rest of the form from that whole question. With no previous question, a follow-up is "refuse": "fragment".
@@ -270,7 +270,9 @@ def read(question, system_prompt, prev=None):
                 {"role": "user", "content": user_message(question, prev)}]
     _tick("calls")
     try:
-        out = _complete(prov, key, model, messages, cache_key="plover-us-reader", effort="none")
+        # low, not none: with no reasoning gpt-6-luna read "Apple revenue history" and "Tesla insider
+        # trades" as not a question on one try in two (2026-10-21); with low, never in ten
+        out = _complete(prov, key, model, messages, cache_key="plover-us-reader", effort="low")
     except Exception:                                             # noqa: BLE001 — a timeout, a refusal, a bad reply
         _tick("failed")
         return None

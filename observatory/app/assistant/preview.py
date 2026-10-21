@@ -90,9 +90,9 @@ def _stock(q, prev=None):
         cur = sec_api._require()
         a = stock_recipes.answer(cur, q, prev)
     except HTTPException as exc:
-        return None, str(exc.detail).strip('"')
-    except Exception:  # noqa: BLE001 — no SEC database here: try the next route
-        return None, None
+        return None, exc                       # a miss: app/ask_miss.py words it for the reader
+    except Exception:  # noqa: BLE001 — no SEC database, or a failure: try the next route
+        return None, "error"
     if not a or not a.get("headline"):
         return None, None
     figs = []
@@ -194,6 +194,19 @@ def _macro(q):
             "full_url": page or "us-treasury.html"}
 
 
+def _miss_kind(exc):
+    from .. import ask_miss
+    return getattr(exc, "miss", None) or ask_miss.classify(exc.detail if isinstance(exc.detail, str) else "")
+
+
+def _cur():
+    try:
+        from .. import sec_api
+        return sec_api._require()
+    except Exception:                                             # noqa: BLE001 — suggestions without company names
+        return None
+
+
 @router.get("")
 def preview(q: str = Query(..., min_length=2, max_length=300),
             prev: str = Query("", max_length=300, description="the reader's previous question, for a follow-up")):
@@ -201,15 +214,24 @@ def preview(q: str = Query(..., min_length=2, max_length=300),
     the source, and what the full answer adds."""
     q = " ".join(q.split())
     prev = " ".join(prev.split()) if isinstance(prev, str) else ""          # called directly, the default is a Query
-    out, _refusal = _stock(q, prev or None)
-    if out is None:
+    out, refusal = _stock(q, prev or None)
+    # a stock question declined on principle (why, buy or sell, a forecast) is
+    # not handed to the economy answers, which would match a word in it
+    # ("will Apple beat earnings" is not a question about hourly earnings)
+    declined = isinstance(refusal, HTTPException) and _miss_kind(refusal) == "policy"
+    if out is None and not declined:
         out = _macro(q)
-    from .. import ask_log
+    from .. import ask_log, ask_miss
     if out is None:
-        ask_log.note("/api/v1/assistant/preview", q, False)
-        # the stock box's own refusal is worded for its page ("the tables ..."):
-        # one plain sentence here, and what Plover does hold
-        return {"kind": "none", "question": q, "message": "That is not in what Plover can answer yet.",
+        # the same reason, in the same words, as a signed-in reader gets (app/ask_miss.py)
+        if isinstance(refusal, HTTPException):
+            r = ask_miss.reply(q, refusal, _cur())
+        elif refusal == "error":
+            r = ask_miss.reply(q, None)
+        else:
+            r = {"detail": ask_miss.NOTHING, "miss": "not_held", "try": ask_miss.EXAMPLES[:3]}
+        ask_log.note("/api/v1/assistant/preview", q, False, r["miss"])
+        return {"kind": "none", "question": q, "message": r["detail"], "miss": r["miss"], "try": r["try"],
                 "holds": HOLDS}
     ask_log.note("/api/v1/assistant/preview", q, True, out.get("kind"))
     out.setdefault("question", q)

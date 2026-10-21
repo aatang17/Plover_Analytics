@@ -263,7 +263,7 @@
      the front page's engine); its answer is drawn here the way the front
      page draws it (us-stocks.js), cut to fit a chat: the first rows of the
      table, and the full answer one click away. */
-  var MISSING = "—", MINUS = "\u2212", STOCK_ROWS = 10;
+  var MISSING = "—", MINUS = "\u2212";
   function money(v, dp) {
     if (v == null) return MISSING;
     var a = Math.abs(v), t;
@@ -333,14 +333,14 @@
       return !(vals.length && vals.every(function (v) { return typeof v === "string" && technical(v); }));
     });
     var cols = t.columns.filter(function (c, i) { return keep[i]; });
-    var rows = t.rows.slice(0, STOCK_ROWS).map(function (r) { return r.filter(function (v, i) { return keep[i]; }); });
+    // every row: the answer in the chat is the whole answer, with nowhere else to see the rest
     var all = t.rows.map(function (r) { return r.filter(function (v, i) { return keep[i]; }); });
+    var rows = all;
     var num = cols.map(function (c, i) { return all.some(function (r) { return typeof r[i] === "number"; }); });
     return '<div class="my-tbl"><table data-no-enhance><thead><tr>' + cols.map(function (c, i) {
       return "<th" + (num[i] ? ' class="num"' : "") + ">" + esc(c) + "</th>"; }).join("") + "</tr></thead><tbody>" +
       rows.map(function (r) { return "<tr>" + r.map(function (v, i) { return cellFor(cols[i], v, t.unit); }).join("") + "</tr>"; }).join("") +
-      "</tbody></table></div>" +
-      (t.rows.length > rows.length ? '<p class="my-src">The first ' + rows.length + " of " + count(t.rows.length) + " rows. Open the full answer for all of them.</p>" : "");
+      "</tbody></table></div>";
   }
   function stockFigs(figs) {
     var cells = (figs || []).filter(function (f) { return f && f.value !== undefined; }).map(function (f) {
@@ -375,8 +375,8 @@
       (a.notes && a.notes.length ? '<p class="my-src">' + a.notes.map(esc).join(" ") + "</p>" : "") +
       (src ? '<p class="my-src">' + esc(src) + "</p>" : "") +
       stockCalc(a) +
-      '<p class="my-acts"><a class="btn" href="/?q=' + encodeURIComponent(run.question || a.question || "") + '">Open Full Answer</a>' +
-      (page ? '<a class="btn" href="' + esc(page) + '">Open ' + esc(co ? co.name : "Company") + "</a>" : "") + "</p></article>";
+      (page ? '<p class="my-acts"><a class="btn" href="' + esc(page) + '">Open ' + esc(co ? co.name : "Company") + "</a></p>" : "") +
+      "</article>";
   }
   function drawStockChart(el, a) {
     var chart = a.chart;

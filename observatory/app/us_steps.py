@@ -444,7 +444,8 @@ def prompt(question, last_price_date=None, today=None):
             " \"sql\": \"one SELECT or WITH ... SELECT\",\n"
             " \"headline\": \"one sentence answering the question, numbers only as {result_column}, the period as {period}\",\n"
             " \"chart\": null or {\"label\": <result column>, \"value\": <result column>} for a list worth drawing as bars,\n"
-            " \"cannot\": null, or one sentence saying what the tables do not hold}\n\n"
+            " \"cannot\": null, or one sentence for the reader saying what Plover's data does not hold (never \"the tables\"), "
+            "or \"unclear\" when the message is not a question}\n\n"
             "TABLES\n%s\n\nRULES\n%s\n\nWORKED EXAMPLES\n%s"
             % (today.isoformat(), (last_price_date or today).isoformat(), LOOK_ROWS_SHOWN, LOOKS_MAX, _table_doc(), rules,
                "\n\n".join(shown)))
@@ -638,6 +639,7 @@ def _plan_key(question):
     return (datetime.date.today().isoformat(), re.sub(r"\s+", " ", (question or "").strip().lower()).strip(" ?.!"))
 
 
+OTHER_MARKET_PREFIX = "This box covers US-listed companies only."
 OTHER_MARKETS = [
     (r"\bjapan(ese)?\b|\btokyo\b|\bnikkei\b|\btopix\b", "Japanese companies are under the Japan tab (Companies, Banks and the screener there)"),
     (r"\bhong\s*kong\b|\bhang\s*seng\b|\bhk\b", "Hong Kong is under the Asia tab"),
@@ -649,7 +651,7 @@ def other_market(question):
     ql = (question or "").lower()
     for pat, where in OTHER_MARKETS:
         if re.search(pat, ql):
-            return ("This box covers US-listed companies only. %s. A Japanese or Hong Kong company appears here only if it "
+            return (OTHER_MARKET_PREFIX + " %s. A Japanese or Hong Kong company appears here only if it "
                     "is also listed in the US (its depositary shares)." % where)
     return None
 
@@ -689,8 +691,13 @@ def answer(cur, question):
                 messages += [{"role": "assistant", "content": raw}, {"role": "user", "content": told}]
                 plan, raw = _ask_model(messages)
         if plan.get("cannot") and not plan.get("sql"):
+            from . import ask_miss
             log(question, "cannot", plan["cannot"])
-            raise HTTPException(422, str(plan["cannot"])[:400])
+            if str(plan["cannot"]).strip().lower().strip(".") == "unclear":
+                raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
+            # the questions offered instead are the fixed ones in app/ask_miss.py: a model's own suggestion
+            # was found not to answer ("Toyota's reported revenue from India, if available")
+            raise ask_miss.miss(str(plan["cannot"])[:400], "not_held")
         start, end = _period(plan)
         todo = [str(x) for x in (plan.get("steps") or []) if x]
         if todo:
