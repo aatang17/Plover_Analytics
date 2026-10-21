@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app import ask_miss, stock_recipes
+from tests import _data
 
 
 def setUpModule():
@@ -65,16 +66,7 @@ class WordsTest(unittest.TestCase):
             self.assertFalse(stock_recipes._NOT_A_QUESTION.fullmatch(q.lower().strip(" ?!.,")), q)
 
 
-def _live():
-    from app import sec_api
-    try:
-        sec_api._require()
-        return True
-    except Exception:                                             # noqa: BLE001
-        return False
-
-
-@unittest.skipUnless(_live(), "data/sec.duckdb with the SEC tables")
+@unittest.skipUnless(_data.SEC, "data/sec.duckdb not built")
 class DoorsTest(unittest.TestCase):
     """Each door of the box answers a miss with the same reader-facing reply."""
 
@@ -123,10 +115,9 @@ class DoorsTest(unittest.TestCase):
         self.assertTrue(err["try"] and err["detail"])
 
     def test_preview_gives_the_same_reason(self):
-        r = self.c.get("/api/v1/assistant/preview", params={"q": "Which companies have the most employees?"})
-        if r.status_code == 404:
-            self.skipTest("the preview is not mounted here")
-        p = r.json()
+        from app.assistant import preview
+        # called directly: the route is mounted only where accounts and the assistant are switched on
+        p = preview.preview(q="Which companies have the most employees?", prev="")
         self.assertEqual((p["kind"], p["miss"]), ("none", "not_held"))
         _, full = self.full("Which companies have the most employees?")
         self.assertEqual(p["message"], full["detail"])
