@@ -925,7 +925,7 @@
         var back = "my.html" + (asked ? "?q=" + encodeURIComponent(asked) : "");
         gate((asked ? '<p class="my-asked-out">Your question: <strong>' + esc(asked) + "</strong></p>" +
             "<p>Sign in to get the answer. It comes straight back to this question.</p>"
-          : "<p>Sign in to ask questions about the data, keep a list of companies and save articles as you read.</p>") +
+          : "<p>Sign in to ask questions about stocks and the economy, and keep a list of the companies you follow.</p>") +
           '<p><a class="btn btn-primary" href="signin.html?returnTo=' + encodeURIComponent(back) + '">Sign In</a></p>');
         return;
       }

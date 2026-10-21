@@ -201,7 +201,8 @@ class CoverageSearchExamples(unittest.TestCase):
     def test_your_plover_box_shows_examples(self):
         self.assertTrue(self._my_examples())
 
-    @unittest.skipUnless(_data.EQUITY and _data.SEC, "equity and SEC databases not both present")
+    @unittest.skipUnless(_data.EQUITY, _data.NO_EQUITY)
+    @unittest.skipUnless(_data.SEC, "data/sec.duckdb not built")
     def test_your_plover_examples_find_companies(self):
         # the box searches Japan and the US together (/companies?markets=all)
         from app.assistant.api import find_companies, find_us_companies
@@ -210,7 +211,7 @@ class CoverageSearchExamples(unittest.TestCase):
                 self.assertTrue(find_companies(q) or find_us_companies(q),
                                 "Your Plover's company box finds nothing for %r" % q)
 
-    @unittest.skipUnless(_data.SEC, "SEC database not present")
+    @unittest.skipUnless(_data.SEC, "data/sec.duckdb not built")
     def test_us_names_find_the_company_people_mean(self):
         from app.assistant.api import find_us_companies
         for q, ticker in (("Apple", "AAPL"), ("apple", "AAPL"), ("NVDA", "NVDA"), ("Nvidia", "NVDA"),
