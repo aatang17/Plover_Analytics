@@ -29,10 +29,20 @@ WHAT MAKES THIS DATASET WORTH THE TROUBLE, and the traps under each:
      matched for the holder side either.
   3. 重要提案行為 (ActOfMakingImportantProposalEtc) IS A FILED FIELD. It is
      what separates a campaign from an index position, and it is disclosed
-     rather than inferred. The special form (第二号様式, jplvh020000) is the
+     rather than inferred. The special-reporting form (jplvh030000) is the
      exemption for institutions that undertake NOT to make such proposals, and
      it does not carry the field at all — absence there is meaningful, and is
-     recorded as such rather than as a missing value.
+     recorded as such rather than as a missing value. It is jplvh030000, not
+     jplvh020000: measured on the archive, every one of 27,015 jplvh030000
+     packages lacks the field and its filers are Nomura, the trust banks, the
+     megabanks and FMR, while jplvh020000 packages ask the question and are
+     filed by Evo Fund, City Index Eleventh and the like (lvh-1 had the two
+     the wrong way round).
+     The answer is free text, and "none" comes in dozens of wordings —
+     特にありません, 当該事項はございません, 現時点において重要提案行為等を
+     行う予定はありません — so it is read by proposal_stance(), not by
+     testing for one phrase. lvh-1 treated anything that did not open with
+     該当事項なし as a stated act, and so counted those as campaigns.
   4. A JOINT HOLDER WHO HAS LEFT THE GROUP IS STILL DESCRIBED IN THE FILING.
      Nomura's report on Nissui details three holders, and its group total of
      33,338,274 shares is the sum of TWO of them: Nomura International plc had
@@ -80,6 +90,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 import zipfile
 from collections import defaultdict
 from html.parser import HTMLParser
@@ -94,7 +105,15 @@ from extract import (LocalSource, S3Source, load_codelist, build_index, pick,
                      select_pending, catch_up_start, CATCH_UP_DAYS,
                      recorded_floor)
 
-PARSER_VERSION = "lvh-1"
+# lvh-2: alphanumeric securities codes kept whole (130A, not 130), the
+# special-reporting form identified correctly, and the 重要提案行為 answer read
+# by proposal_stance(). Stored lvh-1 rows are brought up to date by
+# reclassify() and, for the truncated codes, by re-extraction (see main()).
+PARSER_VERSION = "lvh-2"
+
+# The special-reporting form: institutions that undertake to make no important
+# proposals (trap 3).
+SPECIAL_FORM = "jplvh030000"
 
 L = "jplvh_cor:"
 DEI = "jpdei_cor:"
@@ -364,6 +383,119 @@ def stated_none(text):
                              for n in NONE_STATED)
 
 
+# ---- reading the 重要提案行為 answer ----------------------------------------
+#
+# Three readings of a filed answer, plus None when nothing was filed:
+#
+#   will_or_may   the holder states it will, may or has made important
+#                 proposals (可能性がある, 行うことがある, 取締役2名の指名提案)
+#   none_planned  the holder states none, in any of the archive's wordings
+#   unclear       text that does not answer the question — a lock-up
+#                 agreement or a pledge typed into the wrong box, 純投資,
+#                 現時点において未定
+#
+# important_proposal is True for will_or_may, False for none_planned and None
+# otherwise: a misplaced lock-up clause is not a campaign, and it is not a
+# "no" either.
+STANCE_FLAG = {"will_or_may": True, "none_planned": False}
+
+# A plan stated and then denied: 行う予定はありません, 予定していない.
+# Not a bare 行わない: a lock-up typed into this box reads 売買等を行わない旨を
+# 合意, which denies a sale, not a proposal.
+NO_PLAN = re.compile(u"予定(は|も)?(ありません|ございません|ない|無い|なし|無し)|"
+                     u"予定していない|予定しておりません|提案[^。]{0,15}(行わない|行いません)|"
+                     u"意図はない|考えていない|目的と(し|は)(ない|ていない|しない|"
+                     u"しておりません|していません)|行うことは(ない|ありません)")
+# Hedges that turn a denial back into a reservation: 予定はないが、行う可能性がある.
+HEDGE = re.compile(u"可能性|ことがある|ことがあります|場合があ|ありうる|あり得る|検討")
+# A short answer that ends by saying none, typos included: 特にありません,
+# 当該事業はありません, 該当時効無し.
+NONE_TAIL = re.compile(u"(なし|無し|無|ありません|ございません|ない|無い)$")
+# "Yes": 該当あり, 可能性　有. Not ありません.
+SAYS_YES = re.compile(u"(あり|有り)(?!ませ)|有$")
+PROPOSAL_WORDS = re.compile(u"提案|提言|選任|選解任|解任|指名|招集|助言|役員の派遣|"
+                            u"非公開化|該当あり|可能性(有|あり)")
+SEE_PURPOSE = re.compile(u"保有目的")
+# What in a 保有目的 counts as the holder reserving proposals of its own. Not
+# 他の株主が提案した議案 — voting on somebody else's proposal is not making one.
+PURPOSE_PROPOSAL = re.compile(u"重要提案|重要事項提案|提案行為|提案(等|など)?を(行|検討)|"
+                              u"指名提案|(助言|提言)(、|又は|または|及び|および|や)[^。]{0,6}提案")
+CLAUSES = re.compile(u"[。\n\r]|が、|但し|ただし|なお、|しかし")
+
+
+def _fold(text):
+    u"""Width folded (NFKC turns the half-width ｡ some filers type into 。)."""
+    return unicodedata.normalize("NFKC", html_mod.unescape(text or ""))
+
+
+def _compact(text):
+    return re.sub(u"[\\s。.、,]+", "", _fold(text))
+
+
+def purpose_reserves_proposal(purpose):
+    u"""Does the 保有目的 reserve important proposals, clause by clause?
+
+    Derived, and deliberately kept apart from important_proposal: the large
+    asset managers write 状況に応じて経営陣への助言、重要提案行為等を行うこと
+    into the purpose of nearly every report as boilerplate, so this is true of
+    Nomura and Mizuho as often as of any activist. A clause that denies a plan
+    (重要提案行為等を行う予定はありません) does not count; a denial followed by
+    a reservation (予定はありませんが、…提案を検討) does.
+    """
+    t = _fold(purpose)
+    if not t.strip():
+        return None
+    for clause in CLAUSES.split(t):
+        c = _compact(clause)
+        if PURPOSE_PROPOSAL.search(c) and not NO_PLAN.search(c):
+            return True
+    return False
+
+
+def proposal_stance(answer, purpose=None):
+    u"""The filed 重要提案行為 answer -> will_or_may | none_planned | unclear,
+    or None when nothing was filed. See the block comment above."""
+    raw = _fold(answer).strip()
+    if not raw:
+        return None
+    head = _compact(re.split(u"[\n\r。]", raw, 1)[0])
+    if NO_PLAN.search(head) and not HEDGE.search(head):
+        return "none_planned"
+    if stated_none(raw) and not SAYS_YES.search(head):
+        return "none_planned"
+    if len(head) <= 40 and NONE_TAIL.search(head) and not HEDGE.search(head):
+        return "none_planned"
+    full = _compact(raw)
+    if PROPOSAL_WORDS.search(full):
+        return "will_or_may"
+    # 上記（２）保有目的に記載のとおり: the answer is the purpose.
+    if SEE_PURPOSE.search(full):
+        return "will_or_may" if purpose_reserves_proposal(purpose) else "unclear"
+    return "unclear"
+
+
+def group_stance(stances):
+    u"""A filing's stance from its holders': any will_or_may wins, then any
+    none_planned, then unclear."""
+    for s in ("will_or_may", "none_planned", "unclear"):
+        if s in stances:
+            return s
+    return None
+
+
+def issuer_code_of(text):
+    u"""SecurityCodeOfIssuer -> the four-character code, letters kept.
+
+    Codes issued since January 2024 may carry a letter (130A, 285A). lvh-1
+    kept digits only and stored 130A as '130', which joins to nothing. Filers
+    write the code in full or half width and with or without the trailing
+    check digit, so: width folded, separators dropped, first four kept.
+    """
+    t = re.sub(u"[^0-9A-Z]", "", unicodedata.normalize("NFKC", text or "").upper())
+    m = re.search(u"[0-9][0-9A-Z]{3}", t)       # a code opens with a digit
+    return m.group(0) if m else None
+
+
 REPORT_TYPES = ((u"訂正報告書", "amendment"), (u"変更報告書", "change"),
                 (u"大量保有報告書", "initial"))
 CHANGE_NO = re.compile(u"(?:No|NO|ＮＯ|Ｎｏ|№)?\\s*[.．]?\\s*([0-9０-９]+)")
@@ -422,7 +554,11 @@ SCHEMA_SQL = """
             purpose_ja VARCHAR, own_funds_yen BIGINT, borrowings_yen BIGINT,
             funding_implausible BOOLEAN,
             sha256 VARCHAR, parser_version VARCHAR, status VARCHAR,
-            detail VARCHAR, messy_facts INTEGER);
+            detail VARCHAR, messy_facts INTEGER,
+            -- The holders' 重要提案行為 answers read as one stance, and
+            -- whether any holder's 保有目的 reserves proposals (derived; see
+            -- proposal_stance and purpose_reserves_proposal).
+            proposal_stance VARCHAR, purpose_mentions_proposal BOOLEAN);
         -- One row per filer or joint holder named in the report. in_group_total
         -- is false for a holder the filing describes but excludes from the
         -- group position — typically one that has just left the group.
@@ -444,8 +580,36 @@ SCHEMA_SQL = """
             -- holder is gets read from these at serve time; storing the filer's
             -- own words rather than our reading of them means a change to that
             -- reading never rewrites a stored row.
-            business_ja VARCHAR, occupation_ja VARCHAR);
+            business_ja VARCHAR, occupation_ja VARCHAR,
+            -- This holder's 重要提案行為 answer read as will_or_may /
+            -- none_planned / unclear, and whether its 保有目的 reserves
+            -- proposals. Re-derived from the stored text on every run by
+            -- reclassify(), so a change to the reading reaches every row.
+            proposal_stance VARCHAR, purpose_mentions_proposal BOOLEAN);
 """
+
+# Columns added after lvh-1, for a database built by it: CREATE TABLE IF NOT
+# EXISTS will not add a column to a table that is already there.
+ADDED_COLUMNS = {
+    "eq_lvh_filings": (("proposal_asked", "BOOLEAN"),
+                       ("funding_implausible", "BOOLEAN"),
+                       ("cover_date", "DATE"),
+                       ("proposal_stance", "VARCHAR"),
+                       ("purpose_mentions_proposal", "BOOLEAN")),
+    "eq_lvh_holders": (("proposal_stance", "VARCHAR"),
+                       ("purpose_mentions_proposal", "BOOLEAN")),
+}
+
+HOLDER_COLUMNS = ("doc_id", "holder_no", "name_raw", "name_en", "address_raw",
+                  "holder_type_ja", "is_individual", "holder_edinet_code",
+                  "holder_sec_code", "match_status", "shares_held", "ratio_pct",
+                  "prior_ratio_pct", "in_group_total", "purpose_ja",
+                  "important_proposal_ja", "important_proposal", "own_funds_yen",
+                  "borrowings_yen", "total_funding_yen", "name_key",
+                  "business_ja", "occupation_ja", "proposal_stance",
+                  "purpose_mentions_proposal")
+HOLDER_INSERT = "INSERT INTO eq_lvh_holders (%s) VALUES (%s)" % (
+    ", ".join(HOLDER_COLUMNS), ", ".join(["?"] * len(HOLDER_COLUMNS)))
 
 FILING_COLUMNS = ("doc_id", "doc_type", "form", "report_type", "change_no",
                   "is_special_form", "filer_edinet_code", "filer_name",
@@ -458,7 +622,8 @@ FILING_COLUMNS = ("doc_id", "doc_type", "form", "report_type", "change_no",
                   "filing_reason_ja",
                   "purpose_ja", "own_funds_yen", "borrowings_yen",
                   "funding_implausible", "sha256",
-                  "parser_version", "status", "detail", "messy_facts")
+                  "parser_version", "status", "detail", "messy_facts",
+                  "proposal_stance", "purpose_mentions_proposal")
 FILING_INSERT = "INSERT INTO eq_lvh_filings (%s) VALUES (%s)" % (
     ", ".join(FILING_COLUMNS), ", ".join(["?"] * len(FILING_COLUMNS)))
 
@@ -481,11 +646,11 @@ def build(doc_id, doc_type, facts, form, submitted, resolve_issuer, resolve_hold
             v = v * YEN_THOUSANDS if v is not None else None
         return "messy" if v is None else v
 
-    special = form == "jplvh020000"
+    special = form == SPECIAL_FORM
     title = first(facts, "DocumentTitleCoverPage", 0)
     report_type, change_no = report_type_of(title, doc_type)
 
-    sec = re.sub(r"\D", "", first(facts, "SecurityCodeOfIssuer", 0))[:4] or None
+    sec = issuer_code_of(first(facts, "SecurityCodeOfIssuer", 0))
     issuer_name = first(facts, "NameOfIssuer", 0).strip() or None
     imstat, iec = resolve_issuer(sec, issuer_name)
     issuer_code = iec
@@ -537,16 +702,17 @@ def build(doc_id, doc_type, facts, form, submitted, resolve_issuer, resolve_hold
         # it a CURRENT figure (trap 4).
         current = vals["ratio"] is not None or vals["shares"] is not None
         in_total += 1 if current else 0
+        purpose = first(facts, "PurposeOfHolding", no).strip() or None
+        stance = None if special else proposal_stance(proposal_ja, purpose)
         holders.append((doc_id, no, name, clean_english_name(first(facts, "FilerNameInEnglishDEI", no)),
                         first(facts, "ResidentialAddressOrAddressOfRegisteredHeadquarter", no).strip() or None,
                         kind_ja or None, (u"個人" in kind_ja) if kind_ja else None,
                         ec, sc, mstat, to_int(vals["shares"]), vals["ratio"],
-                        vals["prior"], current, first(facts, "PurposeOfHolding", no).strip() or None,
-                        proposal_ja or None,
-                        (None if special or not proposal_ja else not stated_none(proposal_ja)),
+                        vals["prior"], current, purpose,
+                        proposal_ja or None, STANCE_FLAG.get(stance),
                         to_int(vals["own"]), to_int(vals["borrow"]),
                         to_int(vals["funding"]), norm(name), business_ja,
-                        occupation_ja))
+                        occupation_ja, stance, purpose_reserves_proposal(purpose)))
 
     # ---- the group position ------------------------------------------------
     group = {}
@@ -680,12 +846,15 @@ def build(doc_id, doc_type, facts, form, submitted, resolve_issuer, resolve_hold
         # form does not carry the field, and NULL there says "not asked", not
         # "none" — the exemption itself is the undertaking.
         "important_proposal": (None if not proposals else any(proposals)),
-        # Whether the form put the question at all. 第三号様式 (the change
-        # report) and 第二号様式 (the special form) carry no 重要提案行為 field,
-        # so a null there is "not asked" — measured, not assumed: 4,719 holder
-        # rows on change reports have no such element anywhere in the package.
-        # Without this a reader cannot tell a silent filer from a form that
-        # never asked.
+        "proposal_stance": group_stance([h[23] for h in holders]),
+        "purpose_mentions_proposal": (
+            None if all(h[24] is None for h in holders)
+            else any(h[24] for h in holders)),
+        # Whether the form put the question at all. The special-reporting
+        # form (jplvh030000) carries no 重要提案行為 field, so a null there is
+        # "not asked". The general form asks it on initial, change and
+        # amendment reports alike. Without this a reader cannot tell a silent
+        # filer from a form that never asked.
         "proposal_asked": bool(facts.get(L + "ActOfMakingImportantProposalEtc")
                                or facts.get(L + "ActOfMakingImportantProposalEtcNA")),
         "filing_reason_ja": (first(facts, "ReasonForFilingChangeReportCoverPage", 0).strip()
@@ -703,6 +872,97 @@ def build(doc_id, doc_type, facts, form, submitted, resolve_issuer, resolve_hold
         "messy_facts": messy,
     }
     return row, holders, problems
+
+
+def _bulk_temp(con, name, columns, rows, chunk=500):
+    u"""A temp table holding `rows`, inserted a chunk of rows per statement
+    (row-at-a-time executemany is minutes on a first full pass)."""
+    con.execute("CREATE OR REPLACE TEMP TABLE %s (%s)" % (name, ", ".join(columns)))
+    width = len(columns)
+    for i in range(0, len(rows), chunk):
+        part = rows[i:i + chunk]
+        con.execute("INSERT INTO %s VALUES %s" % (
+            name, ", ".join(["(%s)" % ", ".join(["?"] * width)] * len(part))),
+            [v for r in part for v in r])
+
+
+def reclassify(con):
+    u"""Re-apply the readings of stored text to every stored row.
+
+    The stance, the flag and the purpose reading are functions of text the
+    database already holds (important_proposal_ja, purpose_ja) and of the
+    stored form code, so a change to how they are read reaches the whole
+    archive on the next run without downloading anything. Only rows whose
+    reading changes are written. Returns (holder rows changed, filings changed).
+    """
+    rows = con.execute("""
+        SELECT h.doc_id, h.holder_no, h.important_proposal_ja, h.purpose_ja,
+               h.important_proposal, h.proposal_stance,
+               h.purpose_mentions_proposal, f.form
+        FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)""").fetchall()
+    per_doc = defaultdict(list)
+    changed = []
+    for doc_id, no, answer, purpose, flag, stance, mentions, form in rows:
+        new_stance = None if form == SPECIAL_FORM else proposal_stance(answer, purpose)
+        new = (STANCE_FLAG.get(new_stance), new_stance, purpose_reserves_proposal(purpose))
+        per_doc[doc_id].append(new)
+        if new != (flag, stance, mentions):
+            changed.append((doc_id, no) + new)
+    if changed:
+        _bulk_temp(con, "lvh_reread",
+                   ("doc_id VARCHAR", "holder_no INTEGER", "flag BOOLEAN",
+                    "stance VARCHAR", "mentions BOOLEAN"), changed)
+        con.execute("""
+            UPDATE eq_lvh_holders h SET important_proposal = r.flag,
+                   proposal_stance = r.stance, purpose_mentions_proposal = r.mentions
+            FROM lvh_reread r
+            WHERE h.doc_id = r.doc_id AND h.holder_no = r.holder_no""")
+
+    filings = con.execute("""
+        SELECT doc_id, form, important_proposal, proposal_stance,
+               purpose_mentions_proposal, is_special_form
+        FROM eq_lvh_filings WHERE status IN ('clean','partial')""").fetchall()
+    fchanged = []
+    for doc_id, form, flag, stance, mentions, special in filings:
+        hs = per_doc.get(doc_id, [])
+        flags = [h[0] for h in hs if h[0] is not None]
+        ments = [h[2] for h in hs if h[2] is not None]
+        new = ((any(flags) if flags else None), group_stance([h[1] for h in hs]),
+               (any(ments) if ments else None), form == SPECIAL_FORM)
+        if new != (flag, stance, mentions, special):
+            fchanged.append((doc_id,) + new)
+    if fchanged:
+        _bulk_temp(con, "lvh_reread_f",
+                   ("doc_id VARCHAR", "flag BOOLEAN", "stance VARCHAR",
+                    "mentions BOOLEAN", "special BOOLEAN"), fchanged)
+        con.execute("""
+            UPDATE eq_lvh_filings f SET important_proposal = r.flag,
+                   proposal_stance = r.stance, purpose_mentions_proposal = r.mentions,
+                   is_special_form = r.special
+            FROM lvh_reread_f r WHERE f.doc_id = r.doc_id""")
+    return len(changed), len(fchanged)
+
+
+def truncated_code_docs(db_path):
+    u"""Stored filings whose issuer code lvh-1 cut to three characters, with
+    their archive day: they are re-extracted from the archive (the full code
+    is not stored anywhere else). Only rows written by an older parser are
+    picked, so a filing that genuinely yields a short code is not re-read
+    every night."""
+    if not os.path.exists(db_path):
+        return {}
+    con = duckdb.connect(db_path, read_only=True)
+    try:
+        return {r[0]: {"date": r[1].isoformat(), "doc_type": r[2]}
+                for r in con.execute("""
+                    SELECT doc_id, filed_date, doc_type FROM eq_lvh_filings
+                    WHERE length(issuer_sec_code) < 4
+                      AND coalesce(parser_version, '') <> ?""",
+                    [PARSER_VERSION]).fetchall()}
+    except Exception:                                            # noqa: BLE001
+        return {}
+    finally:
+        con.close()
 
 
 # ---- filing discovery ------------------------------------------------------
@@ -789,6 +1049,17 @@ def main():
     if since is not None:
         print("incremental: %d of %d archived filings are new since %s"
               % (len(pending), len(filings), since))
+    # Filings whose issuer code an older parser truncated are read again. The
+    # archive day is the one the listing gives where it has the filing, and
+    # the filed date otherwise; a filing that cannot be fetched keeps its
+    # stored row rather than being overwritten with a failure.
+    redo = set()
+    for doc_id, rec in truncated_code_docs(args.db).items():
+        if doc_id not in pending:
+            pending[doc_id] = filings.get(doc_id) or rec
+            redo.add(doc_id)
+    if redo:
+        print("re-reading %d filings stored with a truncated issuer code" % len(redo))
     meta = src.list_metadata(
         days=None if since is None else {r["date"] for r in pending.values()})
     targets = []
@@ -812,12 +1083,11 @@ def main():
     # A database written by an earlier parser has the table already, and
     # CREATE TABLE IF NOT EXISTS will not add a column to it. Add rather than
     # rebuild, so a re-extraction stays a re-extraction.
-    have = {r[1] for r in con.execute("PRAGMA table_info('eq_lvh_filings')").fetchall()}
-    for col, typ in (("proposal_asked", "BOOLEAN"),
-                     ("funding_implausible", "BOOLEAN"),
-                     ("cover_date", "DATE")):
-        if col not in have:
-            con.execute("ALTER TABLE eq_lvh_filings ADD COLUMN %s %s" % (col, typ))
+    for table, added in ADDED_COLUMNS.items():
+        have = {r[1] for r in con.execute("PRAGMA table_info('%s')" % table).fetchall()}
+        for col, typ in added:
+            if col not in have:
+                con.execute("ALTER TABLE %s ADD COLUMN %s %s" % (table, col, typ))
 
     def resolve_issuer(sec, name):
         u"""The issuer's securities code is filed, so this is a lookup, not a
@@ -875,6 +1145,9 @@ def main():
             if done % 2000 == 0:
                 print("  %d/%d filings" % (done, len(targets)))
                 sys.stdout.flush()
+            if err and doc_id in redo:
+                stats["redo_unreadable"] += 1
+                continue
             con.execute("DELETE FROM eq_lvh_holders WHERE doc_id = ?", [doc_id])
             con.execute("DELETE FROM eq_lvh_filings WHERE doc_id = ?", [doc_id])
             if err:
@@ -910,10 +1183,11 @@ def main():
             row["filed_date"] = submitted
             con.execute(FILING_INSERT, [row[c] for c in FILING_COLUMNS])
             if holders:
-                con.executemany("INSERT INTO eq_lvh_holders VALUES (%s)"
-                                % ",".join(["?"] * 23), holders)
+                con.executemany(HOLDER_INSERT, holders)
                 tot_holders += len(holders)
                 tot_proposal += sum(1 for h in holders if h[16])
+    reread = reclassify(con)
+    print("reclassified: %d holder rows, %d filings" % reread)
     con.close()
     record_run(args.db, "5pct-filings", through, len(filings), PARSER_VERSION,
                back_to=catch_up_floor)

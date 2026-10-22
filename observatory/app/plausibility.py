@@ -88,6 +88,36 @@ def lvh_rows(rows):
     return rows
 
 
+def pct_ok(col):
+    u"""SQL: the percentage where it is one (0-100), else NULL — for ranking
+    and averaging. The filed value itself is published unchanged."""
+    return "CASE WHEN %s BETWEEN 0 AND 100 THEN %s END" % (col, col)
+
+
+# The register's shareholder-category percentages, each a share of one total.
+OWN_PCT_FIELDS = ("foreign_pct", "individuals_pct", "financial_institutions_pct",
+                  "other_corporations_pct", "securities_firms_pct",
+                  "government_pct", "nominee_ratio_pct", "majors_ratio_filed_pct")
+
+
+def own_rows(rows):
+    u"""Flag a register percentage outside 0-100.
+
+    Seven registers in the archive state category percentages that sum to
+    thousands of percent (スポーツフィールド's foreign ownership is filed as
+    5,860.012%): units or shares typed into the percentage column. The
+    extractor already marks those filings partial; this says which figure."""
+    for row in rows or ():
+        for field in OWN_PCT_FIELDS:
+            v = row.get(field)
+            if v is not None and not 0 <= v <= 100:
+                _add(row, field,
+                     "%s is %.3f%%; a share of the register cannot exceed 100%%, "
+                     "so the filing has put a count in the percentage column"
+                     % (field, v))
+    return rows
+
+
 def holdings_total(row, portfolio_yen, total_assets_yen):
     u"""Flag a cross-holding portfolio worth more than the whole balance sheet."""
     if portfolio_yen and total_assets_yen and portfolio_yen > total_assets_yen:

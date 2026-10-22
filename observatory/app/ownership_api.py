@@ -32,6 +32,7 @@ from . import asof
 from . import equity_api
 
 from . import aliases
+from . import plausibility
 from .equity_api import NAMES_NOTE, NAME_CTES, PROVENANCE, _cur, _rows
 
 router = APIRouter(prefix="/api/v1/equity/ownership", tags=["Shareholder register"])
@@ -155,12 +156,14 @@ def summary(year: str = Query("", description="fiscal year, e.g. 2026; default l
     head = _rows(cur, latest_own() + """
         SELECT count(*)                          AS companies,
                sum(majors_rows)                  AS register_rows,
-               avg(majors_ratio_filed_pct)       AS avg_top_holders_pct,
-               avg(nominee_ratio_pct)            AS avg_nominee_pct,
-               avg(foreign_pct)                  AS avg_foreign_pct,
-               avg(individuals_pct)              AS avg_individuals_pct,
-               avg(financial_institutions_pct)   AS avg_financial_institutions_pct,
-               avg(other_corporations_pct)       AS avg_other_corporations_pct,
+               avg(""" + plausibility.pct_ok("majors_ratio_filed_pct") + """) AS avg_top_holders_pct,
+               avg(""" + plausibility.pct_ok("nominee_ratio_pct") + """) AS avg_nominee_pct,
+               avg(""" + plausibility.pct_ok("foreign_pct") + """) AS avg_foreign_pct,
+               avg(""" + plausibility.pct_ok("individuals_pct") + """) AS avg_individuals_pct,
+               avg(""" + plausibility.pct_ok("financial_institutions_pct") + """)
+                   AS avg_financial_institutions_pct,
+               avg(""" + plausibility.pct_ok("other_corporations_pct") + """)
+                   AS avg_other_corporations_pct,
                sum(shareholders_total)           AS shareholders_counted,
                min(period_end) AS earliest_period_end, max(period_end) AS latest_period_end
         FROM current_own""", p)[0]
@@ -186,13 +189,15 @@ def summary(year: str = Query("", description="fiscal year, e.g. 2026; default l
 
 
 @router.get("/companies")
-def companies(q: str = Query("", description="name or code substring")):
+def companies(q: str = Query("", description="name or code substring"),
+              limit: int = Query(25, ge=1, le=500),
+              offset: int = Query(0, ge=0)):
     u"""Search feed for this dataset — a company is here if a register was
     extracted from its annual report."""
     cur = _require()
     like = "%" + q.strip() + "%"
     alias_sql, alias_params = aliases.clause(cur, "c.sec_code", q)
-    return {"companies": _rows(cur, latest_own() + NAME_CTES + """
+    return {"companies": plausibility.own_rows(_rows(cur, latest_own() + NAME_CTES + """
         SELECT c.sec_code, c.filer_name AS name,
                coalesce(n.name_en, s.name_en) AS name_en, e.industry,
                CAST(year(c.period_end) AS VARCHAR) AS year, c.majors_rows,
@@ -205,9 +210,9 @@ def companies(q: str = Query("", description="name or code substring")):
           AND (c.sec_code LIKE ? OR c.filer_name LIKE ?
                OR lower(coalesce(n.name_en, s.name_en, '')) LIKE lower(?)"""
         + alias_sql + """)
-        ORDER BY c.shareholders_total DESC NULLS LAST LIMIT 25""",
-        _params("", "") + [like, like, like] + alias_params),
-        "names_note": NAMES_NOTE}
+        ORDER BY c.shareholders_total DESC NULLS LAST, c.sec_code LIMIT ? OFFSET ?""",
+        _params("", "") + [like, like, like] + alias_params + [limit, offset])),
+        "limit": limit, "offset": offset, "names_note": NAMES_NOTE}
 
 
 @router.get("/company/{sec_code}")
@@ -243,14 +248,15 @@ def company(sec_code: str,
         SELECT share_class, category, category_en, shareholders, units, pct
         FROM eq_own_category WHERE doc_id = ?
         ORDER BY share_class, pct DESC NULLS LAST""", [doc])
-    head["history"] = _rows(cur, """
+    head["history"] = plausibility.own_rows(_rows(cur, """
         SELECT CAST(year(period_end) AS VARCHAR) AS year, period_end, doc_id,
                majors_ratio_filed_pct, nominee_ratio_pct, foreign_pct,
                individuals_pct, financial_institutions_pct,
                other_corporations_pct, shareholders_total, status
         FROM eq_own_filings
         WHERE (sec_code = ? OR edinet_code = ?) AND status IN ('clean','partial')
-        ORDER BY period_end DESC""", [code, head.get("edinet_code")])
+        ORDER BY period_end DESC""", [code, head.get("edinet_code")]))
+    plausibility.own_rows([head])
     return _notes(head)
 
 
@@ -401,9 +407,13 @@ def screen(metric: str = Query("foreign_pct", description="one of /screen/metric
         FROM current_own c
         LEFT JOIN en_scode es ON es.sec_code = c.sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = c.edinet_code
-        WHERE {COL} IS NOT NULL
+        WHERE {COL} IS NOT NULL{RANGE}
           AND coalesce(c.shareholders_total, 0) >= ?{COHORT}
         ORDER BY metric_value {DIR} LIMIT ?"""
+        # A percentage outside 0-100 is a filing on the wrong scale; ranked,
+        # it would top every screen (Sportsfield's 5,860% foreign ownership).
+        .replace("{RANGE}", (" AND " + plausibility.pct_ok("{COL}") + " IS NOT NULL")
+                 if col.endswith("_pct") else "")
         .replace("{COL}", "c." + col).replace("{DIR}", direction)
         .replace("{COHORT}", cohort_clause),
         _params(year, listed) + [min_shareholders] + cohort_params + [limit])

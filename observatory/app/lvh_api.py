@@ -18,21 +18,37 @@ WHAT A CONSUMER MUST NOT ASSUME, carried in the data rather than in prose:
      between joint holders, and a member that has just left is still described
      in the document with last-report figures only. Members that count toward
      the group carry in_group_total.
-  3. 重要提案行為 IS NOT ASKED ON EVERY FORM. The change report (第三号様式)
-     and the special form (第二号様式 — the exemption for institutions that
-     undertake to make no such proposals) carry no such field at all, so
-     important_proposal is null on them. `proposal_asked` says which case a
-     null is: false means the form never put the question, true means it did
-     and the filer left it blank. Null never means "no".
+  3. 重要提案行為 IS NOT ASKED ON EVERY FORM. The special-reporting form
+     (EDINET jplvh030000 — the exemption for institutions that undertake to
+     make no such proposals) carries no such field, so important_proposal is
+     null on it. The general form asks it on initial, change and amendment
+     reports alike. `proposal_asked` says which case a null is: false means
+     the form never put the question, true means it did and the filer left it
+     blank. Null never means "no". The answer is free text, read into
+     proposal_stance (will_or_may / none_planned / unclear).
   4. A CHANGE REPORT OFTEN RESTATES THE ORIGINAL OBLIGATION DATE. 提出義務
      発生日 on a 変更報告書 is frequently the date the holder first crossed 5%,
-     not the date of the change reported — so requirement_date orders the tape
-     but the gap to filed_date is not a lateness measure.
+     not the date of the change reported — so the gap to filed_date is not a
+     lateness measure. A trigger date before the 5% rule began (1 December
+     1990) or after the report was filed is a typo; it is published as filed,
+     marked by date_quality, and never used to order or bound anything.
+  6. A JOINT FILING IS ONE REPORT WITH SEVERAL HOLDERS. A holder's book
+     (/holder) lists each report once per line the holder has in it, with the
+     filing group's position in ratio_pct and shares_held — the same fields
+     as everywhere else — and the holder's own line in holder_ratio_pct and
+     holder_shares_held. An investment manager whose fund holds the shares
+     can file its own line as 0; that is the filing, not a gap.
   5. THE RATIO IS THE STATUTORY ONE. Its denominator is 発行済株式等総数 plus
      the holder's own potential shares, so it does not equal shares_held /
      shares_outstanding and the difference is not an error.
 """
+import csv
+import io
+import json
+import re
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from . import asof
 from . import jp_enums
@@ -58,7 +74,77 @@ CALC = {
     "days_to_file": ("filed_date − requirement_date, in days. NOT a lateness "
                      "measure: a change report often restates the date the "
                      "holder first crossed 5%, years earlier"),
+    "proposal_stance": ("the filed 重要提案行為 answer read as will_or_may (states "
+                        "it will, may or has made important proposals), "
+                        "none_planned (states none, in any wording) or unclear "
+                        "(text that does not answer the question, such as a "
+                        "lock-up clause typed into the box); a filing's stance "
+                        "is will_or_may if any holder's is"),
+    "purpose_mentions_proposal": ("the 保有目的 (purpose) reserves important "
+                                  "proposals in a clause that does not deny a "
+                                  "plan. Large asset managers write this into "
+                                  "nearly every report as boilerplate, so it "
+                                  "is not a campaign signal on its own"),
+    "date_quality": ("ok, or after_filing (trigger date later than the date "
+                     "EDINET received the report), before_5pct_rule (earlier "
+                     "than 1 December 1990, when the rule began) or missing"),
+    "unique_proposal_docs": ("distinct reports with important_proposal true; "
+                             "proposal_reports counts holder lines, so a joint "
+                             "filing counts once per co-filer there"),
 }
+
+# The 5% rule (大量保有報告制度) took effect on 1 December 1990; no obligation
+# can predate it, and none can arise after the report that discloses it.
+RULE_START = "1990-12-01"
+
+
+def trigger(a="f"):
+    u"""The trigger date where it is possible, else NULL — for ordering and
+    for bounds. The filed value itself is always published unchanged."""
+    return ("CASE WHEN {a}.requirement_date BETWEEN DATE '%s' AND {a}.filed_date "
+            "THEN {a}.requirement_date END" % RULE_START).format(a=a)
+
+
+def date_quality(a="f"):
+    return ("CASE WHEN {a}.requirement_date IS NULL THEN 'missing' "
+            "WHEN {a}.requirement_date > {a}.filed_date THEN 'after_filing' "
+            "WHEN {a}.requirement_date < DATE '%s' THEN 'before_5pct_rule' "
+            "ELSE 'ok' END" % RULE_START).format(a=a)
+
+
+# The newest order of events: possible trigger date, else the filed date.
+def event_date(a="f"):
+    return "coalesce(%s, %s.filed_date)" % (trigger(a), a)
+
+
+# Columns lvh-2 added. Until the nightly extraction has run once against a
+# database written by lvh-1 they are absent, and the API serves NULL in their
+# place rather than failing.
+OPTIONAL = {"eq_lvh_filings": ("proposal_stance", "purpose_mentions_proposal"),
+            "eq_lvh_holders": ("proposal_stance", "purpose_mentions_proposal")}
+
+
+def _opt(cur):
+    u"""{'f.proposal_stance': 'f.proposal_stance' or 'NULL', ...}."""
+    have = {(r[0], r[1]) for r in cur.execute(
+        "SELECT table_name, column_name FROM duckdb_columns() "
+        "WHERE table_name IN ('eq_lvh_filings', 'eq_lvh_holders')").fetchall()}
+    out = {}
+    for table, cols in OPTIONAL.items():
+        alias = "f" if table == "eq_lvh_filings" else "h"
+        for c in cols:
+            out["%s.%s" % (alias, c)] = ("%s.%s" % (alias, c)) if (table, c) in have else "NULL"
+    return out
+
+
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _date_param(value, name):
+    v = (value or "").strip()
+    if v and not DATE_RE.match(v):
+        raise HTTPException(400, "%s must be YYYY-MM-DD" % name)
+    return v
 
 TAPE_NOTE = (
     "The tape is ordered by the date each report was FILED, which is when the "
@@ -81,10 +167,14 @@ GROUP_NOTE = (
 
 PROPOSAL_NOTE = (
     "important_proposal is the filed answer to 重要提案行為等 — the acts under "
-    "Article 27-26 that separate a campaign from a passive stake. Only the "
-    "general first-schedule form asks it: the change report and the special "
-    "form carry no such field, and proposal_asked is false on those. A null "
-    "answer never means 'no'.")
+    "Article 27-26 that separate a campaign from a passive stake — read as "
+    "true when the holder states it will, may or has made such proposals and "
+    "false when it states none. The general form asks it on initial, change "
+    "and amendment reports alike; the special-reporting form used by "
+    "institutions that undertake to make no proposals carries no such field, "
+    "and proposal_asked is false there. An answer that does not address the "
+    "question (a lock-up clause typed into the box, say) is null with "
+    "proposal_stance 'unclear'. A null answer never means 'no'.")
 
 RATIO_NOTE = (
     "ratio_pct is the statutory 株券等保有割合. Its denominator is 発行済株式等"
@@ -125,7 +215,7 @@ _LATEST_STAKE = """
                    PARTITION BY coalesce(f.issuer_sec_code, f.issuer_edinet_code,
                                          f.issuer_name_raw),
                                 coalesce(f.filer_edinet_code, f.filer_name)
-                   ORDER BY coalesce(f.requirement_date, f.filed_date) DESC,
+                   ORDER BY /*EVENT*/ DESC,
                             f.filed_date DESC,
                             CASE WHEN f.doc_type = '360' THEN 1 ELSE 0 END DESC,
                             f.doc_id DESC) AS rn
@@ -138,18 +228,34 @@ _LATEST_STAKE = """
 
 def latest_stake():
     """Latest Stake, with the point-in-time ceiling in force (app/asof.py)."""
-    return _LATEST_STAKE.replace("/*ASOF*/", asof.clause("filed_date", "f"))
+    return (_LATEST_STAKE.replace("/*ASOF*/", asof.clause("filed_date", "f"))
+            .replace("/*EVENT*/", event_date("f")))
 
-FILING_COLS = """
+
+_FILING_COLS = """
         f.doc_id, f.doc_type, f.report_type, f.change_no, f.is_special_form,
         f.filer_edinet_code, f.filer_name, f.issuer_name_raw, f.issuer_sec_code,
         f.issuer_edinet_code, f.listing, f.exchange, f.requirement_date,
         f.filed_date, f.cover_date, f.holders_declared, f.holders_rows, f.shares_held,
         f.shares_outstanding, f.ratio_pct, f.prior_ratio_pct, f.ratio_change_pp,
-        f.important_proposal, f.proposal_asked, f.filing_reason_ja, f.purpose_ja,
+        f.important_proposal, f.proposal_asked, {f.proposal_stance} AS proposal_stance,
+        {f.purpose_mentions_proposal} AS purpose_mentions_proposal,
+        f.filing_reason_ja, f.purpose_ja,
         f.own_funds_yen, f.borrowings_yen, f.funding_implausible, f.status,
-        f.detail, date_diff('day', f.requirement_date, f.filed_date) AS days_to_file
+        f.detail, date_diff('day', f.requirement_date, f.filed_date) AS days_to_file,
+        {DQ} AS date_quality
 """
+
+
+def _fill(sql, opt):
+    u"""Put each optional column, or NULL, where {alias.column} stands."""
+    for key, expr in opt.items():
+        sql = sql.replace("{%s}" % key, expr)
+    return sql
+
+
+def filing_cols(opt):
+    return _fill(_FILING_COLS.replace("{DQ}", date_quality("f")), opt)
 
 
 @router.get("/summary")
@@ -161,12 +267,28 @@ def summary():
                count(DISTINCT issuer_sec_code) AS issuers,
                count(DISTINCT filer_edinet_code) AS filers,
                min(filed_date) AS earliest_filed, max(filed_date) AS latest_filed,
-               min(requirement_date) AS earliest_trigger,
-               max(requirement_date) AS latest_trigger,
+               min(/*T*/) AS earliest_trigger,
+               max(/*T*/) AS latest_trigger,
+               sum(CASE WHEN /*DQ*/ IN ('after_filing', 'before_5pct_rule')
+                        THEN 1 ELSE 0 END) AS trigger_dates_implausible,
                sum(CASE WHEN important_proposal THEN 1 ELSE 0 END) AS activist_filings,
                sum(CASE WHEN is_special_form THEN 1 ELSE 0 END) AS special_form_filings,
-               median(date_diff('day', requirement_date, filed_date)) AS median_days_to_file
-        FROM eq_lvh_filings WHERE status IN ('clean','partial')""" + asof.clause("filed_date"))[0]
+               median(date_diff('day', /*T*/, filed_date)) AS median_days_to_file
+        FROM eq_lvh_filings f WHERE status IN ('clean','partial')""".replace(
+            "/*T*/", trigger("f")).replace("/*DQ*/", date_quality("f"))
+        + asof.clause("filed_date"))[0]
+    opt = _opt(cur)
+    if opt["f.proposal_stance"] != "NULL":
+        head["by_proposal_stance"] = {
+            (r["s"] or "not_stated"): r["n"] for r in _rows(cur, """
+                SELECT proposal_stance AS s, count(*) AS n FROM eq_lvh_filings
+                WHERE status IN ('clean','partial')""" + asof.clause("filed_date")
+                + " GROUP BY 1")}
+    head["trigger_note"] = (
+        "earliest_trigger and latest_trigger leave out trigger dates that cannot "
+        "be right (before 1 December 1990, when the 5% rule began, or after the "
+        "report was filed); trigger_dates_implausible counts them, and each "
+        "report carries date_quality.")
     head["by_report_type"] = _rows(cur, """
         SELECT report_type, count(*) AS n FROM eq_lvh_filings
         WHERE status IN ('clean','partial')""" + asof.clause("filed_date") + """ GROUP BY 1 ORDER BY 2 DESC""")
@@ -185,17 +307,8 @@ def summary():
     return _notes(head)
 
 
-@router.get("/recent")
-def recent(limit: int = Query(50, ge=1, le=500),
-           activist: str = Query("", description="'true' for filings stating an "
-                                                 "important-proposal act"),
-           min_ratio: float = Query(0.0, ge=0, le=100),
-           min_change: float = Query(0.0, ge=0, le=100,
-                                     description="minimum absolute change in "
-                                                 "percentage points"),
-           report_type: str = Query("", description="initial | change | amendment")):
-    u"""The tape, newest trigger date first."""
-    cur = _require()
+def _tape_where(activist, min_ratio, min_change, report_type, since, until):
+    u"""(conditions, params) shared by the tape and the bulk export."""
     where = ["f.status IN ('clean','partial')"]
     params = []
     if (activist or "").strip().lower() == "true":
@@ -206,24 +319,59 @@ def recent(limit: int = Query(50, ge=1, le=500),
     if min_change:
         where.append("abs(f.ratio_change_pp) >= ?")
         params.append(min_change)
-    if report_type.strip():
+    if (report_type or "").strip():
         where.append("f.report_type = ?")
         params.append(report_type.strip())
+    if since:
+        where.append("f.filed_date >= CAST(? AS DATE)")
+        params.append(since)
+    if until:
+        where.append("f.filed_date <= CAST(? AS DATE)")
+        params.append(until)
+    return where, params
+
+
+@router.get("/recent")
+def recent(limit: int = Query(50, ge=1, le=1000),
+           offset: int = Query(0, ge=0),
+           activist: str = Query("", description="'true' for filings stating an "
+                                                 "important-proposal act"),
+           min_ratio: float = Query(0.0, ge=0, le=100),
+           min_change: float = Query(0.0, ge=0, le=100,
+                                     description="minimum absolute change in "
+                                                 "percentage points"),
+           report_type: str = Query("", description="initial | change | amendment"),
+           since: str = Query("", description="filed on or after, YYYY-MM-DD"),
+           until: str = Query("", description="filed on or before, YYYY-MM-DD")):
+    u"""The tape, newest filing first. Page with offset; `total` is the number
+    of filings matching the filters, so a reader knows when it has them all.
+    For the whole archive at once use /export."""
+    cur = _require()
+    since, until = _date_param(since, "since"), _date_param(until, "until")
+    where, params = _tape_where(activist, min_ratio, min_change, report_type,
+                                since, until)
+    where_sql = " AND ".join(where) + asof.clause("filed_date", "f")
+    total = cur.execute("SELECT count(*) FROM eq_lvh_filings f WHERE " + where_sql,
+                        params).fetchone()[0]
     rows = _rows(cur, "WITH x AS (SELECT 1)" + NAME_CTES + """
-        SELECT """ + FILING_COLS + """,
+        SELECT """ + filing_cols(_opt(cur)) + """,
                coalesce(es.name_en, ee.name_en) AS issuer_name_en
         FROM eq_lvh_filings f
         LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = f.issuer_edinet_code
-        WHERE """ + " AND ".join(where) + """
+        WHERE """ + where_sql + """
         ORDER BY f.filed_date DESC, f.requirement_date DESC, f.doc_id DESC
-        LIMIT ?""", params + [limit])
+        LIMIT ? OFFSET ?""", params + [limit, offset])
     plausibility.lvh_rows(rows)
     jp_enums.annotate_listing(rows)
-    return _notes({"filings": rows, "filters": {
-        "activist": (activist or "").strip().lower() == "true",
-        "min_ratio": min_ratio, "min_change": min_change,
-        "report_type": report_type.strip() or None}})
+    return _notes({"filings": rows, "total": total, "offset": offset,
+                   "returned": len(rows),
+                   "next_offset": (offset + len(rows)) if offset + len(rows) < total else None,
+                   "filters": {
+                       "activist": (activist or "").strip().lower() == "true",
+                       "min_ratio": min_ratio, "min_change": min_change,
+                       "report_type": report_type.strip() or None,
+                       "since": since or None, "until": until or None}})
 
 
 @router.get("/companies")
@@ -238,7 +386,7 @@ def companies(q: str = Query("", description="issuer name or code substring")):
                any_value(coalesce(es.name_en, ee.name_en)) AS name_en,
                count(*) AS reports,
                count(DISTINCT coalesce(f.filer_edinet_code, f.filer_name)) AS groups,
-               max(coalesce(f.requirement_date, f.filed_date)) AS latest_report,
+               max(""" + event_date("f") + """) AS latest_report,
                sum(CASE WHEN f.important_proposal THEN 1 ELSE 0 END) AS activist_reports
         FROM eq_lvh_filings f
         LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
@@ -261,6 +409,7 @@ def company(sec_code: str,
     code = (sec_code or "").strip()
     current = _rows(cur, latest_stake() + NAME_CTES + """
         SELECT f.*, (f.ratio_pct >= ?) AS is_current,
+               """ + date_quality("f") + """ AS date_quality,
                coalesce(es.name_en, ee.name_en) AS issuer_name_en
         FROM current_stakes f
         LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
@@ -287,11 +436,11 @@ def company(sec_code: str,
             "combined_current_pct": round(sum(r["ratio_pct"] or 0 for r in current
                                               if r.get("is_current")), 2) or None}
     head["reports"] = jp_enums.annotate_listing(plausibility.lvh_rows(_rows(cur, """
-        SELECT """ + FILING_COLS + """
+        SELECT """ + filing_cols(_opt(cur)) + """
         FROM eq_lvh_filings f
         WHERE (f.issuer_sec_code = ? OR f.issuer_edinet_code = ?)
           AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") + """
-        ORDER BY coalesce(f.requirement_date, f.filed_date) DESC, f.doc_id DESC
+        ORDER BY """ + event_date("f") + """ DESC, f.doc_id DESC
         LIMIT ?""", [code, code, history])))
     head["combined_note"] = (
         "combined_current_pct adds the current groups' filed ratios. Groups "
@@ -301,72 +450,129 @@ def company(sec_code: str,
     return _notes(head)
 
 
-@router.get("/holder/{key}", openapi_extra={"x-example": "/api/v1/equity/stakes/holder/E12444"})
-def holder(key: str, limit: int = Query(200, ge=1, le=1000)):
-    u"""One holder's book: every issuer it has filed on, latest position first.
-
-    `key` is the holder's EDINET code. Joint holders are coded in the filing
-    even when they never file themselves, so the code identifies a holder
-    across every report it appears in — including the ones EDINET's public
-    filer registry has no row for (match_status = code_not_in_registry).
-    """
-    cur = _require()
-    k = (key or "").strip()
-    rows = _rows(cur, "WITH x AS (SELECT 1)" + NAME_CTES + """
-        SELECT h.name_raw, h.name_en, h.holder_edinet_code, h.business_ja,
-               h.holder_type_ja, h.is_individual, f.issuer_sec_code,
-               f.issuer_name_raw, coalesce(es.name_en, ee.name_en) AS issuer_name_en,
-               f.report_type, f.requirement_date, f.filed_date, h.shares_held,
-               h.ratio_pct, h.prior_ratio_pct, h.important_proposal, h.purpose_ja,
-               f.doc_id, f.status
+# One holder's lines across every report it appears in. The filing group's
+# position goes out under the same names every other endpoint uses
+# (ratio_pct, shares_held); the holder's own line is holder_*. A joint filing
+# appears once per line this holder has in it, never once per co-filer.
+_BOOK = """
+    book AS (
+        SELECT h.name_raw, h.name_en, h.holder_edinet_code,
+               coalesce(h.holder_edinet_code, h.name_key) AS holder_key,
+               h.business_ja, h.holder_type_ja, h.is_individual, h.holder_no,
+               (h.holder_no = 1) AS is_primary_filer,
+               f.filer_edinet_code, f.filer_name, f.holders_rows AS joint_holders,
+               f.issuer_sec_code, f.issuer_name_raw,
+               coalesce(es.name_en, ee.name_en) AS issuer_name_en,
+               f.report_type, f.is_special_form, f.requirement_date, f.filed_date,
+               {DQ} AS date_quality,
+               f.shares_held, f.ratio_pct, f.prior_ratio_pct, f.ratio_change_pp,
+               h.shares_held AS holder_shares_held, h.ratio_pct AS holder_ratio_pct,
+               h.prior_ratio_pct AS holder_prior_ratio_pct, h.in_group_total,
+               f.important_proposal, {f.proposal_stance} AS proposal_stance,
+               h.important_proposal AS holder_important_proposal,
+               {h.proposal_stance} AS holder_proposal_stance,
+               {h.purpose_mentions_proposal} AS purpose_mentions_proposal,
+               h.purpose_ja, f.doc_id, f.status,
+               {EVENT} AS event_date
         FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)
         LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = f.issuer_edinet_code
-        WHERE h.holder_edinet_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") + """
-        ORDER BY coalesce(f.requirement_date, f.filed_date) DESC LIMIT ?""",
-        [k, limit])
-    if not rows:
-        raise HTTPException(404, "no 5%% filings archived for holder %s" % k)
-    latest = {}
-    for r in rows:
-        latest.setdefault(r["issuer_sec_code"] or r["issuer_name_raw"], r)
+        WHERE coalesce(h.holder_edinet_code, h.name_key) = ?
+          AND f.status IN ('clean','partial'){ASOF})
+"""
+
+
+@router.get("/holder/{key}", openapi_extra={"x-example": "/api/v1/equity/stakes/holder/E12444"})
+def holder(key: str,
+           limit: int = Query(200, ge=1, le=5000),
+           offset: int = Query(0, ge=0, description="skip this many reports; "
+                                                    "page through with next_offset")):
+    u"""One holder's book: every issuer it has filed on, latest position first.
+
+    `key` is the holder's EDINET code, or for a holder with none, the
+    holder_key that /holders lists. Joint holders are coded in the filing even
+    when they never file themselves, so the code identifies a holder across
+    every report it appears in — including the ones EDINET's public filer
+    registry has no row for (match_status = code_not_in_registry).
+
+    `reports` is one page, newest first; `reports_total` is the whole book and
+    `truncated` says whether this page stops short of it. `current` is the
+    latest report per issuer over the whole book, whatever the page.
+    """
+    cur = _require()
+    k = (key or "").strip()
+    book = "WITH x AS (SELECT 1)" + NAME_CTES + "," + _fill(
+        _BOOK.replace("{DQ}", date_quality("f")).replace("{EVENT}", event_date("f"))
+        .replace("{ASOF}", asof.clause("filed_date", "f")), _opt(cur))
     # Counted over every report this holder has filed, not the page returned:
     # an active filer has more reports than `limit`, and reporting the page
     # size as its number of issuers would understate its book.
-    totals = _rows(cur, """
-        SELECT count(*) AS reports,
-               count(DISTINCT coalesce(f.issuer_sec_code, f.issuer_name_raw)) AS issuers
-        FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)
-        WHERE h.holder_edinet_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f"), [k])[0]
-    profile = _label({"holder_edinet_code": k, "name_ja": rows[0]["name_raw"],
-                      "name_en": rows[0]["name_en"],
-                      "business_ja": rows[0].get("business_ja"),
-                      "holder_type_ja": rows[0].get("holder_type_ja"),
-                      "is_individual": rows[0].get("is_individual")})
-    return _notes({"holder_edinet_code": k, "name": rows[0]["name_raw"],
-                   "name_en": rows[0]["name_en"],
+    totals = _rows(cur, book + """
+        SELECT count(*) AS reports, count(DISTINCT doc_id) AS documents,
+               count(DISTINCT coalesce(issuer_sec_code, issuer_name_raw)) AS issuers
+        FROM book""", [k])[0]
+    if not totals["reports"]:
+        raise HTTPException(404, "no 5%% filings archived for holder %s" % k)
+    rows = _rows(cur, book + """
+        SELECT * EXCLUDE (event_date) FROM book
+        ORDER BY event_date DESC, doc_id DESC, holder_no
+        LIMIT ? OFFSET ?""", [k, limit, offset])
+    current = _rows(cur, book + """
+        SELECT * EXCLUDE (event_date, rn) FROM (
+            SELECT *, row_number() OVER (
+                PARTITION BY coalesce(issuer_sec_code, issuer_name_raw)
+                ORDER BY event_date DESC, filed_date DESC, doc_id DESC, holder_no) AS rn
+            FROM book)
+        WHERE rn = 1
+        ORDER BY ratio_pct DESC NULLS LAST""", [k])
+    first = current[0]
+    profile = _label({"holder_edinet_code": first["holder_edinet_code"],
+                      "holder_key": first["holder_key"],
+                      "name_ja": first["name_raw"], "name_en": first["name_en"],
+                      "business_ja": first.get("business_ja"),
+                      "holder_type_ja": first.get("holder_type_ja"),
+                      "is_individual": first.get("is_individual")})
+    end = offset + len(rows)
+    return _notes({"holder_edinet_code": first["holder_edinet_code"],
+                   "holder_key": first["holder_key"],
+                   "name": first["name_raw"], "name_en": first["name_en"],
                    "filer_type": profile["filer_type"],
                    "filer_type_en": profile["filer_type_en"],
                    "filer_type_evidence": profile["filer_type_evidence"],
-                   "business_ja": rows[0].get("business_ja"),
+                   "business_ja": first.get("business_ja"),
                    "group": profile["group"],
                    "group_entities": profile["group_entities"],
                    "type_note": TYPE_NOTE, "group_note": GROUP_NOTE,
                    "issuers": totals["issuers"], "reports_total": totals["reports"],
-                   "reports_returned": len(rows),
-                   "current": sorted(latest.values(),
-                                     key=lambda r: -(r["ratio_pct"] or 0)),
+                   "documents_total": totals["documents"],
+                   "offset": offset, "reports_returned": len(rows),
+                   "truncated": end < totals["reports"],
+                   "next_offset": end if end < totals["reports"] else None,
+                   "book_note": BOOK_NOTE,
+                   "current": current,
                    "reports": rows})
+
+
+BOOK_NOTE = (
+    "ratio_pct, shares_held and prior_ratio_pct are the filing group's "
+    "position as filed, the same fields every other endpoint returns. "
+    "holder_ratio_pct and holder_shares_held are this holder's own line in the "
+    "filing — null where the filing gives it no current figure, and 0 where it "
+    "files 0 (an investment manager whose fund holds the shares). "
+    "is_primary_filer marks the first holder named, which is the filer. "
+    "reports_total counts this holder's lines; documents_total counts distinct "
+    "reports.")
 
 
 def _label(row):
     u"""Attach the two derived labels to one filing-entity row."""
     kind, evidence = type_of(row.get("business_ja"), row.get("is_individual"),
-                             row.get("holder_type_ja"))
+                             row.get("holder_type_ja"),
+                             row.get("name_ja") or row.get("name_raw"))
     row["filer_type"] = kind
     row["filer_type_en"] = TYPE_EN[kind]
     row["filer_type_evidence"] = evidence
-    row["group"] = group_of(row.get("holder_edinet_code"),
+    row["group"] = group_of(row.get("holder_edinet_code") or row.get("holder_key"),
                             row.get("name_en") or row.get("name_ja"))
     row["group_entities"] = group_size(row["group"]) or 1
     return row
@@ -386,11 +592,11 @@ ENTITY_ROLLUP = """
            count(DISTINCT coalesce(f.issuer_sec_code, f.issuer_name_raw)) AS issuers,
            max(h.ratio_pct) AS max_ratio_pct,
            sum(CASE WHEN h.important_proposal THEN 1 ELSE 0 END) AS proposal_reports,
-           max(coalesce(f.requirement_date, f.filed_date)) AS latest_report
+           max({EVENT}) AS latest_report
     FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)
     WHERE {WHERE}
     GROUP BY 1
-"""
+""".replace("{EVENT}", event_date("f"))
 
 
 @router.get("/holders")
@@ -432,13 +638,15 @@ def holders(limit: int = Query(50, ge=1, le=500),
         # sixteen entities file on largely the same names, and adding them
         # would report it holding 5% of more companies than exist.
         keys = [e["holder_key"] for e in entities]
-        per_issuer = _issuers_by_entity(cur, where) if keys else {}
+        per_entity = _sets_by_entity(cur, where) if keys else {}
+        empty = (set(), set(), set())
         merged = {}
         for e in entities:
             g = merged.setdefault(e["group"], {
                 "group": e["group"], "entities": [], "reports": 0,
                 "max_ratio_pct": None, "proposal_reports": 0,
-                "latest_report": None, "issuer_set": set()})
+                "latest_report": None, "issuer_set": set(), "doc_set": set(),
+                "proposal_doc_set": set()})
             g["entities"].append({
                 "holder_key": e["holder_key"],
                 "holder_edinet_code": e["holder_edinet_code"],
@@ -454,10 +662,17 @@ def holders(limit: int = Query(50, ge=1, le=500),
             if e["latest_report"] and (not g["latest_report"]
                                        or e["latest_report"] > g["latest_report"]):
                 g["latest_report"] = e["latest_report"]
-            g["issuer_set"] |= per_issuer.get(e["holder_key"], set())
+            issuers, docs, proposal_docs = per_entity.get(e["holder_key"], empty)
+            g["issuer_set"] |= issuers
+            g["doc_set"] |= docs
+            g["proposal_doc_set"] |= proposal_docs
         rows = []
         for g in merged.values():
             g["issuers"] = len(g["issuer_set"])
+            # A joint filing names several of a group's entities; these count
+            # it once, where reports and proposal_reports count each line.
+            g["unique_reports"] = len(g.pop("doc_set"))
+            g["unique_proposal_docs"] = len(g.pop("proposal_doc_set"))
             g.pop("issuer_set")
             g["entity_count"] = len(g["entities"])
             # The type of a group is its entities' type where they agree, and
@@ -479,21 +694,33 @@ def holders(limit: int = Query(50, ge=1, le=500),
             "group": wanted_group or None,
             "activist_only": (activist or "").strip().lower() == "true",
             "filers_total": len(entities),
-            "groups_total": (None if by_entity else len(rows))}
+            "groups_total": (None if by_entity else len(rows)),
+            "unique_proposal_docs_total": cur.execute(
+                "SELECT count(DISTINCT f.doc_id) FROM eq_lvh_holders h "
+                "JOIN eq_lvh_filings f USING (doc_id) WHERE "
+                + " AND ".join(where) + " AND f.important_proposal").fetchone()[0]}
+    head["proposal_count_note"] = CALC["unique_proposal_docs"]
     head["type_note"] = TYPE_NOTE
     head["group_note"] = GROUP_NOTE
     return _notes(head)
 
 
-def _issuers_by_entity(cur, where):
-    u"""entity key -> the set of issuers it has filed on."""
+def _sets_by_entity(cur, where):
+    u"""entity key -> (issuers it has filed on, its reports, its reports
+    with important_proposal true), each a set so a group can union them."""
     out = {}
-    for r in _rows(cur, """
+    cur.execute("""
             SELECT coalesce(h.holder_edinet_code, h.name_key) AS holder_key,
-                   coalesce(f.issuer_sec_code, f.issuer_name_raw) AS issuer
+                   coalesce(f.issuer_sec_code, f.issuer_name_raw) AS issuer,
+                   f.doc_id, coalesce(f.important_proposal, false) AS proposal
             FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)
-            WHERE """ + " AND ".join(where)):
-        out.setdefault(r["holder_key"], set()).add(r["issuer"])
+            WHERE """ + " AND ".join(where))
+    for key, issuer, doc_id, proposal in cur.fetchall():
+        sets = out.setdefault(key, (set(), set(), set()))
+        sets[0].add(issuer)
+        sets[1].add(doc_id)
+        if proposal:
+            sets[2].add(doc_id)
     return out
 
 
@@ -505,11 +732,105 @@ def holder_types():
     for r in _rows(cur, ENTITY_ROLLUP.replace(
             "{WHERE}", "f.status IN ('clean','partial')")):
         kind, _ = type_of(r.get("business_ja"), r.get("is_individual"),
-                          r.get("holder_type_ja"))
+                          r.get("holder_type_ja"), r.get("name_ja"))
         counts[kind] = counts.get(kind, 0) + 1
     return {"types": [{"filer_type": k, "label": TYPE_EN[k], "filers": counts.get(k, 0)}
                       for k in TYPE_EN if counts.get(k)],
             "type_note": TYPE_NOTE, "calc": CALC, "provenance": PROVENANCE}
+
+
+_EXPORT_HOLDER_COLS = """
+        h.holder_no, (h.holder_no = 1) AS is_primary_filer,
+        h.holder_edinet_code, coalesce(h.holder_edinet_code, h.name_key) AS holder_key,
+        h.name_raw AS holder_name, h.name_en AS holder_name_en,
+        h.holder_type_ja, h.is_individual, h.business_ja,
+        h.shares_held AS holder_shares_held, h.ratio_pct AS holder_ratio_pct,
+        h.prior_ratio_pct AS holder_prior_ratio_pct, h.in_group_total,
+        h.important_proposal AS holder_important_proposal,
+        {h.proposal_stance} AS holder_proposal_stance,
+        {h.purpose_mentions_proposal} AS holder_purpose_mentions_proposal,
+        h.important_proposal_ja AS holder_important_proposal_ja,
+        h.purpose_ja AS holder_purpose_ja
+"""
+
+
+@router.get("/export")
+def export(level: str = Query("filings", description="'filings' (one row per "
+                                                     "report) or 'holders' (one "
+                                                     "row per holder line, with "
+                                                     "its report's columns)"),
+           format: str = Query("csv", description="'csv' or 'ndjson'"),
+           activist: str = Query("", description="'true' for filings stating an "
+                                                 "important-proposal act"),
+           report_type: str = Query("", description="initial | change | amendment"),
+           since: str = Query("", description="filed on or after, YYYY-MM-DD"),
+           until: str = Query("", description="filed on or before, YYYY-MM-DD")):
+    u"""The whole tape in one download, streamed: every report (or every
+    holder line) matching the filters, oldest first. CSV opens with '#'
+    lines carrying the source, the notes and the formulas."""
+    cur = _require()
+    lvl = (level or "").strip().lower()
+    fmt = (format or "").strip().lower()
+    if lvl not in ("filings", "holders"):
+        raise HTTPException(400, "level must be 'filings' or 'holders'")
+    if fmt not in ("csv", "ndjson"):
+        raise HTTPException(400, "format must be 'csv' or 'ndjson'")
+    since, until = _date_param(since, "since"), _date_param(until, "until")
+    where, params = _tape_where(activist, 0, 0, report_type, since, until)
+    opt = _opt(cur)
+    cols = filing_cols(opt)
+    join = ""
+    order = "f.filed_date, f.doc_id"
+    if lvl == "holders":
+        cols += "," + _fill(_EXPORT_HOLDER_COLS, opt)
+        join = "JOIN eq_lvh_holders h USING (doc_id)"
+        order += ", h.holder_no"
+    cur.execute("WITH x AS (SELECT 1)" + NAME_CTES + """
+        SELECT """ + cols + """, coalesce(es.name_en, ee.name_en) AS issuer_name_en
+        FROM eq_lvh_filings f """ + join + """
+        LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
+        LEFT JOIN en_ecode ee ON ee.edinet_code = f.issuer_edinet_code
+        WHERE """ + " AND ".join(where) + asof.clause("filed_date", "f") + """
+        ORDER BY """ + order, params)
+    names = [d[0] for d in cur.description]
+
+    def text(v):
+        return "" if v is None else (v.isoformat() if hasattr(v, "isoformat") else v)
+
+    def rows():
+        if fmt == "csv":
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            for line in ["Plover Analytics — 5% shareholding reports (大量保有報告書), "
+                         "level=" + lvl,
+                         "Source: large shareholding reports (大量保有報告書・変更報告書) "
+                         "filed on EDINET, Financial Services Agency of Japan. Figures "
+                         "as filed; derived columns carry their formula below.",
+                         EVENT_NOTE, GROUP_NOTE, RATIO_NOTE, PROPOSAL_NOTE,
+                         "Missing values are empty, never zero."] + [
+                             "%s = %s" % kv for kv in sorted(CALC.items())]:
+                buf.write("# " + line + "\n")
+            w.writerow(names)
+            yield buf.getvalue()
+        while True:
+            batch = cur.fetchmany(2000)
+            if not batch:
+                break
+            buf = io.StringIO()
+            if fmt == "csv":
+                w = csv.writer(buf)
+                for r in batch:
+                    w.writerow([text(v) for v in r])
+            else:
+                for r in batch:
+                    buf.write(json.dumps(dict(zip(names, (text(v) for v in r))),
+                                         ensure_ascii=False) + "\n")
+            yield buf.getvalue()
+
+    media = "text/csv; charset=utf-8" if fmt == "csv" else "application/x-ndjson"
+    name = "5pct-%s.%s" % (lvl, fmt)
+    return StreamingResponse(rows(), media_type=media, headers={
+        "Content-Disposition": 'attachment; filename="%s"' % name})
 
 
 # The dataset's card (app/registry.py). Events, not positions: each row is one
@@ -558,6 +879,13 @@ MANIFEST = {
          "unit": "days", "trust": "derived", "calc": CALC["days_to_file"]},
         {"id": "filer_type", "label": "Filer classification", "unit": "category",
          "trust": "derived", "calc": TYPE_NOTE},
+        {"id": "proposal_stance", "label": "Filed 重要提案行為 answer, read",
+         "unit": "category", "trust": "derived", "calc": CALC["proposal_stance"]},
+        {"id": "purpose_mentions_proposal",
+         "label": "Stated purpose reserves important proposals", "unit": "boolean",
+         "trust": "derived", "calc": CALC["purpose_mentions_proposal"]},
+        {"id": "date_quality", "label": "Whether the trigger date is possible",
+         "unit": "category", "trust": "derived", "calc": CALC["date_quality"]},
     ],
     "endpoints": {
         "company": "/api/v1/equity/stakes/company/{sec_code}",
@@ -567,6 +895,7 @@ MANIFEST = {
         "recent": "/api/v1/equity/stakes/recent",
         "holder": "/api/v1/equity/stakes/holder/{key}",
         "holder_types": "/api/v1/equity/stakes/holder-types",
+        "export": "/api/v1/equity/stakes/export",
     },
     "capabilities": ["company", "search", "summary", "screen"],
     "screens": [

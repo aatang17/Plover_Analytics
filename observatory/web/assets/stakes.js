@@ -86,12 +86,13 @@
   }
 
   // Three states, and the third is the one a reader must not mistake for "no":
-  // only the general first-schedule form asks the question at all.
+  // the special-reporting form used by institutions never asks the question.
   function proposalBadge(v, asked) {
     if (v === true) return "<span class='badge badge-warn'>Important proposals</span>";
     if (v === false) return "<span class='badge badge-note'>None stated</span>";
-    if (asked === false) return "<span class='badge badge-note' title='The change " +
-      "report and the special form carry no 重要提案行為等 field — the question was " +
+    if (asked === false) return "<span class='badge badge-note' title='The " +
+      "special-reporting form, filed by institutions that undertake to make no " +
+      "important proposals, carries no 重要提案行為等 field — the question was " +
       "not put to this filer'>Not on this form</span>";
     return "<span class='badge badge-note' title='This filing does not tag the " +
       "field'>Not stated</span>";
@@ -220,7 +221,7 @@
               ? "<span class='members'><a href='#' data-group='" + esc(r.group) + "'>" +
                 r.entity_count + " filing entities</a></span>" : "") + "</div>"
           : nameCell(r.name_en, r.name_ja,
-                     r.holder_edinet_code ? "stakes.html?h=" + esc(r.holder_edinet_code) : null);
+                     r.holder_key ? "stakes.html?h=" + encodeURIComponent(r.holder_key) : null);
         return "<tr><td>" + name +
           "</td><td>" + typeBadge(r) +
           "</td><td class=r>" + count(r.issuers) +
@@ -437,7 +438,7 @@
   function renderHolder(d) {
     document.title = (d.name || d.holder_edinet_code) + " · 5% Filings · Plover Analytics";
     $("ho-name").textContent = d.name_en || d.name || d.holder_edinet_code;
-    $("ho-code").textContent = d.holder_edinet_code;
+    $("ho-code").textContent = d.holder_edinet_code || "";
     var prof = [];
     if (d.filer_type_en) prof.push("<b>" + esc(d.filer_type_en) + "</b>");
     if (d.business_ja) prof.push("Filed business: " + esc(d.business_ja));
@@ -485,18 +486,22 @@
           "</td><td class=r>" + pct(r.prior_ratio_pct) + "</td></tr>";
       }).join("") + "</tbody></table>";
     $("ho-csv").onclick = function () {
-      csvDownload("5pct-holder-" + d.holder_edinet_code + ".csv",
+      csvDownload("5pct-holder-" + (d.holder_edinet_code || "holder") + ".csv",
         ["Plover Analytics — one holder's 5% reports",
-         "Holder: " + (d.name || "") + " (" + d.holder_edinet_code + ")",
+         "Holder: " + (d.name || "") + (d.holder_edinet_code ? " (" + d.holder_edinet_code + ")" : ""),
          "Latest report per issuer. Each is a snapshot at its own trigger date.",
+         "shares_held and ratio_pct are the filing group's position; holder_* is this holder's own line.",
          "Source: 大量保有報告書 via EDINET, Financial Services Agency."],
         ["issuer_sec_code", "issuer_name_ja", "issuer_name_en", "requirement_date",
          "filed_date", "shares_held", "ratio_pct", "prior_ratio_pct",
-         "important_proposal", "purpose_ja", "doc_id"],
+         "holder_shares_held", "holder_ratio_pct", "joint_holders",
+         "important_proposal", "proposal_stance", "purpose_ja", "doc_id"],
         cur.map(function (r) {
           return [r.issuer_sec_code, r.issuer_name_raw, r.issuer_name_en,
                   r.requirement_date, r.filed_date, r.shares_held, r.ratio_pct,
-                  r.prior_ratio_pct, r.important_proposal, r.purpose_ja, r.doc_id];
+                  r.prior_ratio_pct, r.holder_shares_held, r.holder_ratio_pct,
+                  r.joint_holders, r.important_proposal, r.proposal_stance,
+                  r.purpose_ja, r.doc_id];
         }));
     };
   }

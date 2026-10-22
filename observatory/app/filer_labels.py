@@ -41,18 +41,38 @@ TYPE_RULES = (
                            u"自己の計算|資産管理会社|資産の保有"),
     ("asset_manager", u"投資顧問|投資助言|投資一任|投資信託|信託財産の運用|顧客資産|"
                       u"顧客またはファンド|ファンドの資産管理|アセットマネジメント|"
-                      u"インベストメント・マネジメント|投資運用|資産運用|運用業|投資業務"),
+                      u"インベストメント・マネジメント|投資運用|資産運用|運用業|"
+                      u"投資マネージャー|投資マネジャー"),
+    # Not 投資業務: a company that files "investment business" alone is
+    # investing its own money (花明, 大和PIパートナーズ), and is read below
+    # as an investment vehicle.
     ("broker_dealer", u"証券業|金融商品取引業|第一種金融商品|証券取引|ブローカー|ディーラー"),
-    ("trust_bank",    u"信託業|信託銀行|信託兼営"),
-    ("bank",          u"銀行業|銀行法"),
+    # A trust bank lists its trust business FIRST (三菱ＵＦＪ信託銀行 files
+    # 信託業務・銀行業務); りそな銀行 is a bank that also holds a trust
+    # licence and lists 信託業務 fourth, so it is read as a bank.
+    ("trust_bank",    u"^信託|信託銀行|信託兼営"),
+    ("bank",          u"銀行業|銀行法|預金(又は|または)?(定期預金|定期積金)?の受入"),
+    ("trust_bank",    u"信託業"),
     ("insurer",       u"保険業|生命保険|損害保険|保険会社"),
     # A vehicle whose stated business IS holding securities: a fund SPV, or a
     # founder's 資産管理会社. Economically an owner, not a manager of other
     # people's money — which is why it is not folded into asset_manager.
     ("investment_vehicle", u"投資事業|有価証券の保有|有価証券の運用|有価証券の投資|"
                            u"資産管理|資産の運用|投資業|持株会社|ファンド|"
-                           u"有価証券の取得|投資活動"),
+                           u"有価証券の取得|投資活動|^投資$|株式又は持分を所有"),
 )
+
+# Selling insurance as an agent is a trade, not underwriting: テンポス and 小千谷
+# 産業 list 損害保険代理業 among a dozen businesses and were read as insurers.
+INSURANCE_AGENCY = re.compile(u"(損害|生命)?保険(の)?(代理(業|店)?|募集)(に関する業務)?")
+
+# A company whose filed business is a long numbered list of trades is an
+# operating company, even when one line of the list is a financial licence:
+# ａｂｃ株式会社 lists seventeen businesses, real estate first, and its eighth
+# (金融商品取引業) made it a broker-dealer. Such a list is read by its FIRST
+# item. Ten items, because a bank's own list runs to six.
+LONG_LIST = 10
+LIST_ITEM = re.compile(u"(?:^|\\s|[^0-9０-９])([0-9０-９]{1,2})\\s*[．.、，,)）]")
 TYPE_EN = {
     "individual": "Individual",
     "asset_manager": "Asset manager",
@@ -73,14 +93,30 @@ TYPE_NOTE = (
     "filing means a strategic holder.")
 
 
-def type_of(business_ja, is_individual=None, holder_type_ja=None):
-    u"""(type_key, evidence) for one holder, from what the filing states."""
+def _first_item(text):
+    u"""The first business of a long numbered list, or None for a short one."""
+    marks = [m for m in LIST_ITEM.finditer(text)]
+    if len(marks) < LONG_LIST:
+        return None
+    end = marks[1].start() if len(marks) > 1 else len(text)
+    return text[marks[0].end():end]
+
+
+def type_of(business_ja, is_individual=None, holder_type_ja=None, name_ja=None):
+    u"""(type_key, evidence) for one holder, from what the filing states.
+
+    The one reading taken from the name is 信託銀行: only a licensed trust
+    bank may use it in its legal name, so it is a filed fact, not a guess."""
     if is_individual or (holder_type_ja and u"個人" in holder_type_ja):
         return "individual", u"filed 法人/個人"
-    text = business_ja or ""
-    if text:
+    if name_ja and u"信託銀行" in name_ja:
+        return "trust_bank", u"legal name"
+    filed = (business_ja or "").strip()
+    text = INSURANCE_AGENCY.sub("", filed)
+    if filed:
+        text = _first_item(text) or text
         for key, pattern in TYPE_RULES:
-            if re.search(pattern, text):
+            if re.search(pattern, text.strip()):
                 return key, u"filed 事業内容"
         return "operating_company", u"filed 事業内容"
     if holder_type_ja:
@@ -142,6 +178,29 @@ _family("ValueAct", ["E34044", "E34138"])
 # The listed operating company, its securities-holding arm and its Singapore
 # investment vehicle — one group, three very different filed businesses.
 _family("Hikari Tsushin", ["E04948", "E35239", "E39496"])
+# Families whose entities file JOINTLY — named together as joint holders in
+# the same reports (counts from the archive, October 2026).
+_family("Dalton Investments", ["E39237", "E08827"])                    # 19 joint
+_family("Taiyo Pacific", ["E37410", "E30581", "E09183", "E30463",      # 37 joint
+                          "E37411", "E36328", "E32623"])
+_family("Hibiki Path Advisors", ["E34566", "E41402", "E41592"])        # 12 joint
+_family("Alphaleo", ["E34691", "E27283"])                              # 24 joint
+_family("Asia Development Capital", ["E04298", "E36808"])              # 12 joint
+# One entity under two keys: filed with its EDINET code in some reports and
+# with none in others, or under a chair's name that changed. The uncoded key
+# is the holder_key /holders lists (name_key, the filed name folded).
+_family("Symphony Financial Partners", [
+    "E30522",
+    u"シンフォニー・フィナンシャル・パートナーズ(シンガポール)ピーティーイー・リミテッド"
+    u"(SymphonyFinancialPartners(Singapore)Pte.Ltd.)"])
+_family("Be Brave", ["E37710", u"BeBrave株式会社代表取締役泉田和人"])
+# GFA株式会社 renamed itself ａｂｃ株式会社 and kept its code, E03740.
+_family("abc (formerly GFA)", ["E03740", u"GFA株式会社"])
+_family("Kimoto Kyoeikai", ["E33823", "E38941"])
+# Five members of one family who file separately, on the same issuer (北王
+# ＧＲＯＵＰ), on the same day, with the same purpose text. Not joint holders on the
+# form, but one holding in substance.
+_family("Furuse family", ["E41798", "E41799", "E41800", "E41801", "E41802"])
 
 GROUP_NOTE = (
     "Filing entities are consolidated into their group where the group is a "
@@ -153,7 +212,8 @@ GROUP_NOTE = (
 
 
 def group_of(code, fallback=None):
-    u"""The group a filing entity belongs to, or its own name."""
+    u"""The group a filing entity belongs to, or its own name. `code` is the
+    EDINET code, or the holder_key of a holder that has none."""
     return GROUPS.get(code) or fallback
 
 
