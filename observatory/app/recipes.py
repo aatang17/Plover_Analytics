@@ -33,7 +33,7 @@ def _years_ago(n):
 
 def _measure(opts, default="level"):
     m = (opts or {}).get("measure") or default
-    return m if m in MEASURES else default
+    return m if isinstance(m, str) and m in MEASURES else default
 
 
 def _cols(names, measure):
@@ -104,6 +104,14 @@ def build(recipe_id, series, start=None, end=None, options=None, monthly=None, t
             raise RecipeError("'%s' needs a series for %s." % (r["label"], dict(r["slots"])[n].lower()))
     names = [n for n, _ in r["slots"] if n in series]
     opts = options or {}
+    if not isinstance(opts, dict):
+        raise RecipeError("Options are named, e.g. {\"measure\": \"yoy\"}.")
+    # a list here means no choice was made (a matcher echoing the allowed
+    # values); falling back to the default could chart index levels for a
+    # question about inflation, so it is refused
+    for k, v in opts.items():
+        if isinstance(v, (list, tuple, dict)):
+            raise RecipeError("Option '%s' takes one value, e.g. \"measure\": \"yoy\"." % k)
     m = _measure(opts, (r["options"].get("measure") or ["level"])[0])
     unit_pct = m != "level"
     spec = {"series": dict((n, series[n]) for n in names)}

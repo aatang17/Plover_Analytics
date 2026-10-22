@@ -1383,7 +1383,9 @@ MATCH_RULES = (
     "You match a question about economic or market data to one ready-made analysis, or say "
     "none fits. Answer with one JSON object and nothing else: {\"recipe\": <id or null>, "
     "\"series\": {<slot>: \"dataset:code\"}, \"start\": \"YYYY-MM-DD\" or null, "
-    "\"end\": null or a date, \"options\": {}, \"title\": <short chart title>}. Use only series "
+    "\"end\": null or a date, \"options\": {<option>: <one value>}, \"title\": <short chart title>}. "
+    "Each option takes exactly one of its listed values, e.g. {\"measure\": \"yoy\"}, never the list. "
+    "Inflation, or the growth of any index, is measure yoy, never level. Use only series "
     "codes from the list given; if the question names a series that is not listed, or asks "
     "for something no recipe computes — volatility, a standard deviation, a correlation, a "
     "regression, a ranking, a count of periods, contributions, a forecast — answer "
@@ -1424,7 +1426,8 @@ def _match_recipe(aid, desk, question, hints, house=None):
         model = desk.get("study_model") or desk["model_name"] or gateway.default_model(provider)
     cat = "; ".join("%s (%s; slots %s%s)" % (r["id"], r["label"], ", ".join(
         s["name"] + ("?" if s["optional"] else "") for s in r["slots"]),
-        "; options " + json.dumps(r["options"]) if r["options"] else "") for r in recipes.catalogue())
+        "; options " + ", ".join("%s: one of %s" % (k, "/".join(v)) if isinstance(v, list) else "%s: a %s" % (k, v)
+                                 for k, v in r["options"].items()) if r["options"] else "") for r in recipes.catalogue())
     messages = [{"role": "system", "content": MATCH_RULES + "\n\nRecipes: " + cat},
                 {"role": "user", "content": question + "\n\n" + analysis.hints_text(hints)}]
     try:
@@ -1440,10 +1443,14 @@ def _match_recipe(aid, desk, question, hints, house=None):
         pick = json.loads(m.group(0))
     except ValueError:
         return None
-    if not isinstance(pick, dict) or not pick.get("recipe") or pick["recipe"] not in recipes.BY_ID:
+    if not isinstance(pick, dict) or not isinstance(pick.get("recipe"), str) or pick["recipe"] not in recipes.BY_ID:
         return NO_MATCH
     allowed = set("%s:%s" % (h["dataset"], h["code"]) for h in hints)
-    series = dict((k, v) for k, v in (pick.get("series") or {}).items() if v in allowed)
+    # the model's JSON is not trusted for shape: a list or a string where a
+    # mapping belongs is a failed match, not a crash
+    series = pick.get("series")
+    series = dict((k, v) for k, v in series.items() if isinstance(v, str) and v in allowed) \
+        if isinstance(series, dict) else {}
     try:
         spec = recipes.build(pick["recipe"], series, pick.get("start"), pick.get("end"),
                              pick.get("options") or {}, None, pick.get("title"))

@@ -344,6 +344,44 @@ class RecipeTests(_Base):
         self.assertIn("ust-yields:10Y", user_text(script.seen[0]))
         self.assertLess(len(script.seen[0]["messages"][0]["content"]), 3000)
 
+    def test_ask_with_a_list_for_an_option_goes_to_the_loop_not_a_500(self):
+        # production, 2026-10-21: the matcher echoed the allowed values,
+        # "measure": ["level", "yoy"], and recipes.build raised TypeError
+        c = self.client()
+        c.post("/api/v1/assistant/settings", json={"model_provider": "anthropic", "model_key": "sk-ant-abcd-9876", "study_model": "cheap-model"})
+        q = "Is Japan's core inflation above or below America's?"
+        st = self.new(c, question=q)
+        script = Script(['{"recipe": "gap", "series": {"a": "ust-yields:10Y", "b": "jgb-yields:10Y"}, "options": {"measure": ["level", "yoy"]}}',
+                         [("run_analysis", dict(SPEC))], "Done."])
+        runner.gateway.complete = script
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": q})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["run"]["tokens"]["tier"], 2)
+        # the matcher is told to pick one value, and that inflation is yoy
+        system = script.seen[0]["messages"][0]["content"]
+        self.assertIn("measure: one of level/yoy", system)
+        self.assertIn("never the list", system)
+        with self.assertRaises(recipes.RecipeError):
+            recipes.build("gap", {"a": "x:1", "b": "x:2"}, options={"measure": ["level", "yoy"]})
+
+    def test_matcher_replies_of_the_wrong_shape_are_misses_not_crashes(self):
+        hints = [{"dataset": "ust-yields", "code": "10Y", "name": "10-year Treasury"},
+                 {"dataset": "jgb-yields", "code": "10Y", "name": "10-year JGB"}]
+        s = {"a": "ust-yields:10Y", "b": "jgb-yields:10Y"}
+        house = {"provider": "anthropic", "key": "k", "model": "m"}
+        for pick in ({"recipe": ["gap"]}, {"recipe": {"id": "gap"}},
+                     {"recipe": "gap", "series": ["ust-yields:10Y", "jgb-yields:10Y"]},
+                     {"recipe": "gap", "series": "ust-yields:10Y"},
+                     {"recipe": "gap", "series": {"a": ["ust-yields:10Y"], "b": "jgb-yields:10Y"}},
+                     {"recipe": "gap", "series": {"a": {"x": 1}, "b": "jgb-yields:10Y"}},
+                     {"recipe": "gap", "series": s, "options": "yoy"},
+                     {"recipe": "gap", "series": s, "options": ["yoy"]}):
+            aapi.gateway.complete = Script([json.dumps(pick)])
+            try:
+                self.assertIn(aapi._match_recipe(None, {}, "the gap", hints, house), (None, aapi.NO_MATCH), pick)
+            finally:
+                aapi.gateway.complete = self._complete
+
     def test_ask_falls_back_to_a_lean_loop(self):
         c = self.client()
         c.post("/api/v1/assistant/settings", json={"model_provider": "anthropic", "model_key": "sk-ant-abcd-9876", "study_model": "cheap-model"})
