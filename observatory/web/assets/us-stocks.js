@@ -337,9 +337,27 @@
     document.title = a.headline.slice(0, 70) + " · Plover Analytics";
   }
 
+  // A question first asked by clicking an example stays an example when this
+  // tab sends it again (Ask, Enter, a reload), so the ask log counts one click,
+  // not a click and a typed question (app/ask_log.py)
+  var EXAMPLE_KEY = "plover-example-asked", lastExample = null;
+  function exampleVia(q, via) {
+    var key = q.toLowerCase();
+    if (via === "example") {
+      lastExample = key;
+      try { sessionStorage.setItem(EXAMPLE_KEY, key); } catch (e) {}
+      return via;
+    }
+    if (via) return via;
+    var kept = lastExample;
+    try { kept = sessionStorage.getItem(EXAMPLE_KEY) || kept; } catch (e) {}
+    return kept === key ? "example" : via;
+  }
+
   // via: "example" when the question is one of the page's own suggestions,
   // so the ask log can tell a click from a question somebody typed (app/ask_log.py)
   function ask(q, push, via) {
+    via = exampleVia(q, via);
     var el = $("answer");
     el.hidden = false;
     $("stock").hidden = true;

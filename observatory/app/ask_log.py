@@ -192,7 +192,49 @@ def _read(start, today):
                         lines.append(e)
         except OSError:
             continue
-    return lines
+    return _one_per_question(lines)
+
+
+SAME_QUESTION_SECONDS = 30
+
+
+def _seconds_at(at):
+    try:
+        return datetime.datetime.strptime(str(at)[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _one_per_question(lines):
+    """One line per question asked, though one question can reach the box as
+    two requests: signed in, a question the full answer does not hold goes on
+    to the economy answers a second later; and a click on an example puts the
+    question in the box, where Ask or Enter sends it again (2026-10-22: a
+    reader in Japan clicked 'Apple buybacks', pressed Ask three seconds later,
+    and showed up as an example click and a typed question). The same
+    question within SAME_QUESTION_SECONDS of the last request for it is folded
+    into its first line: that line keeps when it was asked and who it came
+    from, the last request says how it was answered. The file keeps every
+    request; only what is counted and shown is folded."""
+    out, last = [], {}
+    for e in lines:
+        key = _norm(e.get("q")).lower()
+        when = _seconds_at(e.get("at"))
+        seen = last.get(key)
+        if seen and when and 0 <= (when - seen[1]).total_seconds() <= SAME_QUESTION_SECONDS:
+            first = out[seen[0]]
+            fell_back = first.get("where") == "full" and first.get("answered") is False and e.get("where") == "preview"
+            merged = dict(e, at=first["at"], **{"from": first.get("from")})
+            if fell_back:
+                # the reader waited for both; they were signed in, so it was the full answer they saw
+                spent = [s for s in (first.get("seconds"), e.get("seconds")) if isinstance(s, (int, float))]
+                merged.update(where="full", seconds=round(sum(spent), 1) if spent else None)
+            out[seen[0]] = merged
+            last[key] = (seen[0], when)
+            continue
+        last[key] = (len(out), when)
+        out.append(e)
+    return out
 
 
 FROM_KEYS = ("reader", "example", "us")

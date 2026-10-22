@@ -143,6 +143,31 @@ class LogTest(unittest.TestCase):
         self.assertEqual(s["weekly"], rows)
         self.assertEqual([r["from"] for r in s["recent"]], ["us", "example", "reader", "reader", "reader"])
 
+    def test_one_question_sent_twice_is_one_line(self):
+        # the two cases from the live log on 2026-10-22
+        rows = [
+            {"at": "2026-10-22T14:26:27Z", "q": "Has US inflation been increasing yoy?", "where": "full",
+             "answered": False, "route": "not_held", "seconds": 0.0, "from": "us"},
+            {"at": "2026-10-22T14:26:28Z", "q": "Has US inflation been increasing yoy?", "where": "preview",
+             "answered": True, "route": "macro", "seconds": 0.4, "from": "us"},
+            {"at": "2026-10-22T15:12:57Z", "q": "Apple buybacks", "where": "preview", "answered": True,
+             "route": "stock", "seconds": 0.2, "from": "example"},
+            {"at": "2026-10-22T15:13:00Z", "q": "Apple buybacks", "where": "preview", "answered": True,
+             "route": "stock", "seconds": 0.2, "from": "reader"},
+            {"at": "2026-10-22T15:20:00Z", "q": "Apple buybacks", "where": "preview", "answered": True,
+             "route": "stock", "seconds": 0.2, "from": "reader"},
+        ]
+        with open(str(self.dir / "ask-2026-10.jsonl"), "w") as f:
+            f.write("".join(json.dumps(r) + "\n" for r in rows))
+        s = ask_log.summary(1, datetime.date(2026, 10, 22), datetime.date(2026, 10, 22))
+        self.assertEqual([(r["at"], r["q"], r["where"], r["answered"], r["route"], r["seconds"], r["from"]) for r in s["recent"]], [
+            ("2026-10-22T15:20:00Z", "Apple buybacks", "preview", True, "stock", 0.2, "reader"),     # minutes later: asked again
+            ("2026-10-22T15:12:57Z", "Apple buybacks", "preview", True, "stock", 0.2, "example"),
+            ("2026-10-22T14:26:27Z", "Has US inflation been increasing yoy?", "full", True, "macro", 0.4, "us"),
+        ])
+        self.assertEqual((s["searches"], s["answered"], s["previews"]), (3, 3, 2))
+        self.assertEqual(len(self.lines()), 5, "the file keeps every request")
+
 
 
 class EndpointNoteTest(unittest.TestCase):
