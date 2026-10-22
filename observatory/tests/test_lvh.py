@@ -248,6 +248,13 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(q["D2"], "after_filing")
         self.assertEqual(q["D4"], "before_5pct_rule")
 
+    def test_an_impossible_date_is_a_400_not_a_crash(self):
+        for bad in ("2026-13-01", "2026-02-30", "yesterday"):
+            with self.assertRaises(HTTPException) as e:
+                lvh_api.recent(limit=10, offset=0, activist="", min_ratio=0,
+                               min_change=0, report_type="", since=bad, until="")
+            self.assertEqual(e.exception.status_code, 400)
+
     def test_a_database_written_by_lvh1_still_serves(self):
         self.use("old")
         d = lvh_api.holder("E1", limit=10, offset=0)

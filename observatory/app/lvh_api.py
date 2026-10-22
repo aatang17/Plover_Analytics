@@ -43,6 +43,7 @@ WHAT A CONSUMER MUST NOT ASSUME, carried in the data rather than in prose:
      shares_outstanding and the difference is not an error.
 """
 import csv
+import datetime
 import io
 import json
 import re
@@ -141,9 +142,15 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _date_param(value, name):
+    u"""A real calendar date or empty; 2026-13-01 is refused, not passed on."""
     v = (value or "").strip()
-    if v and not DATE_RE.match(v):
-        raise HTTPException(400, "%s must be YYYY-MM-DD" % name)
+    if v:
+        try:
+            if not DATE_RE.match(v):
+                raise ValueError(v)
+            datetime.date(*map(int, v.split("-")))
+        except ValueError:
+            raise HTTPException(400, "%s must be a real date, YYYY-MM-DD" % name)
     return v
 
 TAPE_NOTE = (
