@@ -218,7 +218,8 @@ def pay_rows(cur):
     out = []
     for r in d.get("companies") or []:
         v = r.get("values") or {}
-        if not r.get("ticker") or v.get("ceo_total_pay") is None:
+        # a proxy whose pay table leaves the CEO columns blank (Tesla, 2024) keeps its row: the name is known
+        if not r.get("ticker") or (v.get("ceo_total_pay") is None and not r.get("ceo_names")):
             continue
         out.append({"ticker": r["ticker"], "ceo": " / ".join(r.get("ceo_names") or []) or None,
                     "fiscal_year_end": r.get("fiscal_year_end"),
@@ -376,13 +377,13 @@ def segment_rows(cur):
         cik, period, total = latest[adsh]
         t = tickers.get(cik)
         rev = rec.get("rev")
-        if not t or rev is None:
-            continue
+        if not t or (rev is None and rec.get("oi") is None):
+            continue                      # Alphabet tags operating income by segment but no revenue line: kept, revenue blank
         prior = rec.get("rev_prior")
         out.append({"ticker": t, "fiscal_year_end": period, "kind": kind, "segment": segment_name(member, kind),
                     "revenue_usd": rev, "revenue_prior_usd": prior,
-                    "revenue_growth_pct": round((rev / prior - 1) * 100, 4) if prior and prior > 0 else None,
-                    "share_of_revenue_pct": round(rev / total * 100, 4) if total and total > 0 else None,
+                    "revenue_growth_pct": round((rev / prior - 1) * 100, 4) if (rev is not None and prior and prior > 0) else None,
+                    "share_of_revenue_pct": round(rev / total * 100, 4) if (rev is not None and total and total > 0) else None,
                     "operating_income_usd": rec.get("oi")})
     return out
 
@@ -409,6 +410,10 @@ def insider_rows(cur, today=None):
     for cik, sym, td, filed, name, title, is_dir, is_off, is_ten, code, shares, price, plan in rows:
         t = tickers.get(cik) or (sym or "").strip().upper() or None
         if not t:
+            continue
+        # a filer's typo (a price of $1,062,500 a share, a $3.7tn "sale") must never lead a ranking: no open-market
+        # insider trade has topped $20bn, and no listed share trades above $1mn
+        if price is not None and (price > 1e6 or price <= 0) or (shares is not None and price is not None and shares * price > 2e10):
             continue
         out.append({"ticker": t, "trade_date": td, "filed": filed, "insider": name, "title": (title or None),
                     "is_director": bool(is_dir), "is_officer": bool(is_off), "is_ten_percent_owner": bool(is_ten),

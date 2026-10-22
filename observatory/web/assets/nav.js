@@ -239,6 +239,7 @@ var NAV_SECTIONS = [
         ] },
       { id: "us-prices", label: "Retail Prices", href: "us-prices.html" },
       { id: "us-wages", label: "Wages", href: "us-wages.html" },
+      { id: "us-labour", label: "Jobs", href: "us-labour.html" },
     ],
   },
   {

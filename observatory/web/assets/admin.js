@@ -1130,6 +1130,22 @@ function trafficAsk(a) {
       }).join("") + "</tbody></table></div>"
     : "";
 
+  var ROUTE_WORDS = { quick: "Code, no model (quick lane)", reader: "Model reads, code answers", steps: "Model writes the steps (SQL)",
+    patterns: "Word patterns (model off)", macro: "Economy series", stock: "Stock box (preview)", explicit: "Run with blanks filled", miss: "No answer" };
+  var routes = (a.routes || []).length
+    ? '<div class="admin-section">How Questions Were Answered <span class="note">which route answered, how many it answered, ' +
+      "and the median wait; code answers in under a second, one model call takes a few seconds, the step route takes 10 to 30</span></div>" +
+      '<div class="table-wrap"><table class="data"><thead><tr><th>Route</th><th class="num">Searches</th><th class="num">Share</th>' +
+      '<th class="num">Answered</th><th class="num">Median Time</th></tr></thead><tbody>' +
+      a.routes.map(function (r) {
+        return "<tr><td>" + escapeHtml(ROUTE_WORDS[r.route] || r.route) + "</td>" +
+          '<td class="num">' + fmtCount(r.searches) + "</td>" +
+          '<td class="num">' + (r.share == null ? MISSING : escapeHtml(String(r.share)) + "%") + "</td>" +
+          '<td class="num">' + fmtCount(r.answered) + "</td>" +
+          '<td class="num">' + fmtDuration(r.median_seconds) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : "";
+
   var days = (a.daily || []).filter(function (r) { return r.searches; }).slice().reverse();
   var daily = '<div class="table-wrap"><table class="data"><thead><tr><th>Day</th>' +
     '<th class="num">Searches</th><th class="num">People</th><th class="num">Answered</th>' +

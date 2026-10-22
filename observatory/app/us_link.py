@@ -37,7 +37,7 @@ _SHARE_CLASS = re.compile(r"\b(CLASS|CL|SERIES)\s+[A-C]\b")
 _WORD = re.compile(r"[A-Z0-9]+")
 _TICKER_TOKEN = re.compile(r"\b[A-Z]{1,5}(?:[.-][A-Z])?\b")
 _TICKER_STOP = {"US", "USA", "PE", "P", "E", "A", "I", "IT", "AT", "ON", "OR", "AN", "ALL", "ARE", "BE",
-                "BY", "CEO", "CFO", "ETF", "IPO", "USD", "NYSE", "SEC", "EPS", "ROE", "ROA", "Q", "FY",
+                "BY", "CEO", "CFO", "ETF", "IPO", "USD", "NYSE", "SEC", "EPS", "ROE", "ROA", "Q", "FY", "CIK", "SIC", "TSR", "YTD", "AI", "EV", "ESG",
                 "TOP", "TEN", "VS", "AND", "THE", "OF", "IN", "TO", "FOR", "WHO", "WHAT", "HOW", "IS",
                 "DO", "DID", "NEXT", "LAST", "THIS", "YEAR", "MONTH", "WEEK", "BIG", "LOW", "HIGH",
                 "NET", "CASH", "DEBT", "BUY", "SELL", "OWN", "OWNS", "ANY", "ONLY", "SOLD", "PLAN",
@@ -143,10 +143,28 @@ def _build_companies(cur):
     # exchange or a stock term is never read as a company from the words alone;
     # its ticker still works ("TEN Holdings" is TXHG, "Nasdaq, Inc." is NDAQ).
     names = sorted((n for n in by_norm if not (" " not in n and n in _GENERIC_NAMES)), key=len, reverse=True)
-    return {"by_ticker": by_ticker, "by_norm": by_norm, "names": names, "by_cik": by_cik}
+    # the first two words of a longer name ("Restaurant Brands" for Restaurant Brands International), when
+    # they are distinctive and name one company only
+    prefix2, seen = {}, {}
+    for n, rec in by_norm.items():
+        w = n.split()
+        if len(w) >= 3 and len(w[0]) >= 4 and len(w[1]) >= 3 and w[0] not in _GENERIC_NAMES and w[0] not in _ENGLISH:
+            key = " ".join(w[:2])
+            seen.setdefault(key, []).append((len(w), (rec.get("exchange") or "") in ("OTC", ""), rec))
+    # one company per prefix: the shortest registered name on a main exchange ("Restaurant Brands International"
+    # over its partnership twin); a prefix shared by unrelated companies is left out
+    for key, lst in seen.items():
+        lst.sort(key=lambda x: (x[0], x[1]))
+        if len(lst) == 1 or (len(lst) == 2 and lst[0][0] != lst[1][0]):
+            prefix2[key] = lst[0][2]
+    return {"by_ticker": by_ticker, "by_norm": by_norm, "names": names, "by_cik": by_cik, "prefix2": prefix2}
 
 
-_GENERIC_NAMES = {"TEN", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TOP", "BEST",
+_GENERIC_NAMES = {"TEN", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TOP", "BEST", "TECH", "BIG", "RETURN",
+                  "FOOD", "MEDICAL", "CARE", "BILL", "MILK", "ELECTRICITY", "HOUSING", "CARS", "TREASURY", "WAGE", "WAGES", "JOBS",
+                  "EMPLOYMENT", "PRICES", "INFLATION", "CONSUMER", "RETAIL", "PARENT", "MAKER", "WEIGHT", "SPLIT", "SPLITS", "SECTOR", "LABS",
+                  "CLOUD", "DATA", "CENTER", "GAMING", "SEARCH", "VIDEO", "MUSIC", "MOBILE", "PAYMENTS", "ADVERTISING", "SERVICES",
+                  "RETURNS", "HIGHEST", "LOWEST", "CHEAPEST", "FASTEST", "LARGEST", "BIGGEST", "RATE", "RATES", "RENT", "MARGIN", "MARGINS",
                   "FIRST", "LAST", "NEXT", "BIG", "LARGE", "MOST", "MARKET", "VALUE", "GLOBAL", "GENERAL",
                   "AMERICAN", "UNITED", "NATIONAL", "CAPITAL", "FINANCIAL", "ENERGY", "HEALTH", "MEDICAL",
                   "DIGITAL", "TARGET", "GAP", "MATCH", "YIELD", "PRICE", "EARNINGS", "REPORT", "INSIDER",
@@ -207,7 +225,64 @@ def _build_short_names(cur):
     return out
 
 
-def find_companies(cur, question, limit=3):
+# A company that moved to a new SEC filer number (a holding-company reorganisation) keeps its
+# history under the old one: {new cik: old cik}. Used wherever the latest annual report is looked up.
+PREDECESSOR_CIKS = {2115436: 34088}          # ExxonMobil Holdings Corp <- Exxon Mobil Corp (2026)
+
+# Names people write that are not the filer's registered name. Each maps to
+# the ticker the SEC lists, so "Exxon" finds ExxonMobil Holdings and "Google"
+# finds Alphabet without a model. Longest phrase wins; whole words only.
+ALIASES = {
+    "exxon": "XOM", "exxonmobil": "XOM", "exxon mobil": "XOM", "google": "GOOGL", "alphabet": "GOOGL",
+    "facebook": "META", "meta": "META", "berkshire": "BRK-B", "berkshire hathaway": "BRK-B", "jp morgan": "JPM",
+    "jpmorgan": "JPM", "jpmorgan chase": "JPM", "j.p. morgan": "JPM", "goldman": "GS", "goldman sachs": "GS",
+    "morgan stanley": "MS", "bank of america": "BAC", "bofa": "BAC", "wells": "WFC", "wells fargo": "WFC",
+    "citi": "C", "citigroup": "C", "coke": "KO", "coca-cola": "KO", "coca cola": "KO", "pepsi": "PEP", "pepsico": "PEP",
+    "walmart": "WMT", "wal-mart": "WMT", "costco": "COST", "home depot": "HD", "mcdonald's": "MCD", "mcdonalds": "MCD",
+    "tsmc": "TSM", "taiwan semiconductor": "TSM", "novo": "NVO", "novo nordisk": "NVO", "toyota": "TM", "sony": "SONY",
+    "nintendo": "NTDOY", "shell": "SHEL", "bp": "BP", "chevron": "CVX", "p&g": "PG", "procter & gamble": "PG",
+    "procter and gamble": "PG", "j&j": "JNJ", "johnson & johnson": "JNJ", "johnson and johnson": "JNJ",
+    "ups": "UPS", "fedex": "FDX", "amd": "AMD", "nvidia": "NVDA", "nvidea": "NVDA", "micorsoft": "MSFT",
+    "microsoft": "MSFT", "amazon": "AMZN", "apple": "AAPL", "tesla": "TSLA", "netflix": "NFLX", "palantir": "PLTR",
+    "broadcom": "AVGO", "salesforce": "CRM", "oracle": "ORCL", "ibm": "IBM", "intel": "INTC", "qualcomm": "QCOM",
+    "boeing": "BA", "lockheed": "LMT", "raytheon": "RTX", "rtx": "RTX", "ge": "GE", "general electric": "GE",
+    "ford": "F", "gm": "GM", "general motors": "GM", "disney": "DIS", "nike": "NKE", "starbucks": "SBUX",
+    "visa": "V", "mastercard": "MA", "amex": "AXP", "american express": "AXP", "paypal": "PYPL", "uber": "UBER",
+    "airbnb": "ABNB", "united health": "UNH", "unitedhealth": "UNH", "pfizer": "PFE", "merck": "MRK",
+    "eli lilly": "LLY", "lilly": "LLY", "abbvie": "ABBV", "caterpillar": "CAT", "deere": "DE", "john deere": "DE",
+    "3m": "MMM", "honeywell": "HON", "at&t": "T", "verizon": "VZ", "comcast": "CMCSA", "t-mobile": "TMUS",
+    "alibaba": "BABA", "baidu": "BIDU", "jd": "JD", "pdd": "PDD", "temu": "PDD", "nio": "NIO", "byd": "BYDDY",
+    "target": "TGT", "lowe's": "LOW", "lowes": "LOW", "kroger": "KR", "exxon's": "XOM", "blackrock": "BLK",
+    "berkshire's": "BRK-B", "schwab": "SCHW", "charles schwab": "SCHW", "us bancorp": "USB", "pnc": "PNC",
+    "truist": "TFC", "capital one": "COF", "american airlines": "AAL", "delta": "DAL", "united airlines": "UAL",
+    "southwest": "LUV", "marriott": "MAR", "hilton": "HLT", "chipotle": "CMG", "spotify": "SPOT", "shopify": "SHOP",
+    "snowflake": "SNOW", "crowdstrike": "CRWD", "servicenow": "NOW", "adobe": "ADBE", "cisco": "CSCO",
+    "micron": "MU", "arm": "ARM", "asml": "ASML", "applied materials": "AMAT", "lam research": "LRCX",
+    "texas instruments": "TXN", "mu": "MU", "dell": "DELL", "hp": "HPQ", "hewlett packard": "HPQ", "lowe": "LOW",
+    "google parent": "GOOGL", "google's parent": "GOOGL", "facebook parent": "META", "facebook's parent": "META",
+    "the iphone maker": "AAPL", "iphone maker": "AAPL", "windows maker": "MSFT", "chatgpt": None, "openai": None,
+    # possessive names lose their "'s" before matching: "McDonald's" arrives as "McDonald"
+    "mcdonald": "MCD", "kohl": "KSS", "macy": "M", "wendy": "WEN", "domino": "DPZ", "hershey": "HSY", "moody": "MCO",
+    "levi": "LEVI", "casey": "CASY", "papa john": "PZZA", "dick's sporting goods": "DKS", "dick": "DKS", "bj": "BJ",
+    "sam": None, "kellogg": "K", "campbell": "CPB", "tyson": "TSN", "hormel": "HRL", "kraft": "KHC", "kraft heinz": "KHC",
+}
+ALIASES = {k: v for k, v in ALIASES.items() if v}
+_ALIAS_RE = re.compile(r"(?<![\w&])(" + "|".join(sorted((re.escape(a) for a in ALIASES), key=len, reverse=True)) +
+                       r")(?![\w&])", re.I)
+
+
+def _alias_hits(idx, text):
+    """[(position, record)] for alias phrases written in the question."""
+    out = []
+    for m in _ALIAS_RE.finditer(text):
+        t = ALIASES[m.group(1).lower()]
+        rec = idx["by_ticker"].get(t) or idx["by_ticker"].get(t.replace("-", "."))
+        if rec is not None:
+            out.append((m.start(), rec))
+    return out
+
+
+def find_companies(cur, question, limit=4):
     """Companies mentioned in a question, in order of appearance: ticker
     tokens written in capitals first, then names as whole words, then a
     distinctive first word of a name ("Ford")."""
@@ -215,6 +290,34 @@ def find_companies(cur, question, limit=3):
     found = []
     text = re.sub(r"(\w)['\u2019]s\b", r"\1", question or "")      # Nvidia's -> Nvidia
     bare = text.strip().strip("?.!").strip()
+    # a one-word question that is a company's whole name, however ordinary the
+    # word ("Target", "Visa"), is that company; so is a ticker typed in lower case ("nvda")
+    if bare and " " not in bare and norm_name(bare) in idx["by_norm"] and norm_name(bare):
+        return [dict(idx["by_norm"][norm_name(bare)], matched_by="name")]
+    if bare and " " not in bare and 2 <= len(bare) <= 5 and bare.upper() in idx["by_ticker"] and bare.upper() not in _TICKER_STOP \
+            and bare.upper() not in _ENGLISH and bare.lower() not in ALIASES:
+        return [dict(idx["by_ticker"][bare.upper()], matched_by="ticker")]
+    qn0 = " " + norm_name(text) + " "
+    for m in re.finditer(r"\b([A-Z][a-z]{3,4})\b", text):
+        w = m.group(1).upper()
+        # a word of a person's name ("Tim Cook") is never a ticker, however it is spelt
+        beside = re.search(r"\b[A-Z][a-z]+\s*$", text[:m.start()]) or re.match(r"\s*[A-Z][a-z]+\b", text[m.end():])
+        if beside:
+            continue
+        if w in idx["by_ticker"] and w not in _TICKER_STOP and w not in _ENGLISH and w not in _GENERIC_NAMES and m.group(1).lower() not in ALIASES:
+            rec = idx["by_ticker"][w]
+            if not any(r is rec for _, r, _ in found):
+                found.append((m.start(), rec, "ticker"))         # "Googl", "Nvda" typed as a word
+    for pos, rec in _alias_hits(idx, text):
+        if any(r is rec for _, r, _ in found):
+            continue
+        # "Apple Hospitality REIT" is written whole: the longer registered name wins over the alias
+        alias_word = norm_name(text[pos:pos + 40].split(" ")[0])
+        longer = any(" " + n + " " in qn0 for n in idx["names"] if " " in n and n.startswith(alias_word + " ") and n != norm_name(rec["name"])) or \
+            any(" " + k + " " in qn0 for k in idx.get("prefix2", {}) if k.startswith(alias_word + " ") and idx["prefix2"][k] is not rec)
+        if longer:
+            continue
+        found.append((pos, rec, "alias"))
     for m in _TICKER_TOKEN.finditer(text):
         tok = m.group(0).upper()
         if tok in _TICKER_STOP or tok not in idx["by_ticker"]:
@@ -226,10 +329,18 @@ def find_companies(cur, question, limit=3):
             before, after = text[max(0, m.start() - 1):m.start()], text[m.end():m.end() + 7]
             if not (bare.upper() == tok or before == "$" or re.match(r"\s+(stock|shares)\b", after, re.I)):
                 continue
+            if re.search(r"(class|series|cl)\s+$", text[:m.start()], re.I):
+                continue                                   # "class C shares" is a share class, not Citigroup
+            prev_word = (text[:m.start()].split() or [""])[-1].lower().strip(",.'")
+            if prev_word in ALIASES or any(prev_word == norm_name(r["name"]).split()[0].lower() for _, r, _ in found if r.get("name")):
+                continue                                   # "Berkshire B shares": the class of the company just named
         if re.match(r"[&/]", text[m.end():m.end() + 1]) or (m.start() > 0 and text[m.start() - 1] in "&/"):
             continue
         rec = idx["by_ticker"][tok]
-        if rec not in found:
+        typed = tok.replace(".", "-")
+        if typed != (rec.get("ticker") or "") and typed in (rec.get("tickers") or []):
+            rec = dict(rec, ticker=typed, cik=rec["cik"])          # BRK.A, GOOG: that class's prices, the same filer
+        if not any(r["cik"] == rec["cik"] and r.get("ticker") == rec.get("ticker") for _, r, _ in found):
             found.append((m.start(), rec, "ticker"))
     qn = " " + norm_name(text) + " "
     lower_q = text == text.lower()
@@ -238,6 +349,8 @@ def find_companies(cur, question, limit=3):
             break
         pos = qn.find(" " + n + " ")
         if pos < 0:
+            continue
+        if any(how == "alias" and n in norm_name(r["name"]) for _, r, how in found):
             continue
         # A one-word name that is also an English word ("Bill", "People",
         # "Target") counts only when written as a name — capitalised — or when
@@ -253,6 +366,11 @@ def find_companies(cur, question, limit=3):
             continue
         found.append((pos, rec, "name"))
     if len(found) < limit:
+        for key, rec in idx.get("prefix2", {}).items():
+            pos = qn.find(" " + key + " ")
+            if pos >= 0 and not any(r is rec for _, r, _ in found) and not any(key in norm_name(r["name"]) for _, r, _ in found):
+                found.append((pos, rec, "name"))
+    if len(found) < limit:
         short = _memo(cur, "short_names", _build_short_names)
         covered = " ".join(norm_name(r["name"]) for _, r, _ in found)
         # A short name is read only from a word written as a name (capitalised,
@@ -263,6 +381,8 @@ def find_companies(cur, question, limit=3):
             raw = m.group(0)
             w = norm_name(raw)
             if not w or w not in short or w in covered or any(r is short[w][0] for _, r, _ in found):
+                continue
+            if w in INDUSTRY_WORD_SET or (w.endswith("S") and w[:-1] in INDUSTRY_WORD_SET):
                 continue
             if not (lower_q or raw[0].isupper()):
                 continue
@@ -357,6 +477,12 @@ INDUSTRY_WORDS = [
 ]
 
 
+# every word that names an industry above: never read as a company's short name
+# ("pharma" is not Royalty Pharma, "restaurant" is not Restaurant Brands)
+INDUSTRY_WORD_SET = {w.upper() for words, _, _ in INDUSTRY_WORDS for phrase in words for w in phrase.split()} | \
+                    {"DEFENSE", "DEFENCE", "CONTRACTORS", "CHAINS", "STOCKS", "STOCK", "COMPANIES", "COMPANY", "SECTOR", "INDUSTRY"}
+
+
 def resolve_industry(cur, question):
     """(sic prefixes, label) for an industry named in the question, or None."""
     q = " " + re.sub(r"[^a-z0-9 ]", " ", (question or "").lower()) + " "
@@ -384,16 +510,47 @@ def resolve_industry(cur, question):
 
 
 # ---- managers --------------------------------------------------------------
-_MANAGER_WORDS = {"PORTFOLIO", "CAPITAL", "MANAGEMENT", "ADVISORS", "ADVISERS", "PARTNERS", "INVESTMENT",
+# people asked about by name, and the manager that files their 13F
+MANAGER_PEOPLE = {"bill ackman": "PERSHING SQUARE", "ackman": "PERSHING SQUARE", "soros": "SOROS FUND MANAGEMENT", "george soros": "SOROS FUND MANAGEMENT",
+                  "michael burry": "SCION ASSET MANAGEMENT", "burry": "SCION ASSET MANAGEMENT", "warren buffett": "BERKSHIRE HATHAWAY", "buffett": "BERKSHIRE HATHAWAY",
+                  "ray dalio": "BRIDGEWATER ASSOCIATES", "dalio": "BRIDGEWATER ASSOCIATES", "ken griffin": "CITADEL ADVISORS", "griffin": "CITADEL ADVISORS",
+                  "cathie wood": "ARK INVESTMENT MANAGEMENT", "ark invest": "ARK INVESTMENT MANAGEMENT", "ark": "ARK INVESTMENT MANAGEMENT",
+                  "david tepper": "APPALOOSA", "tepper": "APPALOOSA", "carl icahn": "ICAHN CARL C", "icahn": "ICAHN CARL C", "dan loeb": "THIRD POINT",
+                  "daniel loeb": "THIRD POINT", "seth klarman": "BAUPOST GROUP", "klarman": "BAUPOST GROUP", "druckenmiller": "DUQUESNE FAMILY OFFICE",
+                  "stanley druckenmiller": "DUQUESNE FAMILY OFFICE", "jim simons": "RENAISSANCE TECHNOLOGIES", "david einhorn": "GREENLIGHT CAPITAL",
+                  "einhorn": "GREENLIGHT CAPITAL", "howard marks": "OAKTREE CAPITAL MANAGEMENT", "paul singer": "ELLIOTT INVESTMENT MANAGEMENT",
+                  "elliott": "ELLIOTT INVESTMENT MANAGEMENT", "nelson peltz": "TRIAN FUND MANAGEMENT", "peltz": "TRIAN FUND MANAGEMENT",
+                  "chase coleman": "TIGER GLOBAL MANAGEMENT", "tiger global": "TIGER GLOBAL MANAGEMENT", "steve cohen": "POINT72 ASSET MANAGEMENT",
+                  "point72": "POINT72 ASSET MANAGEMENT", "millennium": "MILLENNIUM MANAGEMENT", "izzy englander": "MILLENNIUM MANAGEMENT",
+                  "norges": "NORGES BANK", "norway's oil fund": "NORGES BANK", "norwegian sovereign wealth fund": "NORGES BANK",
+                  "saudi pif": "PUBLIC INVESTMENT FUND", "temasek": "TEMASEK HOLDINGS", "gic": "GIC PRIVATE", "softbank": "SOFTBANK GROUP"}
+_MANAGER_PEOPLE_RE = re.compile(r"(?<![\w])(" + "|".join(sorted((re.escape(k) for k in MANAGER_PEOPLE), key=len, reverse=True)) + r")(?![\w])", re.I)
+_MANAGER_ASKS = re.compile(r"\b(portfolio|positions?|holdings?|added|dropped|manager|fund|funds|sold|sell|sells|selling|bought|buy|buys|buying|"
+                           r"stake|trimmed|exited|13f|owns?|holds?|largest holding|biggest holding|top holdings?)\b")
+_MANAGER_WORDS = {"PORTFOLIO", "CAPITAL", "MANAGEMENT", "ADVISORS", "ADVISERS", "PARTNERS", "INVESTMENT", "INVEST", "INVESTING",
                   "INVESTMENTS", "INVESTORS", "ASSET", "ASSETS", "WEALTH", "FINANCIAL", "SECURITIES", "HOLDINGS",
                   "POSITIONS", "HOLDING", "MANAGERS", "FUNDS", "STRATEGIES", "STRATEGY", "RESEARCH", "GLOBAL"}
+
+
+def manager_by_cik(cur, cik, name):
+    """(cik, name) when the company itself files Form 13F (Berkshire Hathaway does), else None."""
+    if not sec_api._has(cur, "sec_13f_filings"):
+        return None
+    try:
+        hit = cur.execute("SELECT arg_max(manager_name, filed) FROM sec_13f_filings WHERE manager_cik = ?", [int(cik)]).fetchone()
+    except Exception:                                             # noqa: BLE001
+        return None
+    return (int(cik), hit[0] or name) if hit and hit[0] else None
 
 
 def resolve_manager(cur, question):
     """A 13F manager named in the question: (manager_cik, name) or None."""
     if not sec_api._has(cur, "sec_13f_filings"):
         return None
-    qn = norm_name(question)
+    pm = _MANAGER_PEOPLE_RE.search(question or "")
+    if pm:
+        question = MANAGER_PEOPLE[pm.group(1).lower()]              # "Bill Ackman" -> Pershing Square
+    qn = norm_name(re.sub(r"(\w)['\u2019]s\b", r"\1", question or ""))      # Vanguard's -> Vanguard
     if not qn:
         return None
     rows = cur.execute("""
@@ -402,7 +559,10 @@ def resolve_manager(cur, question):
     best = None
     for cik, name, v in rows:
         n = norm_name(name)
-        if len(n) < 4:
+        # a name that is nothing but trade words ("Asset Management") matches any
+        # question with those words in it: "Scion Asset Management" found Trust
+        # Asset Management LLC after Scion stopped filing
+        if len(n) < 4 or all(w in _MANAGER_WORDS or w in _GENERIC_NAMES or len(w) < 3 for w in n.split()):
             continue
         if " " + n + " " in " " + qn + " ":
             if best is None or len(n) > len(best[2]):
@@ -411,7 +571,7 @@ def resolve_manager(cur, question):
         return best[0], best[1]
     # "Berkshire" alone: the largest manager whose name starts with the word —
     # a name word, never an ordinary one ("portfolio", "capital", "partners")
-    for word in [w for w in qn.split() if len(w) >= 6 and w not in _ENGLISH and w not in _GENERIC_NAMES and w not in _MANAGER_WORDS]:
+    for word in [w for w in qn.split() if len(w) >= 5 and w not in _ENGLISH and w not in _GENERIC_NAMES and w not in _MANAGER_WORDS]:
         for cik, name, v in rows:                  # rows are largest first
             if (" " + word + " ") in (" " + norm_name(name) + " "):
                 return cik, name
@@ -488,14 +648,101 @@ def parse_since(question, today=None):
         return today - datetime.timedelta(days=92)
     if re.search(r"\b(past|last)\s+(six|6) months\b", q):
         return today - datetime.timedelta(days=183)
-    if re.search(r"\b(past|last)\s+(two|2|five|5|ten|10) years\b", q):
-        n = {"two": 2, "2": 2, "five": 5, "5": 5, "ten": 10, "10": 10}[re.search(r"\b(past|last)\s+(\w+) years\b", q).group(2)]
+    m = re.search(r"\b(?:over|in|across|during|for)\s+(?:the\s+)?(?:past|last)?\s*(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)[- ]years?\b|"
+                  r"\b(?:past|last)\s+(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+years\b", q)
+    if m:
+        v = m.group(1) or m.group(2)
+        n = int(v) if v.isdigit() else _NUM_WORDS[v]
         return today - datetime.timedelta(days=365 * n)
     return None
 
 
 _NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
               "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20}
+
+
+_YEAR = r"((?:19|20)\d{2})"
+
+
+def parse_year_window(question, today=None):
+    """(since, until) when the question names a year or a span of years for a
+    figure: "in 2019", "fiscal 2023", "FY2024", "2015 vs 2025", "2015-2025",
+    "between 2015 and 2025", "five years ago". Both dates, or None."""
+    today = today or datetime.date.today()
+    q = (question or "").lower()
+    m = re.search(r"\b" + _YEAR + r"\s*(?:-|–|to|vs\.?|versus|and|through|until)\s*" + _YEAR + r"\b", q)
+    if m:
+        a, b = sorted((int(m.group(1)), int(m.group(2))))
+        return datetime.date(a, 1, 1), datetime.date(b, 12, 31)
+    m = re.search(r"\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+years?\s+ago\b", q)
+    if m:
+        v = m.group(1)
+        n = int(v) if v.isdigit() else _NUM_WORDS[v]
+        y = today.year - n
+        return datetime.date(y, 1, 1), datetime.date(y, 12, 31)
+    m = re.search(r"\b(?:fy|fiscal(?: year)?)\s*'?(\d{2}|(?:19|20)\d{2})\b", q)
+    if m:
+        y = int(m.group(1))
+        y = y + 2000 if y < 100 else y
+        return datetime.date(y, 1, 1), datetime.date(y, 12, 31)
+    m = re.search(r"\b(?:in|during|for|of)\s+" + _YEAR + r"\b|\b" + _YEAR + r"\s+(?:revenue|sales|profit|net income|earnings|results|figures?)\b|"
+                  r"(?:revenue|sales|profits?|income|earnings|cash|flow|margin|eps|assets|equity|capex|dividends?|buybacks?|results)\s+(?:in\s+|for\s+)?" + _YEAR + r"\s*$", q)
+    if m:
+        y = int(m.group(1) or m.group(2) or m.group(3))
+        if y <= today.year:
+            return datetime.date(y, 1, 1), datetime.date(y, 12, 31)
+    return None
+
+
+_MONTHS = {m: i + 1 for i, m in enumerate(["january", "february", "march", "april", "may", "june", "july", "august",
+                                           "september", "october", "november", "december"])}
+_MONTHS.update({k[:3]: v for k, v in list(_MONTHS.items())})
+
+
+_WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+
+
+def parse_weekday(question, today=None, ahead=True):
+    """The date of "Thursday", "next Thursday" (ahead) or "last Friday" (behind), or None."""
+    today = today or datetime.date.today()
+    q = (question or "").lower()
+    m = re.search(r"\b(last|next|this|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", q)
+    if not m:
+        return None
+    wd = _WEEKDAYS[m.group(2)]
+    if m.group(1) == "last" or not ahead:
+        back = (today.weekday() - wd) % 7 or 7
+        return today - datetime.timedelta(days=back)
+    fwd = (wd - today.weekday()) % 7
+    return today + datetime.timedelta(days=fwd)
+
+
+def parse_date(question):
+    """One calendar day written in the question ("23 March 2020", "March 23, 2020", "2020-03-23"), or None."""
+    q = (question or "").lower()
+    if re.search(r"\byesterday\b", q):
+        return datetime.date.today() - datetime.timedelta(days=1)
+    if re.search(r"\blast (monday|tuesday|wednesday|thursday|friday)\b", q):
+        return parse_weekday(q, ahead=False)
+    m = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9})\.?,?\s+((?:19|20)\d{2})\b", q)
+    if m and m.group(2) in _MONTHS:
+        try:
+            return datetime.date(int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1)))
+        except ValueError:
+            return None
+    m = re.search(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+((?:19|20)\d{2})\b", q)
+    if m and m.group(1) in _MONTHS:
+        try:
+            return datetime.date(int(m.group(3)), _MONTHS[m.group(1)], int(m.group(2)))
+        except ValueError:
+            return None
+    m = re.search(r"\b((?:19|20)\d{2})-(\d{2})-(\d{2})\b", q)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    return None
 
 
 def parse_years(question):
@@ -512,6 +759,12 @@ def parse_years(question):
 
 def parse_ahead_days(question, default=14):
     q = (question or "").lower()
+    if re.search(r"\btomorrow\b|\btoday\b", q):
+        return 1
+    if re.search(r"\bthis week\b|\bnext week\b", q):
+        return 7
+    if re.search(r"\bthis month\b|\bnext month\b", q):
+        return 30
     m = re.search(r"next\s+(\d+|two|three|four|one)\s+(week|weeks|day|days|month|months)", q)
     if not m:
         return default

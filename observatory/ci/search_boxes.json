@@ -10,33 +10,259 @@
     "be run here goes under 'elsewhere' or 'not_run' with the reason: gaps stay visible."
   ],
   "boxes": [
-    {"key": "company.html#q", "url": "/company.html", "input": "#q", "area": "#results", "hits": "#results li", "extra": ["Sony"]},
-    {"key": "equities.html#co-q", "url": "/equities.html", "input": "#co-q", "area": "#co-results", "hits": "#co-results li", "extra": []},
-    {"key": "agm.html#q", "url": "/agm.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "buyback.html#q", "url": "/buyback.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "customs-lens.html#q", "url": "/customs-lens.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "earnings.html#q", "url": "/earnings.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "financials.html#q", "url": "/financials.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "facilities.html#q", "url": "/facilities.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "holdings.html#q", "url": "/holdings.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "governance.html#q", "url": "/governance.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "ownership.html#q", "url": "/ownership.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "stakes.html#q", "url": "/stakes.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "risks.html#q", "url": "/risks.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "shorts.html#q", "url": "/shorts.html", "input": "#q", "area": "#search-results", "hits": "#search-results tbody tr", "extra": []},
-    {"key": "risks.html#ts-q", "url": "/risks.html", "input": "#ts-q", "area": "#ts-wrap", "hits": "#ts-wrap tbody tr", "extra": []},
-    {"key": "customers.html#buyer-search", "url": "/customers.html", "input": "#buyer-search", "area": "#buyer-table", "hits": "#buyer-table tbody tr", "extra": []},
-    {"key": "explorer.html#q", "url": "/explorer.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": ["Food"]},
-    {"key": "us-explorer.html#q", "url": "/us-explorer.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": []},
-    {"key": "us-prices.html#q", "url": "/us-prices.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": []},
-    {"key": "us-weights.html#q", "url": "/us-weights.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": []},
-    {"key": "us-wages.html#q", "url": "/us-wages.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": []},
-    {"key": "us-cpi-areas.html#q", "url": "/us-cpi-areas.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": []},
-    {"key": "hk-economy.html#q", "url": "/hk-economy.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": ["GDP"]},
-    {"key": "hk-prices.html#q", "url": "/hk-prices.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "extra": ["CPI"]},
-    {"key": "labour.html#q", "url": "/labour.html", "input": "#q", "area": "#table-wrap", "hits": "#table-wrap tbody tr", "ready": "#table-wrap tbody tr", "placeholder_examples": false, "extra": ["unemployment", "wage"]},
-    {"key": "us-companies.html#cn-q", "url": "/us-companies.html?t=DIS", "input": "#cn-q", "area": "#cn-table", "hits": "#cn-table tbody tr", "ready": "#cn-table tbody tr", "extra": ["revenue"]},
-    {"key": "index.html#q", "url": "/", "input": "#q", "submit": true, "area": "#answer", "hits": "#answer .hit", "extra": ["What is Apple worth?", "AAPL insiders this year"]}
+    {
+      "key": "company.html#q",
+      "url": "/company.html",
+      "input": "#q",
+      "area": "#results",
+      "hits": "#results li",
+      "extra": [
+        "Sony"
+      ]
+    },
+    {
+      "key": "equities.html#co-q",
+      "url": "/equities.html",
+      "input": "#co-q",
+      "area": "#co-results",
+      "hits": "#co-results li",
+      "extra": []
+    },
+    {
+      "key": "agm.html#q",
+      "url": "/agm.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "buyback.html#q",
+      "url": "/buyback.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "customs-lens.html#q",
+      "url": "/customs-lens.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "earnings.html#q",
+      "url": "/earnings.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "financials.html#q",
+      "url": "/financials.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "facilities.html#q",
+      "url": "/facilities.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "holdings.html#q",
+      "url": "/holdings.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "governance.html#q",
+      "url": "/governance.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "ownership.html#q",
+      "url": "/ownership.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "stakes.html#q",
+      "url": "/stakes.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "risks.html#q",
+      "url": "/risks.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "shorts.html#q",
+      "url": "/shorts.html",
+      "input": "#q",
+      "area": "#search-results",
+      "hits": "#search-results tbody tr",
+      "extra": []
+    },
+    {
+      "key": "risks.html#ts-q",
+      "url": "/risks.html",
+      "input": "#ts-q",
+      "area": "#ts-wrap",
+      "hits": "#ts-wrap tbody tr",
+      "extra": []
+    },
+    {
+      "key": "customers.html#buyer-search",
+      "url": "/customers.html",
+      "input": "#buyer-search",
+      "area": "#buyer-table",
+      "hits": "#buyer-table tbody tr",
+      "extra": []
+    },
+    {
+      "key": "explorer.html#q",
+      "url": "/explorer.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": [
+        "Food"
+      ]
+    },
+    {
+      "key": "us-explorer.html#q",
+      "url": "/us-explorer.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": []
+    },
+    {
+      "key": "us-prices.html#q",
+      "url": "/us-prices.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": []
+    },
+    {
+      "key": "us-weights.html#q",
+      "url": "/us-weights.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": []
+    },
+    {
+      "key": "us-wages.html#q",
+      "url": "/us-wages.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": []
+    },
+    {
+      "key": "us-cpi-areas.html#q",
+      "url": "/us-cpi-areas.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": []
+    },
+    {
+      "key": "hk-economy.html#q",
+      "url": "/hk-economy.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": [
+        "GDP"
+      ]
+    },
+    {
+      "key": "hk-prices.html#q",
+      "url": "/hk-prices.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": [
+        "CPI"
+      ]
+    },
+    {
+      "key": "labour.html#q",
+      "url": "/labour.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "placeholder_examples": false,
+      "extra": [
+        "unemployment",
+        "wage"
+      ]
+    },
+    {
+      "key": "us-companies.html#cn-q",
+      "url": "/us-companies.html?t=DIS",
+      "input": "#cn-q",
+      "area": "#cn-table",
+      "hits": "#cn-table tbody tr",
+      "ready": "#cn-table tbody tr",
+      "extra": [
+        "revenue"
+      ]
+    },
+    {
+      "key": "index.html#q",
+      "url": "/",
+      "input": "#q",
+      "submit": true,
+      "area": "#answer",
+      "hits": "#answer .hit",
+      "extra": [
+        "What is Apple worth?",
+        "AAPL insiders this year"
+      ]
+    },
+    {
+      "key": "us-labour.html#q",
+      "url": "/us-labour.html",
+      "input": "#q",
+      "area": "#table-wrap",
+      "hits": "#table-wrap tbody tr",
+      "ready": "#table-wrap tbody tr",
+      "extra": []
+    }
   ],
   "elsewhere": {
     "write.js#wd-cvq": "The coverage search on a publication's Coverage tab, inside the signed-in Writer Desk. tests/test_search_examples.py types the box's own examples and the obvious company queries into the same search.",

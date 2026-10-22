@@ -56,6 +56,27 @@ SUCCESSORS = {
 # entry here: the filer's own rate, read from the same filing, is used first.
 # Every entry was checked against the wording quoted, in the 10-K named.
 _ONE = 1.0
+# Filers whose unlisted classes convert into the listed one at rates not tagged in any filing: the weighted
+# diluted share count (which the filer computes as-converted) stands in for the class-by-class total.
+AS_CONVERTED_DILUTED = {
+    1403161: ("Visa 10-K: class B-1, B-2, B-3 and C common stock convert into class A at conversion rates the company "
+              "adjusts; the diluted weighted-average class A count is used as the as-converted total"),
+}
+
+
+def _diluted_count(cur, cik):
+    """The latest annual weighted diluted share count (class A or company-wide), or None."""
+    try:
+        row = cur.execute("""
+            SELECT f.value FROM sec_facts f JOIN sec_filings s USING (adsh) LEFT JOIN sec_segments g USING (segment_id)
+            WHERE s.cik = ? AND f.tag = 'WeightedAverageNumberOfDilutedSharesOutstanding' AND f.qtrs = 4 AND f.coreg IS NULL
+              AND (f.segment_id IS NULL OR g.segments LIKE 'ClassOfStock=CommonClassA;')
+            ORDER BY f.ddate DESC, f.segment_id NULLS FIRST LIMIT 1""", [cik]).fetchone()
+    except Exception:                                             # noqa: BLE001 — no facts table, no count
+        return None
+    return float(row[0]) if row and row[0] else None
+
+
 CONVERSIONS = {
     1559720: {"commonclassb": (None, _ONE, "Airbnb 10-K 2026-02-12: each Class B share convertible into one share of Class A"),
               "commonclassh": (None, _ONE, "Airbnb 10-K 2026-02-12: Class H converts into Class A on a share-for-share basis")},
@@ -387,6 +408,14 @@ def basis(cur, row, closes):
     classes = _share_classes(rs)
     whole = [r for r in rs if not r["class"]]
     listed = [r for r in classes if r["ticker"]]
+    # Visa: class B-1, B-2 and C convert into class A at rates the company adjusts and does not tag, so the
+    # cover counts cannot be valued class by class. Its diluted weighted count is the as-converted total.
+    if cik in AS_CONVERTED_DILUTED and len(listed) == 1:
+        n = _diluted_count(cur, cik)
+        if n:
+            return done(n, "diluted, as converted", [AS_CONVERTED_DILUTED[cik]],
+                        caution=("Market value uses the weighted diluted share count from the latest annual report as the "
+                                 "as-converted total, since the unlisted classes' conversion rates are not on file."))
     # One figure for the whole company, unless two classes trade at their own prices
     if len(classes) <= 1 or (whole and len(listed) < 2):
         r = whole[0] if whole else (classes[0] if classes else None)

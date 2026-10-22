@@ -112,7 +112,9 @@ FIELDS = [
      ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
       "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax",
       "SalesRevenueGoodsNet", "TotalRevenuesAndOtherIncome",
-      "InterestAndDividendIncomeOperating"]),
+      "InterestAndDividendIncomeOperating",
+      # IFRS filers (20-F): Shell, Novo Nordisk and Toyota tag "Revenue", TSMC "RevenueFromContractsWithCustomers"
+      "Revenue", "RevenueFromContractsWithCustomers"]),
     ("operating_income", "duration", ["OperatingIncomeLoss"]),
     ("pretax_income", "duration",
      ["IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
@@ -129,10 +131,11 @@ FIELDS = [
     ("cash", "instant",
      ["CashAndCashEquivalentsAtCarryingValue",
       "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"]),
-    ("cf_operating", "duration", ["NetCashProvidedByUsedInOperatingActivities"]),
+    ("cf_operating", "duration", ["NetCashProvidedByUsedInOperatingActivities", "CashFlowsFromUsedInOperatingActivities"]),
     ("cf_investing", "duration", ["NetCashProvidedByUsedInInvestingActivities"]),
     ("cf_financing", "duration", ["NetCashProvidedByUsedInFinancingActivities"]),
-    ("capex", "duration", ["PaymentsToAcquirePropertyPlantAndEquipment"]),
+    # Amazon files its capital spending as "productive assets"; without the second tag its free cash flow was blank
+    ("capex", "duration", ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"]),
     # dividends to common shareholders first: the all-in line also carries preferred dividends
     ("dividends_paid", "duration", ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]),
     ("buybacks", "duration", ["PaymentsForRepurchaseOfCommonStock"]),

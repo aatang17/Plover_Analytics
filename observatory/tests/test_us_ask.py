@@ -257,9 +257,12 @@ class TwentyQuestionsTest(unittest.TestCase):
             {"text": json.dumps(form), "usage": {"in": 10, "out": 5}})
         us_ask_model.provider = lambda: ("deepseek", "db-test", "deepseek-chat")
         us_ask_model._CACHE.clear()
+        from app import stock_recipes
+        stock_recipes.QUICK_LANE = False          # these questions must reach the reader, not the quick lane
         try:
             return fn(), calls
         finally:
+            stock_recipes.QUICK_LANE = True
             us_ask_model._complete, us_ask_model.provider = real, real_provider
             us_ask_model._CACHE.clear()
 

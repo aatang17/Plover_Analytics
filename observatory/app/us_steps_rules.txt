@@ -17,7 +17,10 @@ Which stocks
 - A performance list or count across all stocks (no index named) leaves out companies under $2bn in market value unless the question asks for all, small or micro companies: add market_cap_usd >= 2e9 and say "companies above $2bn" in the headline.
 - "Chinese", "Israeli", "Canadian" ... companies: country = 'CN' etc. on the business address; say "US-listed Chinese companies" in the headline, since only those listed in the US are here. Japan and Hong Kong are covered elsewhere on the site, not here.
 - "Large" means market_cap_usd >= 1e10 ($10bn), "mega" >= 2e11 ($200bn), "small" < 2e9. "Tech" is sector = 'Technology'; "banks" is industry ILIKE '%BANK%'; "carmakers" industry ILIKE '%MOTOR VEHICLES%'; "chipmakers" or "semiconductors" industry ILIKE '%SEMICONDUCTOR%'; "software" industry ILIKE '%SOFTWARE%' OR industry ILIKE '%PROGRAMMING%'; "oil" sector = 'Energy'; "pharma" industry ILIKE '%PHARMACEUTICAL%'; "REITs" sector = 'Real Estate'; "retailers" industry ILIKE '%RETAIL%'.
-- A company named by name: name ILIKE '%Apple%' or ticker = 'AAPL'.
+- A company named in the question: ticker = 'AAPL', by the ticker you know for it. Never match on the name with ILIKE: '%Apple%' also finds Apple Hospitality and Apple iSports, and "AAPL revenue" came back as a $19mn company. Match on name only when you know no ticker, and then with the whole registered name.
+- "No dividend", "pays no dividend", "non-dividend": dividend_yield_pct IS NULL OR dividend_yield_pct = 0 (a company that pays none has a blank, not a zero). "Pays a dividend": dividend_yield_pct > 0.
+- A count of quarters, years or trades is named as such ({quarters}, {years}, {trades}); "across {n} companies" when n counts quarters was wrong.
+- A product line named loosely ("cloud", "data center", "services") matches the segment name with ILIKE '%cloud%' across all kinds; the headline names the segment found ("Intelligent Cloud"), so the reader sees what was matched.
 
 Counting and averaging
 - Missing is missing, never zero. Count only rows that have the figure: count(column), never count(*), for the "out of" number. Never coalesce a blank to 0.
@@ -50,11 +53,13 @@ CEO pay (table pay)
 
 Quarterly results (table quarters)
 - "Last quarter", "latest quarter", "most recent quarter": is_latest. Companies' quarters end on different dates: return quarter_end.
+- The table holds each company's last eight quarters only. A question reaching further back ("every quarter since 2022") uses the quarters held, never an empty result, and the headline says "the eight quarters on file".
 - Quarterly growth means against the same quarter a year earlier (revenue_growth_yoy_pct), never against the quarter before. A growth ranking needs revenue_year_ago_usd >= 5e7, said in the headline.
 - A fourth quarter is often worked out (q4_derived): keep it, it is the year less the first three quarters.
 
 Business segments (table segments)
 - "Segment" or "division" means kind = 'business'. A country or region ("China", "Europe", "international") is matched on the segment name with ILIKE across both 'geography' and 'business', because some companies' reporting segments are regions (Apple's "Greater China"); return kind and segment so the reader sees which. A product line ("iPhone", "cloud", "data center") is matched on the segment name with ILIKE across all kinds.
+- Match a segment on the word's stem, never its plural: segment ILIKE '%servic%' (Apple's line is "Service", not "Services"), '%cloud%', '%data center%'. When the first try finds nothing, "look" at the company's segment names before answering that none matches.
 - share_of_revenue_pct is of the company's total revenue; segments of one kind can overlap or leave a remainder, so never add them up to 100.
 - "What does X do", "what business is X in", "what does X sell": its product lines (kind 'product'), or its reporting segments when it has no product lines, largest first, with share_of_revenue_pct. Never answer with sector and industry alone: they name a category, not what the company does.
 

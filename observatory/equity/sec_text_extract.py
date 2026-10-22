@@ -555,6 +555,22 @@ def targets(sec_db, con, limit, tickers=None):
             FROM sec_filings f JOIN sec_companies c USING (cik)
             WHERE c.ticker IS NOT NULL AND f.form IN (%s) AND f.filed >= current_date - %d
             GROUP BY f.cik""" % (",".join("'%s'" % f for f in FORMS), RECENT_DAYS)).fetchall()
+        # a company under a new filer number (ExxonMobil Holdings) is read from its predecessor's reports
+        try:
+            from app.us_link import PREDECESSOR_CIKS
+        except Exception:                                         # noqa: BLE001
+            PREDECESSOR_CIKS = {}
+        have_cik = {r[0] for r in rows}
+        for new, old in PREDECESSOR_CIKS.items():
+            if new in have_cik:
+                continue
+            old_rows = sec.execute("""
+                SELECT f.cik, arg_max(f.adsh, f.filed), arg_max(f.form, f.filed), arg_max(f.period, f.filed),
+                       max(f.filed), arg_max(f.instance, f.filed), any_value(c.ticker)
+                FROM sec_filings f JOIN sec_companies c ON c.cik = ?
+                WHERE f.cik = ? AND f.form IN (%s) AND f.filed >= current_date - %d
+                GROUP BY f.cik""" % (",".join("'%s'" % f for f in FORMS), RECENT_DAYS), [new, old]).fetchall()
+            rows += old_rows                                      # fetched from the old number's archive
     finally:
         sec.close()
     have = {a: s for a, s in con.execute("SELECT adsh, parser FROM sec_text_filings WHERE status <> 'failed'").fetchall()}

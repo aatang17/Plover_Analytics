@@ -267,6 +267,22 @@ def summary(days, start, today, hits=None, recent=50, top=15):
             row["last"], row["q"] = e["at"], e["q"]
     most = sorted((r for r in asked.values() if r["times"] > 1), key=lambda r: (-r["times"], r["q"]))[:top]
     known = [e for e in lines if e.get("answered") in (True, False)]
+    # which route answered, how often, how fast: the quick lane (code, no model), the reader (one model
+    # call, code answers), the step route (the model writes SQL), the economy answers, and the misses
+    by_route = {}
+    for e in lines:
+        r = e.get("route") or ("miss:" + str(e.get("route") or "")) if e.get("answered") is False else (e.get("route") or "unknown")
+        if e.get("answered") is False:
+            r = "miss"
+        row = by_route.setdefault(r, {"route": r, "searches": 0, "answered": 0, "seconds": []})
+        row["searches"] += 1
+        row["answered"] += 1 if e.get("answered") is True else 0
+        if e.get("seconds") is not None:
+            row["seconds"].append(e["seconds"])
+    routes = []
+    for r in sorted(by_route.values(), key=lambda x: -x["searches"]):
+        routes.append({"route": r["route"], "searches": r["searches"], "answered": r["answered"],
+                       "median_seconds": _median(r["seconds"]), "share": round(100.0 * r["searches"] / len(lines), 1) if lines else None})
     return {
         "since": since,
         "searches": len(lines),
@@ -276,6 +292,7 @@ def summary(days, start, today, hits=None, recent=50, top=15):
         "previews": sum(1 for e in lines if e.get("where") == "preview"),
         "median_seconds": _median([e.get("seconds") for e in lines]),
         "distinct_questions": len(asked),
+        "routes": routes,
         "daily": series,
         "weekly": weekly(today),
         "recent": [{k: e.get(k) for k in ("at", "q", "where", "answered", "route", "shape", "seconds", "from")}

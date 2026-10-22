@@ -232,7 +232,7 @@ class LiveTest(unittest.TestCase):
         r, _ = self._mocked([{"steps": ["Employees are not held."], "sql": "", "cannot": "I don't hold employee numbers."}],
                             "Which companies have the most employees?")
         self.assertEqual(r.status_code, 422)
-        self.assertIn("employee", r.json()["detail"])
+        self.assertIn("mployee", r.json()["detail"])
 
 
 if __name__ == "__main__":

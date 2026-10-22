@@ -255,13 +255,39 @@ def period(question, plan, today=None):
                    % (y, y, y))
 
 
-def check(question, plan, rows, cols, headline=None, today=None):
+def wrong_company(question, rows, cols, cur=None):
+    """One company named in the question, and a one-row result about another
+    ticker: the query matched a name loosely ("AAPL revenue" found a $19mn
+    Apple), and must use the ticker."""
+    if not rows or len(rows) != 1 or "ticker" not in cols or cur is None:
+        return None
+    try:
+        from . import stock_recipes, us_link
+        cos = us_link.find_companies(cur, stock_recipes._without_benchmarks(question))
+    except Exception:                                             # noqa: BLE001 — a check never fails the answer
+        return None
+    if len(cos) != 1:
+        return None
+    got = str(rows[0][cols.index("ticker")] or "").upper()
+    want = {t.upper() for t in ([cos[0].get("ticker")] + list(cos[0].get("tickers") or [])) if t}
+    want |= {t.replace("-", ".") for t in want}
+    if not got or got in want:
+        return None
+    return finding("wrong_company", REVISE, "The result is about %s, not the company the question names." % got,
+                   "The question names %s (ticker %s); the result row is %s. Match the company by ticker = '%s', never by name with ILIKE."
+                   % (cos[0].get("name"), cos[0].get("ticker"), got, cos[0].get("ticker")))
+
+
+def check(question, plan, rows, cols, headline=None, today=None, cur=None):
     """Every finding on this plan and result, most serious first. `headline`
     is the filled headline, or None when us_steps refused the template."""
     out = []
     om = other_market(question)
     if om:
         return [om]
+    wc = wrong_company(question, rows, cols, cur)
+    if wc:
+        out.append(wc)
     if rows and headline is None and plan.get("headline"):
         out.append(finding("headline", REVISE, "The headline could not be filled from the result.",
                            "The headline wrote a number of its own, or named a column the query does not return. "

@@ -1,8 +1,8 @@
-# Observatory — Japan CPI
+# Plover Analytics — product app
 
-Working v1 of Plover Analytics data platform ([plan](../docs/plans/PLAN-JAPAN-INFLATION-OBSERVATORY.md),
-[implementation plan](../docs/plans/IMPL-JAPAN-INFLATION-OBSERVATORY.md)) with two Japan CPI
-datasets, both monthly, January 1970 to the latest published month, ingested directly from e-Stat:
+Working product for [Plover Analytics](../README.md) ([plan](../docs/plans/PLAN-JAPAN-INFLATION-OBSERVATORY.md),
+[implementation plan](../docs/plans/IMPL-JAPAN-INFLATION-OBSERVATORY.md)). Japan CPI came first —
+two datasets, both monthly, January 1970 to the latest published month, ingested directly from e-Stat:
 
 - **cpi-jp** — national middle-class indices (~80 category series: headline, cores, ten major
   expenditure groups, and the categories beneath them)
@@ -1596,3 +1596,38 @@ A `rates.html` page still shows the JGB curve only. Putting these on a page is
 a UI change and belongs with the `ui-ux-design` skill; the data and the API
 are done without it.
 
+
+## How the box answers a question: code first, then the model
+
+Every question to the front-page box (`/api/v1/us/ask`, `app/stock_recipes.answer`) goes down
+one of five routes, tried in this order. The admin Traffic page's Ask Box section shows how
+many questions took each route and the median wait, so the split can be watched.
+
+| Route | What it is | When it runs | Cost |
+| --- | --- | --- | --- |
+| Refusals and reasons | Word patterns for advice, forecasts, "why", figures not held, markets not covered, names that are not filers | Before anything else | 0 ms, no model |
+| Economy answers (`app/assistant/preview.py`) | A catalogue of US, Japan and Hong Kong series, then the series search, run by code | The question names an economy topic and no company | under 1 s, no model |
+| Quick lane (`stock_recipes.quick_match`) | A company (or manager, industry, index) plus a few words that name one shape, read by a fixed grammar | The grammar matches the whole question | under 1 s, no model |
+| Reader (`app/us_ask_model.py`) | One short model call fills a form (shape, companies, period, ranking); code runs the shape | The quick lane did not match | 3–8 s, one call, cached per question per day |
+| Steps (`app/us_steps.py`) | The model writes the steps and one SQL query over the sandbox tables; code runs and checks it | The reader names no shape: counts, shares, screens with several conditions, custom maths | 10–30 s, two to four calls, plan cached per question per day |
+
+Rules of thumb when adding something:
+
+- A question people ask in the same words every day (a figure, an owner, a date, a ranking)
+  belongs in the quick lane: add a grammar line to `QUICK_SHAPES` and, if needed, a recipe. It is
+  the only route that is instant, deterministic and free.
+- A question with many phrasings but one shape belongs with the reader: improve `SHAPE_HINTS`.
+- A question that genuinely needs arithmetic across companies belongs with the steps route: add a
+  rule to `app/us_steps_rules.txt` or a worked example to `app/us_steps_examples.json`. Its answers
+  vary run to run, so never leave a common question there.
+- A question the data cannot answer gets a plain reason, never a guess (`app/ask_miss.py`).
+
+Caching, in layers: the provider's prompt cache (every model call carries a `prompt_cache_key`
+and puts the unchanging part of the prompt first, so the long prefix is read from cache and
+counted in `tokens_cached` on `/api/v1/us/ask/recipes`); the reader's form, the step plan and the
+review verdict, each cached per question per day in memory; the metrics rows, name indexes and
+sandbox tables, built once per database version and rebuilt in a background thread
+(`stock_recipes.warm_forever`); and the response cache (`app/cache.py`), which stores every
+`/api/v1` GET body, the box and the front page's preview included, keyed by path and query and
+stamped with the three database versions, so a repeat question costs one dictionary lookup
+until the nightly refresh.

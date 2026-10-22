@@ -31,7 +31,7 @@ const MAX_SERIES = 6;
    the BLS prints average prices and weights to three decimals, earnings to
    two, and the Atlanta Fed its medians to one. Index levels follow the
    platform rule of one decimal. */
-const DP = { "us-avg-prices": 3, "us-wages": 2, "cpi-us-weights": 3, "us-wage-tracker": 1,
+const DP = { "us-avg-prices": 3, "us-wages": 2, "cpi-us-weights": 3, "us-wage-tracker": 1, "us-labour": 1,
              /* Hong Kong: the C&SD publishes its rates and its labour counts
                 (in thousands) to one decimal. */
              "cpi-hk-rates": 1, "labour-hk": 1 };

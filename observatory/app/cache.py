@@ -60,6 +60,10 @@ NEVER_CACHE = ("/api/v1/catalog/health",)
 # prefix, not by exact path, so that adding a second account endpoint cannot
 # accidentally put one reader's answer in a cache everybody is served from.
 NEVER_CACHE_PREFIXES = ("/api/v1/account/", "/api/v1/assistant/")
+# Under an excluded prefix but safe to cache: the front page's preview needs no account and
+# answers from the same data as the box, so a repeat question is served from memory (the
+# reader model is not called again, and the step route's SQL is not rewritten).
+CACHE_ANYWAY = ("/api/v1/assistant/preview",)
 
 
 async def warm(app, paths):
@@ -135,7 +139,7 @@ class ResponseCache(object):
         if (scope["type"] != "http" or scope.get("method") != "GET"
                 or not scope["path"].startswith(self.prefix)
                 or scope["path"] in NEVER_CACHE
-                or scope["path"].startswith(NEVER_CACHE_PREFIXES)):
+                or (scope["path"].startswith(NEVER_CACHE_PREFIXES) and scope["path"] not in CACHE_ANYWAY)):
             await self.app(scope, receive, send)
             return
 

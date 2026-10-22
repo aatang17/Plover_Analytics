@@ -242,6 +242,9 @@ DESCRIPTIONS = {
     "us-wages.html":
         "US average hourly and weekly earnings, nominal and real, from the BLS, and the "
         "Atlanta Fed Wage Growth Tracker's median wage growth by group.",
+    "us-labour.html":
+        "The US unemployment rate, participation, the labor force, nonfarm payrolls and "
+        "JOLTS job openings, hires and quits, monthly from 1939, from the BLS.",
     "hk-economy.html":
         "Hong Kong's quarterly GDP and its expenditure components from 1973, unemployment "
         "and the labour force from 1985, retail sales from 2004 and merchandise trade from "

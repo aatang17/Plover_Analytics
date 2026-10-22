@@ -235,6 +235,9 @@ def base_rows(cur):
             rec[col] = ((r.get(part) or {}).get(field)) if usd else None   # a 20-F filer's own currency is not US$
         for col in _RATIOS:
             rec[col] = m.get(col)
+        eq, ta = size.get("equity"), size.get("total_assets")
+        if rec.get("roe_pct") is not None and (eq is None or eq <= 0 or (ta and eq < 0.05 * ta)):
+            rec["roe_pct"] = None                      # a sliver of equity makes any profit a 15,000% return: blank, never a ranking
         out.append(rec)
     with _BASE_LOCK:
         _BASE.update(v=v, rows=out)
@@ -594,6 +597,7 @@ def fill_headline(template, cols, row, words, question, sql=""):
             return ""
         return fmt_value(k, row[cols.index(k)])
     text = re.sub(r"\{([^}]*)\}", sub, template)
+    text = text.replace("\u00d7\u00d7", "\u00d7").replace("\u00d7x", "\u00d7").replace("%%", "%")        # "{pe_x}\u00d7" doubled the sign
     return text if ok else None
 
 
@@ -695,6 +699,9 @@ def answer(cur, question):
             log(question, "cannot", plan["cannot"])
             if str(plan["cannot"]).strip().lower().strip(".") == "unclear":
                 raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
+            if str(plan["cannot"]).startswith(OTHER_MARKET_PREFIX) and not other_market(question):
+                # the model copied the other-market wording for a US question it could not answer
+                raise ask_miss.miss("Plover's data doesn't hold what that question needs.", "not_held")
             # the questions offered instead are the fixed ones in app/ask_miss.py: a model's own suggestion
             # was found not to answer ("Toyota's reported revenue from India, if available")
             raise ask_miss.miss(str(plan["cannot"])[:400], "not_held")
@@ -729,7 +736,7 @@ def answer(cur, question):
         headline = fill_headline(plan.get("headline"), cols, rows[0], words, question, plan.get("sql") or "") if rows else None
         if not checks_on():
             break
-        findings = us_checks.check(question, plan, rows, cols, headline) if rows else []
+        findings = us_checks.check(question, plan, rows, cols, headline, cur=cur) if rows else []
         refused = [f for f in findings if f["severity"] == us_checks.REFUSE]
         if refused:
             log(question, "refused", refused[0]["check"])

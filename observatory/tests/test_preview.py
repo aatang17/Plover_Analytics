@@ -45,7 +45,7 @@ class Preview(unittest.TestCase):
         preview._stock = lambda q, prev=None: (None, None)
 
     def test_topics_gate_the_economy_route(self):
-        self.assertEqual(preview._allowed("US unemployment rate"), set())
+        self.assertEqual(preview._allowed("US unemployment rate"), {"us-labour"})     # held since the us-labour dataset (2026-10-22)
         self.assertEqual(preview._allowed("Fed funds rate"), set())
         self.assertIn("cpi-us", preview._allowed("Is US inflation falling?"))
         self.assertIn("ust-yields", preview._allowed("US 10-year Treasury yield"))

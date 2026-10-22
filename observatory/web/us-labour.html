@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Jobs · Plover Analytics</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<header class="site-header" data-section="us-prices" data-page="us-labour"></header>
+<script src="assets/nav.js"></script>
+
+<main class="container" data-datasets="us-labour:Jobs and unemployment (BLS)">
+  <div id="stale-banner"></div>
+  <div class="page-tabs" data-page-tabs></div>
+
+  <div class="metric-card">
+    <div class="metric-card-head">
+      <h1>US Jobs</h1>
+      <span class="metric-asof" id="page-asof"></span>
+      <p class="metric-sub" id="page-sub"><span class="skeleton" style="display:inline-block;width:420px;height:14px"></span></p>
+    </div>
+    <div class="seg seg-flush" role="group" aria-label="Dataset" id="dataset-seg"></div>
+    <div class="strip">
+      <div class="strip-grid" id="tiles">
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+      </div>
+    </div>
+    <p class="strip-foot" id="strip-foot"></p>
+  </div>
+
+  <section aria-labelledby="h-main">
+    <h2 id="h-main">Selected Series</h2>
+    <div class="chart-panel">
+    <div class="controls">
+      <label for="measure-select">Measure</label>
+      <select id="measure-select" aria-label="Transformation"></select>
+      <div class="seg" role="group" aria-label="Date range" id="range-seg">
+        <button type="button" data-range="1">1Y</button>
+        <button type="button" data-range="5">5Y</button>
+        <button type="button" data-range="10" aria-pressed="true">10Y</button>
+        <button type="button" data-range="25">25Y</button>
+        <button type="button" data-range="max">Max</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="main-png">Download PNG</button>
+      <button type="button" class="btn" id="main-csv">Download CSV</button>
+    </div>
+    <p class="table-meta" id="chart-note"></p>
+    <div class="chart" id="main-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
+    <p class="source-line" id="main-source"></p>
+    <details class="calc" id="main-calc"></details>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-table">
+    <h2 id="h-table">Series Detail</h2>
+    <div class="explorer-controls">
+      <div class="search-rail">
+        <div class="search-field">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"
+               class="search-icon"><circle cx="7" cy="7" r="4.6"></circle><path d="M10.4 10.4 14 14"></path></svg>
+          <input type="search" id="q" placeholder="Search series. E.g. unemployment, payrolls, participation, openings" aria-label="Search series">
+        </div>
+      </div>
+      <div class="band-toggles" style="display:none"><label><input type="checkbox" id="national"> U.S. city average only</label></div>
+    </div>
+    <p class="table-meta"><span><b id="row-count" class="num"></b> series</span>
+      <span id="filter-note"></span>
+      <span class="meta-rule" aria-hidden="true"></span>
+      <span>Tick rows to chart (max 6)</span></p>
+    <div class="table-wrap" id="table-wrap"><div class="skeleton" style="height:400px"></div></div>
+    <details class="calc" id="table-calc"></details>
+  </section>
+
+  <section aria-label="Data source and provenance" class="prov">
+    <div id="prov-card"></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    Source: U.S. Bureau of Labor Statistics.
+    <a href="methodology.html">Methodology</a>
+  </div>
+</footer>
+
+<script src="assets/echarts.min.js"></script>
+<script src="assets/format.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/sortable.js"></script>
+<script src="assets/us-series.js"></script>
+</body>
+</html>
