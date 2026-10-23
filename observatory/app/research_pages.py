@@ -37,11 +37,11 @@ import os
 import threading
 import urllib.parse
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse,
                                RedirectResponse, Response)
 
-from . import pub_profile, research, research_doc as rd, seo
+from . import newsletter, pub_profile, research, research_doc as rd, seo
 
 log = logging.getLogger(__name__)
 
@@ -564,13 +564,21 @@ def _chart_of_the_week(items, lead):
 def _subscribe_panel(title="Get New Notes by Email", pub=None):
     pub = pub or _home()
     if not pub["home"]:
-        # no email sending for other publications yet: RSS is what there is
-        return ('<aside class="rh-subscribe" aria-label="Follow">'
-                '<div><p class="rh-subscribe-title">Follow %s</p>'
-                '<p class="rh-subscribe-text">New notes appear in the RSS feed the moment they '
-                'are published.</p></div>'
-                '<div class="rh-subscribe-acts"><a class="btn btn-primary" href="%s/feed.xml">'
-                'RSS Feed</a></div></aside>' % (esc(pub["name"]), esc(pub["base"])))
+        # the publication's own list (app/newsletter.py): the form works with
+        # or without the script, which only keeps the reader on the page
+        return ('<aside class="rh-subscribe" id="subscribe" aria-label="Subscribe">'
+                '<div><p class="rh-subscribe-title">Get New Articles by Email</p>'
+                '<p class="rh-subscribe-text">Each new article from %s, sent to your inbox. '
+                'Unsubscribe any time.</p></div>'
+                '<form class="rh-subform" method="post" action="%s/email/subscribe" '
+                'data-subscribe novalidate>'
+                '<label class="visually-hidden" for="rh-sub-email">Email address</label>'
+                '<input type="email" id="rh-sub-email" name="email" required maxlength="254" '
+                'autocomplete="email" placeholder="name@example.com">'
+                '<button class="btn btn-primary" type="submit">Subscribe</button>'
+                '<a class="btn" href="%s/feed.xml">RSS</a>'
+                '<p class="rh-sub-msg" role="status" aria-live="polite" hidden></p>'
+                '</form></aside>' % (esc(pub["name"]), esc(pub["base"]), esc(pub["base"])))
     return ('<aside class="rh-subscribe" aria-label="Subscribe">'
             '<div><p class="rh-subscribe-title">%s</p>'
             '<p class="rh-subscribe-text">Every PloverResearch note is sent to Substack subscribers '
@@ -600,7 +608,8 @@ def render_home(pub=None):
         acts = ('<a class="btn btn-primary" href="%s" rel="noopener">Subscribe</a>'
                 '<a class="btn" href="/research/feed.xml">RSS</a>' % esc(SUBSTACK_URL))
     else:
-        acts = '<a class="btn" href="%s/feed.xml">RSS</a>' % esc(pub["base"])
+        acts = ('<a class="btn btn-primary" href="%s#subscribe">Subscribe</a>'
+                '<a class="btn" href="%s/feed.xml">RSS</a>' % (esc(pub["base"]), esc(pub["base"])))
     parts = ['<header class="rh-mast">%s<div><h1>%s</h1>%s%s</div>'
              '<div class="rh-mast-acts">%s</div></header>'
              % (_logo(pub, "rh-logo"), esc(pub["name"]),
@@ -857,6 +866,114 @@ def pub_index(pub_slug: str):
 @router.get("/p/{pub_slug}/feed.xml")
 def pub_feed(pub_slug: str):
     return _feed(_pub_or_404(pub_slug))
+
+
+# ---------------------------------------------------------------------------
+# a publication's email list: sign up, confirm, unsubscribe (app/newsletter.py)
+#
+# Under /p/<publication>/email/… so no address can shadow an article's: an
+# article's own address is one segment, /p/<publication>/<slug>.
+
+def _notice(pub, title, paragraphs, extra=""):
+    main = (_trail(pub) + '<div class="rs-email"><h1>%s</h1>%s%s</div>' % (
+        esc(title), "".join("<p>%s</p>" % p for p in paragraphs), extra))
+    return _html(page(title + " · " + pub["name"], title, None, main, robots="noindex", pub=pub),
+                 cache="no-store")
+
+
+def _back(pub):
+    return '<p><a class="btn" href="%s">Go to %s</a></p>' % (esc(pub["base"]), esc(pub["name"]))
+
+
+SIGNUP_MESSAGES = {
+    "confirm_sent": "Check your inbox: we sent a link to confirm your subscription.",
+    "already": "Check your inbox: we sent a link to confirm your subscription.",
+    "resend_later": "A confirmation link was sent a few minutes ago. Check your inbox and spam "
+                    "folder, or try again in ten minutes.",
+}
+
+
+@router.post("/p/{pub_slug}/email/subscribe")
+async def pub_subscribe(pub_slug: str, request: Request):
+    """JSON from the page's script, or a plain form post without it. An
+    address already subscribed gets the same reply as a new one, so the form
+    cannot be used to find out who reads what."""
+    pub = _pub_or_404(pub_slug)
+    raw = (await request.body())[:2000]
+    wants_json = "json" in request.headers.get("content-type", "")
+    try:
+        email = (json.loads(raw.decode("utf-8") or "{}").get("email", "") if wants_json else
+                 urllib.parse.parse_qs(raw.decode("utf-8", "replace")).get("email", [""])[0])
+    except (ValueError, AttributeError):
+        email = ""
+    from . import accounts
+    try:
+        status = newsletter.subscribe(pub, email, accounts._client_ip(request))
+        msg, code = SIGNUP_MESSAGES[status], 200
+    except newsletter.MailFailed as exc:
+        msg, code = str(exc), 503
+    except newsletter.NewsletterError as exc:
+        msg, code = str(exc), 400
+    except Exception:  # noqa: BLE001 — the mail provider refused or is down
+        log.exception("newsletter sign-up failed")
+        msg, code = ("The confirmation email could not be sent just now. Try again in a few "
+                     "minutes."), 503
+    if wants_json:
+        return JSONResponse({"ok": code == 200, "message": msg}, status_code=code)
+    return _notice(pub, "Almost Done" if code == 200 else "Not Subscribed", [esc(msg)],
+                   _back(pub))
+
+
+@router.get("/p/{pub_slug}/email/confirm")
+def pub_confirm(pub_slug: str, t: str = ""):
+    pub = _pub_or_404(pub_slug)
+    email = newsletter.confirm(pub, t)
+    if email is None:
+        return _notice(pub, "Link No Longer Valid", [
+            "This confirmation link has expired or was replaced by a newer one.",
+            'Sign up again on <a href="%s#subscribe">%s</a> and use the newest email.'
+            % (esc(pub["base"]), esc(pub["name"]))])
+    return _notice(pub, "You Are Subscribed", [
+        "New articles from %s will arrive at <strong>%s</strong>." % (esc(pub["name"]), esc(email)),
+        "Every email has a link to unsubscribe."], _back(pub))
+
+
+@router.get("/p/{pub_slug}/email/unsubscribe")
+def pub_unsubscribe_page(pub_slug: str, t: str = ""):
+    """A page with a button, not an unsubscribe on GET: mail scanners open
+    every link in a message, and would unsubscribe readers who never asked."""
+    pub = _pub_or_404(pub_slug)
+    row = newsletter.subscriber_by_token(pub, t)
+    if row is None:
+        return _notice(pub, "Link Not Recognised", [
+            "This unsubscribe link does not match an address on the list. It may have been "
+            "removed already.", "Reply to any email from %s to ask the writer directly."
+            % esc(pub["name"])], _back(pub))
+    if row["status"] == "unsubscribed":
+        return _notice(pub, "You Are Unsubscribed", [
+            "<strong>%s</strong> receives no more email from %s." % (esc(row["email"]),
+                                                                     esc(pub["name"]))],
+            '<p><a class="btn" href="%s#subscribe">Subscribe Again</a></p>' % esc(pub["base"]))
+    return _notice(pub, "Unsubscribe from %s" % pub["name"], [
+        "Stop sending new articles to <strong>%s</strong>?" % esc(row["email"])],
+        '<form method="post" action="%s/email/unsubscribe?t=%s">'
+        '<button class="btn btn-primary" type="submit">Unsubscribe</button> '
+        '<a class="btn" href="%s">Keep Subscription</a></form>'
+        % (esc(pub["base"]), esc(urllib.parse.quote(t)), esc(pub["base"])))
+
+
+@router.post("/p/{pub_slug}/email/unsubscribe")
+def pub_unsubscribe(pub_slug: str, t: str = ""):
+    """The page's button, and mail providers' one-click unsubscribe
+    (List-Unsubscribe-Post, RFC 8058), which posts here with no cookie."""
+    pub = _pub_or_404(pub_slug)
+    email = newsletter.unsubscribe(pub, t)
+    if email is None:
+        return _notice(pub, "Link Not Recognised", [
+            "This unsubscribe link does not match an address on the list."], _back(pub))
+    return _notice(pub, "You Are Unsubscribed", [
+        "<strong>%s</strong> receives no more email from %s." % (esc(email), esc(pub["name"]))],
+        '<p><a class="btn" href="%s#subscribe">Subscribe Again</a></p>' % esc(pub["base"]))
 
 
 @router.get("/p/{pub_slug}/{slug}.md")

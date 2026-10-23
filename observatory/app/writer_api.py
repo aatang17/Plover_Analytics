@@ -24,6 +24,10 @@ publications rather than one article:
 ``PUT  .../profile/look``                   logo and accent colour (owner)
 ``GET/POST/PATCH/DELETE .../data-sources``  its own market-data keys, and ``/{sid}/try`` (owner)
 ``GET/POST/DELETE .../coverage``           its coverage list (any member reads; editors change)
+``GET  /publications/{id}/subscribers``     its email list: counts, addresses, past sends (owner)
+``POST .../subscribers/import``             add a list, such as a Substack export (owner)
+``DELETE .../subscribers?email=``           take an address off the list (owner)
+``GET  .../subscribers.csv``                download the whole list (owner)
 ``GET  /companies?q=``                      find a listed company to add to a coverage list
 ``GET/POST/DELETE /keys``                   personal keys for the writer's own AI agent
 ``GET/POST/PATCH/DELETE /data-sources``      the writer's own market-data accounts (and ``/{id}/try``)
@@ -35,9 +39,11 @@ It sits under /admin/api only so that the Plover team's staff session cookie
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from . import accounts, connectors, mailer, research, seo, skills, staff, writers, writing_style
+from . import (accounts, connectors, mailer, newsletter, research, seo, skills, staff, writers,
+               writing_style)
 from . import pub_coverage, pub_profile
 from .assistant import market_data, memory, store as ia_store
 from .admin_api import STAFF_COOKIE, _client_ip, audit
@@ -218,6 +224,72 @@ def remove(publication_id: int, request: Request, email: str = ""):
     writers.remove(publication_id, email)
     _audit(request, person, "member_removed", "%s from %s" % (email, pub["base"]))
     return {"members": writers.member_list(publication_id), "manage": True}
+
+
+# ----------------------------------------------------------- subscribers
+#
+# The publication's own email list (app/newsletter.py). Its owner runs it:
+# nobody else on the publication, or on the platform, sees the addresses.
+
+def _list_owner(request, publication_id):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "owner")
+    if not newsletter.can_collect(pub):
+        raise HTTPException(400, "PloverResearch's readers subscribe through its Substack.")
+    return person, pub
+
+
+@router.get("/publications/{publication_id}/subscribers")
+def subscribers(publication_id: int, request: Request):
+    _list_owner(request, publication_id)
+    return {"counts": newsletter.counts(publication_id),
+            "subscribers": newsletter.listing(publication_id),
+            "sends": newsletter.sends_of(publication_id),
+            "email_ready": mailer.configured(),
+            "postal_address": bool(newsletter.postal_line())}
+
+
+class ImportBody(BaseModel):
+    csv: str
+    confirmed: bool = False
+
+
+@router.post("/publications/{publication_id}/subscribers/import")
+def import_subscribers(publication_id: int, body: ImportBody, request: Request):
+    person, pub = _list_owner(request, publication_id)
+    if not body.confirmed:
+        raise HTTPException(400, "Tick the box to confirm these people asked to receive "
+                                 "your newsletter.")
+    try:
+        found, skipped = newsletter.parse_import(body.csv)
+    except newsletter.NewsletterError as exc:
+        raise HTTPException(400, str(exc))
+    out = newsletter.import_addresses(publication_id, found)
+    out["skipped"] = skipped
+    _audit(request, person, "subscribers_imported", "%s: %d added, %d already, %d unsubscribed kept"
+           % (pub["base"], out["added"], out["already"], out["kept_unsubscribed"]))
+    out["counts"] = newsletter.counts(publication_id)
+    return out
+
+
+@router.delete("/publications/{publication_id}/subscribers")
+def remove_subscriber(publication_id: int, request: Request, email: str = ""):
+    person, pub = _list_owner(request, publication_id)
+    try:
+        newsletter.remove(publication_id, email)
+    except newsletter.NewsletterError as exc:
+        raise HTTPException(404, str(exc))
+    _audit(request, person, "subscriber_removed", "%s from %s" % (email, pub["base"]))
+    return {"counts": newsletter.counts(publication_id)}
+
+
+@router.get("/publications/{publication_id}/subscribers.csv")
+def subscribers_csv(publication_id: int, request: Request):
+    _, pub = _list_owner(request, publication_id)
+    return PlainTextResponse(newsletter.export_csv(publication_id),
+                             media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": 'attachment; filename="%s-subscribers.csv"'
+                                      % pub["slug"], "Cache-Control": "no-store"})
 
 
 class LinkBody(BaseModel):

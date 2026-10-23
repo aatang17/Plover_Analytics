@@ -210,6 +210,21 @@
   border: 1px solid var(--obs-border); border-left: 3px solid var(--obs-band-bg); border-radius: 3px; }
 .rh-subscribe-title { font-size: 18px; font-weight: 800; letter-spacing: -0.2px; color: var(--obs-ink); margin: 0 0 4px; }
 .rh-subscribe-text { font-size: 14px; color: var(--obs-text); margin: 0; line-height: 1.5; }
+/* a publication's own email sign-up (app/newsletter.py) */
+.rh-subform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 0 1 460px; }
+.rh-subform input[type="email"] { flex: 1 1 220px; min-width: 0; font: inherit; font-size: 14px;
+  color: var(--obs-ink); background: var(--obs-surface); border: 1px solid var(--obs-border);
+  border-radius: 3px; padding: 8px 10px; }
+.rh-subform .btn { text-decoration: none; padding: 8px 16px; font-size: 13.5px; }
+.rh-sub-msg { flex: 1 0 100%; margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--obs-ink); }
+.rh-sub-msg.bad { color: var(--obs-warn); }
+/* the confirm and unsubscribe pages */
+.rs-email { max-width: 760px; margin: 0 auto 40px; padding: 24px 26px; background: var(--obs-surface);
+  border: 1px solid var(--obs-border); border-top: 3px solid var(--obs-band-bg); border-radius: 3px; }
+.rs-email h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.3px; margin: 0 0 12px; color: var(--obs-ink); }
+.rs-email p { font-size: 15px; line-height: 1.55; color: var(--obs-text); margin: 0 0 12px; }
+.rs-email .btn { text-decoration: none; padding: 8px 16px; font-size: 13.5px; }
+.rs-email form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 
 @media (max-width: 1080px) {
   .rh-top { grid-template-columns: minmax(0, 1fr); }

@@ -722,3 +722,6 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
 .dk-market-controls label { display: flex; flex-direction: column; gap: 4px; }
 .dk-market-controls input { background: var(--obs-surface); color: var(--obs-ink); border: 1px solid var(--obs-border); font: inherit; }
 [data-theme="dark"] .dk-market-controls input { color-scheme: dark; }
+
+/* email to subscribers: how far a send has got (app/newsletter.py) */
+.dk-progress { display: block; width: 100%; height: 8px; margin: 8px 0 4px; accent-color: var(--obs-primary); }

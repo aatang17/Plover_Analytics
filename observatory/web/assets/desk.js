@@ -2442,12 +2442,15 @@ function openPublish() {
       send("POST", "/research/articles/" + ID + "/publish", {
         base_revision: S.base, change_note: first ? "" : ($("#dk-change").value || ""),
       }).then(function (done) {
+        var mail = emailable();
         body.innerHTML = "<h2>Published</h2><p>Version " + done.version + " is live at " +
           '<a href="' + escapeHtml(done.url) + '" target="_blank" rel="noopener">' + escapeHtml(done.url) + "</a>.</p>" +
           '<p class="hint">Search engines have been notified, and a backup runs in a minute.</p>' +
           '<div class="dk-dlg-acts"><button type="button" class="btn" data-close>Close</button>' +
-          '<button type="button" class="btn btn-primary" id="dk-to-substack">Prepare Substack Post</button></div>';
+          '<button type="button" class="btn' + (mail ? "" : " btn-primary") + '" id="dk-to-substack">Prepare Substack Post</button>' +
+          (mail ? '<button type="button" class="btn btn-primary" id="dk-to-email">Email Subscribers</button>' : "") + "</div>";
         $("#dk-to-substack").addEventListener("click", function () { dlg.close(); openSubstack(); });
+        if (mail) $("#dk-to-email").addEventListener("click", function () { dlg.close(); openEmail(); });
         reload();
       }).catch(function (err) {
         btn.disabled = false;
@@ -2516,6 +2519,107 @@ function openSubstack() {
   });
 }
 
+/* ---------------------------------------------------------------- email to subscribers */
+
+/* The publication's own list (app/newsletter.py): every publication except
+   PloverResearch, which posts through Substack. Editors and owners send. */
+function emailable() {
+  var a = S.article;
+  return !!(a && a.published_version && a.publication && !a.publication.home && canDo("publish"));
+}
+
+var EMAIL_POLL = null;
+
+function openEmail() {
+  var dlg = $("#dk-email");
+  var body = $("#dk-email-body");
+  body.innerHTML = '<p class="muted">Checking the list…</p>';
+  if (!dlg.open) dlg.showModal();
+  dlg.addEventListener("close", function () { clearTimeout(EMAIL_POLL); }, { once: true });
+  api("/research/articles/" + ID + "/email").then(function (st) { renderEmail(st); })
+    .catch(function (err) { emailFail(err); });
+}
+
+function emailFail(err) {
+  $("#dk-email-body").innerHTML = '<h2>Email Subscribers</h2><p class="bad">' + escapeHtml(err.message) +
+    '</p><div class="dk-dlg-acts"><button type="button" class="btn" data-close>Close</button></div>';
+}
+
+function fmtCount(x) { return Number(x || 0).toLocaleString("en"); }
+
+function renderEmail(st) {
+  var body = $("#dk-email-body");
+  var s = st.send;
+  var close = '<button type="button" class="btn" data-close>Close</button>';
+  clearTimeout(EMAIL_POLL);
+  if (!st.email_ready) {
+    body.innerHTML = "<h2>Email Subscribers</h2><p>Email is not set up on this server, so nothing can be sent. " +
+      "Ask the Plover team.</p><div class=\"dk-dlg-acts\">" + close + "</div>";
+    return;
+  }
+  if (s && s.status === "done") {
+    body.innerHTML = "<h2>Already Emailed</h2><p>Version " + st.version + " went to " + fmtCount(s.sent) + " subscriber" +
+      (s.sent === 1 ? "" : "s") + " on " + escapeHtml(fmtStamp(new Date(s.finished_at * 1000).toISOString())) + "." +
+      (s.failed ? " " + fmtCount(s.failed) + " could not be delivered." : "") + "</p>" +
+      '<p class="hint">Each version is emailed once. To send again, publish a new version.</p>' +
+      '<div class="dk-dlg-acts">' + close + "</div>";
+    return;
+  }
+  if (s && s.status === "sending") {
+    var done = (s.sent || 0) + (s.failed || 0);
+    body.innerHTML = "<h2>Sending…</h2><p>" + fmtCount(done) + " of " + fmtCount(s.total) + " sent. " +
+      "You can close this and keep writing; sending carries on.</p>" +
+      '<progress max="' + Math.max(s.total, 1) + '" value="' + done + '" class="dk-progress"></progress>' +
+      '<div class="dk-dlg-acts">' + close + "</div>";
+    EMAIL_POLL = setTimeout(function () {
+      if (!$("#dk-email").open) return;
+      api("/research/articles/" + ID + "/email").then(renderEmail).catch(emailFail);
+    }, 2000);
+    return;
+  }
+  if (s && (s.status === "interrupted" || s.status === "stopped")) {
+    body.innerHTML = "<h2>Sending Stopped</h2><p>Sending stopped after " + fmtCount((s.sent || 0) + (s.failed || 0)) +
+      " of " + fmtCount(s.total) + (s.status === "stopped" && s.error ? ". " + escapeHtml(s.error) : " (the server restarted).") +
+      " Resume sends to the rest only; nobody gets it twice.</p>" +
+      '<p class="dk-dlg-err bad" hidden></p>' +
+      '<div class="dk-dlg-acts">' + close + '<button type="button" class="btn btn-primary" id="dk-email-go">Resume Sending</button></div>';
+    wireEmailGo(st);
+    return;
+  }
+  if (!st.subscribers) {
+    var pub = S.article.publication;
+    body.innerHTML = "<h2>No Subscribers Yet</h2><p>Readers sign up with the box on " +
+      '<a href="' + escapeHtml(pub.base) + '" target="_blank" rel="noopener">' + escapeHtml(pub.name) + "</a>’s pages. " +
+      "The publication’s owner can also import a list, such as a Substack export, on its Subscribers page.</p>" +
+      '<div class="dk-dlg-acts">' + close +
+      '<a class="btn btn-primary" href="write.html#/p/' + pub.id + '/subscribers" target="_blank" rel="noopener">Open Subscribers</a></div>';
+    return;
+  }
+  body.innerHTML = "<h2>Email Version " + st.version + " to " + fmtCount(st.subscribers) + " Subscriber" + (st.subscribers === 1 ? "" : "s") + "</h2>" +
+    "<p>Each subscriber of " + escapeHtml(st.publication) + " gets the title, the summary and a link to the article, " +
+    "from " + escapeHtml(st.publication) + ". Replies come to you.</p>" +
+    '<p class="hint">A version is emailed once and cannot be called back.</p>' +
+    '<p class="dk-dlg-err bad" hidden></p>' +
+    '<div class="dk-dlg-acts"><button type="button" class="btn" data-close>Cancel</button>' +
+    '<button type="button" class="btn btn-primary" id="dk-email-go">Send to ' + fmtCount(st.subscribers) + " Subscriber" + (st.subscribers === 1 ? "" : "s") + "</button></div>";
+  wireEmailGo(st);
+}
+
+function wireEmailGo(st) {
+  var go = $("#dk-email-go");
+  go.addEventListener("click", function () {
+    go.textContent = "Starting…";
+    send("POST", "/research/articles/" + ID + "/email", { version: st.version })
+      .then(function (res) { renderEmail(res); toast("Sending to subscribers."); })
+      .catch(function (err) {
+        go.textContent = "Try Again";
+        var e = $(".dk-dlg-err", $("#dk-email-body"));
+        e.hidden = false;
+        e.textContent = err.message;
+      });
+  });
+}
+
 function reload() {
   return api("/research/articles/" + ID).then(function (a) {
     S.article = a;
@@ -2537,6 +2641,7 @@ function renderBar() {
   $("#dk-state").innerHTML = state;
   $("#dk-crumb-title").textContent = $("#dk-title").value || "Untitled";
   $("#dk-sub-btn").hidden = !a.published_version;
+  $("#dk-email-btn").hidden = !(emailable() && a.status === "published");
   $("#dk-view").hidden = !(a.published_version && a.status === "published");
   if (a.published_version) $("#dk-view").href = pubBase() + "/" + a.slug;
   var pb = $("#dk-publish-btn");
@@ -2594,6 +2699,7 @@ function shell() {
     '<button type="button" class="dk-barbtn theme-toggle">Dark Mode</button>' +
     '<a class="dk-barbtn" id="dk-view" target="_blank" rel="noopener" hidden>View Live</a>' +
     '<button type="button" class="dk-barbtn" id="dk-preview">Preview</button>' +
+    '<button type="button" class="dk-barbtn" id="dk-email-btn" hidden>Email Subscribers</button>' +
     '<button type="button" class="dk-barbtn" id="dk-sub-btn" hidden>Substack</button>' +
     '<button type="button" class="dk-publish" id="dk-publish-btn">Publish</button>' +
     "</div>" +
@@ -2628,6 +2734,7 @@ function shell() {
     '<div id="dk-toast" class="dk-toast" role="status" hidden></div>' +
     '<dialog id="dk-publish" class="dk-dialog"><div id="dk-publish-body"></div></dialog>' +
     '<dialog id="dk-substack" class="dk-dialog wide"><div id="dk-substack-body"></div></dialog>' +
+    '<dialog id="dk-email" class="dk-dialog"><div id="dk-email-body"></div></dialog>' +
     '<dialog id="dk-capture" class="dk-dialog wide"><div id="dk-capture-body"></div></dialog>';
 }
 
@@ -2730,6 +2837,7 @@ function wire() {
     if (canDo("publish")) openPublish(); else askToPublish();
   });
   $("#dk-sub-btn").addEventListener("click", openSubstack);
+  $("#dk-email-btn").addEventListener("click", openEmail);
   $all("dialog").forEach(function (d) {
     d.addEventListener("click", function (e) {
       if (e.target.closest("[data-close]") || e.target === d) d.close();

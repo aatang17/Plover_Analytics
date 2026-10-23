@@ -202,10 +202,10 @@
     const pub = pubOf(r.id) || ME.publications[0];
     if (!r.id || !pubOf(r.id)) { history.replaceState(null, "", "#/p/" + pub.id); r.id = pub.id; }
     const owner = pub.role === "owner";
-    const known = ["articles", "coverage", "members", "assistant"].concat(owner && !pub.home ? ["settings"] : []);
+    const known = ["articles", "coverage", "members", "assistant"].concat(owner && !pub.home ? ["subscribers", "settings"] : []);
     const tab = known.indexOf(r.tab) === -1 ? "articles" : r.tab;
     const tabs = [["articles", "Articles"], ["coverage", "Coverage"], ["members", "Members"], ["assistant", "Assistant Settings"]]
-      .concat(owner && !pub.home ? [["settings", "Settings"]] : []);
+      .concat(owner && !pub.home ? [["subscribers", "Subscribers"], ["settings", "Settings"]] : []);
     const actions = tab === "articles"
       ? `<button class="btn" id="wd-import" type="button">Import Markdown</button>
          <button class="btn primary" id="wd-new" type="button">New Article</button>
@@ -219,6 +219,7 @@
     if (tab === "members") return membersTab(pub, body);
     if (tab === "coverage") return coverageTab(pub, body);
     if (tab === "settings") return settingsTab(pub, body);
+    if (tab === "subscribers") return subscribersTab(pub, body);
     if (tab === "assistant") return assistantTab(pub, body);
     articlesTab(pub, body);
   }
@@ -736,6 +737,78 @@
       if (!box.hidden) { closeBox(box); return; }
       openConn(pub, body, d, base, null, box);
     });
+  }
+
+  /* ---- subscribers: the publication's own email list (app/newsletter.py) ---- */
+
+  const SUB_STATUS = { active: "Subscribed", pending: "Waiting to Confirm", unsubscribed: "Unsubscribed" };
+  const SUB_SOURCE = { signup: "Signed up", import: "Imported" };
+  const SEND_STATUS = { sending: "Sending", interrupted: "Stopped", stopped: "Stopped", done: "Sent" };
+  const day = ts => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : "—";
+
+  function subscribersTab(pub, body, flash) {
+    body.innerHTML = loading("the subscribers");
+    api(`/write/publications/${pub.id}/subscribers`).then(d => {
+      const c = d.counts;
+      const stats = `<div class="stats">
+        <div class="stat"><span class="lbl">Subscribed</span><b>${c.active.toLocaleString()}</b><small>Receive each article you email</small></div>
+        <div class="stat"><span class="lbl">Waiting to Confirm</span><b>${c.pending.toLocaleString()}</b><small>Signed up, not confirmed yet</small></div>
+        <div class="stat"><span class="lbl">Unsubscribed</span><b>${c.unsubscribed.toLocaleString()}</b><small>Asked to stop</small></div></div>`;
+      const ready = d.email_ready ? "" :
+        '<div class="notice wd-bad" role="alert">Email is not set up on this server, so confirmations and articles cannot be sent yet. Ask the Plover team.</div>';
+      const sends = d.sends.length
+        ? `<div class="calwrap"><table class="t"><thead><tr><th>Article</th><th class="right">Version</th><th>Sent</th><th class="right">Delivered</th><th class="right">Failed</th><th>Status</th></tr></thead><tbody>${d.sends.map(x => `<tr>
+            <td>${esc(x.subject)}</td><td class="right">${x.version}</td><td>${esc(day(x.created_at))}</td>
+            <td class="right">${x.sent.toLocaleString()}</td><td class="right">${x.failed.toLocaleString()}</td>
+            <td>${esc(SEND_STATUS[x.status] || x.status)}${x.status === "interrupted" || x.status === "stopped" ? " — resume it from the article’s Email Subscribers button" : ""}</td></tr>`).join("")}</tbody></table></div>`
+        : '<p class="empty wd-empty">Nothing emailed yet. After you publish, press Email Subscribers in the editor.</p>';
+      const rows = d.subscribers;
+      const list = rows.length
+        ? `<div class="calwrap"><table class="t"><thead><tr><th>Email</th><th>Status</th><th>How They Joined</th><th>Since</th><th></th></tr></thead><tbody>${rows.map(r => `<tr>
+            <td>${esc(r.email)}</td><td>${esc(SUB_STATUS[r.status] || r.status)}</td><td>${esc(SUB_SOURCE[r.source] || r.source)}</td>
+            <td>${esc(day(r.created_at))}</td>
+            <td class="right"><button class="btn sm danger" type="button" data-unsub="${esc(r.email)}">Remove</button></td></tr>`).join("")}</tbody></table></div>`
+        : '<p class="empty wd-empty">No subscribers yet. Readers sign up with the box on your publication’s pages, or import a list below.</p>';
+      body.innerHTML = stats + ready + '<div id="wd-subout"></div>' +
+        band("Sign-Up Box") +
+        `<p class="wd-para">Readers subscribe with the box on your front page and under every article, at <a href="${esc(pub.base)}#subscribe" target="_blank" rel="noopener">${esc(pub.url)}</a>. Each one confirms by email before anything is sent to them.</p>` +
+        band("Import a List") +
+        `<p class="wd-para">Add people who already get your newsletter, such as a Substack subscriber export (on Substack: Settings, then Export). Upload the CSV, or paste addresses one a line. Anyone who unsubscribed here stays unsubscribed.</p>
+        <form id="wd-subimp"><dl class="kv wd-kv">
+          <dt><label for="wd-subfile">CSV File</label></dt><dd><input type="file" id="wd-subfile" accept=".csv,.txt,text/csv,text/plain"></dd>
+          <dt><label for="wd-subpaste">Or Paste</label></dt><dd><textarea id="wd-subpaste" rows="4" placeholder="name@example.com"></textarea></dd>
+          <dt></dt><dd><label class="wd-check"><input type="checkbox" id="wd-subok"> These people asked to receive my newsletter.</label></dd>
+          <dt></dt><dd><button class="btn primary" type="submit">Import List</button></dd></dl></form>` +
+        band("Sent Articles", d.sends.length.toLocaleString()) + sends +
+        band("Subscribers", rows.length.toLocaleString()) +
+        (rows.length ? `<p class="wd-para"><a class="btn" href="/admin/api/write/publications/${pub.id}/subscribers.csv" download>Download CSV</a> <span class="hint">The whole list is yours to keep or move.</span></p>` : "") +
+        list;
+      const out = $("#wd-subout");
+      if (flash) { out.innerHTML = flash; out.scrollIntoView({ block: "nearest" }); }
+      $("#wd-subimp").addEventListener("submit", e => {
+        e.preventDefault();
+        const btn = $("button[type=submit]", e.target);
+        const file = $("#wd-subfile").files[0];
+        const pasted = $("#wd-subpaste").value;
+        if (!file && !pasted.trim()) { out.innerHTML = '<p class="err" role="alert">Choose a CSV file or paste addresses first.</p>'; return; }
+        if (!$("#wd-subok").checked) { out.innerHTML = '<p class="err" role="alert">Tick the box to confirm these people asked to receive your newsletter.</p>'; return; }
+        busy(btn, "Importing…", () => (file ? file.text() : Promise.resolve(pasted))
+          .then(text => send("POST", `/write/publications/${pub.id}/subscribers/import`, { csv: text, confirmed: true })))
+          .then(res => subscribersTab(pub, body,
+            `<div class="notice" role="status">Imported: <b>${res.added.toLocaleString()}</b> added` +
+            (res.already ? `, ${res.already.toLocaleString()} already on the list` : "") +
+            (res.kept_unsubscribed ? `, ${res.kept_unsubscribed.toLocaleString()} left out because they unsubscribed` : "") +
+            (res.skipped ? `, ${res.skipped.toLocaleString()} rows skipped (no address, or marked unsubscribed)` : "") + ".</div>"))
+          .catch(err => { out.innerHTML = `<p class="err" role="alert">${esc(err.message)}</p>`; });
+      });
+      $$("[data-unsub]", body).forEach(b => b.addEventListener("click", () => {
+        // two clicks: a removed address gets no more email and leaves the list
+        if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "Click Again to Remove"; return; }
+        busy(b, "Removing…", () => api(`/write/publications/${pub.id}/subscribers?email=` + encodeURIComponent(b.dataset.unsub), { method: "DELETE" }))
+          .then(() => { toast("Removed from the list."); subscribersTab(pub, body); })
+          .catch(err => { b.classList.remove("armed"); toast(err.message); });
+      }));
+    }).catch(err => { body.innerHTML = failed("the subscribers", err); });
   }
 
   /* ---- settings ---- */

@@ -68,6 +68,46 @@ def send(to_address, subject, text, html=None, timeout=10, reply_to=None):
         raise
 
 
+class ProviderBusy(Exception):
+    """Resend asked us to slow down (429) or was briefly down (5xx): the
+    same request can be tried again after a pause."""
+
+
+def send_batch(messages, timeout=30):
+    """Send up to 100 prepared messages in one request (Resend's batch
+    endpoint). Each message is a dict with from, to, subject, text and
+    optionally html, reply_to and headers. Returns 'sent' or 'logged';
+    raises ProviderBusy when worth retrying and HTTPError otherwise.
+
+    Used by the newsletter (app/newsletter.py). Without a key the messages
+    go to the log, as single sends do."""
+    key = (os.environ.get("RESEND_API_KEY") or "").strip()
+    if not key or not (os.environ.get("RESEND_FROM") or "").strip():
+        for m in messages:
+            print("[mail] to %s — %s" % (", ".join(m["to"]), m["subject"]), flush=True)
+        return "logged"
+    request = urllib.request.Request(
+        "https://api.resend.com/emails/batch",
+        data=json.dumps(messages).encode("utf-8"),
+        headers={"Authorization": "Bearer " + key,
+                 "Content-Type": "application/json",
+                 "User-Agent": "PloverAnalytics/1.0 (+https://ploveranalytics.com)"},
+        method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response.read()
+        return "sent"
+    except urllib.error.HTTPError as exc:
+        detail = exc.read()[:300].decode("utf-8", "replace")
+        print("[mail] resend batch %s: %s" % (exc.code, detail), flush=True)
+        if exc.code == 429 or exc.code >= 500:
+            raise ProviderBusy(detail)
+        raise
+    except (urllib.error.URLError, TimeoutError) as exc:
+        print("[mail] resend batch failed: %r" % (exc,), flush=True)
+        raise ProviderBusy(str(exc))
+
+
 def send_link(to_address, subject, paragraphs, link, button, after=(), reply_to=None):
     """An email whose point is one link: an invitation, a sign-in, a password
     setup. ``paragraphs`` come before the link and ``after`` below it, as

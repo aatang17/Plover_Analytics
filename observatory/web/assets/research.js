@@ -411,3 +411,42 @@ var researchChart = (function () {
     });
   }
 })();
+
+/* A publication's email sign-up (app/newsletter.py). Without this script the
+   form posts and the server answers with a page; with it, the reader stays
+   where they are and the answer appears under the box. lock.js keeps the
+   button off until the server replies, so a double click sends one email. */
+(function () {
+  var form = document.querySelector("form[data-subscribe]");
+  if (!form) return;
+  var input = form.querySelector("input[type=email]");
+  var msg = form.querySelector(".rh-sub-msg");
+  function say(text, bad) {
+    msg.textContent = text;
+    msg.className = "rh-sub-msg" + (bad ? " bad" : "");
+    msg.hidden = false;
+  }
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var email = input.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      say("Enter an email address, like name@example.com.", true);
+      input.focus();
+      return;
+    }
+    say("Sending…", false);
+    fetch(form.getAttribute("action"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email }),
+    }).then(function (r) {
+      return r.json().then(function (d) { return { ok: r.ok, d: d }; },
+                           function () { return { ok: false, d: {} }; });
+    }).then(function (res) {
+      say(res.d.message || (res.ok ? "Check your inbox." : "Something went wrong. Try again in a minute."), !res.ok);
+      if (res.ok) input.value = "";
+    }).catch(function () {
+      say("Could not reach the server. Check your connection and try again.", true);
+    });
+  });
+})();

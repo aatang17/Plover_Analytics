@@ -23,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import (chart_library, market_history, pub_coverage, pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
+from . import (chart_library, mailer, newsletter, market_history, pub_coverage, pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
                writers)
 from .admin_api import _client_ip, audit
 
@@ -405,6 +405,49 @@ def reinstate_article(article_id: int, request: Request):
         raise HTTPException(400, str(exc))
     _audit(request, person, "article_reinstated", research.address(a["publication_id"], a["slug"]))
     return _decorate(person, research.get(article_id))
+
+
+class EmailBody(BaseModel):
+    version: int
+
+
+def _email_state(a):
+    pub = research.publication(a["publication_id"])
+    v = a["published_version"]
+    return {"available": newsletter.can_collect(pub), "publication": pub["name"],
+            "version": v, "subscribers": newsletter.counts(pub["id"])["active"],
+            "email_ready": mailer.configured(),
+            "send": newsletter.send_for(a["id"], v) if v else None}
+
+
+@router.get("/articles/{article_id}/email")
+def email_state(article_id: int, request: Request):
+    """Whether the current version can be emailed to the publication's list,
+    to how many, and how a send of it is going."""
+    a = _article_or_404(article_id, _writer(request), "publish")
+    return _email_state(a)
+
+
+@router.post("/articles/{article_id}/email")
+def email_article(article_id: int, body: EmailBody, request: Request):
+    """Email a published version to the publication's subscribers (or resume
+    an interrupted send of it). Editors and owners: whoever may publish."""
+    person = _writer(request)
+    a = _article_or_404(article_id, person, "publish")
+    pub = research.publication(a["publication_id"])
+    if not newsletter.can_collect(pub):
+        raise HTTPException(400, "PloverResearch posts through Substack; use Prepare Substack Post.")
+    if body.version != a["published_version"]:
+        raise HTTPException(409, "A newer version is published. Reload the editor and send that one.")
+    try:
+        send = newsletter.start_send(pub, article_id, body.version, _who(person),
+                                     person.get("email") or "")
+    except newsletter.NewsletterError as exc:
+        raise HTTPException(400, str(exc))
+    _audit(request, person, "article_emailed", "%s version %d to %d subscribers" % (
+        research.address(a["publication_id"], a["slug"]), body.version, send["total"]))
+    state = _email_state(research.get(article_id))
+    return state
 
 
 @router.get("/articles/{article_id}/substack")

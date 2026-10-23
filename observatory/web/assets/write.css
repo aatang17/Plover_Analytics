@@ -15,7 +15,9 @@
 .wd-signin .notice { margin: 16px 0 0; }
 
 /* ---- page parts */
-.wd-tabs { margin: -16px 0 8px; border-bottom: 1px solid var(--obs-border); padding-bottom: 8px; }
+.wd-tabs { margin: -16px 0 8px; border-bottom: 1px solid var(--obs-border); padding-bottom: 8px;
+  overflow-x: auto; }  /* six tabs for an owner: the row scrolls on a phone, the page does not */
+.wd-tabs button { flex-shrink: 0; white-space: nowrap; }
 .wd-loading { padding: 24px 0; }
 .wd-para { color: var(--obs-ink); margin-bottom: 12px; max-width: 72ch; }
 .notice.wd-bad { border-left-color: var(--obs-trust-stale); }
