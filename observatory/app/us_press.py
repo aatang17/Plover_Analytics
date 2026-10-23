@@ -433,10 +433,38 @@ def _edgar_ua():
     return ua
 
 
+# Every request to the SEC from this process goes through one gate: at most
+# SEC_RATE a second across all threads, retries included. 2026-10-19: the 8-K
+# backfill read 1,046 filings in 12 minutes on four threads that each paused
+# only between companies, and the SEC refused the server's address from then
+# on, for every SEC job. Once the SEC answers with its refusal page after every
+# retry, the rest of the run asks it nothing (sec_refused()).
+SEC_RATE = float(os.environ.get("US_PRESS_SEC_RATE", "3"))
+_SEC_GATE = threading.Lock()
+_SEC_STATE = {"last": 0.0, "refused": False}
+
+
+def _sec_wait():
+    with _SEC_GATE:
+        wait = _SEC_STATE["last"] + 1.0 / SEC_RATE - time.time()
+        if wait > 0:
+            time.sleep(wait)
+        _SEC_STATE["last"] = time.time()
+
+
+def sec_refused():
+    return _SEC_STATE["refused"]
+
+
 def _sec_get(url, ua, tries=4):
     """(status, body). The SEC refuses a reader that goes too fast (403 or
-    429, an HTML page): wait and try again, longer each time."""
+    429, an HTML page): wait and try again, longer each time; refused on every
+    try, it is taken as a block and nothing more is asked this run."""
+    if _SEC_STATE["refused"]:
+        return 0, b""
+    refusals = 0
     for attempt in range(tries):
+        _sec_wait()
         req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip"})
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
@@ -449,12 +477,15 @@ def _sec_get(url, ua, tries=4):
             # only the HTML refusal page means "slow down"
             page = exc.read(2048) if exc.code in (403, 429) else b""
             if exc.code == 429 or (exc.code == 403 and b"<html" in page.lower()):
+                refusals += 1
                 time.sleep(5 * (attempt + 1))
                 continue
             return exc.code, b""
         except Exception:  # noqa: BLE001
             time.sleep(2 * (attempt + 1))
             continue
+    if refusals == tries:
+        _SEC_STATE["refused"] = True
     return 0, b""
 
 
@@ -537,7 +568,6 @@ def _sec_exhibits(member, filing, ua):
         if st != 200 or not body:
             return None            # a filing read in part is not kept: it is tried again next poll
         out.append((url, body))
-        time.sleep(0.15)
     return out
 
 
@@ -639,6 +669,7 @@ def _daily_8ks(day, ua, ciks):
 
 def poll_sec(only=None, workers=WORKERS, log=print, con=None):
     """8-K press releases for every S&P 500 member: (new releases, read)."""
+    _SEC_STATE["refused"] = False                 # each poll asks afresh: a block may have been lifted
     ua = _edgar_ua()
     if not ua:
         log("us-press: EDGAR_USER_AGENT is not set; the 8-K releases were skipped")
@@ -692,13 +723,14 @@ def poll_sec(only=None, workers=WORKERS, log=print, con=None):
                     read += 1
         if own:
             con.close()
-        log("us-press: %d new 8-K releases from the SEC's daily index (%d filings could not be read)"
-            % (new, len(failed)))
+        log("us-press: %d new 8-K releases from the SEC's daily index (%d filings could not be read)%s"
+            % (new, len(failed), "; the SEC refused this server, so the rest were not asked" if sec_refused() else ""))
         return new, read, failed
 
     def one(m):
-        time.sleep(0.12)               # about eight requests a second across the pool: under the SEC's ten
-        filings = _sec_filings(m, ua, since)
+        if sec_refused():
+            return m, None
+        filings = _sec_filings(m, ua, since)          # every request is paced by _sec_wait()
         if filings is None:
             return m, None
         got = []

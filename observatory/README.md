@@ -1652,7 +1652,14 @@ days after a fiscal quarter end as the quarter's results, so Tesla's delivery nu
 before it) to the close N trading days later, on split-adjusted prices; "on the day" of a CPI
 release or FOMC statement is that day's close against the day before. Companies are read in
 turns (`US_EVENTS_MAX_COMPANIES` a night, default 1500), so every filer is refreshed about
-weekly; a first run with `--max-companies 0` reads them all (about 25 minutes).
+weekly; the first run reads them all (about 35 minutes at 4 requests a second).
+
+Every SEC job on the server stays at or under 4 requests a second, and the press poller
+(`app/us_press.py`) at 3 through one gate shared by its threads, so two running at once stay
+under the SEC's limit of 10. 2026-10-19: the poller's 8-K backfill read 1,046 filings in 12
+minutes on four threads paced only between companies, and the SEC refused the server's address
+for every SEC job from then on. A job that sees the SEC's refusal page on every retry stops asking
+for the rest of its run (`us_press.sec_refused()`, `us_events.REFUSED_AFTER`).
 
 Caching, in layers: the provider's prompt cache (every model call carries a `prompt_cache_key`
 and puts the unchanging part of the prompt first, so the long prefix is read from cache and

@@ -127,9 +127,11 @@ def user_agent(host):
 class Client(object):
     """GET with a named client, retries, a pause between calls and an archive of every body."""
 
-    def __init__(self, raw_root, pause=0.12, log=print):
+    def __init__(self, raw_root, pause=0.25, log=print):
         self.raw_root = raw_root
-        self.pause = pause                 # at most 1/pause requests a second across every thread (the SEC allows 10)
+        # at most 1/pause requests a second across every thread: 4, like the other nightly SEC jobs, so with
+        # the press poller's 3 (app/us_press.py) the server stays under the SEC's 10 even when both run
+        self.pause = pause
         self.log = log
         self.last = 0.0
         self.pages = 0

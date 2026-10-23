@@ -13,6 +13,7 @@ import json
 import os
 import pathlib
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -235,3 +236,65 @@ class Poll(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SecPacing(unittest.TestCase):
+    """Every SEC request goes through one gate; a refusal on every try stops the run (2026-10-19 block)."""
+
+    def setUp(self):
+        from app import us_press
+        self.p = us_press
+        us_press._SEC_STATE.update(last=0.0, refused=False)
+        self.addCleanup(lambda: us_press._SEC_STATE.update(last=0.0, refused=False))
+
+    def test_requests_from_many_threads_stay_under_the_rate(self):
+        import threading
+        times = []
+
+        class Resp(object):
+            status = 200
+            headers = {}
+
+            def __enter__(self):
+                times.append(time.time())
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self, n=None):
+                return b"{}"
+        with mock.patch.object(self.p, "SEC_RATE", 20.0), \
+                mock.patch.object(self.p.urllib.request, "urlopen", lambda *a, **k: Resp()):
+            ts = [threading.Thread(target=lambda: [self.p._sec_get("https://data.sec.gov/x", "ua") for _ in range(5)])
+                  for _ in range(4)]
+            [t.start() for t in ts]
+            [t.join() for t in ts]
+        times.sort()
+        self.assertEqual(len(times), 20)
+        gaps = [b - a for a, b in zip(times, times[1:])]
+        self.assertGreaterEqual(min(gaps), 1.0 / 20 - 0.01)        # never two requests closer than the gate allows
+
+    def test_refused_on_every_try_stops_asking(self):
+        import io
+        calls = []
+
+        def refuse(*a, **k):
+            calls.append(1)
+            raise self.p.urllib.error.HTTPError("https://data.sec.gov/x", 403, "Forbidden", {},
+                                                io.BytesIO(b"<HTML><TITLE>Access Denied</TITLE></HTML>"))
+        with mock.patch.object(self.p, "SEC_RATE", 1000.0), mock.patch.object(self.p.time, "sleep", lambda s: None), \
+                mock.patch.object(self.p.urllib.request, "urlopen", refuse):
+            self.assertEqual(self.p._sec_get("https://data.sec.gov/a", "ua"), (0, b""))
+            self.assertTrue(self.p.sec_refused())
+            self.assertEqual(self.p._sec_get("https://data.sec.gov/b", "ua"), (0, b""))
+        self.assertEqual(len(calls), 4)                              # the second address was never asked
+
+    def test_a_missing_daily_index_is_not_a_refusal(self):
+        import io
+
+        def missing(*a, **k):
+            raise self.p.urllib.error.HTTPError("https://www.sec.gov/idx", 403, "Forbidden", {}, io.BytesIO(b"NoSuchKey"))
+        with mock.patch.object(self.p, "SEC_RATE", 1000.0), mock.patch.object(self.p.urllib.request, "urlopen", missing):
+            self.assertEqual(self.p._sec_get("https://www.sec.gov/idx", "ua"), (403, b""))
+        self.assertFalse(self.p.sec_refused())
