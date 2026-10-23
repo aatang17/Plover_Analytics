@@ -500,9 +500,16 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
     n_rows = n_ok = n_fail = 0
     t0 = time.time()
     refused = None
+    batch = max(1, workers) * 4                    # queued a few at a time, so a stop really stops
+
+    def fetched(ex):
+        for b in range(0, len(due), batch):
+            if refused:
+                return
+            for out in ex.map(lambda item: _fetch_one(client, item), due[b:b + batch]):
+                yield out
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-        results = ex.map(lambda item: _fetch_one(client, item), due)
-        for i, (item, filings, pages, earliest, err) in enumerate(results):
+        for i, (item, filings, pages, earliest, err) in enumerate(fetched(ex)):
             cik, ticker, fye, periods = item
             if err is not None:
                 con.execute("DELETE FROM us_event_filers WHERE cik = ?", [cik])
@@ -512,7 +519,6 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
                 # stop instead of knocking 8,000 times (2026-10-23: the server's address was refused)
                 if n_ok == 0 and n_fail >= REFUSED_AFTER:
                     refused = err
-                    ex.shutdown(wait=False, cancel_futures=True)
                     break
                 continue
             marks = mark_earnings(filings, fye, periods)

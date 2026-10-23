@@ -193,7 +193,7 @@ class Refused(unittest.TestCase):
         with mock.patch.object(ev, "_fetch_one", refuse):
             with self.assertRaises(ev.EventsError):
                 ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=D(2026, 10, 23), workers=1)
-        self.assertLess(len(calls), 300)                      # it stopped knocking
+        self.assertLessEqual(len(calls), ev.REFUSED_AFTER + 4)   # it stopped knocking within one batch
         self.assertEqual(con.execute("SELECT status FROM us_event_pulls ORDER BY pull_id DESC LIMIT 1").fetchone()[0], "failed")
         con.close()
 
