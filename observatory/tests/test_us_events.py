@@ -167,6 +167,7 @@ class ApiTest(unittest.TestCase):
         from app import us_events_api
         h = us_events_api.health()
         self.assertEqual(h[0]["dataset"], "us-events")
+        self.assertEqual(h[0]["shape_flags"], [])
         self.assertEqual(h[0]["status"], "ok")
         self.assertEqual(h[0]["archive_read_through"], "2026-10-21")     # scheduled rows do not count
 
@@ -175,6 +176,26 @@ class ApiTest(unittest.TestCase):
         rows = us_tables.event_rows(sec_api._cur())
         self.assertEqual(len(rows), 6)
         self.assertEqual((rows[-1]["kind"], rows[-1]["date"]), ("fomc", D(2026, 10, 28)))
+
+
+class Refused(unittest.TestCase):
+    def test_a_source_refusing_every_request_stops_the_run(self):
+        path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        con = ev._connect(path)
+        con.execute("CREATE TABLE sec_companies (cik BIGINT, ticker VARCHAR)")
+        con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
+        con.execute("INSERT INTO sec_companies SELECT i, 'T' || i FROM range(1, 301) t(i)")
+        calls = []
+
+        def refuse(client, item):
+            calls.append(item[0])
+            return item, None, 0, None, "HTTP 403"
+        with mock.patch.object(ev, "_fetch_one", refuse):
+            with self.assertRaises(ev.EventsError):
+                ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=D(2026, 10, 23), workers=1)
+        self.assertLess(len(calls), 300)                      # it stopped knocking
+        self.assertEqual(con.execute("SELECT status FROM us_event_pulls ORDER BY pull_id DESC LIMIT 1").fetchone()[0], "failed")
+        con.close()
 
 
 class LoaderGuards(unittest.TestCase):

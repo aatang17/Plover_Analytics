@@ -60,6 +60,7 @@ RAW_ROOT = os.environ.get("US_EVENTS_RAW", os.path.join(HERE, "..", "data", "raw
 PARSER_VERSION = "events-1"
 HISTORY_FROM = datetime.date(2018, 1, 1)          # daily prices begin 2018-05-01; nothing earlier is useful
 KINDS = ("fomc", "cpi", "shutdown", "results")
+REFUSED_AFTER = 25          # this many failures before any success: the source is refusing us, stop
 
 FOMC_CALENDAR = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 FOMC_HISTORICAL = "https://www.federalreserve.gov/monetarypolicy/fomchistorical%d.htm"
@@ -498,6 +499,7 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
     log("results: %d companies due" % len(due))
     n_rows = n_ok = n_fail = 0
     t0 = time.time()
+    refused = None
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         results = ex.map(lambda item: _fetch_one(client, item), due)
         for i, (item, filings, pages, earliest, err) in enumerate(results):
@@ -506,6 +508,12 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
                 con.execute("DELETE FROM us_event_filers WHERE cik = ?", [cik])
                 con.execute("INSERT INTO us_event_filers VALUES (?, now(), 'failed', 0, NULL, ?)", [cik, err])
                 n_fail += 1
+                # the SEC refusing every request is a block on the address, not one bad company:
+                # stop instead of knocking 8,000 times (2026-10-23: the server's address was refused)
+                if n_ok == 0 and n_fail >= REFUSED_AFTER:
+                    refused = err
+                    ex.shutdown(wait=False, cancel_futures=True)
+                    break
                 continue
             marks = mark_earnings(filings, fye, periods)
             rows = []
@@ -526,6 +534,10 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
             n_ok += 1
             if (i + 1) % 200 == 0:
                 log("  %d/%d companies, %d rows, %.0fs" % (i + 1, len(due), n_rows, time.time() - t0))
+    if refused:
+        _record(con, "results", "failed", n_rows, client.pages, None, None,
+                "the SEC refused the first %d requests (%s); stopped, nothing read" % (n_fail, refused))
+        raise EventsError("the SEC refused the first %d requests (%s): the address is blocked" % (n_fail, refused))
     _record(con, "results", "ok" if n_ok or not due else "failed", n_rows, client.pages, None, None,
             "%d companies read, %d failed" % (n_ok, n_fail))
     log("results: %d companies read, %d failed, %d rows, %.0fs" % (n_ok, n_fail, n_rows, time.time() - t0))

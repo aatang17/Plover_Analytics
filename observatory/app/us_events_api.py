@@ -119,10 +119,12 @@ def health():
     failed = [r[0] for r in cur.execute("""
         SELECT kind FROM us_event_pulls p
         WHERE status <> 'ok' AND pull_id = (SELECT max(pull_id) FROM us_event_pulls q WHERE q.kind = p.kind)""").fetchall()]
+    held = {r[0] for r in cur.execute("SELECT DISTINCT kind FROM us_events").fetchall()}
+    missing = [k for k in KINDS if k not in held]
     days = (datetime.date.today() - last_ok.date()).days if last_ok else None
     stale = days is None or days > STALE_AFTER_DAYS
-    flags = ["latest %s pull failed" % k for k in failed]
-    return [{"dataset": "us-events", "status": "attention" if (stale or failed) else "ok",
+    flags = ["latest %s pull failed" % k for k in failed] + ["no %s rows loaded" % k for k in missing]
+    return [{"dataset": "us-events", "status": "attention" if (stale or failed or missing) else "ok",
              "archive_read_through": _d(last_date), "days_behind": days,
              "stale_after_days": STALE_AFTER_DAYS, "stale": stale,
              "last_extracted_at": last_ok.isoformat() + "Z" if last_ok else None,
