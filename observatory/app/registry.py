@@ -162,7 +162,7 @@ _API_UNIT = {"index": "index", "JPY_100mn": "jpy_100mn", "%": "percent",
 EQUITY_MODULES = ("equity_api", "ownership_api", "lvh_api", "short_api",
                   "governance_api",
                   "buyback_api", "facility_api", "financials_api", "agm_api",
-                  "segments_api", "earnings_api", "sec_api", "sec_insiders_api", "sec_13f_api", "us_prices_api", "bank_api",
+                  "segments_api", "earnings_api", "sec_api", "sec_insiders_api", "sec_13f_api", "us_prices_api", "us_events_api", "bank_api",
                   "risk_api")
 
 

@@ -430,7 +430,7 @@ class PhaseIsolationTest(unittest.TestCase):
         self._saved = {n: getattr(backfill, n) for n in (
             "backfill_macro", "stamp_cycle", "backfill_gdp_vintages",
             "backfill_equity", "backfill_sec", "refresh_us_companies", "refresh_us_pay",
-            "refresh_us_holdings", "refresh_us_prices", "refresh_us_shares", "refresh_us_listings",
+            "refresh_us_holdings", "refresh_us_prices", "refresh_us_events", "refresh_us_shares", "refresh_us_listings",
             "refresh_us_text")}
         self.addCleanup(lambda: [setattr(backfill, n, f) for n, f in self._saved.items()])
         # a phase added to main() without a stub here runs for real (2026-10-19:
@@ -449,6 +449,7 @@ class PhaseIsolationTest(unittest.TestCase):
         backfill.refresh_us_text = lambda: self.ran.append("text")
         backfill.refresh_us_holdings = lambda: self.ran.append("holdings")
         backfill.refresh_us_prices = lambda: self.ran.append("prices")
+        backfill.refresh_us_events = lambda: self.ran.append("events")
         backfill.refresh_us_shares = lambda: self.ran.append("shares")
         backfill.refresh_us_listings = lambda: self.ran.append("listings")
         backfill.backfill_equity = lambda d, m: self.ran.append("equity")

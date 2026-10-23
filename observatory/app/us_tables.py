@@ -103,6 +103,17 @@ TABLES = {
         ("value_usd", "DOUBLE", "shares x price, US$"),
         ("planned", "BOOLEAN", "made under a pre-arranged 10b5-1 trading plan (as flagged on the filing)"),
     ]),
+    "events": ("Days things happened, from 2018: the Fed's FOMC statement days, CPI release mornings, federal shutdowns, "
+               "and the day each company announced its results (its 8-K under Item 2.02). One row per event; a results "
+               "row names its ticker.", [
+        ("kind", "VARCHAR", "'fomc' (the FOMC's statement day), 'cpi' (the morning the CPI came out), 'shutdown' (a federal shutdown), 'results' (a company's results filing)"),
+        ("date", "DATE", "the event day; for a shutdown, its first day"),
+        ("end_date", "DATE", "a shutdown's last day; blank otherwise"),
+        ("ticker", "VARCHAR", "the company, results rows only; joins stocks.ticker"),
+        ("label", "VARCHAR", "what happened, in words"),
+        ("scheduled", "BOOLEAN", "a date on a published calendar that has not happened yet (no prices for it)"),
+        ("is_earnings", "BOOLEAN", "results rows: the quarter's results announcement (true), or another Item 2.02 filing such as delivery numbers (false)"),
+    ]),
     "fund_holdings": ("13F holdings by investment managers: per stock, the latest quarter against the one before (one row per stock).", [
         ("ticker", "VARCHAR", "joins stocks.ticker"),
         ("quarter_end", "DATE", "the quarter-end the latest holdings are reported for"),
@@ -501,8 +512,18 @@ def _splits(cur):
 
 
 # ---------------------------------------------------------------- the sandbox
+def event_rows(cur):
+    """Every event day loaded by equity/us_events.py, as the box's `events` table."""
+    if not _has(cur, "us_events"):
+        return []
+    cols = ("kind", "date", "end_date", "ticker", "label", "scheduled", "is_earnings")
+    return [dict(zip(cols, r)) for r in cur.execute("""
+        SELECT kind, date, end_date, ticker, label, coalesce(scheduled, false), is_earnings
+        FROM us_events ORDER BY date, kind, ticker""").fetchall()]
+
+
 BUILDERS = {"pay": pay_rows, "quarters": quarter_rows, "segments": segment_rows,
-            "insider_trades": insider_rows, "fund_holdings": fund_rows}
+            "insider_trades": insider_rows, "fund_holdings": fund_rows, "events": event_rows}
 
 
 def _load(con, table, cols, rows):
@@ -618,7 +639,7 @@ def sandbox(cur):
     db = duckdb.connect(":memory:")
     for name, (_, cols) in TABLES.items():
         if name not in _DIRECT:
-            _load(db, name, cols, data[name])
+            _load(db, name, cols, data.get(name) or [])
     n_prices = 0
     if cur is not None and _has(cur, "us_px_daily"):
         n_prices = price_table(cur, db, _price_tickers(cur))

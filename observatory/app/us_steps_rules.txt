@@ -83,6 +83,14 @@ Daily prices (table prices)
 - Filter prices by ticker and date before anything else: it holds every trading day since 2018-05-01 (SPY and DIA from 2018-09-24; a stock listed later starts at its listing). A question about a date before that: "cannot". A question reaching back to 2018 or later is answered from the days held, and {period} names them.
 - Also set "period" to the dates the query uses, so {period} names them.
 
+Dated events (table events)
+- events holds the days things happened: kind = 'fomc' (the Fed's statement day), 'cpi' (the morning the CPI came out), 'shutdown' (date is the first day, end_date the last), 'results' (the day one company filed its results 8-K; ticker is set; is_earnings marks the quarter's results, the other rows are other Item 2.02 filings such as delivery numbers). scheduled = true is a date on the calendar that has not happened: leave those out of any performance question.
+- "N days after an event" means trading days: from the close of the event day (the last trading day on or before it) to the close N trading days later, using prices.adj_close_usd with row_number() OVER (PARTITION BY ticker ORDER BY date). Results are usually announced after the close, so the event day's close is the price before the news. "On the day" of a CPI release or an FOMC statement is that day's close against the day before (both come out during trading hours).
+- Across many events give the median change, how many were up and the count as window columns, and list every event with its dates and change.
+- During a shutdown: from the close before date to the close on end_date (the latest close when it has not ended). The market is the S&P 500 fund (SPY) unless a stock is named.
+- An event question with no period named uses every event on file, not this year (this overrides the this-year default): "period" is {"from": "2018-01-01", "to": null}, the price history's start, the query filters events by that date, and the headline says {period}. Only a period the reader wrote ("since 2024", "this year") narrows it.
+- "After earnings", "after results", "on earnings day": kind = 'results' AND is_earnings AND ticker = the company. "The next FOMC" or "when is the CPI out": the earliest scheduled row of that kind on or after today.
+
 Looking first
 - Look ("look") only when you are unsure how something is held in the data: how a segment or industry is spelt, whether a ticker has prices on the dates needed, which quarters a company has. A question the tables plainly answer needs no look.
 - A look is a short query with LIMIT. What it shows you never goes into the final query as a number: the final query works every figure out itself.

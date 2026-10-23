@@ -4099,9 +4099,20 @@ MACRO_MISS = ("That reads as a question about the economy, and Plover's data doe
               "wages, jobs and Treasury yields, and prices, jobs, GDP and yields for Japan and Hong Kong.")
 
 
+# a dated event the events table holds (app/us_tables.py): a question about the market or a stock
+# around one is a price question for the step route, not an economy series
+_EVENT_WORDS = re.compile(r"\b(?:fomc|fed (?:meetings?|decisions?|statements?|days?)|(?:cpi|inflation|jobs) (?:releases?|days?|prints?|reports?)|"
+                          r"(?:government |federal )?shutdowns?|earnings (?:days?|announcements?|releases?)|results days?)\b|"
+                          r"\b(?:after|before|around|following|post)[- ](?:(?:its|their|the|last|latest|next|each|every|an?) )*"
+                          r"(?:earnings|results|reports?|reporting|it reports|they report|fomc|cpi|fed)\b")
+_EVENT_FRAME = re.compile(r"\b(?:after|before|around|during|following|since|on|next|upcoming|when is)\b|\b(?:market|s&p|sp500|dow|nasdaq|stocks?|shares|index)\b")
+
+
 def is_macro_question(cur, question):
     ql = (question or "").lower()
     if not MACRO_WORDS.search(ql):
+        return False
+    if _EVENT_WORDS.search(ql) and _EVENT_FRAME.search(ql):
         return False
     if re.search(r"\b(bank|banks|stocks?|companies|company|shares|dividend|insider|earnings (?:date|calendar|season|report)|reports?)\b", ql) and not re.search(r"\bbank of japan\b|\bboj\b", ql):
         return False
@@ -4207,6 +4218,11 @@ def answer(cur, question, prev=None):
             form = dict(form, shape="steps")
         # quarterly results, CEO pay and segments live only in the step route's tables (app/us_tables.py)
         if form.get("shape") in _FIGURE_SHAPES and _STEPS_DATA.search(ql):
+            form = dict(form, shape="steps")
+        # a price around a dated event (after earnings, on CPI days, during a shutdown) joins the events
+        # table: the step route, never the plain price shapes (the reader read "Tesla 3 days after
+        # earnings" as its price change since last October)
+        if form.get("shape") and form["shape"] != "steps" and _EVENT_WORDS.search(ql) and _EVENT_FRAME.search(ql):
             form = dict(form, shape="steps")
         # a share, a count or an average is worked out step by step, never answered with a ranking
         if form.get("shape") in ("market_rank", "industry_rank") and (_SHARE_WORDS.search(ql) or _THRESHOLD_WORDS.search(ql)):

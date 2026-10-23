@@ -343,7 +343,9 @@ def review_prompt(question, plan, headline, rows, cols):
             "House conventions, never grounds to revise: an index is measured by the fund that tracks it (the S&P 500 "
             "by SPY, the Dow by DIA); \"the Nasdaq\" means the Nasdaq-100 (QQQ), since the Composite is not held; \"the "
             "market\" means the S&P 500; price changes are before dividends; the current month or week counts to the "
-            "latest close; a question naming no period means this year.\n\n"
+            "latest close; a question naming no period means this year, except a question about the days around dated "
+            "events (after earnings, on CPI release days, after Fed decisions, during shutdowns), which uses every event "
+            "on file from 2018 unless the question names a period.\n\n"
             "TODAY: %s\nQUESTION: %s\nSTEPS: %s\nHEADLINE: %s\nRESULT (%d rows, first %d): %s"
             % (datetime.date.today().isoformat(), question, json.dumps(plan.get("steps") or [], ensure_ascii=False), headline, len(rows),
                len(sample), json.dumps(sample, ensure_ascii=False, default=str)[:1500]))

@@ -458,6 +458,22 @@ file.
   Bearer <key>"`; for Codex, `[mcp_servers.plover-desk] url = ".../mcp/desk"` and
   `bearer_token_env_var = "PLOVER_DESK_KEY"` in `~/.codex/config.toml`. Both verified
   end to end on 23 Sep 2026 (Claude Code 2.1.278, codex-cli 0.144.3).
+- **Studies** (`#/studies`, `app/analysis.py`, `app/recipes.py`, `app/assistant/api.py`
+  under `/studies`). A saved analysis: a question, the series, one SQL query the server
+  runs on the full history, every run kept unchanged with its token count. The cheapest
+  route answers a question: a repeat of a question the person asked before is answered
+  from that study, the same analysis run again on today's data, with no model
+  (`_past_answer`; run `by` = `library`); a fresh question goes to one short match call
+  that picks a ready-made analysis (tier 1, no tools); only what no recipe computes goes
+  to the Study Analyst's lean loop (tier 2, at most five calls). Each study can carry a
+  **token budget** (`token_budget`, 1,000–250,000, set beside Refresh) that caps the
+  match call and the loop together: a run that hits it keeps the last analysis that ran
+  and says so; one that made none answers 400 with the budget named. The Audit page
+  shows the account's **AI use by month** (`store.monthly_usage`): questions a model
+  answered, tokens in and out, the average per question; hand runs, ready-made
+  analyses, scheduled refreshes and reused answers cost nothing and are not counted.
+  The chat Analyst's brief (`specialists.ANALYST`, 1.1.0) tells it to stop looking once
+  a tool has returned the figures asked for, and the runner holds it to ten tool calls.
 - **Coverage lists.** A desk keeps named lists (`ia_lists`, `ia_list_items`): the main
   "Coverage" list, which cannot be deleted, and any the PM creates. The first desks' single
   list (`ia_coverage`) moves into the main list the first time lists are read. A specialist
@@ -1620,7 +1636,23 @@ Rules of thumb when adding something:
 - A question that genuinely needs arithmetic across companies belongs with the steps route: add a
   rule to `app/us_steps_rules.txt` or a worked example to `app/us_steps_examples.json`. Its answers
   vary run to run, so never leave a common question there.
-- A question the data cannot answer gets a plain reason, never a guess (`app/ask_miss.py`).
+- A question the data cannot answer gets a plain reason, never a guess (`app/ask_miss.py`), and
+  is offered questions on its own subject (`ask_miss.TOPICS`), each of which answers by code.
+
+"How did X do after Y" questions run on the steps route over the `events` table: the days
+things happened, loaded nightly by `equity/us_events.py` into `data/sec.duckdb` (`us_events`;
+served at `/api/v1/us/events`; health row `us-events`). Four kinds, each from the body that set
+the date: `fomc` (each FOMC statement day since 2018 from the Fed's calendar pages, plus
+scheduled meetings), `cpi` (each CPI release morning from the BLS archive, plus its schedule),
+`shutdown` (each federal shutdown's first and last day, a short list in the loader checked
+against the Wikipedia article's text), and `results` (the day a company filed an 8-K under
+Item 2.02, from EDGAR's submissions JSON; `is_earnings` marks the first such filing seven to 75
+days after a fiscal quarter end as the quarter's results, so Tesla's delivery numbers are not).
+"N days after" means trading days: the close on the event day (the last trading day on or
+before it) to the close N trading days later, on split-adjusted prices; "on the day" of a CPI
+release or FOMC statement is that day's close against the day before. Companies are read in
+turns (`US_EVENTS_MAX_COMPANIES` a night, default 1500), so every filer is refreshed about
+weekly; a first run with `--max-companies 0` reads them all (about 25 minutes).
 
 Caching, in layers: the provider's prompt cache (every model call carries a `prompt_cache_key`
 and puts the unchanging part of the prompt first, so the long prefix is read from cache and

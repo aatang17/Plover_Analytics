@@ -570,8 +570,8 @@ def health():
         except Exception:                                    # noqa: BLE001
             pass
         try:
-            from . import sec_insiders_api, sec_13f_api, us_prices_api
-            equity = equity + sec_insiders_api.health() + sec_13f_api.health() + us_prices_api.health()
+            from . import sec_insiders_api, sec_13f_api, us_prices_api, us_events_api
+            equity = equity + sec_insiders_api.health() + sec_13f_api.health() + us_prices_api.health() + us_events_api.health()
         except Exception:                                    # noqa: BLE001
             pass
         try:

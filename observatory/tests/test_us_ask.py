@@ -59,6 +59,19 @@ QUESTIONS = [
 
 
 class ParserTest(unittest.TestCase):
+    def test_a_market_question_around_an_event_is_not_an_economy_question(self):
+        from app import stock_recipes
+        for q in ("How has the S&P 500 done on CPI release days?", "When is the next FOMC meeting?",
+                  "How did the market do during the last government shutdown?", "How did Tesla perform 3 days after earnings?"):
+            self.assertFalse(stock_recipes.is_macro_question(None, q), q)
+        # the phrasings that send a price question to the step route's events table
+        for q in ("How did Tesla perform 3 days after earnings?", "How did Nvidia do the day after its last earnings?",
+                  "How does Apple do in the week after it reports?", "S&P 500 after Fed decisions"):
+            self.assertTrue(stock_recipes._EVENT_WORDS.search(q.lower()) and stock_recipes._EVENT_FRAME.search(q.lower()), q)
+        self.assertFalse(stock_recipes._EVENT_WORDS.search("apple revenue after tax"))
+        for q in ("Is US core inflation falling?", "What is the 10-year Treasury yield?", "US unemployment rate"):
+            self.assertTrue(stock_recipes.is_macro_question(None, q), q)
+
     def test_norm_name(self):
         self.assertEqual(us_link.norm_name("Apple Inc."), "APPLE")
         self.assertEqual(us_link.norm_name("ALPHABET INC CLASS A"), "ALPHABET")

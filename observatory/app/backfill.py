@@ -798,6 +798,35 @@ def refresh_us_prices():
             log("US prices: exit %s; nothing new landed" % rc)
 
 
+def refresh_us_events():
+    """The event calendar (equity/us_events.py): FOMC statement days, CPI
+    release days, shutdowns and each company's results days, on a copy of
+    data/sec.duckdb swapped in when the loader exits cleanly. Companies are
+    read in turns (US_EVENTS_MAX_COMPANIES a night, default 1500, so every
+    filer about weekly); a failed source leaves its kind as it was."""
+    if not os.environ.get("EDGAR_USER_AGENT"):
+        record_check("us-events", "failed", "EDGAR_USER_AGENT not set")
+        return
+    if not LIVE_SEC.exists():
+        return
+    work = DATA_DIR / "sec.events.duckdb"
+    if fresh_copy(LIVE_SEC, work) is None:
+        record_check("us-events", "failed", "no working copy of sec.duckdb")
+        return
+    before = _table_count(work, "us_events")
+    rc = _run([sys.executable, str(ROOT / "equity" / "us_events.py"), "--db", str(work),
+               "--max-companies", os.environ.get("US_EVENTS_MAX_COMPANIES", "1500")], dict(os.environ), ROOT)
+    after = _table_count(work, "us_events")
+    if rc == 0:
+        swap(work, LIVE_SEC)
+        record_check("us-events", "published", "%d event rows (%+d)" % (after, after - before))
+        log("US events: %d rows (%+d)" % (after, after - before))
+    else:
+        swap(work, LIVE_SEC)          # the pull records carry the failure, which the health row shows
+        record_check("us-events", "failed", "us_events.py exited %s" % rc)
+        log("US events: exit %s" % rc)
+
+
 def refresh_us_shares(limit=300):
     """Shares outstanding from 10-K and 10-Q covers, every cycle.
 
@@ -947,6 +976,7 @@ def main():
     # Yesterday's closes, a few cents a day, under a cap.
     if os.environ.get("BACKFILL_US_PRICES", "1") not in ("", "0") and not _stopping:
         _phase("US prices", refresh_us_prices)
+        _phase("US events", refresh_us_events)
     # Shares outstanding from filing covers, for market value: a few minutes.
     if os.environ.get("BACKFILL_US_SHARES", "1") not in ("", "0") and not _stopping:
         _phase("US share counts", refresh_us_shares)
