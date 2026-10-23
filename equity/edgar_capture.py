@@ -94,6 +94,14 @@ from concurrent.futures import ThreadPoolExecutor
 import heartbeat
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Run from the repository, every SEC request goes through observatory/app/
+# sec_gate.py: one rate (SEC_RATE) and one refusal hold for the whole host.
+# The capture image ships only equity/, so there the job's own pacing stands.
+sys.path.append(os.path.join(HERE, "..", "observatory"))
+try:
+    from app import sec_gate
+except ImportError:
+    sec_gate = None
 ROOT = os.environ.get("EDGAR_ARCHIVE_ROOT", os.path.join(HERE, "data", "raw", "edgar"))
 S3_PREFIX = "edgar"
 ARCHIVES = "https://www.sec.gov/Archives/"
@@ -182,6 +190,11 @@ class Client(object):
 
     def _once(self, url):
         """(status, body) — body already de-gzipped."""
+        if sec_gate is not None:
+            status, body, _ = sec_gate.get(url, timeout=TIMEOUT, headers=self.headers)
+            if status == 0:
+                raise IOError("no answer from %s" % url)
+            return status, body
         if self._pool is not None:
             r = self._pool.request("GET", url, retries=False)
             return r.status, r.data
@@ -215,6 +228,10 @@ class Client(object):
                 return body
             if status == 404:
                 raise NotFound(url)
+            if sec_gate is not None and sec_gate.is_refusal(status, body):
+                # the gate now holds every SEC job on this host: waiting here changes nothing
+                raise RuntimeError("the SEC is refusing this server (%s): %s" % (
+                    "held after a refusal" if status == sec_gate.HELD else "HTTP %d" % status, url))
             if status == 403 and not throttled(body):
                 # a daily index that does not exist (SEC holiday) is a 403 with
                 # a short AccessDenied body, not a 404 — verified 2026-09-10

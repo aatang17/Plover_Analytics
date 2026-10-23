@@ -103,34 +103,63 @@ class FiledReleases(unittest.TestCase):
                           "billion. More.").startswith("JPMorgan Chase Reports"))
 
 
-class SecPoliteness(unittest.TestCase):
-    """The SEC refuses a fast reader with an HTML 403 page: wait and retry; a
-    filing whose exhibits cannot all be read is not kept (tried next poll)."""
+class _Gated(unittest.TestCase):
+    """Every SEC request goes through app/sec_gate.py: its state in a temp
+    folder, its network replaced, no pacing to wait for."""
 
-    def test_refusal_is_retried(self):
+    def setUp(self):
+        from app import sec_gate
+        self.gate = sec_gate
+        self.tmp_gate = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp_gate.cleanup)
+        for p in (mock.patch.object(sec_gate, "STATE_DIR", pathlib.Path(self.tmp_gate.name)),
+                  mock.patch.dict(os.environ, {"SEC_RATE": "1000"})):
+            p.start()
+            self.addCleanup(p.stop)
+        us_press._SEC_STATE.update(refused=False)
+        self.addCleanup(lambda: us_press._SEC_STATE.update(refused=False))
+
+    def opener(self, fn):
+        p = mock.patch.object(self.gate, "_urlopen", fn)
+        p.start()
+        self.addCleanup(p.stop)
+
+
+class _Resp(object):
+    def __init__(self, body=b"{}"):
+        self.body, self.status, self.headers = body, 200, {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, n=None):
+        return self.body
+
+
+class SecPoliteness(_Gated):
+    """The SEC refuses a fast reader with an HTML 403 page: the whole host
+    stops asking; a filing whose exhibits cannot all be read is not kept
+    (tried next poll)."""
+
+    def test_a_refusal_stops_this_run_and_holds_the_host(self):
         import io
         import urllib.error
         calls = []
-
-        class Ok(io.BytesIO):
-            status = 200
-            headers = {}
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
 
         def fake_urlopen(req, timeout=None):
             calls.append(req.full_url)
             if len(calls) == 1:
                 raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"<html>Undeclared</html>"))
-            return Ok(b"{}")
-        with mock.patch.object(us_press.urllib.request, "urlopen", fake_urlopen), \
-                mock.patch.object(us_press.time, "sleep", lambda s: None):
-            self.assertEqual(us_press._sec_get("https://data.sec.gov/x", "UA a@b.c"), (200, b"{}"))
-        self.assertEqual(len(calls), 2)
+            return _Resp(b"{}")
+        self.opener(fake_urlopen)
+        self.assertEqual(us_press._sec_get("https://data.sec.gov/x", "UA a@b.c"), (0, b""))
+        self.assertTrue(us_press.sec_refused())
+        us_press._SEC_STATE.update(refused=False)                  # a new run, in this or another process
+        self.assertEqual(us_press._sec_get("https://data.sec.gov/y", "UA a@b.c"), (0, b""))
+        self.assertEqual(len(calls), 1)                            # held: the SEC was not asked again
 
     def test_a_missing_daily_index_is_not_retried(self):
         import io
@@ -140,8 +169,8 @@ class SecPoliteness(unittest.TestCase):
         def fake_urlopen(req, timeout=None):
             calls.append(1)
             raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"\x1f\x8bAccessDenied"))
-        with mock.patch.object(us_press.urllib.request, "urlopen", fake_urlopen):
-            self.assertEqual(us_press._sec_get("https://www.sec.gov/idx", "UA a@b.c")[0], 403)
+        self.opener(fake_urlopen)
+        self.assertEqual(us_press._sec_get("https://www.sec.gov/idx", "UA a@b.c")[0], 403)
         self.assertEqual(len(calls), 1)
 
     def test_a_partly_read_filing_is_not_kept(self):
@@ -238,35 +267,19 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class SecPacing(unittest.TestCase):
-    """Every SEC request goes through one gate; a refusal on every try stops the run (2026-10-19 block)."""
-
-    def setUp(self):
-        from app import us_press
-        self.p = us_press
-        us_press._SEC_STATE.update(last=0.0, refused=False)
-        self.addCleanup(lambda: us_press._SEC_STATE.update(last=0.0, refused=False))
+class SecPacing(_Gated):
+    """Every SEC request goes through one gate; a refusal stops the run (2026-10-19 block)."""
 
     def test_requests_from_many_threads_stay_under_the_rate(self):
         import threading
         times = []
 
-        class Resp(object):
-            status = 200
-            headers = {}
-
-            def __enter__(self):
-                times.append(time.time())
-                return self
-
-            def __exit__(self, *a):
-                return False
-
-            def read(self, n=None):
-                return b"{}"
-        with mock.patch.object(self.p, "SEC_RATE", 20.0), \
-                mock.patch.object(self.p.urllib.request, "urlopen", lambda *a, **k: Resp()):
-            ts = [threading.Thread(target=lambda: [self.p._sec_get("https://data.sec.gov/x", "ua") for _ in range(5)])
+        def ok(req, timeout=None):
+            times.append(time.time())
+            return _Resp()
+        self.opener(ok)
+        with mock.patch.dict(os.environ, {"SEC_RATE": "20"}):
+            ts = [threading.Thread(target=lambda: [us_press._sec_get("https://data.sec.gov/x", "ua") for _ in range(5)])
                   for _ in range(4)]
             [t.start() for t in ts]
             [t.join() for t in ts]
@@ -275,26 +288,28 @@ class SecPacing(unittest.TestCase):
         gaps = [b - a for a, b in zip(times, times[1:])]
         self.assertGreaterEqual(min(gaps), 1.0 / 20 - 0.01)        # never two requests closer than the gate allows
 
-    def test_refused_on_every_try_stops_asking(self):
+    def test_refused_stops_asking(self):
         import io
+        import urllib.error
         calls = []
 
-        def refuse(*a, **k):
+        def refuse(req, timeout=None):
             calls.append(1)
-            raise self.p.urllib.error.HTTPError("https://data.sec.gov/x", 403, "Forbidden", {},
-                                                io.BytesIO(b"<HTML><TITLE>Access Denied</TITLE></HTML>"))
-        with mock.patch.object(self.p, "SEC_RATE", 1000.0), mock.patch.object(self.p.time, "sleep", lambda s: None), \
-                mock.patch.object(self.p.urllib.request, "urlopen", refuse):
-            self.assertEqual(self.p._sec_get("https://data.sec.gov/a", "ua"), (0, b""))
-            self.assertTrue(self.p.sec_refused())
-            self.assertEqual(self.p._sec_get("https://data.sec.gov/b", "ua"), (0, b""))
-        self.assertEqual(len(calls), 4)                              # the second address was never asked
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {},
+                                         io.BytesIO(b"<HTML><TITLE>Access Denied</TITLE></HTML>"))
+        self.opener(refuse)
+        self.assertEqual(us_press._sec_get("https://data.sec.gov/a", "ua"), (0, b""))
+        self.assertTrue(us_press.sec_refused())
+        self.assertEqual(us_press._sec_get("https://data.sec.gov/b", "ua"), (0, b""))
+        self.assertEqual(len(calls), 1)                              # the second address was never asked
 
     def test_a_missing_daily_index_is_not_a_refusal(self):
         import io
+        import urllib.error
 
-        def missing(*a, **k):
-            raise self.p.urllib.error.HTTPError("https://www.sec.gov/idx", 403, "Forbidden", {}, io.BytesIO(b"NoSuchKey"))
-        with mock.patch.object(self.p, "SEC_RATE", 1000.0), mock.patch.object(self.p.urllib.request, "urlopen", missing):
-            self.assertEqual(self.p._sec_get("https://www.sec.gov/idx", "ua"), (403, b""))
-        self.assertFalse(self.p.sec_refused())
+        def missing(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"NoSuchKey"))
+        self.opener(missing)
+        self.assertEqual(us_press._sec_get("https://www.sec.gov/idx", "ua"), (403, b""))
+        self.assertFalse(us_press.sec_refused())
+        self.assertFalse(self.gate.held())

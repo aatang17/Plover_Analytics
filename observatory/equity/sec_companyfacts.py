@@ -76,12 +76,14 @@ import os
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
 
 import duckdb
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+
+from app import sec_gate                                          # noqa: E402 — one gate for every SEC request on the host
+
 DB_PATH = os.environ.get("SEC_DB_PATH",
                          os.path.join(HERE, "..", "data", "sec.duckdb"))
 RAW_ROOT = os.path.join(HERE, "..", "data", "raw", "sec-companyfacts")
@@ -143,6 +145,9 @@ def load_universe(path=UNIVERSE):
 
 
 class Fetcher(object):
+    """Every request goes through app/sec_gate.py (the host's SEC_RATE, and a
+    hold once the SEC refuses this server); RATE here only ever slows it."""
+
     def __init__(self, ua, rate=RATE):
         self.ua = ua
         self.gap = 1.0 / rate
@@ -154,26 +159,18 @@ class Fetcher(object):
             if wait > 0:
                 time.sleep(wait)
             self.last = time.time()
-            req = urllib.request.Request(url, headers={
-                "User-Agent": self.ua, "Accept-Encoding": "gzip"})
-            try:
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    body = r.read()
-                    if r.headers.get("Content-Encoding") == "gzip":
-                        body = gzip.decompress(body)
-                    return body
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    raise PullError("SEC has no company-facts file (404)")
-                if e.code in (403, 429, 500, 502, 503) and attempt < 3:
-                    time.sleep(2 ** attempt * 2)
-                    continue
-                raise PullError("HTTP %s" % e.code)
-            except urllib.error.URLError as e:
-                if attempt < 3:
-                    time.sleep(2 ** attempt * 2)
-                    continue
-                raise PullError("unreachable: %s" % e.reason)
+            status, body, _ = sec_gate.get(url, timeout=60, headers={"User-Agent": self.ua})
+            if sec_gate.is_refusal(status, body):
+                raise PullError("the SEC is refusing this server (%s)"
+                                % ("held after a refusal" if status == sec_gate.HELD else "HTTP %d" % status))
+            if status == 200:
+                return body
+            if status == 404:
+                raise PullError("SEC has no company-facts file (404)")
+            if status in (0, 500, 502, 503) and attempt < 3:
+                time.sleep(2 ** attempt * 2)
+                continue
+            raise PullError("HTTP %s" % status if status else "unreachable")
         raise PullError("gave up after retries")
 
 

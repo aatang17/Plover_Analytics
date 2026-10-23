@@ -75,6 +75,15 @@ import zipfile
 import heartbeat
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Run from the repository, every SEC request (the statement data sets) goes
+# through observatory/app/sec_gate.py: one rate (SEC_RATE) and one refusal
+# hold for the whole host. The capture image ships only equity/, so there the
+# job's own pacing stands. Other sources never touch the gate.
+sys.path.append(os.path.join(HERE, "..", "observatory"))
+try:
+    from app import sec_gate
+except ImportError:
+    sec_gate = None
 ROOT = os.environ.get("US_ARCHIVE_ROOT", os.path.join(HERE, "data", "raw", "us"))
 S3_PREFIX = "us"
 THROTTLE_SECONDS = 0.5
@@ -148,6 +157,10 @@ class NotModified(Exception):
     pass
 
 
+class Refused(Exception):
+    """The SEC refused this server, or the host's gate is holding after a refusal."""
+
+
 class Client(object):
     """Streams every response to a temp file so a 400MB BLS file never sits
     in memory. Returns (path, sha256, headers). urllib3 when present (the
@@ -173,6 +186,16 @@ class Client(object):
 
     def _once(self, url, cond, out):
         sha = hashlib.sha256()
+        if sec_gate is not None and sec_gate.is_sec(url):
+            status, body, headers = sec_gate.get(url, timeout=TIMEOUT, headers=self._headers(cond))
+            if status == 0:
+                raise IOError("no answer from %s" % url)
+            if sec_gate.is_refusal(status, body):
+                raise Refused("the SEC is refusing this server (%s): %s" % (
+                    "held after a refusal" if status == sec_gate.HELD else "HTTP %d" % status, url))
+            if status == 200:
+                out.write(body)
+            return status, headers
         if self._pool is not None:
             for _ in range(5):                     # follow redirects by hand
                 r = self._pool.request("GET", url, headers=self._headers(cond),
@@ -227,6 +250,11 @@ class Client(object):
                 last = RuntimeError("HTTP %d" % status)
                 time.sleep((10 if status in (403, 429) else 2) * (2 ** i))
             except (NotFound, NotModified):
+                raise
+            except Refused:
+                # waiting changes nothing: the gate holds every SEC job on this host
+                out.close()
+                os.remove(path)
                 raise
             except Exception as e:
                 out.close()

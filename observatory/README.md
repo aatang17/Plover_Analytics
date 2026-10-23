@@ -1654,12 +1654,20 @@ release or FOMC statement is that day's close against the day before. Companies 
 turns (`US_EVENTS_MAX_COMPANIES` a night, default 1500), so every filer is refreshed about
 weekly; the first run reads them all (about 35 minutes at 4 requests a second).
 
-Every SEC job on the server stays at or under 4 requests a second, and the press poller
-(`app/us_press.py`) at 3 through one gate shared by its threads, so two running at once stay
-under the SEC's limit of 10. 2026-10-19: the poller's 8-K backfill read 1,046 filings in 12
-minutes on four threads paced only between companies, and the SEC refused the server's address
-for every SEC job from then on. A job that sees the SEC's refusal page on every retry stops asking
-for the rest of its run (`us_press.sec_refused()`, `us_events.REFUSED_AFTER`).
+Every request to the SEC from the server, from any job, process or thread, goes through one
+gate, `app/sec_gate.py`, with the declared name `EDGAR_USER_AGENT` (environment or
+`observatory/.env`). It holds the whole host to `SEC_RATE` requests a second (default 3,
+retries included; the SEC's limit is 10), using a lock file under `data/sec-gate/`. 2026-10-19:
+the poller's 8-K backfill read 1,046 filings in 12 minutes on four threads paced only between
+companies, and the SEC refused the server's address for every SEC job from then on. When the
+SEC answers 429 or its HTML "Access Denied" 403 (a missing daily index is a short non-HTML 403
+and does not count), the gate writes `data/sec-gate/refused.json` and every SEC job on the host
+stops asking for `SEC_REFUSED_HOLD_MINUTES` (default 60), except one probe each window; an
+answer clears it. While it is on record, `/api/v1/catalog/health` shows a `sec-access` row
+needing attention ("the SEC is refusing this server since …", with Akamai's reference) and marks
+every SEC-sourced row attention. `SEC_VIA` sends SEC requests, and only those, through an
+outbound proxy. The capture jobs in `equity/` use the gate when run from the repository; the
+capture image ships without it and keeps its own pacing.
 
 Caching, in layers: the provider's prompt cache (every model call carries a `prompt_cache_key`
 and puts the unchanging part of the prompt first, so the long prefix is read from cache and

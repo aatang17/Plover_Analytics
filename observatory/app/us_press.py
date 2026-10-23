@@ -53,6 +53,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
+from . import sec_gate
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FEEDS_PATH = ROOT / "equity" / "us_press_feeds.json"
 DB_PATH = pathlib.Path(os.environ.get("US_PRESS_DB") or (ROOT / "data" / "us-press.sqlite"))
@@ -78,7 +80,14 @@ SEC_ITEMS = ("2.02", "7.01", "8.01")      # results, Regulation FD, other events
 
 def fetch(url, timeout=TIMEOUT, limit=4 * 1024 * 1024):
     """(final url, status, content type, bytes). Never raises: an address that
-    does not answer is status 0."""
+    does not answer is status 0. An SEC address goes through the gate."""
+    if sec_gate.is_sec(url):
+        try:
+            status, body, h = sec_gate.get(url, timeout=timeout, max_bytes=limit)
+        except RuntimeError:                       # no EDGAR_USER_AGENT
+            return url, 0, "", b""
+        ctype = {k.lower(): v for k, v in h.items()}.get("content-type") or ""
+        return url, max(status, 0), ctype, body if status == 200 else b""
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*",
                                                "Accept-Language": "en-US,en;q=0.8"})
     try:
@@ -421,35 +430,17 @@ def poll(only=None, workers=WORKERS, log=print, sec=True):
 def _edgar_ua():
     """The SEC asks every automated reader to name itself (EDGAR_USER_AGENT,
     "Company contact@domain"); without it every request is refused."""
-    ua = os.environ.get("EDGAR_USER_AGENT", "").strip()
-    if not ua:
-        env = ROOT / ".env"
-        try:
-            for line in env.read_text(encoding="utf-8").splitlines():
-                if line.startswith("EDGAR_USER_AGENT="):
-                    ua = line.split("=", 1)[1].strip().strip('"').strip("'")
-        except OSError:
-            pass
-    return ua
+    return sec_gate.user_agent()
 
 
-# Every request to the SEC from this process goes through one gate: at most
-# SEC_RATE a second across all threads, retries included. 2026-10-19: the 8-K
-# backfill read 1,046 filings in 12 minutes on four threads that each paused
-# only between companies, and the SEC refused the server's address from then
-# on, for every SEC job. Once the SEC answers with its refusal page after every
-# retry, the rest of the run asks it nothing (sec_refused()).
-SEC_RATE = float(os.environ.get("US_PRESS_SEC_RATE", "3"))
-_SEC_GATE = threading.Lock()
-_SEC_STATE = {"last": 0.0, "refused": False}
-
-
-def _sec_wait():
-    with _SEC_GATE:
-        wait = _SEC_STATE["last"] + 1.0 / SEC_RATE - time.time()
-        if wait > 0:
-            time.sleep(wait)
-        _SEC_STATE["last"] = time.time()
+# Every request to the SEC goes through app/sec_gate.py: at most SEC_RATE a
+# second across every process and thread on the host, retries included.
+# 2026-10-19: the 8-K backfill read 1,046 filings in 12 minutes on four
+# threads that each paused only between companies, and the SEC refused the
+# server's address from then on, for every SEC job. Once the SEC answers with
+# its refusal page the gate holds every SEC job on the host, and the rest of
+# this run asks it nothing (sec_refused()).
+_SEC_STATE = {"refused": False}
 
 
 def sec_refused():
@@ -457,35 +448,21 @@ def sec_refused():
 
 
 def _sec_get(url, ua, tries=4):
-    """(status, body). The SEC refuses a reader that goes too fast (403 or
-    429, an HTML page): wait and try again, longer each time; refused on every
-    try, it is taken as a block and nothing more is asked this run."""
+    """(status, body). A refusal (429, or 403 with the HTML refusal page), or
+    the hold the gate keeps after one, is taken as a block: nothing more is
+    asked this run. A missing daily index is also a 403, but a short non-HTML
+    one, and comes back as 403. A network fault is tried again."""
     if _SEC_STATE["refused"]:
         return 0, b""
-    refusals = 0
     for attempt in range(tries):
-        _sec_wait()
-        req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip"})
-        try:
-            with urllib.request.urlopen(req, timeout=20) as r:
-                body = r.read(8 * 1024 * 1024)
-                if r.headers.get("Content-Encoding") == "gzip":
-                    body = gzip.decompress(body)
-                return r.status, body
-        except urllib.error.HTTPError as exc:
-            # a missing daily index is also a 403, but a short non-HTML one;
-            # only the HTML refusal page means "slow down"
-            page = exc.read(2048) if exc.code in (403, 429) else b""
-            if exc.code == 429 or (exc.code == 403 and b"<html" in page.lower()):
-                refusals += 1
-                time.sleep(5 * (attempt + 1))
-                continue
-            return exc.code, b""
-        except Exception:  # noqa: BLE001
+        status, body, _ = sec_gate.get(url, timeout=20, max_bytes=8 * 1024 * 1024, headers={"User-Agent": ua})
+        if sec_gate.is_refusal(status, body):
+            _SEC_STATE["refused"] = True
+            return 0, b""
+        if status == 0:
             time.sleep(2 * (attempt + 1))
             continue
-    if refusals == tries:
-        _SEC_STATE["refused"] = True
+        return (status, body) if 200 <= status < 300 else (status, b"")
     return 0, b""
 
 
@@ -730,7 +707,7 @@ def poll_sec(only=None, workers=WORKERS, log=print, con=None):
     def one(m):
         if sec_refused():
             return m, None
-        filings = _sec_filings(m, ua, since)          # every request is paced by _sec_wait()
+        filings = _sec_filings(m, ua, since)          # every request is paced by sec_gate
         if filings is None:
             return m, None
         got = []

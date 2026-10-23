@@ -478,6 +478,34 @@ def catalog():
         con.close()
 
 
+# The health rows whose data this server reads from the SEC.
+SEC_DATASETS_EXTRA = ("us-events", "us-press-releases")
+
+
+def sec_access_rows(rows, gate):
+    """[the sec-access row] from sec_gate.status(), or [] when this server
+    has never asked the SEC. While the SEC is refusing this server, every
+    SEC-sourced row in `rows` is marked attention, with the reason."""
+    if not gate.get("last_ok_at") and not gate.get("refused"):
+        return []
+    note = None
+    if gate.get("refused"):
+        r = gate["refused"]
+        note = "the SEC is refusing this server since %s (HTTP %s%s)" % (
+            r.get("since"), r.get("status"), ", reference %s" % r["reference"] if r.get("reference") else "")
+        for row in rows:
+            ds = str(row.get("dataset") or "")
+            if ds.startswith("sec-") or ds in SEC_DATASETS_EXTRA:
+                row["status"] = "attention"
+                row["sec_access"] = note
+    return [{"dataset": "sec-access", "status": "attention" if note else "ok",
+             "archive_read_through": None, "days_behind": None, "stale_after_days": None,
+             "stale": False, "last_extracted_at": None,
+             "last_ok_at": gate.get("last_ok_at"), "refused": gate.get("refused"),
+             "held": bool(gate.get("held")), "proxy": bool(gate.get("proxy")),
+             "shape_flags": [note] if note else []}]
+
+
 def health():
     """Whether each dataset is current, and whether an ingest went quiet.
 
@@ -594,6 +622,16 @@ def health():
         try:
             from . import us_press
             equity = equity + us_press.health()
+        except Exception:                                    # noqa: BLE001
+            pass
+        # The SEC refusing this server (app/sec_gate.py's marker): every
+        # SEC-sourced row needs attention, whatever its own staleness window
+        # says. 2026-10-19: sec-insiders and sec-13f said ok through a block,
+        # their windows being 130 days. One sec-access row carries the flag,
+        # so the alarm says it once rather than once per dataset.
+        try:
+            from . import sec_gate
+            equity = equity + sec_access_rows(equity, sec_gate.status())
         except Exception:                                    # noqa: BLE001
             pass
 

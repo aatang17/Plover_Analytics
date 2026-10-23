@@ -56,6 +56,10 @@ import urllib.parse
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+
+from app import sec_gate                                          # noqa: E402 — one gate for every SEC request on the host
+
 RAW_ROOT = os.environ.get("US_EVENTS_RAW", os.path.join(HERE, "..", "data", "raw", "us-events"))
 PARSER_VERSION = "events-1"
 HISTORY_FROM = datetime.date(2018, 1, 1)          # daily prices begin 2018-05-01; nothing earlier is useful
@@ -103,6 +107,10 @@ class EventsError(Exception):
     pass
 
 
+class Refused(EventsError):
+    """The SEC refused this server, or the gate is holding after a refusal."""
+
+
 # ---------------------------------------------------------------- fetching
 def _env(name):
     v = os.environ.get(name, "").strip()
@@ -129,8 +137,8 @@ class Client(object):
 
     def __init__(self, raw_root, pause=0.25, log=print):
         self.raw_root = raw_root
-        # at most 1/pause requests a second across every thread: 4, like the other nightly SEC jobs, so with
-        # the press poller's 3 (app/us_press.py) the server stays under the SEC's 10 even when both run
+        # at most 1/pause requests a second across every thread; SEC requests are also held to the
+        # host-wide SEC_RATE (app/sec_gate.py, default 3), shared with every other SEC job
         self.pause = pause
         self.log = log
         self.last = 0.0
@@ -150,22 +158,31 @@ class Client(object):
         host = urllib.parse.urlsplit(url).netloc
         for attempt in range(tries):
             self._pace()
-            req = urllib.request.Request(url, headers={"User-Agent": user_agent(host), "Accept-Encoding": "gzip",
-                                                       "Accept": "text/html,application/json;q=0.9,*/*;q=0.8"})
-            try:
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    body = resp.read()
-                    if resp.headers.get("Content-Encoding") == "gzip":
-                        body = gzip.decompress(body)
-                return body
-            except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
-                code = getattr(exc, "code", None)
-                if code == 404:
-                    raise
-                if attempt + 1 == tries:
-                    raise
-                time.sleep(2.0 * (attempt + 1))
-                self.log("  retry %s after %s" % (url, exc))
+            headers = {"User-Agent": user_agent(host), "Accept-Encoding": "gzip",
+                       "Accept": "text/html,application/json;q=0.9,*/*;q=0.8"}
+            if sec_gate.is_sec(url):
+                status, body, _ = sec_gate.get(url, timeout=timeout, headers=headers)
+                if sec_gate.is_refusal(status, body):
+                    raise Refused("the SEC is refusing this server (%s)"
+                                  % ("held after a refusal" if status == sec_gate.HELD else "HTTP %d" % status))
+                if status == 200:
+                    return body
+                exc = (urllib.error.HTTPError(url, status, "HTTP %d" % status, {}, None) if status
+                       else urllib.error.URLError("no answer"))
+            else:
+                req = urllib.request.Request(url, headers=headers)
+                try:
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:
+                        body = resp.read()
+                        if resp.headers.get("Content-Encoding") == "gzip":
+                            body = gzip.decompress(body)
+                    return body
+                except (urllib.error.HTTPError, urllib.error.URLError, OSError) as e:
+                    exc = e
+            if getattr(exc, "code", None) == 404 or attempt + 1 == tries:
+                raise exc
+            time.sleep(2.0 * (attempt + 1))
+            self.log("  retry %s after %s" % (url, exc))
 
     def archive(self, kind, name, body):
         day = datetime.date.today().isoformat()
@@ -486,6 +503,8 @@ def _fetch_one(client, item):
     try:
         filings, pages, earliest = fetch_results(client, cik)
         return item, filings, pages, earliest, None
+    except Refused as exc:
+        return item, None, 0, None, "refused: %s" % exc
     except urllib.error.HTTPError as exc:
         return item, None, 0, None, "HTTP %s" % exc.code
     except (urllib.error.URLError, OSError, ValueError) as exc:
@@ -518,8 +537,9 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
                 con.execute("INSERT INTO us_event_filers VALUES (?, now(), 'failed', 0, NULL, ?)", [cik, err])
                 n_fail += 1
                 # the SEC refusing every request is a block on the address, not one bad company:
-                # stop instead of knocking 8,000 times (2026-10-23: the server's address was refused)
-                if n_ok == 0 and n_fail >= REFUSED_AFTER:
+                # stop instead of knocking 8,000 times (2026-10-23: the server's address was refused).
+                # The gate says so at the first refusal; REFUSED_AFTER catches a block that looks otherwise.
+                if err.startswith("refused") or (n_ok == 0 and n_fail >= REFUSED_AFTER):
                     refused = err
                     break
                 continue
@@ -544,8 +564,10 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
                 log("  %d/%d companies, %d rows, %.0fs" % (i + 1, len(due), n_rows, time.time() - t0))
     if refused:
         _record(con, "results", "failed", n_rows, client.pages, None, None,
-                "the SEC refused the first %d requests (%s); stopped, nothing read" % (n_fail, refused))
-        raise EventsError("the SEC refused the first %d requests (%s): the address is blocked" % (n_fail, refused))
+                "the SEC refused this server after %d companies read and %d failed (%s); stopped"
+                % (n_ok, n_fail, refused))
+        raise EventsError("the SEC refused this server after %d companies read and %d failed (%s): the address is blocked"
+                          % (n_ok, n_fail, refused))
     _record(con, "results", "ok" if n_ok or not due else "failed", n_rows, client.pages, None, None,
             "%d companies read, %d failed" % (n_ok, n_fail))
     log("results: %d companies read, %d failed, %d rows, %.0fs" % (n_ok, n_fail, n_rows, time.time() - t0))

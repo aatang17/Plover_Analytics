@@ -108,6 +108,10 @@ import zipfile
 import duckdb
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+
+from app import sec_gate                                          # noqa: E402 — one gate for every SEC request on the host
+
 DB_PATH = os.environ.get("SEC_DB_PATH", os.path.join(HERE, "..", "data", "sec.duckdb"))
 RAW_ROOT = os.path.join(HERE, "..", "data", "raw", "sec-proxy")
 
@@ -171,7 +175,9 @@ class PullError(Exception):
 
 class Fetcher(object):
     """One rate for every worker: requests are spaced across threads, so
-    several slow replies can be awaited at once without exceeding RATE."""
+    several slow replies can be awaited at once without exceeding RATE.
+    SEC requests also go through app/sec_gate.py, which holds the whole host
+    to SEC_RATE and stops asking once the SEC refuses (PullError at once)."""
 
     def __init__(self, ua, rate=RATE):
         self.ua = ua
@@ -193,6 +199,19 @@ class Fetcher(object):
             # State Street serves its file to browsers; the SEC wants the
             # declared agent and refuses anything else.
             ua = "Mozilla/5.0 (compatible; data archive)" if browser else self.ua
+            if sec_gate.is_sec(url):
+                status, body, _ = sec_gate.get(url, timeout=60, headers={"User-Agent": ua})
+                if sec_gate.is_refusal(status, body):
+                    raise PullError("the SEC is refusing this server (%s): %s" % (
+                        "held after a refusal" if status == sec_gate.HELD else "HTTP %d" % status, url))
+                if status == 200:
+                    return body
+                if status == 404:
+                    raise PullError("not found (404): %s" % url)
+                if status in (0, 500, 502, 503) and attempt < 3:
+                    time.sleep(5 * 3 ** attempt)
+                    continue
+                raise PullError(("HTTP %s: %s" % (status, url)) if status else "unreachable: %s" % url)
             req = urllib.request.Request(url, headers={"User-Agent": ua,
                                                        "Accept-Encoding": "gzip"})
             try:

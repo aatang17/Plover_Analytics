@@ -40,12 +40,14 @@ import os
 import re
 import sys
 import time
-import urllib.error
-import urllib.request
 
 import duckdb
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+
+from app import sec_gate                                          # noqa: E402 — one gate for every SEC request on the host
+
 DB_PATH = os.environ.get("SEC_DB_PATH", os.path.join(HERE, "..", "data", "sec.duckdb"))
 RAW_ROOT = os.environ.get("SEC_UNIVERSE_RAW",
                           os.path.join(HERE, "..", "data", "raw", "sec-universe"))
@@ -93,26 +95,21 @@ def user_agent():
 
 
 def fetch(url, ua, attempts=4):
-    """Bytes of a SEC file, with the back-off the SEC's throttling needs."""
+    """Bytes of a SEC file, with the back-off the SEC's throttling needs.
+    Every request goes through app/sec_gate.py; a refusal stops at once."""
     last = None
     for n in range(attempts):
-        req = urllib.request.Request(url, headers={"User-Agent": ua,
-                                                   "Accept-Encoding": "identity"})
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return r.read()
-        except urllib.error.HTTPError as e:
-            last = e
-            if e.code in (403, 429, 503) and n + 1 < attempts:
-                time.sleep((5, 15, 45)[min(n, 2)])
-                continue
-            raise
-        except (urllib.error.URLError, OSError) as e:
-            last = e
-            if n + 1 < attempts:
-                time.sleep((5, 15, 45)[min(n, 2)])
-                continue
-            raise
+        status, body, _ = sec_gate.get(url, timeout=60, headers={"User-Agent": ua, "Accept-Encoding": "identity"})
+        if sec_gate.is_refusal(status, body):
+            raise UniverseError("the SEC is refusing this server (%s): %s" % (
+                "held after a refusal" if status == sec_gate.HELD else "HTTP %d" % status, url))
+        if status == 200:
+            return body
+        last = "HTTP %d" % status if status else "no answer"
+        if status in (0, 503) and n + 1 < attempts:
+            time.sleep((5, 15, 45)[min(n, 2)])
+            continue
+        break
     raise UniverseError("gave up on %s: %s" % (url, last))
 
 
