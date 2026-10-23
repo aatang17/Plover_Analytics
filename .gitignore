@@ -13,3 +13,6 @@ equity/m1/
 .env
 .env.*
 !.env.example
+
+# personal Claude Code settings (per machine)
+.claude/settings.local.json

@@ -80,7 +80,7 @@ Daily prices (table prices)
 - A _pct column is in percent: 100 * (a / b - 1), never the bare fraction.
 - For "how many months (weeks, days)", the headline gives the count and nothing more ("Apple beat the Nasdaq-100 in {beat} of {weeks} weeks {period}."): the first row is only the first month, so a headline that names it as the best or worst is wrong.
 - The fall from a high (drawdown): adj_close_usd / max(adj_close_usd) OVER (PARTITION BY ticker ORDER BY date ROWS UNBOUNDED PRECEDING) - 1.
-- Filter prices by ticker and date before anything else: it holds every trading day since 2024-07-01. A question about an earlier date: "cannot".
+- Filter prices by ticker and date before anything else: it holds every trading day since 2018-05-01 (SPY and DIA from 2018-09-24; a stock listed later starts at its listing). A question about a date before that: "cannot". A question reaching back to 2018 or later is answered from the days held, and {period} names them.
 - Also set "period" to the dates the query uses, so {period} names them.
 
 Looking first

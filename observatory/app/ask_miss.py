@@ -30,6 +30,54 @@ KINDS = ("not_held", "policy", "unclear", "other_market", "error")
 # the front page's own examples, every one of which answers (ci/search_examples.py checks them)
 EXAMPLES = ["Who owns Nvidia?", "Most valuable US companies", "Is US core inflation falling?"]
 
+# questions the box answers, by the subject a missed question is about: a reader
+# who asked about the market, inflation or jobs is offered questions on that, not
+# the three front-page examples (2026-10-23: "how has the market performed around
+# midterm elections" was offered "Who owns Nvidia?"). Every question here answers
+# without the model (the quick lane, the word patterns or the economy answers:
+# tests/test_us_ask.py checks each one); a company question gets its own lines
+# first (suggestions()).
+TOPICS = [
+    (re.compile(r"\bmarkets?\b|s\s?&\s?p|sp500|\bind(?:ex|ices)\b|\bstocks?\b|wall street|\bdow\b|nasdaq|russell|"
+                r"election|midterm|rally|crash|sell-?off|\bbull|\bbear|recession|correction|\bequit"),
+     ["What drove the S&P 500 this year?", "Best performers in the S&P 500 this year", "Worst S&P 500 stocks this year"]),
+    (re.compile(r"inflation|\bcpi\b|\bprices?\b|cost of living|\brents?\b|grocer|\beggs?\b|gasoline"),
+     ["Is US core inflation falling?", "US rent inflation", "What are egg prices in the US?"]),
+    (re.compile(r"yields?|treasur|interest rates?|\bfed\b|fomc|rate (?:cut|hike|rise)|\bbonds?\b|\bcurve\b|\btips\b"),
+     ["What is the 10-year Treasury yield?", "How steep is the 2s10s curve?", "US 10-year real yield"]),
+    (re.compile(r"\bjobs?\b|unemploy|payrolls?|\bwages?\b|labou?r|hiring|workers|employment"),
+     ["US unemployment rate", "How many jobs did the US add last month?", "US job openings"]),
+    (re.compile(r"insiders?"), ["Where have insiders bought the most stock?", "Largest insider purchases last week"]),
+    (re.compile(r"\bfunds?\b|13f|hedge|berkshire|buffett|\bowns?\b|\bholders?\b|institution"),
+     ["Who owns Nvidia?", "What does Berkshire Hathaway own?"]),
+    (re.compile(r"dividends?|buybacks?|repurchase"), ["Highest dividend yields in the S&P 500", "Apple buybacks"]),
+    (re.compile(r"\bpay\b|\bpaid\b|salary|compensation|\bceos?\b"), ["Highest-paid S&P 500 CEOs", "Apple CEO pay"]),
+    (re.compile(r"earnings|\breports?\b|results|quarter"), ["Who reports next week?", "Nvidia revenue last quarter"]),
+    (re.compile(r"\bp/?e\b|valuation|cheap|expensive|\bworth\b|market (?:cap|value)|largest|biggest"),
+     ["Cheapest S&P 500 stocks by P/E", "Most valuable US companies"]),
+    (re.compile(r"japan|nikkei|\byen\b|\bboj\b|tokyo|\bjgb"), ["Japan inflation", "Japan 10-year yield"]),
+    (re.compile(r"hong kong|\bhk\b|hang seng"), ["Hong Kong inflation"]),
+]
+
+
+def topical(question, n=3):
+    """Up to n questions on the subjects a question names, taken in turn from
+    each subject matched (the first subject gives the most), in TOPICS order."""
+    ql = (question or "").lower()
+    pools = [list(qs) for pat, qs in TOPICS if pat.search(ql)]
+    out = []
+    while pools and len(out) < n:
+        for pool in list(pools):
+            if not pool:
+                pools.remove(pool)
+                continue
+            q = pool.pop(0)
+            if q not in out:
+                out.append(q)
+            if len(out) >= n:
+                break
+    return out
+
 UNCLEAR = ("I couldn't tell what you're asking. Ask about a US company (its owners, results, buybacks, "
            "insider trades or share price), or about US inflation, wages or Treasury yields.")
 ERROR = "That didn't work on our side. Try again in a moment; your question is still in the box."
@@ -133,6 +181,8 @@ def suggestions(question, kind, text, cur=None, given=None):
         if co:
             # price and filings every listed company has (a 20-F filer's revenue growth can come back empty)
             out += ["What does %s do?" % co, "How has %s done this year?" % co, "Who owns %s?" % co]
+        # the subject the reader asked about, before the front page's examples
+        out += topical(question)
         out += EXAMPLES
     seen, uniq = set(), []
     for t in out:

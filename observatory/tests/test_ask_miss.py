@@ -59,6 +59,30 @@ class WordsTest(unittest.TestCase):
             given = ask_miss.suggestions("x", "not_held", "", given=["How many S&P 500 stocks are up this year?"])
             self.assertEqual(given[0], "How many S&P 500 stocks are up this year?")
 
+    def test_suggestions_follow_the_subject_of_the_question(self):
+        with mock.patch.object(ask_miss, "company_in", return_value=None):
+            market = ask_miss.suggestions("How has the market performed on midterm election periods", "not_held", "")
+            self.assertEqual(market, ["What drove the S&P 500 this year?", "Best performers in the S&P 500 this year",
+                                      "Worst S&P 500 stocks this year"])
+            self.assertEqual(ask_miss.suggestions("is inflation coming down", "not_held", "")[0], "Is US core inflation falling?")
+            self.assertEqual(ask_miss.suggestions("when will the Fed cut rates", "not_held", "")[0], "What is the 10-year Treasury yield?")
+            self.assertEqual(ask_miss.suggestions("how many jobs were lost", "not_held", "")[0], "US unemployment rate")
+            # two subjects: each gets a turn, the first subject first
+            two = ask_miss.suggestions("S&P 500 dividend cuts", "not_held", "")
+            self.assertEqual(two[:2], ["What drove the S&P 500 this year?", "Highest dividend yields in the S&P 500"])
+            # no subject the box knows: the front page's examples, as before
+            self.assertEqual(ask_miss.suggestions("weather in Ohio", "not_held", ""), ask_miss.EXAMPLES)
+            # never the question itself
+            self.assertNotIn("US unemployment rate", ask_miss.suggestions("US unemployment rate", "not_held", ""))
+        # a company question keeps its own lines first
+        with mock.patch.object(ask_miss, "company_in", return_value="Intel"):
+            self.assertEqual(ask_miss.suggestions("Intel's share of the market", "not_held", "")[0], "What does Intel do?")
+        # every topical question is one the box answers without the model (checked against the data in
+        # tests/test_us_ask.py); here: no duplicates inside a subject, nothing empty
+        for pat, qs in ask_miss.TOPICS:
+            self.assertEqual(len(qs), len(set(qs)))
+            self.assertTrue(all(q.strip() for q in qs))
+
     def test_plain_non_questions_are_caught_before_anything_runs(self):
         for q in ("hello", "Test", "testing 123", "thanks!", "?", "asdf qwerty", "   "):
             self.assertTrue(stock_recipes._NOT_A_QUESTION.fullmatch(q.lower().strip(" ?!.,")), q)

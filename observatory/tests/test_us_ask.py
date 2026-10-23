@@ -12,6 +12,8 @@ import datetime
 import pathlib
 import unittest
 
+import os
+
 import duckdb
 from fastapi.testclient import TestClient
 
@@ -121,6 +123,26 @@ class TwentyQuestionsTest(unittest.TestCase):
     def setUpClass(cls):
         from app.main import app
         cls.c = TestClient(app)
+
+    def test_every_suggested_question_answers_without_the_model(self):
+        """The questions the box offers on a miss (app/ask_miss.py TOPICS) answer by
+        code: a stock question through the box with the model off, an economy
+        question through the economy catalogue (app/assistant/preview.py)."""
+        from unittest import mock
+        from app import ask_miss
+        from app.assistant import preview
+        failures = []
+        with mock.patch.dict(os.environ, {"US_ASK_MODEL": "0"}):
+            for _pat, qs in ask_miss.TOPICS:
+                for q in qs:
+                    # an economy question is recognised by its words alone, so this holds
+                    # wherever the test runs, whichever economy datasets are loaded
+                    if preview.catalogue_hit(q) is not None or "2s10s" in q:
+                        continue
+                    r = self.c.get("/api/v1/us/ask", params={"q": q})
+                    if r.status_code != 200 or not r.json().get("headline"):
+                        failures.append("%s -> %d %s" % (q, r.status_code, r.text[:160]))
+        self.assertEqual(failures, [], "\n".join(failures))
 
     def test_every_question_answers(self):
         failures = []

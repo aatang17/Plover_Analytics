@@ -58,6 +58,8 @@ class PlainTest(unittest.TestCase):
         self.assertEqual(us_steps.fmt_value("share_pct", 40.1), "40.1%")
         self.assertEqual(us_steps.fmt_value("gap_pp", -6.3), "−6.3 pp")
         self.assertEqual(us_steps.fmt_value("n", 1589), "1,589")
+        self.assertEqual(us_steps.fmt_value("election_year", 2018), "2018")       # 2026-10-23: a headline said "In 2,018"
+        self.assertEqual(us_steps.fmt_value("year", 2022.0), "2022")
         self.assertEqual(us_steps.fmt_value("x_pct", None), "—")
 
     def test_a_figure_seen_in_a_look_cannot_be_copied_into_the_query(self):

@@ -543,6 +543,8 @@ def fmt_value(col, v):
             return money(v)
         if c.endswith("_x"):
             return mult(v)
+        if c.endswith("year") and float(v).is_integer() and 1800 <= int(v) <= 2200:
+            return str(int(v))                                    # a year is "2018", never "2,018"
         if isinstance(v, int) or float(v).is_integer():
             return "{:,}".format(int(v))
         return "{:,.2f}".format(v)
