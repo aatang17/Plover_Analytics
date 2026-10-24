@@ -213,6 +213,38 @@ class LoaderGuards(unittest.TestCase):
         self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, today)], [3, 2])        # 1 was read this week
         con.close()
 
+    def test_the_sp500_is_read_every_night_and_a_failed_read_the_next(self):
+        path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        con = ev._connect(path)
+        con.execute("CREATE TABLE sec_companies (cik BIGINT, ticker VARCHAR)")
+        con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
+        con.execute("CREATE TABLE us_index_snapshots (snapshot_id INTEGER, index_name VARCHAR)")
+        con.execute("CREATE TABLE us_index_members (snapshot_id INTEGER, cik BIGINT, ticker VARCHAR)")
+        con.execute("INSERT INTO us_index_snapshots VALUES (1, 'S&P 500 (SPY holdings)'), (2, 'S&P 500 (SPY holdings)')")
+        con.execute("INSERT INTO us_index_members VALUES (1, 4, 'OLD'), (2, 10, 'TSLA'), (2, 11, 'AAPL')")
+        con.execute("INSERT INTO sec_companies VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'OLD'), (10, 'TSLA'), (11, 'AAPL')")
+        today = D(2026, 10, 24)
+        for cik, at, status in [(1, "2026-10-01", "ok"), (2, "2026-10-23", "failed"), (3, "2026-10-23", "ok"),
+                                (4, "2026-10-01", "ok"), (10, "2026-10-23", "ok"), (11, "2026-10-23", "failed")]:
+            con.execute("INSERT INTO us_event_filers VALUES (?, ?, ?, 1, NULL, NULL)", [cik, at + " 03:00:00", status])
+        due = [c for c, _, _, _ in ev._companies_due(con, 1, today)]
+        # members first, both of them (read yesterday or not), then one of the rest: the failed read before the old one
+        self.assertEqual(due, [11, 10, 2])
+        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, today)], [11, 10, 2, 1, 4])
+        con.execute("UPDATE us_event_filers SET fetched_at = TIMESTAMP '2026-10-24 02:00:00', status = 'ok' WHERE cik IN (10, 11)")
+        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, today)][:2], [2, 1])     # read tonight already
+        con.close()
+
+    def test_no_member_list_leaves_the_turns_as_they_were(self):
+        path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        con = ev._connect(path)
+        con.execute("CREATE TABLE sec_companies (cik BIGINT, ticker VARCHAR)")
+        con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
+        con.execute("INSERT INTO sec_companies VALUES (1, 'A'), (2, 'B')")
+        con.execute("INSERT INTO us_event_filers VALUES (1, TIMESTAMP '2026-10-01 01:00:00', 'ok', 1, NULL, NULL)")
+        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, D(2026, 10, 24))], [2, 1])
+        con.close()
+
 
     def test_too_few_statement_dates_fails_the_kind_and_leaves_the_table(self):
         path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")

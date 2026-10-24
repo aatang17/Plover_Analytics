@@ -31,9 +31,10 @@ Usage:
 
 The table is rebuilt kind by kind: the rows of a kind are replaced in one
 transaction when its source was read in full, and left as they were when it
-was not. Company filings are refreshed in turns (--max-companies a run,
-oldest fetch first), so a nightly run reads every company about weekly; the
-first run, with no company read yet, reads them all whatever the cap. Every page read is archived
+was not. S&P 500 members are read every run; the other companies are
+refreshed in turns (--max-companies a run, failed and oldest fetch first), so
+a nightly run reads each of them about weekly; the first run, with no company
+read yet, reads them all whatever the cap. Every page read is archived
 under data/raw/us-events/ with its SHA-256 and recorded in us_event_pulls,
 which the health row reads. The SEC and the BLS both refuse a client that
 does not name a contact: EDGAR_USER_AGENT (or BLS_USER_AGENT for the BLS)
@@ -457,16 +458,39 @@ def load_shutdowns(con, client, log=print):
     return len(rows)
 
 
+def _sp500(con):
+    """CIKs on the latest S&P 500 member list (equity/sec_proxy_pay.py), or none before it is loaded."""
+    try:
+        return {r[0] for r in con.execute("""
+            SELECT cik FROM us_index_members WHERE cik IS NOT NULL AND snapshot_id = (
+                SELECT max(snapshot_id) FROM us_index_snapshots WHERE index_name = 'S&P 500 (SPY holdings)')""").fetchall()}
+    except Exception:                                              # noqa: BLE001 — no member list on this file
+        return set()
+
+
 def _companies_due(con, max_companies, today):
-    """[(cik, ticker, fye, [known period ends])] oldest fetch first."""
+    """[(cik, ticker, fye, [known period ends])]: the S&P 500 first, then the rest's turn.
+
+    S&P 500 members are read every night, since the questions asked are mostly
+    about them and a results day is wanted the morning after it. The rest are
+    read weekly, max_companies a run. A company whose read failed is due again
+    the next night: 2026-10-23 the SEC refused 7,278 reads, each stamped as
+    fetched, and the weekly rule then kept Tesla, Apple and Nvidia off the
+    table for a week after the block was lifted."""
     rows = con.execute("""
-        SELECT c.cik, c.ticker, f.fetched_at
+        SELECT c.cik, c.ticker, f.fetched_at, f.status
         FROM sec_companies c LEFT JOIN us_event_filers f USING (cik)
-        WHERE c.ticker IS NOT NULL
-        ORDER BY f.fetched_at NULLS FIRST, c.cik""").fetchall()
-    due = [(cik, t) for cik, t, at in rows if at is None or (today - at.date()).days >= 7]
-    if max_companies and any(at is not None for _, _, at in rows):
-        due = due[:max_companies]          # a later run reads its turn; the first run reads every company
+        WHERE c.ticker IS NOT NULL""").fetchall()
+    members = _sp500(con)
+    # never read and failed first, then the oldest read
+    rows.sort(key=lambda r: (r[2] is not None and r[3] == "ok", r[2] or datetime.datetime.min, r[0]))
+    head = [(cik, t) for cik, t, at, st in rows
+            if cik in members and (at is None or st != "ok" or at.date() < today)]
+    rest = [(cik, t) for cik, t, at, st in rows
+            if cik not in members and (at is None or st != "ok" or (today - at.date()).days >= 7)]
+    if max_companies and any(at is not None for _, _, at, _ in rows):
+        rest = rest[:max_companies]        # a later run reads its turn; the first run reads every company
+    due = head + rest
     out = []
     for cik, ticker in due:
         fye = con.execute("SELECT fye FROM sec_filings WHERE cik = ? AND form IN ('10-K', '10-Q') ORDER BY filed DESC LIMIT 1", [cik]).fetchone()
@@ -578,7 +602,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", required=True, help="the sec.duckdb to load (a working copy, never the served file)")
     ap.add_argument("--kinds", default=",".join(KINDS), help="comma-separated: fomc,cpi,shutdown,results")
-    ap.add_argument("--max-companies", type=int, default=1500, help="companies to refresh this run (0 = every company due)")
+    ap.add_argument("--max-companies", type=int, default=1500, help="companies outside the S&P 500 to refresh this run, "
+                         "on top of every member (0 = every company due)")
     ap.add_argument("--raw", default=RAW_ROOT)
     ap.add_argument("--workers", type=int, default=6, help="threads fetching company filings (requests are paced as one)")
     args = ap.parse_args(argv)
