@@ -2,7 +2,10 @@
 """US insider trades — Form 3/4/5 filings, served.
 
 The loader (equity/sec_insiders_extract.py) puts the SEC's quarterly Insider
-Transactions Data Sets into data/sec.duckdb. This module answers the three
+Transactions Data Sets into data/sec.duckdb; equity/sec_insiders_daily.py adds
+the filings since the newest set from each filing's own XML in the EDGAR
+archive (quarter = 'daily'), until the set covering them replaces them. This
+module answers the three
 questions people ask of them:
 
   * **What have insiders at this company done?** `/company/{cik or ticker}`:
@@ -44,6 +47,9 @@ CODES = {
     "V": "Transaction voluntarily reported earlier than required", "K": "Equity swap or similar instrument",
 }
 STALE_AFTER_DAYS = 130      # a quarter's set is on the SEC site within weeks of quarter end
+# Filings read daily from the EDGAR archive: a weekend plus a holiday, plus the
+# capture landing the morning after the filing day
+DAILY_STALE_AFTER_DAYS = 5
 
 PROVENANCE = {
     "trust": "official",
@@ -264,15 +270,30 @@ def health():
     y, q = int(newest[0][:4]), int(newest[0][5])
     through = datetime.date(y + (q == 4), 1 if q == 4 else q * 3 + 1, 1) - datetime.timedelta(days=1)
     back_to = datetime.date(int(oldest[0][:4]), (int(oldest[0][5]) - 1) * 3 + 1, 1)
-    days = (datetime.date.today() - through).days
-    stale = days > STALE_AFTER_DAYS
     ran = max((r[1] for r in good if r[1]), default=None)
-    return [{"dataset": "sec-insiders", "status": "attention" if (stale or failed) else "ok",
+    flags = ["quarter %s failed to load" % f for f in failed]
+    # The filings read since the newest set (equity/sec_insiders_daily.py): once
+    # there are any, the row is as fresh as the newest of them, and is held to
+    # the daily window instead of the quarterly one.
+    limit = STALE_AFTER_DAYS
+    daily = cur.execute("SELECT max(filed) FROM sec_ins_filings WHERE quarter = 'daily'").fetchone()[0]
+    if daily and daily > through:
+        through, limit = daily, DAILY_STALE_AFTER_DAYS
+        if sec_api._has(cur, "sec_ins_daily_runs"):
+            last = cur.execute("SELECT run_at, status, detail FROM sec_ins_daily_runs "
+                               "ORDER BY run_at DESC LIMIT 1").fetchone()
+            if last:
+                ran = max(ran, last[0]) if ran else last[0]
+                if last[1] != "ok":
+                    flags.append("the last daily read failed: %s" % (last[2] or "no detail"))
+    days = (datetime.date.today() - through).days
+    stale = days > limit
+    return [{"dataset": "sec-insiders", "status": "attention" if (stale or failed or len(flags) > len(failed)) else "ok",
              "archive_read_through": through.isoformat(), "days_behind": days,
-             "stale_after_days": STALE_AFTER_DAYS, "stale": stale,
+             "stale_after_days": limit, "stale": stale,
              "last_extracted_at": ran.isoformat() + "Z" if ran else None,
              "archive_read_back_to": back_to.isoformat(),
-             "shape_flags": ["quarter %s failed to load" % f for f in failed]}]
+             "shape_flags": flags}]
 
 
 MANIFEST = {
@@ -281,12 +302,14 @@ MANIFEST = {
     "name": {"en": "US insider trades (Forms 3, 4 and 5)", "ja": "米国インサイダー取引（Form 3・4・5）"},
     "shape": "company",
     "summary": ("Every trade and holding a director, officer or 10% holder reports in a US "
-                "company, from the SEC's quarterly Insider Transactions Data Sets: by company "
+                "company, from the SEC's quarterly Insider Transactions Data Sets and, since the "
+                "newest set, from each filing the day after it is filed: by company "
                 "with open-market buys and sells kept apart from awards and exercises, across "
                 "the market by transaction code, and by reporting person."),
     "source": {
         "publisher": "U.S. Securities and Exchange Commission",
-        "document": "Insider Transactions Data Sets (quarterly; every Form 3, 4 and 5 since 2006)",
+        "document": "Insider Transactions Data Sets (quarterly; every Form 3, 4 and 5 since 2006), "
+                    "and each Form 3, 4 and 5 filed since the newest set, read from the filing's own XML",
         "url": "https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets",
         "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (Forms 3, 4 and 5).",
         "license_note": "US government work; public domain.",
@@ -318,6 +341,10 @@ MANIFEST = {
         "A trade's value is shares × the price the filer reported; awards and many exercises carry no "
         "price and have no value, never 0.",
         "Amendments (4/A) keep their own row and flag; the original is not changed.",
-        "Form 4 is due within two business days of the trade, so this lags the market by days, not months.",
+        "Form 4 is due within two business days of the trade, and each filing is read the day after it "
+        "is filed, so this lags the market by days, not months.",
+        "Filings since the newest quarterly set are read from their own XML; when the SEC's set for that "
+        "quarter is loaded its extraction replaces them. The set rounds shares and prices to two decimals; "
+        "the daily read keeps them as filed (a price of 3.1866 shows as 3.19 once the set is in).",
     ],
 }
