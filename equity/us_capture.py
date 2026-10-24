@@ -127,6 +127,30 @@ BEA_FILES = ["NipaDataA.txt", "NipaDataQ.txt", "NipaDataM.txt",
              "SeriesRegister.txt", "TablesRegister.txt"]
 CFTC = "https://www.cftc.gov/files/dea/history/"
 SEC_FSDS = "https://www.sec.gov/files/dera/data/financial-statement-data-sets/{y}q{q}.zip"
+# Two more of the SEC's own structured data sets, published quarterly as zips
+# of tab-separated tables: every Form 3/4/5 (insider holdings and trades,
+# from 2006q1) and every Form 13F holdings report (from 2013q2). Their zip
+# paths changed folder in 2026 (structureddata -> datastandardsinnovation),
+# so the listing page is read for the links instead of guessing a pattern.
+SEC_INSIDERS_PAGE = "https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets"
+SEC_13F_PAGE = "https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets"
+SEC_ZIP_LINK = re.compile(r'href="(/files/[^"]+?/([^"/]+_form(?:345|13f)\.zip))"')
+# Four more, each listed on its own page and read the same way (pages, file
+# names and sizes checked 2026-10-24):
+#   sec-ftd    fails-to-deliver, twice a month: cnsfailsYYYYMM{a,b}.zip, ~1.5MB, from 2004
+#   sec-formd  Form D private-offering notices, quarterly: YYYYqN_d.zip, ~4MB
+#   sec-nport  fund portfolio holdings from Form N-PORT, quarterly: YYYYqN_nport.zip, ~460MB
+#   sec-notes  financial statements with their notes, monthly: YYYY_MM_notes.zip, ~60MB
+SEC_LISTED = {
+    "sec-ftd": ("https://www.sec.gov/data-research/sec-markets-data/fails-deliver-data",
+                r"cnsfails\d{6}[ab]\.zip"),
+    "sec-formd": ("https://www.sec.gov/data-research/sec-markets-data/form-d-data-sets",
+                  r"\d{4}q[1-4]_d\.zip"),
+    "sec-nport": ("https://www.sec.gov/data-research/sec-markets-data/form-n-port-data-sets",
+                  r"\d{4}q[1-4]_nport\.zip"),
+    "sec-notes": ("https://www.sec.gov/data-research/sec-markets-data/financial-statement-notes-data-sets",
+                  r"\d{4}_\d{2}_notes\.zip"),
+}
 FOMC_CAL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 FOMC_LINK = re.compile(r'href="(/(?:newsevents/pressreleases/monetary\d{8}[a-z]\d?\.htm'
                        r'|monetarypolicy/fomcminutes\d{8}\.htm'
@@ -582,12 +606,55 @@ def src_sec(ctx):
         if q == 0:
             y, q = y - 1, 4
         quarters.append((y, q))
-    if ctx.all_years:
+    if ctx.sec_quarters:
+        quarters = list(ctx.sec_quarters)
+    elif ctx.all_years:
         quarters = [(yy, qq) for yy in range(2009, ctx.today.year + 1) for qq in range(1, 5)
                     if (yy, qq) <= quarters[0]]
     for yy, qq in quarters:
         ctx.take("sec", "fsds_%dq%d.zip" % (yy, qq), SEC_FSDS.format(y=yy, q=qq),
                  expect_absent=True)
+
+
+def _sec_listed_zips(ctx, page, label, link=SEC_ZIP_LINK):
+    """The data-set zips a SEC listing page links to, newest first as the
+    page orders them. The last two are taken unless --all-years, and a file
+    already on the shelf costs one conditional request."""
+    try:
+        html = ctx.client.text(page).decode("utf-8", "replace")
+    except Exception as e:
+        ctx.stats["fail"] += 1
+        print("  %s listing FAILED: %s" % (label, e))
+        return []
+    seen, links = set(), []
+    for path, filename in link.findall(html):
+        if filename not in seen:
+            seen.add(filename)
+            links.append((filename, "https://www.sec.gov" + path))
+    if not links:
+        ctx.stats["fail"] += 1
+        print("  %s listing: no data-set links found (page changed?)" % label)
+    return links if ctx.all_years else links[:2]
+
+
+def src_sec_insiders(ctx):
+    for filename, url in _sec_listed_zips(ctx, SEC_INSIDERS_PAGE, "sec-insiders"):
+        ctx.take("sec-insiders", filename, url)
+
+
+def src_sec_13f(ctx):
+    for filename, url in _sec_listed_zips(ctx, SEC_13F_PAGE, "sec-13f"):
+        ctx.take("sec-13f", filename, url)
+
+
+def _src_sec_listed(source):
+    page, name = SEC_LISTED[source]
+    link = re.compile(r'href="(/files/[^"]+?/(%s))"' % name)
+
+    def src(ctx):
+        for filename, url in _sec_listed_zips(ctx, page, source, link):
+            ctx.take(source, filename, url)
+    return src
 
 
 def src_fomc(ctx):
@@ -626,13 +693,16 @@ def src_fdic(ctx):
 
 SOURCES = {"fed": src_fed, "nyfed": src_nyfed, "treasury": src_treasury,
            "fiscal": src_fiscal, "bls": src_bls, "bea": src_bea, "cftc": src_cftc,
-           "sec": src_sec, "fomc": src_fomc, "fdic": src_fdic}
+           "sec": src_sec, "sec-insiders": src_sec_insiders, "sec-13f": src_sec_13f,
+           "fomc": src_fomc, "fdic": src_fdic}
+SOURCES.update((s, _src_sec_listed(s)) for s in SEC_LISTED)
 
 
 class Context(object):
-    def __init__(self, client, store, day, stats, all_years):
+    def __init__(self, client, store, day, stats, all_years, sec_quarters=None):
         self.client, self.store, self.day, self.stats = client, store, day, stats
         self.all_years = all_years
+        self.sec_quarters = sec_quarters or []
         self.today = dt.date.fromisoformat(day)
 
     def take(self, source, filename, url, expect_absent=False):
@@ -645,7 +715,17 @@ def main():
     p.add_argument("--sources", help="comma-separated subset of: " + ",".join(SOURCES))
     p.add_argument("--all-years", action="store_true",
                    help="also fetch every historic year file (one-off backfill)")
+    p.add_argument("--sec-quarters", help="explicit financial-statement quarters for the "
+                   "sec source, e.g. 2025q3,2025q4 (default: the last two)")
     args = p.parse_args()
+    sec_quarters = []
+    for item in (args.sec_quarters or "").split(","):
+        item = item.strip().lower()
+        if item:
+            m = re.match(r"^(\d{4})q([1-4])$", item)
+            if not m:
+                sys.exit("--sec-quarters wants YYYYqN items, got %r" % item)
+            sec_quarters.append((int(m.group(1)), int(m.group(2))))
     wanted = list(SOURCES)
     if args.sources:
         wanted = [s.strip() for s in args.sources.split(",") if s.strip()]
@@ -659,7 +739,7 @@ def main():
     day = dt.datetime.now(dt.timezone.utc).date().isoformat()
     stats = {"stored": 0, "unchanged": 0, "absent": 0, "fail": 0, "bytes": 0}
     try:
-        ctx = Context(Client(ua), store, day, stats, args.all_years)
+        ctx = Context(Client(ua), store, day, stats, args.all_years, sec_quarters)
         print("store: %s | snapshot %s | sources: %s%s"
               % (type(store).__name__, day, ",".join(wanted),
                  " | all years" if args.all_years else ""))

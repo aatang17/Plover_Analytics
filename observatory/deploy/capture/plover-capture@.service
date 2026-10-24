@@ -1,0 +1,12 @@
+[Unit]
+Description=Plover archive capture: %i
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/plover/bin/plover-capture %i
+# a daily window is minutes; a long EDGAR or US-agency catch-up is hours, never a day
+TimeoutStartSec=5h
+Nice=10
