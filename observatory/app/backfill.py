@@ -797,6 +797,33 @@ def refresh_us_holdings():
             else:
                 record_check(ds, "failed", "%s exited %s" % (script, rc))
                 log("%s: %s exited %s; earlier sets stay live" % (ds, script, rc))
+        # The Forms 3/4/5 filed since the newest quarterly set, from the EDGAR
+        # archive (sec_insiders_daily.py): the set is weeks behind its quarter,
+        # a Form 4 two business days behind its trade. A failure is recorded on
+        # top of the quarterly outcome; a success leaves that outcome standing.
+        if not _stopping:
+            started = time.time()
+            before_f = _table_count(work, "sec_ins_filings")
+            rc = _run([sys.executable, str(ROOT / "equity" / "sec_insiders_daily.py"), "--db", str(work)], env, ROOT)
+            after_f = _table_count(work, "sec_ins_filings")
+            if after_f > before_f:
+                changed = True
+            if rc != 0:
+                record_check("sec-insiders", "failed", "sec_insiders_daily.py exited %s" % rc)
+            log("sec-insiders daily: exit %s in %.0fs (%d filings added)" % (rc, time.time() - started, after_f - before_f))
+        # Schedules 13D and 13G (5% holders) from the same archive (sec_13dg_extract.py).
+        # The first catch-up from December 2024 comes in 150-day slices, one a night.
+        if not _stopping:
+            started = time.time()
+            before_r = _table_count(work, "sec_13dg_runs")
+            before_f = _table_count(work, "sec_13dg_filings")
+            rc = _run([sys.executable, str(ROOT / "equity" / "sec_13dg_extract.py"), "--db", str(work)], env, ROOT)
+            after_r, after_f = _table_count(work, "sec_13dg_runs"), _table_count(work, "sec_13dg_filings")
+            if after_r > before_r:
+                changed = True                      # the run record is what resumes the catch-up
+            record_check("sec-13dg", "published" if rc == 0 else "failed",
+                         None if rc == 0 else "sec_13dg_extract.py exited %s" % rc)
+            log("sec-13dg: exit %s in %.0fs (%d filings added)" % (rc, time.time() - started, after_f - before_f))
     else:
         log("no EDINET_S3_BUCKET; insider and 13F sets stay as they are")
     if changed:

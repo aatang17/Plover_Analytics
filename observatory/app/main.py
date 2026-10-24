@@ -56,6 +56,7 @@ from .sec_api import router as sec_router  # noqa: E402
 from .sec_deep_api import router as sec_deep_router  # noqa: E402
 from .sec_insiders_api import router as sec_insiders_router  # noqa: E402
 from .sec_13f_api import router as sec_13f_router  # noqa: E402
+from .sec_13dg_api import router as sec_13dg_router  # noqa: E402
 from .sec_calendar_api import router as sec_calendar_router  # noqa: E402
 from .us_prices_api import router as us_prices_router  # noqa: E402
 from .us_events_api import router as us_events_router  # noqa: E402
@@ -320,6 +321,7 @@ app.include_router(sec_router)
 app.include_router(sec_deep_router)
 app.include_router(sec_insiders_router)
 app.include_router(sec_13f_router)
+app.include_router(sec_13dg_router)
 app.include_router(sec_calendar_router)
 app.include_router(us_prices_router)
 app.include_router(us_events_router)
