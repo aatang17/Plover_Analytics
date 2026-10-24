@@ -384,6 +384,55 @@ def adapters_are_registered():
 
 
 # ---------------------------------------------------------------------------
+# one subject per address says which subject it is
+# ---------------------------------------------------------------------------
+
+# The query parameters that pick a page's subject — a company, a holder, a
+# ticker, a series — rather than how it is shown.
+_SUBJECT_PARAMS = ("c", "h", "t", "code", "company", "series", "bank", "cohort",
+                   "ticker", "holder", "cik")
+_PARAM_READ = re.compile(r"\.get\(\s*[\"']([a-z_]+)[\"']\s*\)")
+_PAGE_SCRIPT = re.compile(r"<script[^>]+src=[\"']/?assets/([^\"']+\.js)[\"']")
+
+
+@check("every page that serves one company, holder or series per address "
+       "gives each its own title")
+def subject_pages_are_titled():
+    """2026-10-23: every company's 5% filings page went out titled "5% Filings"
+    with an empty heading, Google treated them as one page, and a search for
+    one company landed on Cosmo Energy. Eight more pages had the same gap.
+
+    A page whose script reads a subject parameter must be in
+    app/prerender.py's ENTITY_PAGES (it gets a title naming its subject) or
+    list that parameter in FILTER_PARAMS (it only picks something inside one
+    page), with the reason beside it."""
+    sys.path.insert(0, str(ROOT))
+    from app import prerender
+    problems = []
+    for path in sorted(ROOT.glob("web/*.html")):
+        page = path.name
+        text = path.read_text(encoding="utf-8", errors="replace")
+        sources = [text]
+        for script in _PAGE_SCRIPT.findall(text):
+            js = ROOT / "web" / "assets" / script
+            if js.exists() and not script.startswith("echarts"):  # vendored, not ours
+                sources.append(js.read_text(encoding="utf-8", errors="replace"))
+        read = set()
+        for source in sources:
+            read.update(p for p in _PARAM_READ.findall(source) if p in _SUBJECT_PARAMS)
+        if page in prerender.ENTITY_PAGES:
+            continue
+        loose = sorted(read - prerender.FILTER_PARAMS.get(page, set()))
+        if loose:
+            problems.append(
+                "web/%s reads ?%s= but gives each value no title of its own. Add a view "
+                "to ENTITY_PAGES in app/prerender.py, or list the parameter in "
+                "FILTER_PARAMS there if it only picks something inside the page"
+                % (page, "=, ?".join(loose)))
+    return problems
+
+
+# ---------------------------------------------------------------------------
 
 def main():
     failed = []

@@ -56,6 +56,7 @@ _HEADER_SHELL = re.compile(r'(<header class="site-header"[^>]*>)(\s*)(</header>)
 _MAIN_OPEN = re.compile(r'(<main\b[^>]*>)')
 _HEAD_END = re.compile(r'</head>', re.IGNORECASE)
 _HAS_DESC = re.compile(r'(?is)<meta[^>]+name=["\']description["\']')
+_DESC_TAG = re.compile(r'(?is)<meta[^>]+name=["\']description["\'][^>]*>')
 _HAS_CANONICAL = re.compile(r'(?is)<link[^>]+rel=["\']canonical["\']')
 _HAS_ROBOTS = re.compile(r'(?is)<meta[^>]+name=["\']robots["\']')
 _DATASET = re.compile(r'<main[^>]*\sdata-dataset="([^"]+)"')
@@ -405,7 +406,17 @@ DESCRIPTIONS = {
 # h1 with the same name it already holds.
 
 _TITLE_TAG = re.compile(r'(?is)<title>.*?</title>')
-_CO_NAME_H1 = re.compile(r'(?is)(<h1[^>]*\sid=["\']co-name["\'][^>]*>)(.*?)(</h1>)')
+
+
+def _h1_with_id(h1_id):
+    """The <h1> a view's name goes into. Most pages call it co-name; a page
+    with a holder view beside its company view has a second one (ho-name,
+    h-name), and the name must land in the heading of the view being served."""
+    return re.compile(r'(?is)(<h1[^>]*\sid=["\']%s["\'][^>]*>)(.*?)(</h1>)'
+                      % re.escape(h1_id))
+
+
+_CO_NAME_H1 = _h1_with_id("co-name")
 # Every sec_code in the file is four characters; anything else is a typed URL
 # and gets the plain shell rather than a database lookup.
 _SEC_CODE = re.compile(r'^[0-9A-Za-z]{4}$')
@@ -845,11 +856,433 @@ def _in_default_dataset(code):
 
 
 def _company_view(values):
-    base = company_meta((values.get("code") or "").strip())
+    # company.js reads ?c= as well as ?code=; the two are one page, and the
+    # ?code= spelling is the one the sitemap lists.
+    code = (values.get("code") or values.get("c") or "").strip()
+    base = company_meta(code)
     if not base:
         return None
-    return {"title": base["title"], "description": base["description"],
-            "h1": base["h1"], "noscript": base["noscript"]}
+    out = {"title": base["title"], "description": base["description"],
+           "h1": base["h1"], "noscript": base["noscript"]}
+    if not values.get("code"):
+        out["canonical"] = "%s/company.html?code=%s" % (SITE_BASE_URL_FOR_JSONLD(), code)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# every other page that serves one company, holder or series per address
+# ---------------------------------------------------------------------------
+#
+# 2026-10-23: a Google result for stakes.html?c=5021 read "5% Filings" and
+# landed readers on Cosmo Energy whatever company they had searched for. Every
+# company's 5% page shipped the same title, the same description and an empty
+# <h1>, so to a crawler they were one page, and Google kept one address for
+# the lot. The same was true of eight more pages. Each now says which company,
+# holder or series it is, in the same as-filed voice as the views above: a
+# name, what this page shows about it, and the latest date it has on file —
+# no count the page itself might print differently.
+#
+# ci/guards.py fails a page whose script reads one of these parameters and
+# that is in neither ENTITY_PAGES nor FILTER_PARAMS, so the next page cannot
+# ship without one.
+
+_JPX_CREDIT = "Source: short-selling position reports published by Japan Exchange Group (JPX)."
+_TDNET_CREDIT = "Source: earnings releases disclosed on TDnet (Japan Exchange Group)."
+
+
+def _day(value):
+    """A stored date as a reader writes it: 23 October 2026."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.date.fromisoformat(value[:10])
+        except ValueError:
+            return ""
+    return "%d %s" % (value.day, value.strftime("%B %Y"))
+
+
+def _ident_for(code, name_ja, name_en):
+    """(name, "Name (日本語名, code)", name_ja) for a company page.
+
+    The annual-report name first, so a company reads the same on every page;
+    the page's own table names it when there is no annual report on file (a
+    REIT, a newly listed company) rather than the page going unnamed.
+    """
+    base = company_meta(code)
+    if base:
+        return base["name"], base["ident"], base.get("name_ja")
+    japanese, english = _clean(name_ja), _clean(name_en)
+    name = english or japanese
+    if not name:
+        return None
+    if japanese and japanese != name:
+        return name, "%s (%s, %s)" % (name, japanese, code), japanese
+    return name, "%s (%s)" % (name, code), japanese
+
+
+def _company_page(param, label, sql, say, cached_as, credit=_CREDIT, h1_id=None):
+    """A view for one company per address, read from ?<param>=.
+
+    `sql` returns (rows on file, latest date, name_ja, name_en) for the code;
+    no rows means this page holds nothing for the company and the address is
+    kept out of the index. `say(ident, latest)` is the sentence.
+    """
+    def view(values):
+        code = (values.get(param) or "").strip().upper()
+        if not code:
+            return None  # the market view; the page's own title stands
+        if not _SEC_CODE.match(code):
+            return NOINDEX
+        facts = _cached((cached_as, code), _equity_version,
+                        lambda: _one(sql, [code]))
+        if not facts or not facts[0]:
+            return NOINDEX
+        named = _ident_for(code, facts[2], facts[3])
+        if not named:
+            return NOINDEX
+        name, ident, name_ja = named
+        sentence = say(ident, _day(facts[1]))
+        return {"title": "%s (%s) — %s · %s" % (name, code, label, SITE),
+                "description": sentence, "h1": name, "h1_id": h1_id,
+                "noscript": sentence + " " + credit,
+                "code": code, "name_ja": name_ja}
+    return view
+
+
+def _holder_page(label, sql, say, h1_id, cached_as, fold=None, credit=_CREDIT):
+    """A view for one holder per address, read from ?h=.
+
+    `sql` returns (rows on file, latest date, name, name_en) for the key.
+    A holder is not a company, so the view carries no code and no company
+    JSON-LD; it names the holder and the page."""
+    def view(values):
+        key = (values.get("h") or "").strip()
+        if fold:
+            key = fold(key)
+        if not key:
+            return None
+        facts = _cached((cached_as, key), _equity_version,
+                        lambda: _one(sql, [key]))
+        if not facts or not facts[0]:
+            return NOINDEX
+        name = _clean(facts[3]) or _clean(facts[2])
+        if not name:
+            return NOINDEX
+        sentence = say(name, _day(facts[1]))
+        return {"title": "%s — %s · %s" % (name, label, SITE),
+                "description": sentence, "h1": name, "h1_id": h1_id,
+                "noscript": sentence + " " + credit}
+    return view
+
+
+def _then(latest, words="latest filed"):
+    return (", %s %s" % (words, latest)) if latest else ""
+
+
+_stakes_company = _company_page(
+    "c", "5% Filings", """
+    SELECT count(*), max(filed_date), any_value(issuer_name_raw), NULL
+    FROM eq_lvh_filings
+    WHERE issuer_sec_code = ? AND status IN ('clean','partial')""",
+    lambda ident, latest: (
+        "Who holds 5%% or more of %s: every large-shareholding report "
+        "(大量保有報告書) and change report filed on it%s." % (
+            ident, _then(latest))),
+    "stakes-c")
+
+_stakes_holder = _holder_page(
+    "5% Filings", """
+    SELECT count(*), max(f.filed_date), max_by(h.name_raw, f.filed_date),
+           max_by(h.name_en, f.filed_date)
+    FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)
+    WHERE coalesce(h.holder_edinet_code, h.name_key) = ?
+      AND f.status IN ('clean','partial')""",
+    lambda name, latest: (
+        "%s's 5%% filings (大量保有報告書): every Japanese listed "
+        "company it has reported a stake of 5%% or more in, and how each moved%s." % (
+            name, _then(latest))),
+    "ho-name", "stakes-h")
+
+_ownership_company = _company_page(
+    "c", "Shareholder Register", """
+    SELECT count(*), max(f.period_end), any_value(f.filer_name), any_value(f.filer_name_en)
+    FROM eq_filings f
+    WHERE f.sec_code = ?
+      AND EXISTS (SELECT 1 FROM eq_major_shareholders m WHERE m.doc_id = f.doc_id)""",
+    lambda ident, latest: (
+        "The largest shareholders of %s, as named in its annual securities report%s." % (
+            ident, _then(latest, "for the year to"))),
+    "own-c")
+
+
+def _ownership_holder_sql():
+    # The page matches an EDINET code exactly and anything else as the name a
+    # filing writes; one query covers both, as the API's two branches do.
+    return """
+    SELECT count(*), max(f.period_end), max_by(m.name_base, f.period_end),
+           coalesce((SELECT max_by(x.filer_name_en, x.filed_date) FROM eq_filings x
+                     WHERE x.edinet_code = $1 AND x.filer_name_en IS NOT NULL),
+                    (SELECT any_value(e.name_en) FROM eq_entities e
+                     WHERE e.edinet_code = $1 AND e.name_en IS NOT NULL))
+    FROM eq_major_shareholders m JOIN eq_filings f USING (doc_id)
+    WHERE m.holder_edinet_code = $1 OR m.name_base = $1 OR m.name_raw = $1"""
+
+
+_ownership_holder = _holder_page(
+    "Shareholder Register", _ownership_holder_sql(),
+    lambda name, latest: (
+        "Every Japanese listed company that names %s among its largest shareholders "
+        "in its annual securities report%s." % (name, _then(latest, "latest for the year to"))),
+    "ho-name", "own-h")
+
+_shorts_company = _company_page(
+    "c", "Short Positions", """
+    SELECT count(*), max(calc_date), any_value(name_ja), any_value(name_en)
+    FROM eq_short_reports WHERE sec_code = ?""",
+    lambda ident, latest: (
+        "Disclosed short positions (空売り残高) in %s: who is short, how "
+        "much, and how each position has moved, as published by JPX%s." % (
+            ident, _then(latest, "latest calculated"))),
+    "shorts-c", credit=_JPX_CREDIT, h1_id="c-name")
+
+_shorts_holder = _holder_page(
+    "Short Positions", """
+    SELECT count(*), max(calc_date), max_by(holder_name, calc_date), NULL
+    FROM eq_short_reports WHERE holder_key = ?""",
+    lambda name, latest: (
+        "%s's disclosed short positions in Japanese listed companies, as published "
+        "by JPX%s." % (name, _then(latest, "latest calculated"))),
+    "h-name", "shorts-h", fold=lambda k: k.lower(), credit=_JPX_CREDIT)
+
+_risks_company = _company_page(
+    "c", "Business Risks", """
+    SELECT count(*), max(period_end), any_value(filer_name), NULL
+    FROM eq_risk_filings
+    WHERE sec_code = ? AND status IN ('clean','partial','unsplit')""",
+    lambda ident, latest: (
+        "The business risks (事業等のリスク) %s states in its "
+        "annual securities report, in its own words%s." % (
+            ident, _then(latest, "for the year to"))),
+    "risks-c", h1_id="c-name")
+
+_earnings_company = _company_page(
+    "c", "Earnings Releases", """
+    SELECT count(*), max(disclosed_on), max_by(company_name, disclosed_on), NULL
+    FROM eq_tdnet_filings WHERE sec_code = ? AND status IN ('clean','partial')""",
+    lambda ident, latest: (
+        "Earnings releases (決算短信) from %s as disclosed on TDnet: "
+        "quarterly results, the company's own forecast and progress against it%s." % (
+            ident, _then(latest, "latest disclosed"))),
+    "earnings-c", credit=_TDNET_CREDIT, h1_id="c-name")
+
+_facilities_company = _company_page(
+    "code", "Facilities & Land", """
+    SELECT count(*), max(period_end), any_value(filer_name), NULL
+    FROM eq_fac_filings WHERE sec_code = ? AND status IN ('clean','partial')""",
+    lambda ident, latest: (
+        "Major facilities and land held by %s, as filed in its annual securities report: "
+        "sites, book value and floor space%s." % (ident, _then(latest, "for the year to"))),
+    "fac-c")
+
+_customs_company_c = _company_page(
+    "c", "Customs Lens", """
+    SELECT count(*), max(period_end), any_value(filer_name), NULL
+    FROM eq_seg_filings WHERE sec_code = ? AND status IN ('clean','partial')""",
+    lambda ident, latest: (
+        "What %s reports by region and customer, against the Japanese customs flows its "
+        "business sits in, both in the company's own fiscal year%s." % (
+            ident, _then(latest, "latest for the year to"))),
+    "lens-c")
+
+
+_financials_company = _company_page(
+    "c", "Financial Statements", """
+    SELECT count(*), max(period_end), any_value(filer_name), NULL
+    FROM eq_fin_filings WHERE sec_code = ? AND status IN ('clean','partial')""",
+    lambda ident, latest: (
+        "Financial statements of %s as tagged in its annual securities reports on "
+        "EDINET, with the five-year summary and ratios calculated from them%s." % (
+            ident, _then(latest, "latest for the year to"))),
+    "fin-c")
+
+_governance_company = _company_page(
+    "c", "Board & Pay", """
+    SELECT count(*), max(period_end), any_value(filer_name), NULL
+    FROM eq_company_year WHERE sec_code = ? AND status IN ('clean','partial')""",
+    lambda ident, latest: (
+        "The board and pay of %s: directors, independence and officer remuneration, "
+        "as filed in its annual securities report%s." % (
+            ident, _then(latest, "for the year to"))),
+    "gov-c")
+
+
+def _customs_view(values):
+    # The page reads ?c= and, for older links, ?code=.
+    code = values.get("c") or values.get("code")
+    return _customs_company_c({"c": code}) if code else None
+
+
+def _either(company_view, holder_view):
+    """A page with a company view at ?c= and a holder view at ?h=."""
+    def view(values):
+        if (values.get("c") or "").strip():
+            return company_view(values)
+        if (values.get("h") or "").strip():
+            return holder_view(values)
+        return None
+    return view
+
+
+def _sec_version():
+    from . import sec_api
+    return sec_api.file_version()
+
+
+def _sec_one(sql, params):
+    from . import sec_api
+    return sec_api._cur().execute(sql, params).fetchone()
+
+
+_US_TICKER = re.compile(r'^[A-Z][A-Z0-9.\-]{0,9}$')
+
+
+def _us_pay_view(values):
+    t = (values.get("t") or "").strip().upper().replace(".", "-")
+    if not t:
+        return None
+    if not _US_TICKER.match(t):
+        return NOINDEX
+    # The same member lookup /api/v1/us/pay/{company} makes, on the latest list.
+    row = _cached(("us-pay", t), _sec_version, lambda: _sec_one("""
+        WITH snap AS (SELECT max(snapshot_id) AS id FROM us_index_snapshots
+                      WHERE index_name = 'S&P 500 (SPY holdings)')
+        SELECT m.cik, m.ticker, m.name,
+               (SELECT arg_max(f.value_text, x.filed)
+                FROM sec_px_facts f JOIN sec_px_filings x ON x.accn = f.accn
+                WHERE f.cik = m.cik AND f.prefix = 'dei' AND f.tag = 'EntityRegistrantName'),
+               (SELECT max(filed) FROM sec_px_filings x WHERE x.cik = m.cik)
+        FROM us_index_members m, snap
+        WHERE m.snapshot_id = snap.id
+          AND (upper(m.ticker) = ? OR list_contains(string_split(upper(m.tickers), ','), ?))
+        LIMIT 1""", [t, t]))
+    if not row or not row[4]:
+        return NOINDEX
+    # Spelled as the page's own API spells it, so the heading does not change on load.
+    from .us_link import display_name
+    name = display_name(_clean(row[3]) or _clean(row[2]))
+    ticker = row[1] or t
+    sentence = ("What %s (%s) paid its chief executive and what it returned to "
+                "shareholders, from the pay-versus-performance table in its proxy "
+                "statements filed with the SEC%s." % (name, ticker, _then(_day(row[4]))))
+    return {"title": "%s (%s) — Executive Pay · %s" % (name, ticker, SITE),
+            "description": sentence, "h1": name,
+            "noscript": sentence + " Source: proxy statements (DEF 14A) on SEC EDGAR."}
+
+
+def _us_companies_view(values):
+    t = (values.get("t") or "").strip().upper()
+    if not t:
+        return None
+    if not _US_TICKER.match(t):
+        return NOINDEX
+    row = _cached(("us-deep", t), _sec_version, lambda: _sec_one("""
+        SELECT ticker, entity_name, first_filed, last_filed FROM sec_cf_companies
+        WHERE upper(ticker) = ? AND successor_cik IS NULL LIMIT 1""", [t]))
+    if not row:
+        return NOINDEX
+    from . import sec_deep_api
+    name = _clean(sec_deep_api.NAMES.get(row[0]) or row[1])
+    if not name:
+        return NOINDEX
+    span = ""
+    if row[2] and row[3]:
+        span = " from %d to %s" % (row[2].year, _day(row[3]))
+    sentence = ("%s (%s) financial statements as filed with the SEC%s: revenue, profit, "
+                "cash flows and every reported concept, as latest filed or as first "
+                "reported." % (name, row[0], span))
+    return {"title": "%s (%s) — US Company Financials · %s" % (name, row[0], SITE),
+            "description": sentence, "h1": name,
+            "noscript": sentence + " Source: SEC EDGAR company facts."}
+
+
+def _us_stock_view(values):
+    """The front page with ?t= open on one US stock (us-stocks.js openStock)."""
+    t = (values.get("t") or "").strip().upper().replace(".", "-")
+    if not t:
+        return None
+    if not _US_TICKER.match(t):
+        return NOINDEX
+    # The same lookup /api/v1/us/financials/metrics/{t} resolves a ticker by.
+    row = _cached(("us-stock", t), _sec_version, lambda: _sec_one("""
+        SELECT name, ticker, exchange, industry FROM sec_companies
+        WHERE ticker = ? OR list_contains(string_split(tickers, ','), ?)
+        ORDER BY (ticker = ?) DESC LIMIT 1""", [t, t, t]))
+    if not row or not row[0]:
+        return NOINDEX
+    name, ticker = _clean(row[0]), row[1] or t
+    where = (" on %s" % row[2]) if row[2] else ""
+    sentence = ("%s (%s%s)%s: price, ratios from its latest annual report, insider "
+                "trades and the largest holders, from SEC filings." % (
+                    name, ticker, where, (", " + row[3]) if row[3] else ""))
+    return {"title": "%s (%s) — Stock, Ratios & Holders · %s" % (name, ticker, SITE),
+            "description": sentence,
+            "noscript": sentence + " Source: SEC EDGAR."}
+
+
+# The nine data pages built on us-series.js: one <main data-datasets="slug:Label,…">
+# each, a ?dataset= picking one (the first by default) and ?series= naming
+# one or more codes in it. A chart of one series is that series' page.
+_DATASETS_ATTR = re.compile(r'(?is)<main\b[^>]*\bdata-datasets="([^"]+)"')
+_PAGE_TITLE = re.compile(r'(?is)<title>(.*?)\s*·\s*Plover Analytics\s*</title>')
+
+
+@lru_cache(maxsize=32)
+def _series_page(page_name):
+    """(dataset slugs, page title) as the page file declares them."""
+    text = (WEB_DIR / page_name).read_text(encoding="utf-8")
+    slugs = [x.split(":", 1)[0].strip() for x in _DATASETS_ATTR.search(text).group(1).split(",")]
+    title = _PAGE_TITLE.search(text)
+    return slugs, (title.group(1).strip() if title else page_name)
+
+
+def _series_page_view(page_name):
+    def view(values):
+        codes = [c for c in (values.get("series") or "").split(",") if c.strip()]
+        if not codes:
+            return None
+        slugs, page_title = _series_page(page_name)
+        dataset = values.get("dataset")
+        dataset = dataset if dataset in slugs else slugs[0]
+        names = []
+        for code in codes[:3]:
+            row = _cached(("series", dataset, code), _macro_version,
+                          lambda c=code: _one_macro(_SERIES_SQL, [dataset, c]))
+            if not row or not (row[0] or row[1]):
+                return NOINDEX
+            names.append(((row[0] or row[1]).strip(), code, row[3], row[4]))
+        first = names[0]
+        if len(codes) == 1:
+            title = "%s (%s) — %s · %s" % (first[0], first[1], page_title, SITE)
+            sentence = "%s, series %s" % (first[0], first[1])
+            if first[2] and first[3]:
+                sentence += ", %s to %s" % (first[2].strftime("%B %Y"),
+                                            first[3].strftime("%B %Y"))
+        else:
+            # A comparison is its own view; named by what it compares.
+            label = ", ".join(n[0] for n in names) + (
+                " and %d more" % (len(codes) - 3) if len(codes) > 3 else "")
+            title = "%s — %s · %s" % (label, page_title, SITE)
+            sentence = "%s compared" % label
+        from . import registry
+        manifest = registry.get(dataset) or {}
+        source = (manifest.get("source") or {}).get("credit") or ""
+        sentence += ", in %s." % (
+            ((manifest.get("name") or {}).get("en")) or page_title)
+        return {"title": title, "description": sentence,
+                "noscript": (sentence + " " + source).strip(),
+                "datasets": [dataset]}
+    return view
 
 
 # Which page serves one entity per address, and how to describe it. A page
@@ -860,6 +1293,35 @@ ENTITY_PAGES = {
     "agm.html": _agm_view,
     "buyback.html": _buyback_view,
     "explorer.html": _explorer_view,
+    "stakes.html": _either(_stakes_company, _stakes_holder),
+    "ownership.html": _either(_ownership_company, _ownership_holder),
+    "shorts.html": _either(_shorts_company, _shorts_holder),
+    "risks.html": _risks_company,
+    "earnings.html": _earnings_company,
+    "facilities.html": _facilities_company,
+    "customs-lens.html": _customs_view,
+    "us-pay.html": _us_pay_view,
+    "us-companies.html": _us_companies_view,
+    "financials.html": _financials_company,
+    "governance.html": _governance_company,
+    "index.html": _us_stock_view,
+}
+for _page in ("hk-economy.html", "hk-prices.html", "labour.html", "us-cpi-areas.html",
+              "us-explorer.html", "us-labour.html", "us-prices.html", "us-wages.html",
+              "us-weights.html"):
+    ENTITY_PAGES[_page] = _series_page_view(_page)
+
+# Parameters that pick something inside a page rather than the page's subject:
+# the page is the same page whichever is chosen, so it needs no title of its
+# own. ci/guards.py reads this, so a page reading c, h, t, code, company,
+# series, bank or cohort must be named either here or in ENTITY_PAGES.
+FILTER_PARAMS = {
+    # One bank's statements, in the last section of a page about every bank.
+    "banks.html": {"bank"},
+    # A peer group and a company highlighted in it: a ranking table either way.
+    "cohorts.html": {"c", "cohort"},
+    # Searches over business risk text, not a company.
+    "risks.html": {"t"},
 }
 
 
@@ -1141,11 +1603,18 @@ def _inject(html, page_name, canonical=None, query_string=""):
         html = _TITLE_TAG.sub(
             lambda m: "<title>%s</title>" % _escape(entity["title"]), html, count=1)
         if entity.get("h1"):
-            html = _CO_NAME_H1.sub(
+            heading = (_h1_with_id(entity["h1_id"]) if entity.get("h1_id")
+                       else _CO_NAME_H1)
+            html = heading.sub(
                 lambda m: m.group(1) + _escape(entity["h1"]) + m.group(3),
                 html, count=1)
 
     description = (entity or {}).get("description") or DESCRIPTIONS.get(page_name)
+    if entity and entity.get("description") and _HAS_DESC.search(html):
+        # A page that ships a description of its own (risks.html, the answer
+        # pages) describes the whole page; this address is one subject of it.
+        html = _DESC_TAG.sub('<meta name="description" content="%s">'
+                             % _escape(entity["description"]), html, count=1)
     if description and not _HAS_DESC.search(html):
         tag = '<meta name="description" content="%s">\n' % _escape(description)
         html = _HEAD_END.sub(tag + "</head>", html, count=1)
@@ -1260,7 +1729,8 @@ def page_blocks(html, page_name, entity, datasets, query_string=""):
                        "credit": "", "release": "", "links": [], "csv": None})
         if page_name == "company.html":
             # The company view carries no code of its own; the address does.
-            code = dict(parse_qsl(query_string, keep_blank_values=True)).get("code", "")
+            q = dict(parse_qsl(query_string, keep_blank_values=True))
+            code = q.get("code") or q.get("c") or ""
             if _SEC_CODE.match(code.strip()):
                 blocks.extend(readable.company_blocks(code.strip()))
             return blocks
