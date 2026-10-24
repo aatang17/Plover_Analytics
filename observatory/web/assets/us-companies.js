@@ -185,6 +185,8 @@
     var c = head.company, regs = head.registrants;
     document.title = c.name + " (" + c.ticker + ") · US Company Financials · Plover Analytics";
     $("co-name").textContent = c.name;
+    $("co-logo").hidden = !c.logo;
+    if (c.logo) $("co-logo").src = c.logo;
     $("co-code").textContent = c.ticker;
     $("co-sector").textContent = c.sector;
     var facts = regs.reduce(function (a, r) { return a + r.facts; }, 0);
@@ -194,6 +196,7 @@
     $("co-meta").innerHTML = "SEC registrant <b>" + esc(c.entity_name) + "</b>, CIK <span class='mono'>" +
       c.cik + "</span> · filings held " + esc(from) + " to " + esc(c.last_filed) + " · " +
       count(filings) + " filings · " + count(facts) + " filed values" +
+      " · <a href='us-company.html?t=" + encodeURIComponent(c.ticker) + "'>Everything held for this company</a>" +
       (preds.length ? "<br>Earlier years come from the predecessor registrant" +
         (preds.length > 1 ? "s " : " ") + preds.map(function (p) {
           return "<b>" + esc(p.entity_name) + "</b> (CIK <span class='mono'>" + p.cik + "</span>, " +

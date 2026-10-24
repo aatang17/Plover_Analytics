@@ -255,6 +255,8 @@ var NAV_SECTIONS = [
     id: "us-companies", market: "us", label: "Companies", suffix: "US Companies",
     pages: [
       // The ask box is the home page (/), reached from the logo, since 2026-10-19.
+      // One record per company (SEC number): who it is and every item held for it.
+      { id: "us-company", label: "Company Records", href: "us-company.html" },
       { id: "us-companies", label: "Company Financials", href: "us-companies.html" },
       // Pay versus performance from every S&P 500 member's proxy statement.
       { id: "us-pay", label: "Executive Pay", href: "us-pay.html" },

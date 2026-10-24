@@ -105,7 +105,9 @@ class ParserTest(unittest.TestCase):
                              ("SCHWAB CHARLES CORP", "Charles Schwab Corp"),
                              ("GARMIN LTD.", "Garmin Ltd."),
                              ("KIMCO     REALTY CORP", "Kimco Realty Corp"),
-                             ("THE BANK OF NEW YORK MELLON CORPORATION", "The Bank of New York Mellon Corporation")]:
+                             ("THE BANK OF NEW YORK MELLON CORPORATION", "The Bank of New York Mellon Corporation"),
+                             ("ELI LILLY & Co", "Eli Lilly & Co"), ("GERDAU S.A.", "Gerdau S.A."),
+                             ("NVIDIA CORP", "Nvidia Corp")]:
             self.assertEqual(us_link.display_name(filed), shown)
 
     def test_index_and_year_words(self):

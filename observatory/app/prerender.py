@@ -1206,6 +1206,32 @@ def _us_companies_view(values):
             "noscript": sentence + " Source: SEC EDGAR company facts."}
 
 
+def _us_company_view(values):
+    """One US company's record (us-company.html?t=, a ticker or SEC number)."""
+    t = (values.get("t") or "").strip().upper().replace(".", "-")
+    if not t:
+        return None
+    if not (_US_TICKER.match(t) or t.isdigit()):
+        return NOINDEX
+    row = _cached(("us-company", t), _sec_version, lambda: _sec_one("""
+        SELECT cik, name, ticker FROM sec_companies
+        WHERE ticker = ? OR list_contains(string_split(tickers, ','), ?) OR CAST(cik AS VARCHAR) = ltrim(?, '0')
+        ORDER BY (ticker = ?) DESC LIMIT 1""", [t, t, t, t]))
+    if not row or not row[1]:
+        return NOINDEX
+    from . import sec_api, us_companies, us_link
+    try:
+        name = us_link.company_name(row[0], _clean(row[1]), sec_api._cur())
+    except Exception:                                     # noqa: BLE001 — the title still names it
+        name = us_companies.name(row[0]) or us_link.display_name(_clean(row[1]))
+    ticker = row[2] or ("CIK %s" % row[0])
+    sentence = ("Everything Plover Analytics holds for %s (%s), SEC number %s: executive pay, "
+                "financial statements, annual report text, insider trades, holders, results days, "
+                "press releases, prices and shares outstanding." % (name, ticker, row[0]))
+    return {"title": "%s (%s) — US Company Record · %s" % (name, ticker, SITE),
+            "description": sentence, "h1": name, "noscript": sentence + " Source: SEC EDGAR."}
+
+
 def _us_stock_view(values):
     """The front page with ?t= open on one US stock (us-stocks.js openStock)."""
     t = (values.get("t") or "").strip().upper().replace(".", "-")
@@ -1302,6 +1328,7 @@ ENTITY_PAGES = {
     "customs-lens.html": _customs_view,
     "us-pay.html": _us_pay_view,
     "us-companies.html": _us_companies_view,
+    "us-company.html": _us_company_view,
     "financials.html": _financials_company,
     "governance.html": _governance_company,
     "index.html": _us_stock_view,

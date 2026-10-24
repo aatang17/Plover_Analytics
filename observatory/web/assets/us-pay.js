@@ -234,7 +234,8 @@
     var read = co.filings.filter(function (f) { return f.status === "ok"; }).length;
     $("co-meta").innerHTML = "CIK <span class='mono'>" + c.cik + "</span> · " +
       (c.weight_pct == null ? "" : fmtNum(c.weight_pct, 2) + "% of SPY on " + esc(co.index.as_of) + " · ") +
-      count(read) + (read === 1 ? " proxy statement" : " proxy statements") + " read since 2023";
+      count(read) + (read === 1 ? " proxy statement" : " proxy statements") + " read since 2023 · " +
+      "<a href='us-company.html?t=" + encodeURIComponent(c.ticker) + "'>Everything held for this company</a>";
     var last = co.years[0];
     if (!last) {
       $("co-facts").innerHTML = "";

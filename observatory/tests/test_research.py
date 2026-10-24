@@ -15,6 +15,7 @@ Content-Security-Policy; only people with the Writing permission can write.
 import json
 import os
 import pathlib
+import shutil
 import sqlite3
 import struct
 import tempfile
@@ -473,9 +474,16 @@ class DeskTest(Base):
         self.save(a["id"], self.complete_draft(), a["revision"])
         for k in ("EDINET_S3_BUCKET",):
             os.environ.pop(k, None)
+        # the admin console's hand curation is carried too (2026-10-24)
+        admin = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, admin, True)
+        open(os.path.join(admin, "us_companies.json"), "w").write('{"schema": 1, "companies": {}}')
+        saved = research_backup.ADMIN_DIR
+        self.addCleanup(setattr, research_backup, "ADMIN_DIR", saved)
+        research_backup.ADMIN_DIR = pathlib.Path(admin)
         status = research_backup.run()
         self.assertTrue(status["ok"], status)
-        self.assertEqual(sorted(status["local"]["files"]), ["research.db", "staff.db"])
+        self.assertEqual(sorted(status["local"]["files"]), ["research.db", "staff.db", "us_companies.json"])
         self.assertFalse(status["offsite"]["configured"])
         copy = sqlite3.connect(os.path.join(status["local"]["folder"], "research.db"))
         self.assertEqual(copy.execute("SELECT count(*) FROM articles").fetchone()[0], 1)

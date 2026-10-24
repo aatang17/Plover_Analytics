@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Company Records · Plover Analytics</title>
+<meta name="description" content="One record per US company, keyed by its SEC number: who it is, and every item this site holds for it — executive pay, financial statements, annual report text, insider trades, holders, results days, press releases, prices and shares.">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+/* page-local layout only — tokens and components come from app.css.
+   Same head as us-pay.html and us-companies.html, so the US company pages read alike. */
+.co-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 18px 0 4px; }
+.co-head h1 { margin: 0; }
+.co-code { font-family: var(--obs-mono, monospace); color: var(--obs-text-muted); font-size: 15px; }
+.co-logo { width: 32px; height: 32px; border-radius: 3px; border: 1px solid var(--obs-border);
+  background: var(--obs-logo-bg); object-fit: contain; }
+.filing-meta { font-size: 12.5px; color: var(--obs-text-muted); margin: 6px 0 0; line-height: 1.6; }
+.filing-meta a { color: var(--obs-primary); text-decoration: none; }
+.mono { font-family: var(--obs-mono, monospace); }
+.sec-note { font-size: 12.5px; color: var(--obs-text-muted); margin: 0; line-height: 1.55; }
+
+.search-row { display: flex; gap: 8px; align-items: center; max-width: 560px; margin: 14px 0 6px; }
+.search-row input { flex: 1; min-width: 0; }
+.search-state { font-size: 12.5px; color: var(--obs-text-muted); min-height: 18px; margin: 4px 0 8px; }
+
+.tbl-fin { width: 100%; border-collapse: collapse; }
+.tbl-fin th, .tbl-fin td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--obs-grid);
+  white-space: nowrap; }
+.tbl-fin thead th { font-size: 11px; font-weight: 600; color: var(--obs-text-muted); text-align: left;
+  text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--obs-border); }
+.tbl-fin .r, .tbl-fin th.r { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl-fin tbody tr:hover td { background: var(--obs-surface-subtle); }
+.tbl-fin a { color: var(--obs-primary); text-decoration: none; }
+.tbl-fin a:hover { text-decoration: underline; }
+.tbl-fin td.muted { color: var(--obs-text-muted); }
+.tbl-fin .day { white-space: nowrap; }
+.tbl-fin .unit { color: var(--obs-text-muted); }
+.tbl-fin img.logo, .tbl-fin span.logo { display: inline-block; width: 20px; height: 20px; margin-right: 8px;
+  vertical-align: -5px; border-radius: 3px; background: var(--obs-logo-bg); object-fit: contain; }
+.tbl-fin span.logo { background: none; }
+/* At phone width the item's own name is the link; the latest date wraps under its kind. */
+@media (max-width: 700px) {
+  .tbl-fin td.api, .tbl-fin th.api, .tbl-fin td.open, .tbl-fin th.open { display: none; }
+  .tbl-fin th, .tbl-fin td { white-space: normal; padding: 8px 6px; }
+}
+</style>
+</head>
+<body class="page-wide">
+
+<header class="site-header" data-section="us-companies" data-page="us-company"></header>
+<script src="assets/nav.js"></script>
+
+<main class="container">
+  <!-- search view -->
+  <section id="search-view">
+    <div class="page-head">
+      <h1>US Company Records</h1>
+      <p class="page-sub">One record per US company, kept under its SEC number: who it is, and
+      every item this site holds for it, with how much and how recent, and where to read it.</p>
+    </div>
+    <div class="search-row">
+      <input type="search" id="uc-q" placeholder="Search a company, e.g. Apple, NVDA, Berkshire"
+             aria-label="Company name or ticker" autocomplete="off">
+    </div>
+    <p class="search-state" id="uc-state">Type a name or a ticker.</p>
+    <div class="table-wrap"><table class="tbl-fin" id="uc-results" data-no-enhance></table></div>
+  </section>
+
+  <!-- record view -->
+  <section id="company-view" hidden>
+    <p style="margin:16px 0 0"><a href="us-company.html">← Search companies</a></p>
+    <div class="co-head">
+      <img class="co-logo" id="co-logo" alt="" width="32" height="32" hidden>
+      <h1 id="co-name"></h1>
+      <span class="co-code" id="co-code"></span>
+    </div>
+    <p class="filing-meta" id="co-meta"></p>
+
+    <h2>Data on File <span class="h2-note" id="items-note"></span></h2>
+    <div class="table-wrap"><table class="tbl-fin" id="items-table" data-no-enhance></table></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container" id="source-line">
+    Source: U.S. Securities and Exchange Commission, EDGAR (filer records, financial statement
+    data sets, company facts, proxy statements, annual reports, Forms 3/4/5, Form 13F, 8-K), each
+    company's newsroom, and the daily price feed. Counts are what this site has read; each item
+    names its API address. Missing is —, never zero.
+    <a href="methodology.html">Methodology</a> · <a href="api.html">API</a>
+  </div>
+</footer>
+
+<script src="assets/format.js"></script>
+<script src="assets/sortable.js"></script>
+<script src="assets/us-company.js"></script>
+</body>
+</html>

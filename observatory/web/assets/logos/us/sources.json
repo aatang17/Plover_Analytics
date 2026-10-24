@@ -595,10 +595,10 @@
   "ticker": "TROW"
  },
  "1116132": {
-  "domain": "coach.com",
+  "domain": "tapestry.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=coach.com&sz=64",
-  "sha256": "50ac46be8d942e77cb5c1ba6a6661f1a8a19820d6c324491b85cc73795887344",
+  "icon": "https://www.google.com/s2/favicons?domain=tapestry.com&sz=64",
+  "sha256": "75a6c98f9b94199775b9329126cab644f01cd99c40a9958058a66a85f1ddf39c",
   "ticker": "TPR"
  },
  "1120193": {
@@ -1113,9 +1113,9 @@
   "ticker": "VRSK"
  },
  "1447669": {
-  "domain": "authy.com",
+  "domain": "twilio.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=authy.com&sz=64",
+  "icon": "https://www.google.com/s2/favicons?domain=twilio.com&sz=64",
   "sha256": "3c8f1e486ec4077eb5e06b0f87d8cad489099bca4c8b21396a9996f971aa2c1d",
   "ticker": "TWLO"
  },
@@ -1981,17 +1981,17 @@
   "ticker": "NKE"
  },
  "320193": {
-  "domain": "mac.com",
+  "domain": "apple.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=mac.com&sz=64",
+  "icon": "https://www.google.com/s2/favicons?domain=apple.com&sz=64",
   "sha256": "116c7dd931bdbc78c2cf5ca4e3e19ab600a6d3db24f6313815e80e6f7f5427fb",
   "ticker": "AAPL"
  },
  "320335": {
-  "domain": "torchmarkcorp.com",
+  "domain": "globelifeinsurance.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=torchmarkcorp.com&sz=64",
-  "sha256": "f7f5e98d206fea62ef7f8dfa5f49ebe89ccb2c15003c218326d456e3d56a7b75",
+  "icon": "https://www.google.com/s2/favicons?domain=globelifeinsurance.com&sz=64",
+  "sha256": "e7171d8857e20219d1c6038682f26457ff2a39f8ec8e2928879a37465a082d70",
   "ticker": "GL"
  },
  "32604": {
@@ -2513,10 +2513,10 @@
   "ticker": "NTRS"
  },
  "731766": {
-  "domain": "uhc.com",
+  "domain": "unitedhealthgroup.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=uhc.com&sz=64",
-  "sha256": "71c2b442dc793c5ced1e58abd1e2a50be87ecfcf4fe8c7ca9705dcf5cade68b7",
+  "icon": "https://www.google.com/s2/favicons?domain=unitedhealthgroup.com&sz=64",
+  "sha256": "d63c96f84ed1a236aa97839e695f30d08242220d832c0fa584353fa7c52ef528",
   "ticker": "UNH"
  },
  "731802": {
@@ -2828,9 +2828,9 @@
   "ticker": "APH"
  },
  "820318": {
-  "domain": "ii-vi.com",
+  "domain": "coherent.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=ii-vi.com&sz=64",
+  "icon": "https://www.google.com/s2/favicons?domain=coherent.com&sz=64",
   "sha256": "235e5ede801ed1d18fa8029b240a58dd8281400747f9e6eaf3bcec23d11bb0f7",
   "ticker": "COHR"
  },
@@ -3136,9 +3136,9 @@
   "ticker": "GS"
  },
  "895126": {
-  "domain": "chk.com",
+  "domain": "expandenergy.com",
   "fetched": "2026-10-24",
-  "icon": "https://www.google.com/s2/favicons?domain=chk.com&sz=64",
+  "icon": "https://www.google.com/s2/favicons?domain=expandenergy.com&sz=64",
   "sha256": "54fab41c47c1ace42771494dbc103e24aeb2f1ea7fae5c84da658aad7b7c9a3b",
   "ticker": "EXE"
  },

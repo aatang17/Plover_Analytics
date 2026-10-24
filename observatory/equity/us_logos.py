@@ -68,6 +68,10 @@ DOMAINS = {
     "TT": "tranetechnologies.com", "DOC": "healthpeak.com", "WEC": "wecenergygroup.com", "MDLZ": "mondelezinternational.com", "MRK": "merck.com",
     "MU": "micron.com", "NXPI": "nxp.com", "SHW": "sherwin-williams.com", "STZ": "cbrands.com",
     "NFLX": "netflix.com", "HAS": "hasbro.com", "MTB": "mtb.com", "NDAQ": "nasdaq.com", "V": "visa.com",
+    # a product, a former name or an old company's site (checked 2026-10-24)
+    "AAPL": "apple.com", "COHR": "coherent.com", "EXE": "expandenergy.com",
+    "GL": "globelifeinsurance.com", "TPR": "tapestry.com", "TWLO": "twilio.com",
+    "UNH": "unitedhealthgroup.com",
 }
 
 

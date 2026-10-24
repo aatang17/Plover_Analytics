@@ -531,10 +531,13 @@
     // a split read from prices in the last year that no filing confirms makes the one-year change doubtful
     var yearAgo = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
     var doubtfulSplit = !!(px && px.splits && px.splits.some(function (s) { return s.status && s.status !== "confirmed" && s.date >= yearAgo; }));
-    var html = "<div class='co-head'><h1>" + esc(m.name) + "</h1><span class='co-code'>" + esc(m.ticker || ("cik:" + m.cik)) + "</span>" +
+    var html = "<div class='co-head'>" + (m.logo ? "<img class='co-logo' src='" + esc(m.logo) + "' alt='' width='32' height='32' " +
+      "style='align-self:center;border-radius:3px;border:1px solid var(--obs-border);background:var(--obs-logo-bg);object-fit:contain'>" : "") +
+      "<h1>" + esc(m.name) + "</h1><span class='co-code'>" + esc(m.ticker || ("cik:" + m.cik)) + "</span>" +
       "<span class='co-industry'>" + esc([m.exchange, m.industry].filter(Boolean).join(" · ")) + "</span></div>" +
       "<p class='sec-note'>Latest annual report: year to " + dateWords(m.period_end) + ", filed " + dateWords(m.filed) + " · " +
-      "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>filing on EDGAR</a></p>" +
+      "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>filing on EDGAR</a> · " +
+      "<a href='us-company.html?t=" + encodeURIComponent(m.ticker || m.cik) + "'>Everything held for this company</a></p>" +
       "<dl class='fact-row'>" +
       "<div><dt>Close</dt><dd>" + money(p.close, 2) + "<span class='qual'>" + (p.date ? dateWords(p.date) : "no price on file") + "</span></dd></div>" +
       "<div><dt>Market value</dt><dd>" + money(mt.market_cap) + "<span class='qual'>" +

@@ -7,6 +7,8 @@ volume holds the only copy of what the writers wrote. So once a day, and a
 minute after every publication, this makes a consistent copy of the SQLite
 files (SQLite's own backup API, safe while the server is writing) and:
 
+* also copies the admin console's hand curation (data/admin/us_companies.json,
+  logos included, and data/admin/parties.json);
 * keeps the last 14 daily copies on the volume, under data/research/backups/,
   which covers a damaged database file;
 * uploads them, and every image not yet uploaded, to the object store the
@@ -22,15 +24,18 @@ import datetime
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import threading
 import time
 
-from . import research, staff
+from . import db, research, staff
 
 log = logging.getLogger(__name__)
 
 PREFIX = "plover-backups/"
+ADMIN_DIR = db.DATA_DIR / "admin"
+ADMIN_FILES = ("us_companies.json", "parties.json")
 KEEP_LOCAL = 14
 INTERVAL_SECONDS = 24 * 3600
 _run_lock = threading.Lock()
@@ -109,6 +114,14 @@ def run():
                 copied.append("research.db")
             if _copy_sqlite(staff.DB_PATH, folder / "staff.db"):
                 copied.append("staff.db")
+            # Hand curation kept as JSON under data/admin/: the US company
+            # edits (with their uploaded logos) and the party profiles.
+            for name in ADMIN_FILES:
+                src = ADMIN_DIR / name
+                if src.exists():
+                    folder.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(str(src), str(folder / name))
+                    copied.append(name)
             status["local"] = {"folder": str(folder), "files": copied}
             days = sorted(p for p in (research.DATA_DIR / "backups").iterdir() if p.is_dir())
             for old in days[:-KEEP_LOCAL]:

@@ -754,6 +754,9 @@ def metrics(company: str):
         raise HTTPException(404, "no annual report loaded for CIK %d, so no ratios" % n)
     row = dict(row)
     _decorate(cur, [row])
+    from . import us_link
+    row["name"] = us_link.company_name(n, row.get("name") or "", cur)
+    row["logo"] = us_link.logo(n)
     priced = _has_prices(cur)
     row["metric_defs"] = sec_metrics.metric_defs(prices=priced)
     row["calc"] = dict(sec_metrics.FORMULAS, **(sec_metrics.PRICE_FORMULAS if priced else {}))

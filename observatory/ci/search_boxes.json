@@ -232,6 +232,18 @@
       ]
     },
     {
+      "key": "us-company.html#uc-q",
+      "url": "/us-company.html",
+      "input": "#uc-q",
+      "area": "#uc-results",
+      "hits": "#uc-results tbody tr",
+      "extra": [
+        "AAPL",
+        "Exxon",
+        "320193"
+      ]
+    },
+    {
       "key": "us-companies.html#cn-q",
       "url": "/us-companies.html?t=DIS",
       "input": "#cn-q",
@@ -273,6 +285,7 @@
   "not_run": {
     "desk-tabs.js#class=dk-at-q": "Filters the writer's own articles, already listed under + Open Article in the desk; there is nothing to fetch.",
     "sortable.js#class=table-filter": "Filters the rows a table already shows; there is nothing to fetch.",
+    "us-companies-admin.js#uca-q": "The company search on the signed-in admin US Companies tab. It runs the same search as us-company.html#uc-q (/api/v1/us/company?q=), whose examples are typed in a real browser; tests/test_us_company.py checks the admin route.",
     "admin.js#rh-find": "Filters the datasets already listed on the signed-in admin Release History page; there is nothing to fetch.",
     "assistant.js#cat-q": "Filters the specialists already listed; there is nothing to fetch.",
     "assistant.js#class=st-pick": "Studies: picks a series for a ready-made analysis through /api/v1/assistant/studies/series. The Assistant needs a signed-in account, which this check does not have; tests/test_studies.py exercises the endpoint with CPI and 10-year examples."

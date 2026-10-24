@@ -107,6 +107,8 @@ def _word(w):
         return w.replace(core, _MIXED[core])
     if core in _KEEP_UPPER or "&" in core or (len(core) <= 3 and not any(ch in "AEIOU" for ch in core)):
         return w
+    if re.fullmatch(r"(?:[A-Z]\.)+[A-Z]?", core):            # S.A., N.V., L.P.
+        return w
     return w.capitalize()
 
 
@@ -119,8 +121,12 @@ def display_name(name):
     while n != prev:
         prev, n = n, _STATE_TAG.sub("", n)
     n = re.sub(r",?\s+/\w+/?$", "", n)
-    if n != n.upper():
+    # Mixed case is kept, unless a word is still in capitals ("ELI LILLY & Co"
+    # in the SEC's list): then the whole name is read as capitals.
+    if n != n.upper() and not any(w.isupper() and len(w.strip(",.")) >= 4 and w.strip(",.") not in _KEEP_UPPER
+                                  for w in n.split()):
         return n
+    n = n.upper()
     n = _CLASS_TAIL.sub("", n)
     if n in _WHOLE:
         return _WHOLE[n]
@@ -135,7 +141,17 @@ _LOGO_SET = (None, frozenset())
 
 
 def logo(cik):
-    """The company's icon on our own host (equity/us_logos.py), or None."""
+    """The company's icon on our own host, or None: an admin edit first
+    (app/us_companies.py: uploaded, or hidden), else the built-in one."""
+    from . import us_companies
+    edit = us_companies.logo_url(cik)
+    if edit is not None:
+        return edit or None
+    return builtin_logo(cik)
+
+
+def builtin_logo(cik):
+    """The icon equity/us_logos.py fetched for the company, or None."""
     global _LOGO_SET
     try:
         stamp = os.stat(_LOGOS).st_mtime
@@ -145,6 +161,55 @@ def logo(cik):
         _LOGO_SET = (stamp, frozenset(f.name for f in _LOGOS.glob("*.png")))
     name = "%d.png" % int(cik)
     return "/assets/logos/us/" + name if name in _LOGO_SET[1] else None
+
+
+def company_name(cik, filed, cur=None):
+    """The one name every US page shows for a company: an admin edit, else a
+    name chosen by hand (_curated_names), else the company's own registered name from its latest proxy (S&P 500 members:
+    'Amazon.com, Inc.', where the SEC's list has 'Amazon Com Inc'), else the
+    filed name it is given, made readable (display_name)."""
+    from . import us_companies
+    edit = us_companies.name(cik) or _curated_names().get(int(cik))
+    if edit:
+        return edit
+    own = registrant_names(cur).get(int(cik)) if cur is not None else None
+    return display_name(own or filed)
+
+
+_CURATED = {}
+
+
+def _curated_names():
+    """The names chosen by hand for the deep-coverage companies
+    (equity/us_universe.json: 'NVIDIA Corporation'), so the financials page
+    and every other US page say the same."""
+    if not _CURATED:
+        import json
+        path = pathlib.Path(__file__).resolve().parent.parent / "equity" / "us_universe.json"
+        try:
+            for c in json.loads(path.read_text(encoding="utf-8"))["companies"]:
+                if c.get("cik") and c.get("name"):
+                    _CURATED[int(c["cik"])] = c["name"]
+        except (OSError, ValueError, KeyError):
+            pass
+        _CURATED.setdefault(0, None)
+    return _CURATED
+
+
+def registrant_names(cur):
+    """{cik: dei:EntityRegistrantName from the latest proxy read}, memoised."""
+    return _memo(cur, "registrant_names", _build_registrant_names)
+
+
+def _build_registrant_names(cur):
+    have = {r[0] for r in cur.execute("SELECT table_name FROM duckdb_tables()").fetchall()}
+    if not {"sec_px_facts", "sec_px_filings"} <= have:
+        return {}
+    return {r[0]: r[1] for r in cur.execute("""
+        SELECT f.cik, arg_max(f.value_text, x.filed)
+        FROM sec_px_facts f JOIN sec_px_filings x ON x.accn = f.accn
+        WHERE f.prefix = 'dei' AND f.tag = 'EntityRegistrantName' AND f.value_text IS NOT NULL
+        GROUP BY f.cik""").fetchall()}
 
 
 def norm_name(name):

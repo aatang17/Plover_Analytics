@@ -575,6 +575,11 @@ def _source(cik, accn):
     return "https://www.sec.gov/Archives/edgar/data/%d/%s/" % (cik, accn.replace("-", ""))
 
 
+def _shown_name(cur, cik, filed):
+    """The one name every US page shows for a company (us_link.company_name)."""
+    return us_link.company_name(cik, filed, cur)
+
+
 def _names(cur, ciks):
     """The registrant's own name from its latest proxy (dei:EntityRegistrantName)."""
     ph = ",".join("?" * len(ciks))
@@ -643,7 +648,7 @@ def index(basis: str = Query("latest", description="latest | first"),
                      (y["ceos"] and next(iter(y["ceos"][0].get("sources", {}).values()), None)))
         rows.append({
             "cik": m["cik"], "ticker": m["ticker"], "tickers": m["tickers"].split(","),
-            "name": us_link.display_name(names.get(m["cik"]) or m["fund_name"]),
+            "name": _shown_name(cur, m["cik"], names.get(m["cik"]) or m["fund_name"]),
             "sec_name": names.get(m["cik"]) or m["fund_name"], "logo": us_link.logo(m["cik"]),
             "weight_pct": m["weight_pct"], "status": status,
             "fiscal_year_end": y["fiscal_year_end"] if y else None,
@@ -703,7 +708,7 @@ def company(company: str,
         f["url"] = _source(m["cik"], f["accn"])
     name = _names(cur, [m["cik"]]).get(m["cik"]) or m["fund_name"]
     return {"company": {"cik": m["cik"], "ticker": m["ticker"], "tickers": m["tickers"].split(","),
-                        "name": us_link.display_name(name), "sec_name": name, "logo": us_link.logo(m["cik"]),
+                        "name": _shown_name(cur, m["cik"], name), "sec_name": name, "logo": us_link.logo(m["cik"]),
                         "fund_name": m["fund_name"], "weight_pct": m["weight_pct"]},
             "index": snap, "years": years, "filings": filings, "basis": basis,
             "as_of": _d(ceiling), "calc": CALC, "provenance": PROVENANCE}

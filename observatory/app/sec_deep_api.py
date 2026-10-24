@@ -106,7 +106,11 @@ NAMES = _names()
 
 
 def _named(row):
-    row["name"] = NAMES.get(row.get("ticker")) or row.get("entity_name")
+    from . import us_companies, us_link
+    cik = row.get("cik")
+    row["name"] = ((us_companies.name(cik) if cik else None) or NAMES.get(row.get("ticker"))
+                   or row.get("entity_name"))
+    row["logo"] = us_link.logo(cik) if cik else None
     return row
 
 
