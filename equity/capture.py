@@ -66,7 +66,9 @@ DOC_URL = ("https://api.edinet-fsa.go.jp/api/v2/documents/{doc_id}"
 
 DOC_TYPES = {"120", "130", "160", "170", "180", "190",
              "240", "250", "270", "290", "300",
-             "030", "040", "350", "360", "220"}
+             "030", "040", "350", "360", "220", "230"}
+# 230 (a buyback report's correction) from 2026-10-24: equity/buyback.py now
+# reads corrections, and EDINET keeps buyback reports only about a year.
 # periodic reports: CSV package too. 140/150 (quarterly reports, abolished for
 # periods from April 2024) are not in DOC_TYPES; a backfill asks for them with
 # --types 140,150

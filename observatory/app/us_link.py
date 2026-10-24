@@ -22,6 +22,8 @@ indexes are memoised per database version. Nothing here guesses: a mention
 that resolves to nothing stays None, and the recipe says so.
 """
 import datetime
+import os
+import pathlib
 import re
 import threading
 
@@ -73,29 +75,76 @@ companies company corporation corporations business businesses industries indust
 
 _KEEP_UPPER = {"LLC", "LP", "LLP", "NV", "SA", "AG", "SE", "PLC", "USA", "US", "UK", "II", "III", "IV", "REIT", "ETF",
                "IBM", "AMD", "AT&T", "HP", "3M", "UPS", "CVS", "AES", "AIG", "BNY", "PNC", "PPG", "MSCI", "KLA", "ASML",
-               "NXP", "TJX", "EOG", "DTE", "CME", "ICE", "AMC", "GE", "GM", "HCA", "IQVIA", "RTX", "NRG", "ON", "WEC"}
+               "NXP", "TJX", "EOG", "DTE", "CME", "ICE", "AMC", "GE", "GM", "HCA", "IQVIA", "RTX", "NRG", "ON", "WEC",
+               "TE", "APA", "VICI", "EQT", "TKO", "SBA", "IDEX", "IDEXX", "PACCAR", "EMCOR", "ONEOK", "AMETEK",
+               "CBRE", "EPAM", "STERIS", "CDW", "PTC"}
 _MIXED = {"JPMORGAN": "JPMorgan", "NVIDIA": "Nvidia", "PAYPAL": "PayPal", "EBAY": "eBay", "IPHONE": "iPhone",
           "MCDONALDS": "McDonald's", "MCDONALD'S": "McDonald's", "BLACKROCK": "BlackRock", "FEDEX": "FedEx",
-          "DUPONT": "DuPont", "MASTERCARD": "Mastercard", "LINKEDIN": "LinkedIn", "YOUTUBE": "YouTube"}
+          "DUPONT": "DuPont", "MASTERCARD": "Mastercard", "LINKEDIN": "LinkedIn", "YOUTUBE": "YouTube",
+          "EXXONMOBIL": "ExxonMobil", "SERVICENOW": "ServiceNow", "METLIFE": "MetLife", "NISOURCE": "NiSource",
+          "COSTAR": "CoStar", "FACTSET": "FactSet", "TRANSDIGM": "TransDigm", "DAVITA": "DaVita",
+          "KEYCORP": "KeyCorp", "L3HARRIS": "L3Harris", "AUTOZONE": "AutoZone", "CARMAX": "CarMax",
+          "GODADDY": "GoDaddy", "CROWDSTRIKE": "CrowdStrike", "DOORDASH": "DoorDash", "NETAPP": "NetApp",
+          "MARKETAXESS": "MarketAxess", "APPLOVIN": "AppLovin", "LYONDELLBASELL": "LyondellBasell",
+          "HUBSPOT": "HubSpot", "DEXCOM": "DexCom", "VERISIGN": "VeriSign", "SNAP-ON": "Snap-on", "LTD": "Ltd", "HLDGS": "Hldgs"}
+# Joining words stay lower case inside a name: "Eli Lilly and Company".
+_SMALL = {"AND", "OF", "THE", "FOR", "IN"}
+# The SEC files some names surname first or without their punctuation; these
+# are keyed on the name with its state tag and spacing already cleaned.
+_WHOLE = {"SCHWAB CHARLES CORP": "Charles Schwab Corp", "PRICE T ROWE GROUP INC": "T. Rowe Price Group Inc",
+          "BERKLEY W R CORP": "W. R. Berkley Corp", "US BANCORP": "U.S. Bancorp", "KKR + CO INC": "KKR & Co Inc",
+          "COCA COLA CO": "Coca-Cola Co", "COLGATE PALMOLIVE CO.": "Colgate-Palmolive Co.",
+          "LOWES COMPANIES INC": "Lowe's Companies Inc"}
+_STATE_TAG = re.compile(r"\s*[/\\]\s*[A-Z]{2,4}\s*[/\\]?\s*$|\s*/\s*$")
+_CLASS_TAIL = re.compile(r"\s+CL(?:ASS)?\s+[A-C]$|(?<=\bINC)\.?\s+[A-C]$")
+
+
+def _word(w):
+    if "-" in w and w not in _MIXED:
+        return "-".join(_word(p) for p in w.split("-"))
+    core = w.strip(",.")
+    if core in _MIXED:
+        return w.replace(core, _MIXED[core])
+    if core in _KEEP_UPPER or "&" in core or (len(core) <= 3 and not any(ch in "AEIOU" for ch in core)):
+        return w
+    return w.capitalize()
 
 
 def display_name(name):
     """The SEC's company name as people write it: 'FEDERAL SIGNAL CORP /DE/'
-    -> 'Federal Signal Corp'. Names already in mixed case are kept."""
-    n = re.sub(r"\s*/[A-Z]{2,4}/?\s*$", "", (name or "").strip())
+    -> 'Federal Signal Corp', 'ELI LILLY AND COMPANY' -> 'Eli Lilly and Company'.
+    Names already in mixed case are kept."""
+    n = " ".join((name or "").split())
+    prev = None
+    while n != prev:
+        prev, n = n, _STATE_TAG.sub("", n)
     n = re.sub(r",?\s+/\w+/?$", "", n)
     if n != n.upper():
         return n
+    n = _CLASS_TAIL.sub("", n)
+    if n in _WHOLE:
+        return _WHOLE[n]
     out = []
-    for w in n.split():
-        core = w.strip(",.")
-        if core in _MIXED:
-            out.append(w.replace(core, _MIXED[core]))
-        elif core in _KEEP_UPPER or "&" in core or (len(core) <= 3 and not any(ch in "AEIOU" for ch in core)):
-            out.append(w)
-        else:
-            out.append(w.capitalize())
+    for i, w in enumerate(n.split()):
+        out.append(w.lower() if i and w in _SMALL else _word(w))
     return " ".join(out)
+
+
+_LOGOS = pathlib.Path(__file__).resolve().parent.parent / "web" / "assets" / "logos" / "us"
+_LOGO_SET = (None, frozenset())
+
+
+def logo(cik):
+    """The company's icon on our own host (equity/us_logos.py), or None."""
+    global _LOGO_SET
+    try:
+        stamp = os.stat(_LOGOS).st_mtime
+    except OSError:
+        return None
+    if _LOGO_SET[0] != stamp:
+        _LOGO_SET = (stamp, frozenset(f.name for f in _LOGOS.glob("*.png")))
+    name = "%d.png" % int(cik)
+    return "/assets/logos/us/" + name if name in _LOGO_SET[1] else None
 
 
 def norm_name(name):

@@ -497,7 +497,7 @@ def filing_evidence(con):
     decides between two registrations of one company.
     """
     return dict((r[0], (r[1], r[2], r[3])) for r in con.execute(
-        "SELECT edinet_code, count(*), min(period_end), max(period_end) "
+        "SELECT edinet_code, count(DISTINCT period_end), min(period_end), max(period_end) "
         "FROM eq_filings WHERE edinet_code IS NOT NULL GROUP BY 1").fetchall())
 
 
@@ -732,6 +732,81 @@ def select_pending(filings, since, have, catch_up_days=0, floor=None):
     return pending, new_floor
 
 
+# An annual report (有価証券報告書, 120) and its correction (訂正有価証券報告書,
+# 130). A correction carries the whole corrected report in the original's
+# layout and is stored as a filing of its own, beside the original, whose rows
+# are never touched; the APIs serve the latest filed for each year. Until
+# 2026-10-24 every reader took 120 only, and the ~650 corrections a year from
+# listed companies never reached a page.
+ANNUAL = ("120", "130")
+_ERA = {"令和": 2018, "平成": 1988, "昭和": 1925}
+_DAY = r"(?:(\d{4})/(\d{1,2})/(\d{1,2})|(令和|平成|昭和)(\d{1,2}|元)年(\d{1,2})月(\d{1,2})日)"
+_PERIOD = re.compile(r"[(（]" + _DAY + r"\s*[－\-~〜―ー]\s*" + _DAY + r"[)）]")
+_PARENTS = {}
+
+
+def _iso(g):
+    if g[0]:
+        return "%04d-%02d-%02d" % (int(g[0]), int(g[1]), int(g[2]))
+    return "%04d-%02d-%02d" % (_ERA[g[3]] + (1 if g[4] == "元" else int(g[4])), int(g[5]), int(g[6]))
+
+
+def description_period(desc):
+    """(start, end) from a filing's description, '…第99期(2025/04/01－2026/03/31)'
+    or in era dates, '…(平成29年4月1日－平成30年3月31日)'; None if it names none."""
+    m = _PERIOD.search(desc or "")
+    if not m:
+        return None
+    g = m.groups()
+    return _iso(g[:7]), _iso(g[7:])
+
+
+def _parent_periods():
+    """docID -> (periodStart, periodEnd) of every annual report in the cached
+    daily lists: read once, only for a correction whose description names no
+    period and whose original is not among the lists already loaded."""
+    if not _PARENTS:
+        for f in glob.glob(os.path.join(ARCHIVE, "lists", "*.json")):
+            try:
+                rows = json.load(open(f)).get("results") or []
+            except ValueError:
+                continue
+            for r in rows:
+                if r.get("docTypeCode") == "120" and r.get("periodEnd"):
+                    _PARENTS[r["docID"]] = (r.get("periodStart"), r["periodEnd"])
+        _PARENTS.setdefault(None, None)
+    return _PARENTS
+
+
+def dated_corrections(meta):
+    """Give each correction in `meta` the period EDINET's list leaves blank:
+    from its description (6,577 of 6,762 cached corrections; every one checked
+    against its original agreed), else from its original (parentDocID). One
+    with neither keeps no period, and annual() turns it away."""
+    for r in meta.values():
+        if r.get("docTypeCode") != "130" or r.get("periodEnd"):
+            continue
+        got = description_period(r.get("docDescription"))
+        if got is None:
+            parent = meta.get(r.get("parentDocID")) or {}
+            got = ((parent.get("periodStart"), parent["periodEnd"]) if parent.get("periodEnd")
+                   else _parent_periods().get(r.get("parentDocID")))
+        if got:
+            r["periodStart"], r["periodEnd"] = got
+    return meta
+
+
+def annual(m, rec):
+    """True for a filing an annual-report reader takes: an annual report, or a
+    correction whose period is known (a row with no year would sit nowhere)."""
+    kind = m.get("docTypeCode") or rec.get("doc_type")
+    if kind == "130" and not m.get("periodEnd"):
+        print("  skipped correction %s: no period in its description or original"
+              % (m.get("docID") or "?"))
+        return False
+    return kind in ANNUAL
+
+
 class LocalSource(object):
     """The laptop archive: manifest.jsonl + whatever daily lists it holds."""
 
@@ -741,7 +816,7 @@ class LocalSource(object):
         out = {}
         for line in open(os.path.join(ARCHIVE, "manifest.jsonl"), encoding="utf-8"):
             r = json.loads(line)
-            if r.get("status") == "ok" and r.get("doc_type") == "120" and r.get("dl_type") == "5":
+            if r.get("status") == "ok" and r.get("doc_type") in ANNUAL and r.get("dl_type") == "5":
                 out[r["doc_id"]] = r
         return out
 
@@ -752,7 +827,7 @@ class LocalSource(object):
                 continue
             for r in json.load(open(f)).get("results") or []:
                 meta[r["docID"]] = r
-        return meta
+        return dated_corrections(meta)
 
     def read_zip(self, doc_id, date):
         with open(os.path.join(ARCHIVE, "docs", date, doc_id + "_t5.zip"), "rb") as f:
@@ -891,7 +966,7 @@ class S3Source(object):
                     meta[r["docID"]] = r
             except ValueError:
                 continue
-        return meta
+        return dated_corrections(meta)
 
     def read_zip(self, doc_id, date):
         key = "docs/%s/%s_t5.zip" % (date, doc_id)
@@ -1176,6 +1251,7 @@ def main():
     ap.add_argument("--source", choices=("local", "s3"), default="local")
     ap.add_argument("--workers", type=int, default=12, help="parallel fetches (s3)")
     ap.add_argument("--limit", type=int, help="stop after N filings (smoke test)")
+    ap.add_argument("--docs", help="comma-separated docIDs, as the other readers take")
     ap.add_argument("--db", default=DB_PATH,
                     help="target DuckDB file (default: the served equity DB); "
                          "point it elsewhere to verify a parser change without "
@@ -1231,10 +1307,13 @@ def main():
         m = meta.get(doc_id) or {}
         # the daily list is the authority on doc type; the local manifest also
         # records it, but S3 discovery only knows the key exists
-        if (m.get("docTypeCode") or rec.get("doc_type")) != "120":
+        if not annual(m, rec):
             continue
         if args.all or m.get("edinetCode") in fin_codes:
             targets.append((doc_id, rec, m))
+    if args.docs:
+        want = {d.strip() for d in args.docs.split(",") if d.strip()}
+        targets = [t for t in targets if t[0] in want]
     if args.limit:
         targets = targets[:args.limit]
     years = sorted({(m.get("periodEnd") or "?")[:4] for _, _, m in targets})

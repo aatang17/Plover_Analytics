@@ -114,6 +114,24 @@ def _tables_present():
     return len(got) == 5
 
 
+def _current(alias="f"):
+    """` AND …`: the filing aliased `alias` is the newest of its report and
+    that report's corrections filed by the ceiling (equity/buyback.py CURRENT).
+    Empty on a database written before corrections were read."""
+    have = _rows(_cur(), "SELECT 1 FROM information_schema.tables "
+                         "WHERE table_name = 'eq_buyback_corrections'")
+    if not have:
+        return ""
+    a = alias
+    return (" AND NOT EXISTS (SELECT 1 FROM eq_buyback_corrections c"
+            " JOIN eq_buyback_filings n ON n.doc_id = c.doc_id"
+            " WHERE c.corrects_doc_id = coalesce((SELECT c2.corrects_doc_id FROM eq_buyback_corrections c2"
+            " WHERE c2.doc_id = {a}.doc_id), {a}.doc_id)"
+            " AND n.doc_id <> {a}.doc_id AND n.status <> 'failed'"
+            " AND (n.submitted > {a}.submitted OR (n.submitted = {a}.submitted AND n.doc_id > {a}.doc_id)){c})"
+            .format(a=a, c=asof.clause("submitted", "n")))
+
+
 def _require():
     if not _tables_present():
         raise HTTPException(503, "buyback dataset not published on this server yet")
@@ -195,13 +213,14 @@ def monthly():
                    sum(p.month_yen)         AS acquired_yen,
                    sum(p.month_shares)      AS acquired_shares
             FROM eq_buyback_programs p JOIN eq_buyback_filings f USING (doc_id)
-            WHERE f.as_of IS NOT NULL GROUP BY 1),
+            WHERE f.as_of IS NOT NULL""" + _current("f") + """ GROUP BY 1),
         retired AS (
-            SELECT as_of AS month, sum(cancelled_yen) AS retired_yen,
-                   sum(cancelled_shares) AS retired_shares,
+            SELECT t.as_of AS month, sum(t.cancelled_yen) AS retired_yen,
+                   sum(t.cancelled_shares) AS retired_shares,
                    count(*) AS retirements
-            FROM eq_buyback_treasury WHERE as_of IS NOT NULL
-              AND cancelled_shares > 0 GROUP BY 1)
+            FROM eq_buyback_treasury t JOIN eq_buyback_filings f USING (doc_id)
+            WHERE t.as_of IS NOT NULL
+              AND t.cancelled_shares > 0""" + _current("f") + """ GROUP BY 1)
         SELECT b.month, b.filings, b.acquired_yen, b.acquired_shares,
                r.retired_yen, r.retired_shares, coalesce(r.retirements, 0) AS retirements
         FROM bought b LEFT JOIN retired r USING (month)
@@ -318,11 +337,11 @@ def companies(q: str = Query("", description="name or code substring")):
         FROM eq_buyback_filings f
         LEFT JOIN en_scode es ON es.sec_code = f.sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = f.edinet_code
-        WHERE CAST(? AS VARCHAR) = ''
+        WHERE (TRUE""" + _current("f") + """) AND (CAST(? AS VARCHAR) = ''
            OR lower(coalesce(es.name_en, ee.name_en, '')) LIKE CAST(? AS VARCHAR)
            OR lower(f.filer_name) LIKE CAST(? AS VARCHAR)
            OR coalesce(f.sec_code, '') LIKE CAST(? AS VARCHAR)"""
-        + alias_sql + """
+        + alias_sql + """)
         GROUP BY 1, 2 ORDER BY count(*) DESC, f.sec_code
         LIMIT 40""", [term, like, like, like] + alias_params)}
 
@@ -341,7 +360,7 @@ def company(sec_code: str):
         FROM eq_buyback_filings f
         LEFT JOIN en_scode es ON es.sec_code = f.sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = f.edinet_code
-        WHERE f.sec_code = ?""" + asof.clause("submitted", "f") + """ GROUP BY 1, 2""", [code])
+        WHERE f.sec_code = ?""" + asof.clause("submitted", "f") + _current("f") + """ GROUP BY 1, 2""", [code])
     if not ident:
         raise HTTPException(404, "no buyback filings for securities code '%s'" % code)
     head = ident[0]
@@ -374,7 +393,7 @@ def company(sec_code: str):
                p.progress_shares_pct, p.progress_yen_pct, p.daily_rows,
                p.status AS program_status
         FROM eq_buyback_filings f LEFT JOIN eq_buyback_programs p USING (doc_id)
-        WHERE f.sec_code = ?""" + asof.clause("submitted", "f") + """
+        WHERE f.sec_code = ?""" + asof.clause("submitted", "f") + _current("f") + """
         ORDER BY f.as_of DESC, p.resolution_date DESC""", [code])
     head["treasury"] = _rows(cur, """
         SELECT as_of AS month, doc_id, cancelled_shares, cancelled_yen,
@@ -382,8 +401,8 @@ def company(sec_code: str):
                100.0 * treasury_shares / nullif(shares_outstanding, 0) AS treasury_pct,
                status
         FROM eq_buyback_treasury WHERE doc_id IN (
-            SELECT doc_id FROM eq_buyback_filings WHERE sec_code = ?"""
-            + asof.clause("submitted") + """)
+            SELECT f.doc_id FROM eq_buyback_filings f WHERE f.sec_code = ?"""
+            + asof.clause("submitted", "f") + _current("f") + """)
         ORDER BY as_of DESC""", [code])
     head["measure_note"] = MEASURE_NOTE
     head["dates_note"] = DATES_NOTE

@@ -37,7 +37,11 @@ company feed — the standard submissions file lists only about a year of a
 large bank's filings, and JPMorgan's proxies are thousands of filings back.
 A proxy without a tagged instance (a fiscal year before the rule, or a filer
 that has not tagged) is recorded as 'no_xbrl' and not asked for again.
-Amendments (DEF 14A/A) are not read.
+A revised definitive proxy (DEFR14A) is read like a DEF 14A: Intel filed its
+2026 proxy untagged on 23 March and refiled it, tagged, as a DEFR14A the next
+day, and fiscal 2025 was missing until this read it. The feed is asked once
+per form, since its type filter matches by prefix and DEF 14A never lists a
+DEFR14A. Amendments (DEF 14A/A) are not read.
 
 Tables (data/sec.duckdb)
 ------------------------
@@ -130,7 +134,7 @@ EXTRACTOR = "sec-proxy-pay"
 SINCE = dt.date(2023, 1, 1)     # pay versus performance: fiscal years ending after 2022-12-16
 RATE = 4.0                      # requests per second across all workers; the SEC's ceiling is 10
 WORKERS = 2                     # SEC replies take one to ten seconds; fetch two at once
-FORMS = ("DEF 14A",)
+FORMS = ("DEF 14A", "DEFR14A")
 MAX_TEXT = 2000                 # a longer text fact is a text block; the raw file keeps it
 
 SCHEMA_SQL = """
@@ -345,8 +349,15 @@ def refresh_members(con, fetcher):
 
 # ---- one proxy ------------------------------------------------------------------
 def list_proxies(fetcher, cik):
-    """[(accn, filed)] of this company's DEF 14As since SINCE, newest first."""
-    body = fetcher.get(FEED_URL % cik)
+    """[(accn, filed, form)] of this company's proxies (FORMS) since SINCE,
+    newest first."""
+    out = []
+    for want in FORMS:
+        out += _listed(fetcher.get(FEED_URL.replace("type=DEF+14A", "type=" + want.replace(" ", "+")) % cik))
+    return sorted(set(out), key=lambda r: (r[1], r[0]), reverse=True)
+
+
+def _listed(body):
     try:
         root = ET.fromstring(body)
     except ET.ParseError as e:
@@ -363,7 +374,7 @@ def list_proxies(fetcher, cik):
             continue
         day = dt.date.fromisoformat(filed)
         if day >= SINCE:
-            out.append((accn, day))
+            out.append((accn, day, form))
     return out
 
 
@@ -428,15 +439,15 @@ def parse_instance(body):
     return list(dict.fromkeys(rows))
 
 
-def fetch_proxy(fetcher, cik, accn, filed):
+def fetch_proxy(fetcher, cik, accn, filed, form=FORMS[0]):
     """Network half of reading one proxy (safe in a worker thread): a dict
     the store half writes, or raises PullError."""
     url = find_instance(fetcher, cik, accn)
     if url is None:
-        return {"accn": accn, "filed": filed, "url": None}
+        return {"accn": accn, "filed": filed, "form": form, "url": None}
     body = fetcher.get(url)
     sha = hashlib.sha256(body).hexdigest()
-    return {"accn": accn, "filed": filed, "url": url, "sha": sha, "bytes": len(body),
+    return {"accn": accn, "filed": filed, "form": form, "url": url, "sha": sha, "bytes": len(body),
             "raw": archive(body, "instances", accn, sha), "rows": parse_instance(body)}
 
 
@@ -445,7 +456,7 @@ def store_proxy(con, cik, got):
     if got["url"] is None:
         con.execute("INSERT INTO sec_px_filings (cik, accn, form, filed, fetched_at, "
                     "parser_version, status, facts, detail) VALUES (?,?,?,?,?,?,'no_xbrl',0,?)",
-                    [cik, got["accn"], FORMS[0], got["filed"], _now(), PARSER_VERSION,
+                    [cik, got["accn"], got.get("form", FORMS[0]), got["filed"], _now(), PARSER_VERSION,
                      "no tagged instance in the filing folder"])
         return "no_xbrl"
     rows = got["rows"]
@@ -455,7 +466,7 @@ def store_proxy(con, cik, got):
         con.executemany("INSERT INTO sec_px_facts VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                         [(got["accn"], cik) + r for r in rows])
         con.execute("INSERT INTO sec_px_filings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    [cik, got["accn"], FORMS[0], got["filed"], got["url"], _now(), got["sha"],
+                    [cik, got["accn"], got.get("form", FORMS[0]), got["filed"], got["url"], _now(), got["sha"],
                      got["bytes"], got["raw"], PARSER_VERSION, "ok", len(rows),
                      None if pvp else "tagged, but no pay-versus-performance facts"])
         con.execute("COMMIT")
@@ -470,13 +481,13 @@ def fetch_company(fetcher, cik, held):
     not yet held, fetched and parsed. Failures are returned, not raised."""
     listed = list_proxies(fetcher, cik)
     got = []
-    for accn, filed in listed:
+    for accn, filed, form in listed:
         if accn in held:
             continue
         try:
-            got.append(fetch_proxy(fetcher, cik, accn, filed))
+            got.append(fetch_proxy(fetcher, cik, accn, filed, form))
         except Exception as e:                                      # noqa: BLE001
-            got.append({"accn": accn, "filed": filed,
+            got.append({"accn": accn, "filed": filed, "form": form,
                         "error": "%s: %s" % (type(e).__name__, str(e)[:200])})
     return listed, got
 
@@ -488,7 +499,7 @@ def store_company(con, cik, listed, got):
         if "error" in g:
             con.execute("INSERT INTO sec_px_filings (cik, accn, form, filed, fetched_at, "
                         "parser_version, status, facts, detail) VALUES (?,?,?,?,?,?,'failed',0,?)",
-                        [cik, g["accn"], FORMS[0], g["filed"], _now(), PARSER_VERSION, g["error"]])
+                        [cik, g["accn"], g.get("form", FORMS[0]), g["filed"], _now(), PARSER_VERSION, g["error"]])
             notes.append("%s FAILED %s" % (g["accn"], g["error"]))
         else:
             notes.append("%s %s" % (g["accn"], store_proxy(con, cik, g)))

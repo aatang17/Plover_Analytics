@@ -1,0 +1,3502 @@
+{
+ "1000228": {
+  "domain": "henryschein.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=henryschein.com&sz=64",
+  "sha256": "e6cde6ac93a939386d9225bb7eff218d163ea4fda167f6e96eece88379cb5cce",
+  "ticker": "HSIC"
+ },
+ "1000697": {
+  "domain": "waters.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=waters.com&sz=64",
+  "sha256": "76df52e7aa0b259598b01748ddc033f319f70aec6fa2b6d52994353e01d4d38d",
+  "ticker": "WAT"
+ },
+ "1001250": {
+  "domain": "elcompanies.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=elcompanies.com&sz=64",
+  "sha256": "3600fe3f7a4f7094e709aef0734176f991849540a348498240e1f01c5afe9a29",
+  "ticker": "EL"
+ },
+ "1002047": {
+  "domain": "netapp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=netapp.com&sz=64",
+  "sha256": "8421511c54038c213396f68ecb3a5341b66fa7c73a4078fa1cdae738b10ee192",
+  "ticker": "NTAP"
+ },
+ "1002910": {
+  "domain": "ameren.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ameren.com&sz=64",
+  "sha256": "654587932ae8ccf7ad321d1bf70b5d4c4389f277cd68a13983a459de223d85e8",
+  "ticker": "AEE"
+ },
+ "100493": {
+  "domain": "tyson.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=tyson.com&sz=64",
+  "sha256": "3db49cf6f22d86fd31ddcaec1de2c23b40dcb4fcc62b4031f4ab9e592e2e0d1b",
+  "ticker": "TSN"
+ },
+ "1004980": {
+  "domain": "pge.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pge.com&sz=64",
+  "sha256": "57e08e25ef35fa7ae176ee2222c62716b187ccc5476b5dc4197fa127a74b62bb",
+  "ticker": "PCG"
+ },
+ "100517": {
+  "domain": "united.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=united.com&sz=64",
+  "sha256": "0d59818071a869f460e851d4f87c654956ba5f75bc2a1467e8842f07c72a3728",
+  "ticker": "UAL"
+ },
+ "100885": {
+  "domain": "up.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=up.com&sz=64",
+  "sha256": "bba9e63a5d6910189a111d1a0d7379a31bf38f03f25507df3f29d8471eabded5",
+  "ticker": "UNP"
+ },
+ "1013237": {
+  "domain": "factset.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=factset.com&sz=64",
+  "sha256": "52530fede55195e8aa54e11dfadecd91108276f6b02d76c2b161a038c0d6ca21",
+  "ticker": "FDS"
+ },
+ "1013871": {
+  "domain": "nrg.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nrg.com&sz=64",
+  "sha256": "890649a4dca36b3752900055be390b29989c10e4dae70b16abcb76c2962bca5c",
+  "ticker": "NRG"
+ },
+ "1014473": {
+  "domain": "verisign.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=verisign.com&sz=64",
+  "sha256": "652e928b8d84d15ebac0353c592d1728666cf2ce00c1083fe2de0bd42e4e5f66",
+  "ticker": "VRSN"
+ },
+ "101829": {
+  "domain": "rtx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=rtx.com&sz=64",
+  "sha256": "52029e9b75cb4f7c00e1b135766b2c737542e2e0bba5a5f5aeb64cfd3c3b3cd1",
+  "ticker": "RTX"
+ },
+ "1018724": {
+  "domain": "amazon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=amazon.com&sz=64",
+  "sha256": "bdb6b392196308cb49b16fe08ddb36aeb870c9fe5d4f6d54f06dd91465c9b3d7",
+  "ticker": "AMZN"
+ },
+ "1020569": {
+  "domain": "ironmountain.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ironmountain.com&sz=64",
+  "sha256": "f648e676045ab4bd341ce1ac4cbabdc91e99bb3fe5cb17970458857de7d80239",
+  "ticker": "IRM"
+ },
+ "1022079": {
+  "domain": "questdiagnostics.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=questdiagnostics.com&sz=64",
+  "sha256": "7878daf11403b27164a609e9b04ee10a7da8e4f730998a0b494978ee2bf9274c",
+  "ticker": "DGX"
+ },
+ "1022671": {
+  "domain": "steeldynamics.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=steeldynamics.com&sz=64",
+  "sha256": "ceafca33884de521bca98dbb851b34dcb4dcac42c50939ae564a141b1b0e4b6b",
+  "ticker": "STLD"
+ },
+ "1024478": {
+  "domain": "rockwellautomation.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.rockwellautomation.com/etc.clientlibs/rockwell-aem-base/clientlibs/clientlib-base/resources/favicons/apple-touch-icon.png",
+  "sha256": "4347b5d37cbc32a80f96c0563979cad2450592a35278faa4476162c6d6c7fc10",
+  "ticker": "ROK"
+ },
+ "1031296": {
+  "domain": "firstenergycorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=firstenergycorp.com&sz=64",
+  "sha256": "26fcb9807f77f6de7e2359141a144791343ad511a8fc35866955152cd99fb6a3",
+  "ticker": "FE"
+ },
+ "1032208": {
+  "domain": "sempra.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=sempra.com&sz=64",
+  "sha256": "70ec95df9ddae85e5e90bdae69a6e327c643bb3741a29281eb98d73e8c0ca9b7",
+  "ticker": "SRE"
+ },
+ "1034054": {
+  "domain": "sbasite.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=sbasite.com&sz=64",
+  "sha256": "28f0829d495bbfde163951617a7f15309a6cf1d0b6a7ecb26ed9d3f1ade02ce7",
+  "ticker": "SBAC"
+ },
+ "1035002": {
+  "domain": "valero.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=valero.com&sz=64",
+  "sha256": "0ac5cdeec255be72eb96300a05d179504e6244abfef69cf313c99ecf981e9262",
+  "ticker": "VLO"
+ },
+ "1035267": {
+  "domain": "intuitive.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=intuitive.com&sz=64",
+  "sha256": "78de65866aec48eebf79854caaa77402352545cd64d55b4aaf23a20511782534",
+  "ticker": "ISRG"
+ },
+ "1035443": {
+  "domain": "are.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=are.com&sz=64",
+  "sha256": "82071525fad5dd1ccde66d673702aaec3975136c263005190aa3094bdab3e9bc",
+  "ticker": "ARE"
+ },
+ "1035983": {
+  "domain": "comfortsystemsusa.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=comfortsystemsusa.com&sz=64",
+  "sha256": "f13529d9f263d6caeda426fa6188db67820e899d414c745b6c084362b72328f6",
+  "ticker": "FIX"
+ },
+ "1037038": {
+  "domain": "ralphlauren.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ralphlauren.com&sz=64",
+  "sha256": "b88b8eba18d00cffe778078e1248384fa0f91502d7412216428a7694dcb2dbea",
+  "ticker": "RL"
+ },
+ "1037540": {
+  "domain": "bxp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bxp.com&sz=64",
+  "sha256": "79e56d401084db742a514ac0548863f14ac79d24def67da26c66c1f79fe116da",
+  "ticker": "BXP"
+ },
+ "1037646": {
+  "domain": "mt.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mt.com&sz=64",
+  "sha256": "6972debaca54388385b5aa16d3424e0979d8a72e6ceea6ecaf2d2baf6e5fa689",
+  "ticker": "MTD"
+ },
+ "1037868": {
+  "domain": "ametek.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ametek.com&sz=64",
+  "sha256": "8df893d25a0a13ba8494d56ff3888721183a66c8e186cdb2a7564b6402697846",
+  "ticker": "AME"
+ },
+ "1039684": {
+  "domain": "oneok.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=oneok.com&sz=64",
+  "sha256": "176eaf31c11534d0622055d94d82d7523c8bdee1fc6f72ed78e46fcf5e32a24d",
+  "ticker": "OKE"
+ },
+ "1041061": {
+  "domain": "yum.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=yum.com&sz=64",
+  "sha256": "7359509c6ba0b5cbf8343e0c6e61a4756700918bccda7ec114a6d736e36d4147",
+  "ticker": "YUM"
+ },
+ "104169": {
+  "domain": "walmart.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=walmart.com&sz=64",
+  "sha256": "4bfb5cc7feb69c6aa89bd7a2b91075d95ba4139bcb547bcbaae3450994fb4e78",
+  "ticker": "WMT"
+ },
+ "1043277": {
+  "domain": "chrobinson.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=chrobinson.com&sz=64",
+  "sha256": "7d8e7044f2c7ad6b95b3ef3eb01925a65ec30a430ee655821738d2c3846cf1a1",
+  "ticker": "CHRW"
+ },
+ "10456": {
+  "domain": "baxter.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.baxter.com/themes/custom/cosmos/favicon/apple-touch-icon.png",
+  "sha256": "28f59e8e42bb509415ee083518ef6ebad43d1c4b374434c1f7f1ba3ebc652880",
+  "ticker": "BAX"
+ },
+ "1045609": {
+  "domain": "prologis.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=prologis.com&sz=64",
+  "sha256": "b6870e4eaca3c3f6a2c7e2616d98e6cfc88e88f27130c32f9ac89171f85749a0",
+  "ticker": "PLD"
+ },
+ "1045810": {
+  "domain": "nvidia.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nvidia.com&sz=64",
+  "sha256": "22f20c89875491ba01bb404fea22f2367f749aa4147f6fe15e23590e231a23be",
+  "ticker": "NVDA"
+ },
+ "1047862": {
+  "domain": "coned.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=coned.com&sz=64",
+  "sha256": "57ca150b4bc659ed4359ce05375ffb4706452700a07ee915f68d87239b2fc556",
+  "ticker": "ED"
+ },
+ "1048286": {
+  "domain": "marriott.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=marriott.com&sz=64",
+  "sha256": "e4239b04c8aa6542b84c70f5f77124ccf59405ec083f85958456964d721feda9",
+  "ticker": "MAR"
+ },
+ "1048695": {
+  "domain": "f5.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=f5.com&sz=64",
+  "sha256": "abd84178bfb55d7a1beecc2e74a748d9b36bb8be7b213c91b8a12616600fbfe0",
+  "ticker": "FFIV"
+ },
+ "1048911": {
+  "domain": "fedex.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fedex.com&sz=64",
+  "sha256": "71b92c36ab068b67ab7e1e873bedd09c619321e1a7ad98961f20d1df9e952ea0",
+  "ticker": "FDX"
+ },
+ "1050915": {
+  "domain": "quantaservices.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=quantaservices.com&sz=64",
+  "sha256": "b89d83e2ecf978ce689f99565b44d79be813c94d3a26f735e7503ea87bed3eca",
+  "ticker": "PWR"
+ },
+ "1051470": {
+  "domain": "crowncastle.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=crowncastle.com&sz=64",
+  "sha256": "1aeb375cf966a116a5f29bc3240b272dc7307cd37213a30a7a5ca843616c51b3",
+  "ticker": "CCI"
+ },
+ "1053507": {
+  "domain": "americantower.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=americantower.com&sz=64",
+  "sha256": "638a2c58df5a743524946a0023235ff81e4199caf1cf3efae19c89d50afda093",
+  "ticker": "AMT"
+ },
+ "105634": {
+  "domain": "emcorgroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=emcorgroup.com&sz=64",
+  "sha256": "b2918fd8f4272f48e3e3569a2b24360b8af0acd33791dcc3149b7ba755bfd55a",
+  "ticker": "EME"
+ },
+ "1057352": {
+  "domain": "costargroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=costargroup.com&sz=64",
+  "sha256": "57203e58bf776f6038e19c0db6fb7a387d870202ad122f677629c34551a22c29",
+  "ticker": "CSGP"
+ },
+ "105770": {
+  "domain": "westpharma.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=westpharma.com&sz=64",
+  "sha256": "224430240a068d7147fa11befb698b5a578a04cd383da686c0ccd700e5898076",
+  "ticker": "WST"
+ },
+ "1058090": {
+  "domain": "chipotle.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=chipotle.com&sz=64",
+  "sha256": "1b1ce9a364020c423e1c5f4fb741db67ac2da78da6a94c949bd4303d2ea57a01",
+  "ticker": "CMG"
+ },
+ "1058290": {
+  "domain": "cognizant.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cognizant.com&sz=64",
+  "sha256": "efe83c96bef8ea82ace65a2cccd1418392350f1ec81af4c58ef26abebf39bbae",
+  "ticker": "CTSH"
+ },
+ "1059556": {
+  "domain": "moodys.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=moodys.com&sz=64",
+  "sha256": "c7e0b4ac3213e2dcebe14fec6a23fa856fa798dcdc267bd465e3abe5bf393f02",
+  "ticker": "MCO"
+ },
+ "1060391": {
+  "domain": "republicservices.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=republicservices.com&sz=64",
+  "sha256": "43354dea2cb798572e37de4b2023a482ded08ceea32f683dc746c1bfb7632bbc",
+  "ticker": "RSG"
+ },
+ "106040": {
+  "domain": "westerndigital.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=westerndigital.com&sz=64",
+  "sha256": "493595a716e620cd9b63e8ccaa3a076e70af6eb44188b6691385962b5b9c6d98",
+  "ticker": "WDC"
+ },
+ "1063761": {
+  "domain": "simon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=simon.com&sz=64",
+  "sha256": "539c10fe2094d0d1b401f104ef711bf9c0715b42d8ea64f09c97a1bf000ca526",
+  "ticker": "SPG"
+ },
+ "1065088": {
+  "domain": "ebay.com",
+  "fetched": "2026-10-24",
+  "icon": "https://ebay.com/apple-touch-icon.png",
+  "sha256": "05be888b1cf2da32b1a1aa5d5e64056d6d5c800e9dee73483849101d8c0f4c8c",
+  "ticker": "EBAY"
+ },
+ "1065280": {
+  "domain": "netflix.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=netflix.com&sz=64",
+  "sha256": "31c6360717bb9b3aa23603688a64ccd35f01ff1b897eea5a47ba9eb8b13f926a",
+  "ticker": "NFLX"
+ },
+ "106535": {
+  "domain": "weyerhaeuser.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=weyerhaeuser.com&sz=64",
+  "sha256": "b281ce177eafc77216d520481120b4b96c16a5eb80d62cfabd5a7902f4344e8f",
+  "ticker": "WY"
+ },
+ "1067701": {
+  "domain": "unitedrentals.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=unitedrentals.com&sz=64",
+  "sha256": "53c24316aacee8300c0c926fee7041ed7729a0a9223b7ed1a90acb8dc8ccdd00",
+  "ticker": "URI"
+ },
+ "1067983": {
+  "domain": "berkshirehathaway.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "BRK-B"
+ },
+ "1069183": {
+  "domain": "axon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=axon.com&sz=64",
+  "sha256": "dc127a46155aaa4f3705ece5ba884dfb5db9c2da362484106a7d853ea43bf3bf",
+  "ticker": "AXON"
+ },
+ "1069202": {
+  "domain": "lennox.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.lennox.com/application/themes/lennox/assets/favicon.ico",
+  "sha256": "90b692b45ec37a83c2ccc9f7391aa67736e23b8266b2dc020d19f52eaaff074f",
+  "ticker": "LII"
+ },
+ "1070750": {
+  "domain": "hosthotels.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hosthotels.com&sz=64",
+  "sha256": "ec31c6bd809f07155b8fb6907d41cb4bb7013f21fba80d48cbf5a9268ecb08f2",
+  "ticker": "HST"
+ },
+ "1071739": {
+  "domain": "centene.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=centene.com&sz=64",
+  "sha256": "145b72d39f711441854c7fd801949c2833e9fc075a4813a41558a6ad71c0977e",
+  "ticker": "CNC"
+ },
+ "107263": {
+  "domain": "williams.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=williams.com&sz=64",
+  "sha256": "59f8409cb502c4af6df32ef0b94e0313e600e2af8703a67e9fbdceac46472cc6",
+  "ticker": "WMB"
+ },
+ "1075531": {
+  "domain": "bookingholdings.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bookingholdings.com&sz=64",
+  "sha256": "3bc398dd2e046c6780bd7a676383655157168c7c7a1e0593c46876c34c5557b5",
+  "ticker": "BKNG"
+ },
+ "10795": {
+  "domain": "bd.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bd.com&sz=64",
+  "sha256": "81be7c7e2f28c939a0cd1330500b49ced01b16f9340e7ef2ae970e76f0712aa0",
+  "ticker": "BDX"
+ },
+ "1086222": {
+  "domain": "akamai.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=akamai.com&sz=64",
+  "sha256": "f25444b3edf6c9c4aa513eb99c2fd2c63daa34836373accec1a5ea2c04a83bb9",
+  "ticker": "AKAM"
+ },
+ "1090012": {
+  "domain": "devonenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.devonenergy.com/favicons/favicon-196x196.png",
+  "sha256": "136c8e30a4957bf13e81db5df69902a0fa5f8b0efcea2121292f4b8425bee808",
+  "ticker": "DVN"
+ },
+ "1090727": {
+  "domain": "ups.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ups.com&sz=64",
+  "sha256": "c8454224dbbcd6d7ce809cde7357990f554eb7463ed2f680180a1a497fb72cc3",
+  "ticker": "UPS"
+ },
+ "1090872": {
+  "domain": "agilent.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=agilent.com&sz=64",
+  "sha256": "8573305d8119beba5acd3daff7aea2da924146c0d5ca008e0991f5e58a3c4baf",
+  "ticker": "A"
+ },
+ "1091667": {
+  "domain": "charter.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=charter.com&sz=64",
+  "sha256": "1ca329b21d6a63fc0a8be0ec5f31d3664ea520d7d8d0234624a612a1286c234b",
+  "ticker": "CHTR"
+ },
+ "109198": {
+  "domain": "tjx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=tjx.com&sz=64",
+  "sha256": "4d9fe9fe37b6de9296adf44a112fd23d7a732c4e68777ab0286b106347c93e5c",
+  "ticker": "TJX"
+ },
+ "1093557": {
+  "domain": "dexcom.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dexcom.com&sz=64",
+  "sha256": "e89cef425d258e743b3ad73035918b7e8cc2682df2517fcaa4db0153da5e3346",
+  "ticker": "DXCM"
+ },
+ "1094285": {
+  "domain": "teledyne.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=teledyne.com&sz=64",
+  "sha256": "d3196d750c68df98c00e200e934c460d6f6ebae0b9b3c9d3ae78252e52a86c4e",
+  "ticker": "TDY"
+ },
+ "1095073": {
+  "domain": "everestre.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=everestre.com&sz=64",
+  "sha256": "41bf59d29a387926ef580adee13e44a21dc805459ba895258c96f592393f9976",
+  "ticker": "EG"
+ },
+ "1097149": {
+  "domain": "aligntech.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aligntech.com&sz=64",
+  "sha256": "3f18968799c4fb1524e13c43a81de899d6a431c4830f28d96a993c575fd961e6",
+  "ticker": "ALGN"
+ },
+ "1097864": {
+  "domain": "onsemi.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=onsemi.com&sz=64",
+  "sha256": "8ce45a2cde3bc15a7f28b11df85cf98ffe3423d91a61e3ee383e613c769f75f3",
+  "ticker": "ON"
+ },
+ "1099219": {
+  "domain": "metlife.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=metlife.com&sz=64",
+  "sha256": "c34316c823678458f696a86f2b0a1d6e6bced1d5f1fcee764d14e8a2a2b62190",
+  "ticker": "MET"
+ },
+ "1099800": {
+  "domain": "edwardslifesciences.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=edwardslifesciences.com&sz=64",
+  "sha256": "4416c80b5d49263d78569ed291f9c46397740b6db167f3ded295c097282decc0",
+  "ticker": "EW"
+ },
+ "1100682": {
+  "domain": "criver.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=criver.com&sz=64",
+  "sha256": "b7a5f90b4bb55fc9a6266635db797496a1c5d16234e0d0ef00aa2dcadee1296f",
+  "ticker": "CRL"
+ },
+ "1101239": {
+  "domain": "equinix.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=equinix.com&sz=64",
+  "sha256": "12ddba2454ab905061df106de9d94d6d110e01526ee963f5e62589f67579b593",
+  "ticker": "EQIX"
+ },
+ "1103982": {
+  "domain": "mondelezinternational.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mondelezinternational.com&sz=64",
+  "sha256": "18eccd07c38696cbb4a7c8e1d997b261af9224fa6a60e197497fb64415bdc58b",
+  "ticker": "MDLZ"
+ },
+ "1108524": {
+  "domain": "salesforce.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=salesforce.com&sz=64",
+  "sha256": "7f58f5f4bf4558f8b3a206eb009705e8e1e02aa578efe4500bffb3036efcf032",
+  "ticker": "CRM"
+ },
+ "1109357": {
+  "domain": "exeloncorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=exeloncorp.com&sz=64",
+  "sha256": "ac52557ced672ae3c72dc615e7fa16202bcb4ef8e50003715aa6a4be04290550",
+  "ticker": "EXC"
+ },
+ "1110803": {
+  "domain": "illumina.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=illumina.com&sz=64",
+  "sha256": "c44bb60be603a45840023826a1554ec34075a0a0baf40bb33e15ef34fd97f159",
+  "ticker": "ILMN"
+ },
+ "1111711": {
+  "domain": "nisource.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nisource.com&sz=64",
+  "sha256": "d2e99d2d5abe249133a888465b350ab2133f5e086ce6b1c0852d21066911c0d8",
+  "ticker": "NI"
+ },
+ "1113169": {
+  "domain": "troweprice.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=troweprice.com&sz=64",
+  "sha256": "3ca2a73b27c51e919f7c9f4fcb9da5def0e0cbbbe013fff6cc0e0f2c5e77152b",
+  "ticker": "TROW"
+ },
+ "1116132": {
+  "domain": "coach.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=coach.com&sz=64",
+  "sha256": "50ac46be8d942e77cb5c1ba6a6661f1a8a19820d6c324491b85cc73795887344",
+  "ticker": "TPR"
+ },
+ "1120193": {
+  "domain": "nasdaq.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nasdaq.com&sz=64",
+  "sha256": "1ed3e204c27f710b5f1a2e6deb60689c558be1a88a94b6640ede58d049c8d958",
+  "ticker": "NDAQ"
+ },
+ "1121788": {
+  "domain": "garmin.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=garmin.com&sz=64",
+  "sha256": "4673fd62a7dc7fc80c175b4ee3aa262e0e056d6e4558bbc8c8cfe5569419734c",
+  "ticker": "GRMN"
+ },
+ "1123360": {
+  "domain": "globalpaymentsinc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=globalpaymentsinc.com&sz=64",
+  "sha256": "97ac0e6f463b3557005bdb556850f430cb0a8f96845ff1143d62dfd6d4720a5e",
+  "ticker": "GPN"
+ },
+ "1126328": {
+  "domain": "principal.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=principal.com&sz=64",
+  "sha256": "b93e1eeb49d8754d4d2bf20a98623ae0a8954e3b04de9a2212bb16c64a6aee01",
+  "ticker": "PFG"
+ },
+ "1130310": {
+  "domain": "centerpointenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=centerpointenergy.com&sz=64",
+  "sha256": "0d8d364f8c7ecf5c7967548dfbd904ce1e8ab227f3dfca5b5a5e9e8c9f56c8d0",
+  "ticker": "CNP"
+ },
+ "1133421": {
+  "domain": "northropgrumman.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=northropgrumman.com&sz=64",
+  "sha256": "2a284a02f0da0fc645e3e49a7eca2f340929b6504701bd8cc4d62b5695fd8ab5",
+  "ticker": "NOC"
+ },
+ "1136869": {
+  "domain": "zimmer.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=zimmer.com&sz=64",
+  "sha256": "c36bcf64e723704bda701c9bf0a6c1a27d8a440e06bf415d2965c23a039e52d1",
+  "ticker": "ZBH"
+ },
+ "1136893": {
+  "domain": "fisglobal.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fisglobal.com&sz=64",
+  "sha256": "087db3becec5c71b9db479c50020b8ce1120babbc11bcdaf96248e1fd36b6eba",
+  "ticker": "FIS"
+ },
+ "1137774": {
+  "domain": "prudential.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=prudential.com&sz=64",
+  "sha256": "e59f85850e6386e32c89897fc69bde659fb1c435f73277d3bb4f81c591e7e62e",
+  "ticker": "PRU"
+ },
+ "1137789": {
+  "domain": "seagate.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=seagate.com&sz=64",
+  "sha256": "0e96d980eb2550c1e151fc49e320e86ce897c8d4c81fac8ea2f0998db16e75b4",
+  "ticker": "STX"
+ },
+ "1138118": {
+  "domain": "cbre.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cbre.com&sz=64",
+  "sha256": "cee2771279e171d7038af11fb30ae958bc194dc4b5d05c212de04dbf13556b7d",
+  "ticker": "CBRE"
+ },
+ "1140536": {
+  "domain": "wtwco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=wtwco.com&sz=64",
+  "sha256": "4c99deeafa4f4631b960137c3d170536852b56f089d7976577fa698f5392ebf6",
+  "ticker": "WTW"
+ },
+ "1140859": {
+  "domain": "cencora.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cencora.com&sz=64",
+  "sha256": "f6a51056a29af61aeafe4a6643464e7b6053f06df6c9b9b4cf02dfcb57428f2e",
+  "ticker": "COR"
+ },
+ "1141391": {
+  "domain": "mastercard.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mastercard.com&sz=64",
+  "sha256": "0695999f665efc5b3cd4144ccd3df139203533a9e836734f54b4e81069cd3c83",
+  "ticker": "MA"
+ },
+ "1145197": {
+  "domain": "insulet.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=insulet.com&sz=64",
+  "sha256": "29051818ecb51d5a29b9b41f6a3634b9582a4c30a9f13275fd83b0890a084701",
+  "ticker": "PODD"
+ },
+ "11544": {
+  "domain": "wrberkley.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=wrberkley.com&sz=64",
+  "sha256": "a41e498a8f4be00c9024c7c1ba795f823662e379fe0e9c485819e41984abe6e0",
+  "ticker": "WRB"
+ },
+ "1156039": {
+  "domain": "elevancehealth.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=elevancehealth.com&sz=64",
+  "sha256": "e06bdb1dd92d6c93e537a1daa1d1bf2446bf1cd25a55462e3631fe5245f5e933",
+  "ticker": "ELV"
+ },
+ "1156375": {
+  "domain": "cmegroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cmegroup.com&sz=64",
+  "sha256": "6556b8fb42c21178bea205898e1ed9c7d3f332665d864d9cbe654d727d9d0528",
+  "ticker": "CME"
+ },
+ "1163165": {
+  "domain": "conocophillips.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.conocophillips.com/favicons/apple-touch-icon.png",
+  "sha256": "6ca006197e8d28e7dc628a63c66b53c8f32e7672104e8b01c4d2ae9a6368c315",
+  "ticker": "COP"
+ },
+ "1164727": {
+  "domain": "newmont.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=newmont.com&sz=64",
+  "sha256": "bb41de554f0265b7dde23303cc396f669235f0cdd7b416a53d588f918485bbc9",
+  "ticker": "NEM"
+ },
+ "1166691": {
+  "domain": "comcastcorporation.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=comcastcorporation.com&sz=64",
+  "sha256": "8d08a055722a54b0cd01cf743d4a388c5cdb039d655cc2c93d31ab8eb0d26069",
+  "ticker": "CMCSA"
+ },
+ "1174922": {
+  "domain": "wynnresorts.com",
+  "fetched": "2026-10-24",
+  "icon": "https://cdn.wynnresorts.com/image/upload/v1746165894/Wynn%20Las%20Vegas/Fav%20Icon/apple-touch-icon.png",
+  "sha256": "e065b47932b5f421d68f196ad319d86afe0ba53fcba6eda91dec938bad86fa98",
+  "ticker": "WYNN"
+ },
+ "1175454": {
+  "domain": "corpay.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=corpay.com&sz=64",
+  "sha256": "7c79681fe63d295cdf1d6927bfc77a8e972d7a8d986e16e775a36bd9048cebe6",
+  "ticker": "CPAY"
+ },
+ "1176948": {
+  "domain": "aresmgmt.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aresmgmt.com&sz=64",
+  "sha256": "37f903c7fd3271297e5138835c4071761b4bd605689bf4c8d33d04c5bceb8070",
+  "ticker": "ARES"
+ },
+ "1260221": {
+  "domain": "transdigm.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=transdigm.com&sz=64",
+  "sha256": "a82760630de86fde24b9c0a4588638c92b2970889edd50a9b59c16262d51e428",
+  "ticker": "TDG"
+ },
+ "1262039": {
+  "domain": "fortinet.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fortinet.com&sz=64",
+  "sha256": "9cc58d7ba10e2cc53a44c62984cb7371d779e60996ded9738d5302c97e68d3d9",
+  "ticker": "FTNT"
+ },
+ "1267238": {
+  "domain": "assurant.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=assurant.com&sz=64",
+  "sha256": "e3941d26216dcd2d4cfedc299aaffaf1d95d8cb14209cb313cc2f65cb586610f",
+  "ticker": "AIZ"
+ },
+ "1274494": {
+  "domain": "firstsolar.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=firstsolar.com&sz=64",
+  "sha256": "28cbe8b94525240d00a374f726841f6c066b657cee6db7759b0244fd30a189b5",
+  "ticker": "FSLR"
+ },
+ "1280452": {
+  "domain": "monolithicpower.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=monolithicpower.com&sz=64",
+  "sha256": "ec3240f70f172e86366fba9f55c2a24ac554c2a4234ffd58be5edddf79aac04e",
+  "ticker": "MPWR"
+ },
+ "1281761": {
+  "domain": "regions.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=regions.com&sz=64",
+  "sha256": "7c9517cad6e5c6afb7ab0af85024795a663c1d6d11cb07875dc9045ad880458b",
+  "ticker": "RF"
+ },
+ "1283699": {
+  "domain": "t-mobile.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=t-mobile.com&sz=64",
+  "sha256": "b194b662ea328b1634849aa1636031a82e7c6e98150d01ead3c99470aa12bd14",
+  "ticker": "TMUS"
+ },
+ "1285785": {
+  "domain": "mosaicco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mosaicco.com&sz=64",
+  "sha256": "4afcf8e89d1139c24516d78afa972665b947f3c2867a83dc7a203c75374fef03",
+  "ticker": "MOS"
+ },
+ "1286681": {
+  "domain": "dominos.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dominos.com&sz=64",
+  "sha256": "29a4080eb0eb7028204001af8704cca6b7566eb0d0b7d0c1f48eefa4cb053eb4",
+  "ticker": "DPZ"
+ },
+ "1289490": {
+  "domain": "extraspace.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=extraspace.com&sz=64",
+  "sha256": "d6a1170ec001128a391272d0b5a467454add95dd457bec80a699553159fb1d52",
+  "ticker": "EXR"
+ },
+ "12927": {
+  "domain": "boeing.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=boeing.com&sz=64",
+  "sha256": "4aab9cc5231f67934d2efeee4590542414507f450c0ccc5b45c82a6ef68ae504",
+  "ticker": "BA"
+ },
+ "1297996": {
+  "domain": "digitalrealty.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=digitalrealty.com&sz=64",
+  "sha256": "2288de08ac03799edf08741a88b5cf3c6d6192f563916c2878146eee59fb14b5",
+  "ticker": "DLR"
+ },
+ "1300514": {
+  "domain": "lasvegassands.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lasvegassands.com&sz=64",
+  "sha256": "8190899361ffc6791b4b86a111a9da93be4c7552f32ce916f92a30648d65f3ba",
+  "ticker": "LVS"
+ },
+ "1318605": {
+  "domain": "tesla.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=tesla.com&sz=64",
+  "sha256": "0b43ad2ff5cdcd53488d58ee960e3177da268046d47c36763d914696868491a1",
+  "ticker": "TSLA"
+ },
+ "1321655": {
+  "domain": "palantir.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=palantir.com&sz=64",
+  "sha256": "dc6fff61df7398da1cc11e45234d676c0210baed83041fcf84187dac87acdae3",
+  "ticker": "PLTR"
+ },
+ "1324404": {
+  "domain": "cfindustries.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cfindustries.com&sz=64",
+  "sha256": "6f53078b3e73b6d45cfc3f67dee34a42832b91cb4cbacb45ea4cf4925b9da9a8",
+  "ticker": "CF"
+ },
+ "1324424": {
+  "domain": "expediagroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=expediagroup.com&sz=64",
+  "sha256": "92e099d6daa6f81dc1de60848d0475986af39e4195f7e5d5f0362f459b1b94e7",
+  "ticker": "EXPE"
+ },
+ "1326160": {
+  "domain": "duke-energy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=duke-energy.com&sz=64",
+  "sha256": "96ef34b2f10490b8016f3ed0e1cb417d77632126250d14c0288c0ed47caab595",
+  "ticker": "DUK"
+ },
+ "1326801": {
+  "domain": "meta.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=meta.com&sz=64",
+  "sha256": "48f4451e39cffcf7e0257918b15097142b4c2305d5c15b228a93cd48455f513e",
+  "ticker": "META"
+ },
+ "1327567": {
+  "domain": "paloaltonetworks.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.paloaltonetworks.com/etc/clientlibs/pan/img/favicons2020/favicon-194x194.png",
+  "sha256": "5ca19cfd90c4dc4ffdda91889e5e59251109fa69572f3bfb9e7d33f49b768ac0",
+  "ticker": "PANW"
+ },
+ "1327811": {
+  "domain": "workday.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=workday.com&sz=64",
+  "sha256": "5c01e5c0ab50caa77f150bab7b99e029c0aceb281ea1307ff9c465438abd35f9",
+  "ticker": "WDAY"
+ },
+ "1335258": {
+  "domain": "livenationentertainment.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=livenationentertainment.com&sz=64",
+  "sha256": "40ad053d30a22743d26465faf4233f75fb4d385c987f7ba5c2bb85e613228c5a",
+  "ticker": "LYV"
+ },
+ "1336920": {
+  "domain": "leidos.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=leidos.com&sz=64",
+  "sha256": "8db386ba748add7e01cd3d65ffdebdeec70cda61d2f527e133402b1a7345401d",
+  "ticker": "LDOS"
+ },
+ "1341439": {
+  "domain": "oracle.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=oracle.com&sz=64",
+  "sha256": "d00a16f78c847015c9552151ad17f028797ac95968b89306e04af31c4935c601",
+  "ticker": "ORCL"
+ },
+ "1373715": {
+  "domain": "servicenow.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=servicenow.com&sz=64",
+  "sha256": "fa0d9e747943f077ad44795b5c1a2daab1bc033534343bfafa9c25c25009a908",
+  "ticker": "NOW"
+ },
+ "1374310": {
+  "domain": "cboe.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cboe.com&sz=64",
+  "sha256": "8dc8a1d60d36231d7868099362db996cb2895759d4d38f1bb3fd414873ae8a24",
+  "ticker": "CBOE"
+ },
+ "1375365": {
+  "domain": "supermicro.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=supermicro.com&sz=64",
+  "sha256": "4957cc40c314344d67aba146587e9952fcdd5a6fee19b80bf0bc02e29d90f953",
+  "ticker": "SMCI"
+ },
+ "1381197": {
+  "domain": "interactivebrokers.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=interactivebrokers.com&sz=64",
+  "sha256": "1dcd45198b544c72699cb2597c940d8783b67e0f2578c7d1070a230f6a807d37",
+  "ticker": "IBKR"
+ },
+ "1383312": {
+  "domain": "broadridge.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=broadridge.com&sz=64",
+  "sha256": "470e75fc77fbb3578d004eb02ef491caa709c0e348e8c8a8b76bff3ebfa4a633",
+  "ticker": "BR"
+ },
+ "1385157": {
+  "domain": "te.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=te.com&sz=64",
+  "sha256": "e5f815437c585f45259e2697cfaf22492169cf6ae57efd02d1edc07ed849d977",
+  "ticker": "TEL"
+ },
+ "1389170": {
+  "domain": "targaresources.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "TRGP"
+ },
+ "1390777": {
+  "domain": "bnymellon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.bnymellon.com/content/dam/bnymellon/web/favicons/favicon-152.png",
+  "sha256": "4b84fdbca11367b935124a4e42edc4a6bf6eb19227fd62864515050f7257095e",
+  "ticker": "BNY"
+ },
+ "1393052": {
+  "domain": "veeva.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=veeva.com&sz=64",
+  "sha256": "deb6278f2012eb85d8ac43013e186ebec1c79706278f5f86c17c43aa523cd894",
+  "ticker": "VEEV"
+ },
+ "1393311": {
+  "domain": "publicstorage.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=publicstorage.com&sz=64",
+  "sha256": "01850b71de8e8b4f13e2b92a9fdfeedfdd61e75af13db2fd26815dca800f5aee",
+  "ticker": "PSA"
+ },
+ "1393818": {
+  "domain": "blackstone.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=blackstone.com&sz=64",
+  "sha256": "8f527c6a704d1cabed6866676b9d429e914d8b912753728e332cd20d1b3ae731",
+  "ticker": "BX"
+ },
+ "1396009": {
+  "domain": "vulcanmaterials.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=vulcanmaterials.com&sz=64",
+  "sha256": "6f334a1a42a04f8322f1537a9d04335dcf2daf2e01790245927c882b7cec37da",
+  "ticker": "VMC"
+ },
+ "1397187": {
+  "domain": "lululemon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lululemon.com&sz=64",
+  "sha256": "c43b536ec38210dbe411bafc7b40f76dd039a73a1e04dd9216b953790a1836dc",
+  "ticker": "LULU"
+ },
+ "1402057": {
+  "domain": "cdw.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cdw.com&sz=64",
+  "sha256": "b390ac7f242c038ac26068dcbca316a407718af9e3ea69a41f9c34085b88d76a",
+  "ticker": "CDW"
+ },
+ "1403161": {
+  "domain": "visa.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=visa.com&sz=64",
+  "sha256": "0c3b07145507784bce7d50def712a73baabe2e95398ebd37eef4914ed1cd431d",
+  "ticker": "V"
+ },
+ "1403568": {
+  "domain": "ulta.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ulta.com&sz=64",
+  "sha256": "106f088fcb104e1bd8a9f3730f109223c506790eb1178f51130cc30be7d37007",
+  "ticker": "ULTA"
+ },
+ "1404912": {
+  "domain": "kkr.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=kkr.com&sz=64",
+  "sha256": "e9fdd6bd81f196f00f1601959fd607d0d91defeeb6cdee4bfa000101d458356d",
+  "ticker": "KKR"
+ },
+ "1408198": {
+  "domain": "msci.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=msci.com&sz=64",
+  "sha256": "5b405b3ffdb8f735112e1131b53953f5c9da593fc71826a856156aa282055a5d",
+  "ticker": "MSCI"
+ },
+ "1410636": {
+  "domain": "amwater.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=amwater.com&sz=64",
+  "sha256": "c309cc38d0f27243741fada18fd4f67238cd67799489984ea75d9b6f471a954f",
+  "ticker": "AWK"
+ },
+ "1413329": {
+  "domain": "pmi.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pmi.com&sz=64",
+  "sha256": "2b1fc5a7a2403073af6bba09a2a2faa9c7add764377b3e87b4a314a6a67629b8",
+  "ticker": "PM"
+ },
+ "1413447": {
+  "domain": "nxp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nxp.com&sz=64",
+  "sha256": "f7a72112a2a6ce2a8c5dbc045f49f8ad21d2ecaa115e3d05de1cf467e7aa309f",
+  "ticker": "NXPI"
+ },
+ "1415404": {
+  "domain": "echostar.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=echostar.com&sz=64",
+  "sha256": "c1096511261f7b4874949b1ca5aa29fbf27d5c9c5457e75cab872cdd221344fe",
+  "ticker": "ECHO"
+ },
+ "1418135": {
+  "domain": "drpeppersnapplegroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=drpeppersnapplegroup.com&sz=64",
+  "sha256": "4075c9700a4564c6ddcd45b37955d3f8beccd0f086b94bb53b4dc8ad5ac014d4",
+  "ticker": "KDP"
+ },
+ "14272": {
+  "domain": "bms.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bms.com&sz=64",
+  "sha256": "64e8869aed5d19d438175f999eb26e03c9174d463e0767ab6f1a28710850d7a9",
+  "ticker": "BMY"
+ },
+ "1442145": {
+  "domain": "verisk.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=verisk.com&sz=64",
+  "sha256": "67b468a0ec57760dd3a202f77605f3a20cfc2b80461ac7f81f4c144118a00d4d",
+  "ticker": "VRSK"
+ },
+ "1447669": {
+  "domain": "authy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=authy.com&sz=64",
+  "sha256": "3c8f1e486ec4077eb5e06b0f87d8cad489099bca4c8b21396a9996f971aa2c1d",
+  "ticker": "TWLO"
+ },
+ "1466258": {
+  "domain": "tranetechnologies.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=tranetechnologies.com&sz=64",
+  "sha256": "204d3a1a7bb14c5a7369ee0b3213b412baa9247bb9087e2712d6aad5a092ec35",
+  "ticker": "TT"
+ },
+ "1467373": {
+  "domain": "accenture.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=accenture.com&sz=64",
+  "sha256": "d4a26a1620145980fb0a2c1bb790ea82adc3fa0c1e10c4aacd07559023790c4e",
+  "ticker": "ACN"
+ },
+ "1467858": {
+  "domain": "gm.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gm.com&sz=64",
+  "sha256": "763ee45c050c56582cc99f2017b6d0438aa6561abbfecf92e22ffe7c200db51c",
+  "ticker": "GM"
+ },
+ "14693": {
+  "domain": "brown-forman.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=brown-forman.com&sz=64",
+  "sha256": "adb87cf7a181f88da0bbb6aa2649faf34847b658ba87af7fda40b296744efc3f",
+  "ticker": "BF-B"
+ },
+ "1474432": {
+  "domain": "purestorage.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=purestorage.com&sz=64",
+  "sha256": "e759e8aad69451556953f019180f6a32b7b93ff0944edc657f3c6ec5d3eee967",
+  "ticker": "P"
+ },
+ "1474735": {
+  "domain": "generac.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=generac.com&sz=64",
+  "sha256": "93f4134c89c39786cdd83b14bc7b1b2892c8e4aa1a8aecf72981969990e58eb3",
+  "ticker": "GNRC"
+ },
+ "1478242": {
+  "domain": "iqvia.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.iqvia.com/Content/Shotgun/img/favicon/apple-icon-precomposed.png?v=4",
+  "sha256": "3d4a8d48d36d6b7933d59365e4c06f056811a6bd93cdaca8199e5b57960f57f6",
+  "ticker": "IQV"
+ },
+ "1489393": {
+  "domain": "lyondellbasell.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lyondellbasell.com&sz=64",
+  "sha256": "2663be3c3f6a8c431b4c147cf3b2b90edf5afea7d72c5aa3e5be7320312c1b49",
+  "ticker": "LYB"
+ },
+ "1501585": {
+  "domain": "hii.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hii.com&sz=64",
+  "sha256": "4232b516a4eedf1aebf1d92bb7bb4eb35e3057d1b1fb9c6fb38239bfd2aa7a36",
+  "ticker": "HII"
+ },
+ "1506307": {
+  "domain": "kindermorgan.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=kindermorgan.com&sz=64",
+  "sha256": "339c15770f8019c45a409c059982cca1ae489f5f81643648613c15424dc66977",
+  "ticker": "KMI"
+ },
+ "1510295": {
+  "domain": "marathonpetroleum.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=marathonpetroleum.com&sz=64",
+  "sha256": "fa21c61da0d0d8a3189c1a1e6fa2ffe2a5f28b75d9c3e9bba39181dcd145c87b",
+  "ticker": "MPC"
+ },
+ "1512673": {
+  "domain": "block.xyz",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=block.xyz&sz=64",
+  "sha256": "29ccee5c7a34326c5efb86427a60f8e3b3cab1b7f5cdf4374848db1249c03d6e",
+  "ticker": "XYZ"
+ },
+ "1513761": {
+  "domain": "nclhltd.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nclhltd.com&sz=64",
+  "sha256": "d0ae20a95974faa345d5ea622cc300f7f087d93d8907b0c17efc5337579bc813",
+  "ticker": "NCLH"
+ },
+ "1521332": {
+  "domain": "aptiv.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aptiv.com&sz=64",
+  "sha256": "50bd1e5e6400468e0a5e5f852e6f1d3b218a9136051bec2aa0a0c7526f57b7ab",
+  "ticker": "APTV"
+ },
+ "1524472": {
+  "domain": "xylem.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=xylem.com&sz=64",
+  "sha256": "116ebb4bb0ea81165e733359abd4e67b53e31c99b4f2fce3b334a800c456a86e",
+  "ticker": "XYL"
+ },
+ "1534701": {
+  "domain": "phillips66.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "PSX"
+ },
+ "1535527": {
+  "domain": "crowdstrike.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=crowdstrike.com&sz=64",
+  "sha256": "a0307bba56665c072adacfe3f19c036e886637a0511147d1eddf4d95ed018e22",
+  "ticker": "CRWD"
+ },
+ "1539838": {
+  "domain": "diamondbackenergy.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "FANG"
+ },
+ "1543151": {
+  "domain": "uber.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=uber.com&sz=64",
+  "sha256": "d3fc196ba8b63aa61792a998900a6651de6f476aa6970c8286bb11fec9a87728",
+  "ticker": "UBER"
+ },
+ "1551152": {
+  "domain": "abbvie.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=abbvie.com&sz=64",
+  "sha256": "3037b03faeb5742c071637343c5d3e978c0af44dde76535e4fbd14626dccc2ea",
+  "ticker": "ABBV"
+ },
+ "1551182": {
+  "domain": "eaton.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=eaton.com&sz=64",
+  "sha256": "b50a05031eb66a10cc3f7548e1b2aef04a7a6d4485bd63df8795ce7060abd884",
+  "ticker": "ETN"
+ },
+ "1555280": {
+  "domain": "zoetis.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=zoetis.com&sz=64",
+  "sha256": "c61222eaf567da8395afedef7bcb1cd8bd0d2b3d7b5f5e36ddfb1452d5e84b49",
+  "ticker": "ZTS"
+ },
+ "1559720": {
+  "domain": "airbnb.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=airbnb.com&sz=64",
+  "sha256": "7720f0f21c9daa3fac26ba2aba0fc71b212fad80907856d248b71a654597bd15",
+  "ticker": "ABNB"
+ },
+ "1561550": {
+  "domain": "datadoghq.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=datadoghq.com&sz=64",
+  "sha256": "42dda77e702d7bed7388e0fba3cde2e1f8a40014b1f7ef13783b3d4a9b175493",
+  "ticker": "DDOG"
+ },
+ "1564708": {
+  "domain": "newscorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=newscorp.com&sz=64",
+  "sha256": "60e77b29c31b2ea3ddb9ecbbc65ab4425cbf56651c1f6c64e7ce25003b1d0c8e",
+  "ticker": "NWSA"
+ },
+ "1571949": {
+  "domain": "theice.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=theice.com&sz=64",
+  "sha256": "7ecc4245f2dd83bf2280f90249d01a49e6c660988c5dfa95fd4b153f52666066",
+  "ticker": "ICE"
+ },
+ "1571996": {
+  "domain": "dell.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dell.com&sz=64",
+  "sha256": "ec4e95c3e89bf5f5bcdb9b9af0eb323572a093ad99da7508172f3dfbe29621c3",
+  "ticker": "DELL"
+ },
+ "1579241": {
+  "domain": "allegion.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=allegion.com&sz=64",
+  "sha256": "446694786841679a326cd21208b85bb2ae42ad52256d8e3e24dc730f3a08e794",
+  "ticker": "ALLE"
+ },
+ "1585689": {
+  "domain": "hilton.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hilton.com&sz=64",
+  "sha256": "7789806e9655cf105ec318ad26469c331a0447d781c8c0653cb7010e203c54ec",
+  "ticker": "HLT"
+ },
+ "1596532": {
+  "domain": "arista.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=arista.com&sz=64",
+  "sha256": "e37f0c48161af13626019842cff8867975ae4929059262bd31d1593eaafda682",
+  "ticker": "ANET"
+ },
+ "1601046": {
+  "domain": "keysight.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=keysight.com&sz=64",
+  "sha256": "7522414a5f88e0d7a8c97d15e5b7d62691e414c6398119501c1fb26a0862cb6d",
+  "ticker": "KEYS"
+ },
+ "1601712": {
+  "domain": "synchronybank.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=synchronybank.com&sz=64",
+  "sha256": "ff3f34ab63790d6f5ec7da736a53024d89440f33e1af1dadef134d53c9f56be0",
+  "ticker": "SYF"
+ },
+ "1609711": {
+  "domain": "godaddy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=godaddy.com&sz=64",
+  "sha256": "be0b0d3928db5f45d3446916becdc23a56f5e8ce84e73dc8288f20037e466491",
+  "ticker": "GDDY"
+ },
+ "1613103": {
+  "domain": "medtronic.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=medtronic.com&sz=64",
+  "sha256": "2479fa3e48c040d9ed5abc360067f015b21cddd3de693345801cfa6fc2e8d144",
+  "ticker": "MDT"
+ },
+ "1633917": {
+  "domain": "paypal.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=paypal.com&sz=64",
+  "sha256": "33e784d4095b307a0d1f03b6afa8aff7632ac7c12140862721ef0e9f7ef32b51",
+  "ticker": "PYPL"
+ },
+ "1633978": {
+  "domain": "lumentum.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lumentum.com&sz=64",
+  "sha256": "7666feaeb64a9ee338f08b9a5dd1345c2167f8290bd159dba06a82f56d39fc55",
+  "ticker": "LITE"
+ },
+ "1637459": {
+  "domain": "kraftheinzcompany.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "KHC"
+ },
+ "1645590": {
+  "domain": "hpe.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hpe.com&sz=64",
+  "sha256": "ac5e14034f1876cbc291a61f4d073a7e671b9499e8e058dedd8b5a6b33c287cc",
+  "ticker": "HPE"
+ },
+ "1652044": {
+  "domain": "abc.xyz",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=abc.xyz&sz=64",
+  "sha256": "bb01abe149edb6c1896082ad6a7f2282f3d0cb2ee71c0a8ad617d4c056614502",
+  "ticker": "GOOGL"
+ },
+ "1659166": {
+  "domain": "fortive.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fortive.com&sz=64",
+  "sha256": "da538f6aad9af8736068651e8581024c9333fdad3761d51a30be808338779b75",
+  "ticker": "FTV"
+ },
+ "1664703": {
+  "domain": "bloomenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bloomenergy.com&sz=64",
+  "sha256": "5b7b2f4d4768f5f5ad6886360216ba6c5c4ae07307166392b1883ac980f34393",
+  "ticker": "BE"
+ },
+ "1666700": {
+  "domain": "dupont.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dupont.com&sz=64",
+  "sha256": "d16478b423427f5ce4860919af5e5bf0b3753d3fb56a5618dd76c57a6b0bca39",
+  "ticker": "DD"
+ },
+ "1674101": {
+  "domain": "vertiv.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=vertiv.com&sz=64",
+  "sha256": "29df707816fd49f3dfb46ba3d0b68689cca52ce23895df9d8d9cec3284f212c1",
+  "ticker": "VRT"
+ },
+ "1679788": {
+  "domain": "coinbase.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=coinbase.com&sz=64",
+  "sha256": "bb544ee1950fd52ecb3eebea5458d6c9951dc93df48eac31be52612e960f81f2",
+  "ticker": "COIN"
+ },
+ "1682852": {
+  "domain": "modernatx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=modernatx.com&sz=64",
+  "sha256": "f97a7b2143c4c73ae6d8cd8a54453d73e796852ff0fc6aeb3481a9c5ca079ff5",
+  "ticker": "MRNA"
+ },
+ "1687229": {
+  "domain": "invitationhomes.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=invitationhomes.com&sz=64",
+  "sha256": "161e003925fa5e6f2251d14d33306e4c70e7b3cd521f276e6bed55a6c13198b0",
+  "ticker": "INVH"
+ },
+ "1690820": {
+  "domain": "carvana.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=carvana.com&sz=64",
+  "sha256": "f95381eef5bbd2e4a73d3d9b1235f063f5ad6a34764fd2d52bb5f82c04bc5d89",
+  "ticker": "CVNA"
+ },
+ "16918": {
+  "domain": "cbrands.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cbrands.com&sz=64",
+  "sha256": "2b7f99d44395e6303c44028bec17ed27c5f47c02a09f41465f7157d33d8bdc6d",
+  "ticker": "STZ"
+ },
+ "1692819": {
+  "domain": "vistracorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=vistracorp.com&sz=64",
+  "sha256": "3809278090efeb7fe3c0a4bf62b821660aafecf627aa07b2bf9276c634835828",
+  "ticker": "VST"
+ },
+ "1699150": {
+  "domain": "irco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=irco.com&sz=64",
+  "sha256": "0309dcfcbeaae3019fb09b0c50544fa870ee7357dede9e5455389167dfa849ea",
+  "ticker": "IR"
+ },
+ "1701605": {
+  "domain": "bakerhughes.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bakerhughes.com&sz=64",
+  "sha256": "2ae2dbad181ff2e7b83b2044155c15902ff7093099b42f5cc74431ca28cdb5c1",
+  "ticker": "BKR"
+ },
+ "1705696": {
+  "domain": "viciproperties.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=viciproperties.com&sz=64",
+  "sha256": "84ba6e0974f354b86d15e6ddf7cb866e7d67b7dca9f525ec6f1dbcd557d5d6c5",
+  "ticker": "VICI"
+ },
+ "1707925": {
+  "domain": "linde.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=linde.com&sz=64",
+  "sha256": "dcc056f6dc7c1b8d9e8b9a162fec8109e27a6d11887a04f1d48be54d37e9b2da",
+  "ticker": "LIN"
+ },
+ "1711269": {
+  "domain": "evergy.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "EVRG"
+ },
+ "1713445": {
+  "domain": "redditinc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=redditinc.com&sz=64",
+  "sha256": "e72bb043cd2b2710783bd793421be78cdcbc420c3f15d8851c003f5b7cdf64af",
+  "ticker": "RDDT"
+ },
+ "1730168": {
+  "domain": "broadcom.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=broadcom.com&sz=64",
+  "sha256": "91b6873d6d13c93134995e81ddd6c8007df6065e0fbf152c7fd74b70b38af739",
+  "ticker": "AVGO"
+ },
+ "1739940": {
+  "domain": "cigna.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "CI"
+ },
+ "1744489": {
+  "domain": "disney.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=disney.com&sz=64",
+  "sha256": "382bc958b08ba7b2ab9e1dbe2dc10162d1c4bc83f54c6492f817914c8436b059",
+  "ticker": "DIS"
+ },
+ "1748790": {
+  "domain": "amcor.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=amcor.com&sz=64",
+  "sha256": "d2563f20be1e587d02b0f49de1975d78797ab795d8168ef108b41c9f6bea7316",
+  "ticker": "AMCR"
+ },
+ "1751008": {
+  "domain": "applovin.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=applovin.com&sz=64",
+  "sha256": "3726e5e5537b6c7511d1d51291d81fe41d2a6e6368c43984ef9857047d23becb",
+  "ticker": "APP"
+ },
+ "1751788": {
+  "domain": "dow.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "DOW"
+ },
+ "1754301": {
+  "domain": "foxcorporation.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=foxcorporation.com&sz=64",
+  "sha256": "4cfca4683dff06c5348bd1e80c26afc2c4a0e5f0a09f612fb3e9ec5d53fd1a1d",
+  "ticker": "FOXA"
+ },
+ "1757898": {
+  "domain": "steris.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=steris.com&sz=64",
+  "sha256": "27cb1f60ba6fa7da998c4fa85a02b1b1a63b8d9f9413391e525cd063c6358055",
+  "ticker": "STE"
+ },
+ "1781335": {
+  "domain": "otis.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=otis.com&sz=64",
+  "sha256": "50f9fe77cf533cb44cee7f43f5882dc2d11c061e91f248efb19ae46c81d49d4e",
+  "ticker": "OTIS"
+ },
+ "1783180": {
+  "domain": "carrier.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=carrier.com&sz=64",
+  "sha256": "41f5e090ecca596f33c7ad8b338a92ab27c0fe7fc841692842025f8c0959262b",
+  "ticker": "CARR"
+ },
+ "1783879": {
+  "domain": "robinhood.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=robinhood.com&sz=64",
+  "sha256": "def1853f647c2f3a5e54309b3a257fdcab0046cb053c2e3d886ff9d259c430d9",
+  "ticker": "HOOD"
+ },
+ "1792044": {
+  "domain": "viatris.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=viatris.com&sz=64",
+  "sha256": "589fb958767123a4f90812e2cc1532efdd751b745ac6fcf50aa9d8847aedc321",
+  "ticker": "VTRS"
+ },
+ "1792789": {
+  "domain": "doordash.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=doordash.com&sz=64",
+  "sha256": "bb0976ee33b9fa467780331b9979b42ea7f59cf38770ceb9d5ddf003a0cf793a",
+  "ticker": "DASH"
+ },
+ "1800": {
+  "domain": "abbott.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=abbott.com&sz=64",
+  "sha256": "9749ca628b09b8eb09def2fe040e3cb797d63346a5ff3fd92b14f2093ecb650e",
+  "ticker": "ABT"
+ },
+ "1811074": {
+  "domain": "texaspacific.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=texaspacific.com&sz=64",
+  "sha256": "e50149a92e549cb2e248e61902d7e4cf16006ce43b9c9b474ddd28e4a076e139",
+  "ticker": "TPL"
+ },
+ "18230": {
+  "domain": "caterpillar.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=caterpillar.com&sz=64",
+  "sha256": "c78eb1eda4ff46e716f2181dad080a92d61d31e125fbd5d534c7695d4bda6e4a",
+  "ticker": "CAT"
+ },
+ "1835632": {
+  "domain": "marvell.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=marvell.com&sz=64",
+  "sha256": "e9c0d70089a6e3bec6d7a217519d62da601590668fa4dd5961909658440945f3",
+  "ticker": "MRVL"
+ },
+ "1841666": {
+  "domain": "apacorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=apacorp.com&sz=64",
+  "sha256": "cf2b1296b41b4414381e86b3ad026a6cf0a5b646e055b6227b0694d5113dde53",
+  "ticker": "APA"
+ },
+ "1858681": {
+  "domain": "apollo.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=apollo.com&sz=64",
+  "sha256": "f7d3fabcbf76b1089cda025e44424c1dbae84a651e1079de08fbb175e6390a6e",
+  "ticker": "APO"
+ },
+ "1868275": {
+  "domain": "constellationenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=constellationenergy.com&sz=64",
+  "sha256": "8a17d0595dad4603777f6695422ebac20da40114079918be0a5e16783e063e0a",
+  "ticker": "CEG"
+ },
+ "1932393": {
+  "domain": "gehealthcare.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gehealthcare.com&sz=64",
+  "sha256": "2f4fb5e949b5a2fad0ba625ea2faaedb2ec8a436cc07aa61ab4fbfdcba3f6e1f",
+  "ticker": "GEHC"
+ },
+ "1944048": {
+  "domain": "kenvue.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=kenvue.com&sz=64",
+  "sha256": "fadd7faaa4d302ef4daa6dc0ba4e9f074dea55e1e0a2b95a8cbd8d51f2386ccd",
+  "ticker": "KVUE"
+ },
+ "19617": {
+  "domain": "jpmorganchase.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=jpmorganchase.com&sz=64",
+  "sha256": "5e32887a0361916c7776a8b0eea7ae5ab094bffe5d5a86fb852528dc099e89bb",
+  "ticker": "JPM"
+ },
+ "1964738": {
+  "domain": "solventum.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=solventum.com&sz=64",
+  "sha256": "5e0e45a6694ec50c0b58c7d8b793dd9f9170a414bd68a9a8180779e724760080",
+  "ticker": "SOLV"
+ },
+ "1967680": {
+  "domain": "veralto.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=veralto.com&sz=64",
+  "sha256": "74991cda44a4e766c3710a4ea5084ffcbb660cad14cbadc89d900bd7cd74ed34",
+  "ticker": "VLTO"
+ },
+ "1973266": {
+  "domain": "tkogrp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=tkogrp.com&sz=64",
+  "sha256": "94d27a5f91e35af48cfc091411d332893bb81ff45209e8003c039cad8e3be48f",
+  "ticker": "TKO"
+ },
+ "1996810": {
+  "domain": "gevernova.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gevernova.com&sz=64",
+  "sha256": "8c274ebd7f52ad2de13fa0a4be35a4c79a91be773f062b7e1690a9180542a009",
+  "ticker": "GEV"
+ },
+ "1996862": {
+  "domain": "bunge.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bunge.com&sz=64",
+  "sha256": "8aa449bf1d8650dcbce9b085301d262d410d9b7cf36f0ee7ac2f190a28fddda0",
+  "ticker": "BG"
+ },
+ "200406": {
+  "domain": "jnj.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=jnj.com&sz=64",
+  "sha256": "01effcdd9eb03a12031f47e002309251a0ba677a96bf5310abeecbf63491848e",
+  "ticker": "JNJ"
+ },
+ "2005951": {
+  "domain": "smurfitwestrock.com",
+  "fetched": "2026-10-24",
+  "icon": "https://smurfitwestrock.com/apple-touch-icon.png",
+  "sha256": "60c497d0f34d2852ced8e0a6185d753534174f0bc1281b85018bac69d986a674",
+  "ticker": "SW"
+ },
+ "2011641": {
+  "domain": "ferguson.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ferguson.com&sz=64",
+  "sha256": "e2cad6f6797b1b2bda70e57bf1a301bce1e30f8328ea883249dc11de7df552a1",
+  "ticker": "FERG"
+ },
+ "2012383": {
+  "domain": "blackrock.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=blackrock.com&sz=64",
+  "sha256": "63fdf827fd2e8202bd82b01210e86e6b2da808c611ba498ed4e2482bafafb271",
+  "ticker": "BLK"
+ },
+ "202058": {
+  "domain": "l3harris.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=l3harris.com&sz=64",
+  "sha256": "4843b2a4f6da0a8a3def8f43f762223dc1a3a9e5b81ee7e5d91a5fc4d663aa7b",
+  "ticker": "LHX"
+ },
+ "2023554": {
+  "domain": "sandisk.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=sandisk.com&sz=64",
+  "sha256": "c435f9f3c8533f8721d1404820c4ed9c7163ce894edf056d6ba5a542418dc635",
+  "ticker": "SNDK"
+ },
+ "20286": {
+  "domain": "cinfin.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cinfin.com&sz=64",
+  "sha256": "49a69cf5b341e5fd42f7e8fe5a7d3c52bd6bdfaa5547679ddee0265b8596a34c",
+  "ticker": "CINF"
+ },
+ "2041610": {
+  "domain": "paramount.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=paramount.com&sz=64",
+  "sha256": "0d14bd39c1d872962feee7bb69720804dab11eb18d4f851c6068db6bc12ff5fd",
+  "ticker": "SKYD"
+ },
+ "2058873": {
+  "domain": "qnityelectronics.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=qnityelectronics.com&sz=64",
+  "sha256": "e7f8a39162561a4fbba86936b112aa3f2538585bc6ad00b9dfe0010df0a698f8",
+  "ticker": "Q"
+ },
+ "2082247": {
+  "domain": "fedex.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fedex.com&sz=64",
+  "sha256": "71b92c36ab068b67ab7e1e873bedd09c619321e1a7ad98961f20d1df9e952ea0",
+  "ticker": "FDXF"
+ },
+ "2089271": {
+  "domain": "honeywell.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=honeywell.com&sz=64",
+  "sha256": "d35ea7877854a23b05c7f3f62a1c0323d03b4d282c7cbaecbf867aa739831708",
+  "ticker": "HONA"
+ },
+ "21076": {
+  "domain": "thecloroxcompany.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=thecloroxcompany.com&sz=64",
+  "sha256": "3bdca1a8b9347138996cc83b4696e17e7eb64c57048afcc034beea9cf27a3bae",
+  "ticker": "CLX"
+ },
+ "2115436": {
+  "domain": "exxonmobil.com",
+  "fetched": "2026-10-24",
+  "icon": "https://exxonmobil.com/apple-touch-icon.png",
+  "sha256": "421766bee8033cc23f0cb2ecda0298eb211dd4eda298bf2cadd11d54a8593884",
+  "ticker": "XOM"
+ },
+ "2128626": {
+  "domain": null,
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "VYLR"
+ },
+ "21344": {
+  "domain": "coca-colacompany.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=coca-colacompany.com&sz=64",
+  "sha256": "2b25cedd97d98f55a9b35dde2d5eebd7e033941718a9ad9d8d6fb100b40046aa",
+  "ticker": "KO"
+ },
+ "21665": {
+  "domain": "colgatepalmolive.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=colgatepalmolive.com&sz=64",
+  "sha256": "cac5ed45f80624529640e4d0ef7e20b8c2165f38bc3c5d0b84d01a8b9f817218",
+  "ticker": "CL"
+ },
+ "217346": {
+  "domain": "textron.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=textron.com&sz=64",
+  "sha256": "5eaa2c706091fb3aae7bbf776dc78fd007a9616614e4f5167aec3d29dee11a2a",
+  "ticker": "TXT"
+ },
+ "24741": {
+  "domain": "corning.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "GLW"
+ },
+ "2488": {
+  "domain": "amd.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=amd.com&sz=64",
+  "sha256": "89fee2a42294412288a323a312bc387164713b481787665272b6f27d37564b27",
+  "ticker": "AMD"
+ },
+ "26172": {
+  "domain": "cummins.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cummins.com&sz=64",
+  "sha256": "4fb4c879e6d77c7e5e266700400f4af8a850c6e4ed76e8fd19f6d1218a823125",
+  "ticker": "CMI"
+ },
+ "27419": {
+  "domain": "target.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=target.com&sz=64",
+  "sha256": "870ac4da37cfc486d92658d51f509c839184f844b68a68f59bc2cdb44730fd06",
+  "ticker": "TGT"
+ },
+ "277135": {
+  "domain": "grainger.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=grainger.com&sz=64",
+  "sha256": "47b8d18079da650fea163cf21afc41a884e1f755ae2f99bab9da7944b4b773d3",
+  "ticker": "GWW"
+ },
+ "277948": {
+  "domain": "csx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=csx.com&sz=64",
+  "sha256": "abae129569d027f4640fa13362b0af51de39376c212cb2b521b02b9102ef15c2",
+  "ticker": "CSX"
+ },
+ "27904": {
+  "domain": "delta.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=delta.com&sz=64",
+  "sha256": "ed943a0fb1257cae8f563e312df24776703ab5c6f3c5f26564b08252281dc1d9",
+  "ticker": "DAL"
+ },
+ "29534": {
+  "domain": "dollargeneral.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dollargeneral.com&sz=64",
+  "sha256": "94bd0e86fb25fc99c6eaa62692bdcd29680f77e494ac90ab929849f2b5d6ba4c",
+  "ticker": "DG"
+ },
+ "2969": {
+  "domain": "airproducts.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=airproducts.com&sz=64",
+  "sha256": "6de8af7e178dfa69437c2f6e50e11bcad95984f528fe13a61a9fa966910cf5c1",
+  "ticker": "APD"
+ },
+ "29905": {
+  "domain": "dovercorporation.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dovercorporation.com&sz=64",
+  "sha256": "2e966c77a01e71714b28b37edef25dbb5fe5667c77f4f21f935891fc26bbba60",
+  "ticker": "DOV"
+ },
+ "29989": {
+  "domain": "omnicomgroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=omnicomgroup.com&sz=64",
+  "sha256": "883d2a3b43fbbceb1abaf2f5298db6d1d2c05e9873b8736d9444b23e860941c5",
+  "ticker": "OMC"
+ },
+ "310158": {
+  "domain": "merck.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=merck.com&sz=64",
+  "sha256": "1c0c6bef183d49779621549759c249c6ec9a73a2b256bd5ddef87753c9ff52cb",
+  "ticker": "MRK"
+ },
+ "310764": {
+  "domain": "stryker.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=stryker.com&sz=64",
+  "sha256": "218173b15efa7f30c4254fcc22f9280a42b85c6f4c02e432c808352e743df25f",
+  "ticker": "SYK"
+ },
+ "313616": {
+  "domain": "danaher.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.danaher.com/themes/custom/danaher/favicon.ico",
+  "sha256": "eb9c302d41ed18b9e6d82cee43a4302a9d87e3d7b4f5f759b57faa2d756a6493",
+  "ticker": "DHR"
+ },
+ "313927": {
+  "domain": "churchdwight.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "CHD"
+ },
+ "31462": {
+  "domain": "ecolab.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ecolab.com&sz=64",
+  "sha256": "7231897bbb2b15a970f88f92667eef2abe869b42531c0923307a71aee2b16010",
+  "ticker": "ECL"
+ },
+ "315189": {
+  "domain": "deere.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=deere.com&sz=64",
+  "sha256": "255e03a5a19824722b395f88e1398465b52cc3495c1baaf32e9f735d10763969",
+  "ticker": "DE"
+ },
+ "315293": {
+  "domain": "aon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aon.com&sz=64",
+  "sha256": "f80961d0e3465b4ce21d74da3b6b4dae91f0a8b5cf7047746a1b33843590bb26",
+  "ticker": "AON"
+ },
+ "316709": {
+  "domain": "schwab.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=schwab.com&sz=64",
+  "sha256": "d0a665a352af6b0fefb1c263fc10bdc77aaa30c7b6c7eb5b6119093955f27168",
+  "ticker": "SCHW"
+ },
+ "31791": {
+  "domain": "revvity.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=revvity.com&sz=64",
+  "sha256": "afc0ef1336b2f5e96be43a463d7380a62f1f2f55c0d4e7bb5d61c33c45e4a678",
+  "ticker": "RVTY"
+ },
+ "318154": {
+  "domain": "amgen.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=amgen.com&sz=64",
+  "sha256": "916745d70da64fa1b571189d6dc9bbc4a4f5045300a361037a3be2e1dc07ca0b",
+  "ticker": "AMGN"
+ },
+ "319201": {
+  "domain": "kla.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.kla.com/wp-content/uploads/android-chrome-256x256-100x100.png",
+  "sha256": "583a07430635ab9de866dc7c88020f1ae7f9024b797db6f4f0e3544c687aa0a9",
+  "ticker": "KLAC"
+ },
+ "320187": {
+  "domain": "nike.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nike.com&sz=64",
+  "sha256": "9a6653f617532fd0b081c5e59db70f58a2aaa8a12322b27194539370167e9550",
+  "ticker": "NKE"
+ },
+ "320193": {
+  "domain": "mac.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mac.com&sz=64",
+  "sha256": "116c7dd931bdbc78c2cf5ca4e3e19ab600a6d3db24f6313815e80e6f7f5427fb",
+  "ticker": "AAPL"
+ },
+ "320335": {
+  "domain": "torchmarkcorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=torchmarkcorp.com&sz=64",
+  "sha256": "f7f5e98d206fea62ef7f8dfa5f49ebe89ccb2c15003c218326d456e3d56a7b75",
+  "ticker": "GL"
+ },
+ "32604": {
+  "domain": "emerson.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=emerson.com&sz=64",
+  "sha256": "182b4329baf7d492145b9a34d8ce56bf5ca2c98ec49645f913943b96f447bac6",
+  "ticker": "EMR"
+ },
+ "33185": {
+  "domain": "equifax.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=equifax.com&sz=64",
+  "sha256": "472282aee1700cbdef863f0b02b50d494d84be060da993258124732cbd24381a",
+  "ticker": "EFX"
+ },
+ "33213": {
+  "domain": "eqt.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=eqt.com&sz=64",
+  "sha256": "af8100751b2a0407bb41d31197025f6bc2380713348c82808f57beecaf7750eb",
+  "ticker": "EQT"
+ },
+ "34903": {
+  "domain": "federalrealty.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=federalrealty.com&sz=64",
+  "sha256": "d4abcfc2174963c0f8baaf9d692d55035a5bdd78ccd9235f6942a0a3eff8c405",
+  "ticker": "FRT"
+ },
+ "352541": {
+  "domain": "alliantenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=alliantenergy.com&sz=64",
+  "sha256": "d092f466490e958655c07c994802a9f4e4bc205e2bcbfc7ae4a383566de37888",
+  "ticker": "LNT"
+ },
+ "352915": {
+  "domain": "uhsinc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=uhsinc.com&sz=64",
+  "sha256": "8b654e2785951a2e9c0a474c958262b2f9e0d7081651e6abe3f5e2d914fcc074",
+  "ticker": "UHS"
+ },
+ "354190": {
+  "domain": "ajg.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ajg.com&sz=64",
+  "sha256": "f12af6d55282df36e3f04460532660691dd843093157a1313dc651f2d32c8148",
+  "ticker": "AJG"
+ },
+ "354950": {
+  "domain": "homedepot.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=homedepot.com&sz=64",
+  "sha256": "11416a63c08d67677f5f58ee1b2693b757591c1a1ea7abc62ce19eca0971f736",
+  "ticker": "HD"
+ },
+ "35527": {
+  "domain": "53.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=53.com&sz=64",
+  "sha256": "b079398ff267d0ab9b4ca83fd69e30666a3e83d8779cb8b870a73683182fb62f",
+  "ticker": "FITB"
+ },
+ "36104": {
+  "domain": "usbank.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=usbank.com&sz=64",
+  "sha256": "4fdfb83aca2fb3ed1b013181b62390be65d5d9d441b4d984ed167583245acc14",
+  "ticker": "USB"
+ },
+ "36270": {
+  "domain": "mtb.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mtb.com&sz=64",
+  "sha256": "271589f7cc9744c9f739d132af0a06aa416fe1775bffd42700e73131130b5124",
+  "ticker": "MTB"
+ },
+ "37996": {
+  "domain": "ford.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ford.com&sz=64",
+  "sha256": "163bdc5740aceb67ee778733ce4c02f506d716ff8c6517878928a57195891397",
+  "ticker": "F"
+ },
+ "38777": {
+  "domain": "franklintempleton.com",
+  "fetched": "2026-10-24",
+  "icon": "https://franklintempletonprod.widen.net/content/pmhnbht3ff/png/favicon_ft.png",
+  "sha256": "705ecff9bb288c6feb899bf0273835029e45658a55bddf4eba2e7842d3f43ba7",
+  "ticker": "BEN"
+ },
+ "40533": {
+  "domain": "gd.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gd.com&sz=64",
+  "sha256": "6686867057bac77b91287ff958f5df5707e63e0eded5839d585e92a0e95c19af",
+  "ticker": "GD"
+ },
+ "40545": {
+  "domain": "geaerospace.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=geaerospace.com&sz=64",
+  "sha256": "289d0e69f4d1850ebf2de55985ae84cf07b842ec56b0dcaf8ace5acfce037c92",
+  "ticker": "GE"
+ },
+ "40704": {
+  "domain": "generalmills.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=generalmills.com&sz=64",
+  "sha256": "0299e4bc29565de0f4e2a21d894ea99d97c86be5c7ae6ffd762dec28d9a3c148",
+  "ticker": "GIS"
+ },
+ "40987": {
+  "domain": "genpt.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=genpt.com&sz=64",
+  "sha256": "edf72292e9e0842e25c4f5dd9147c728523cd503f21c87c7ddf5f0cdf9d80345",
+  "ticker": "GPC"
+ },
+ "4127": {
+  "domain": "skyworksinc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=skyworksinc.com&sz=64",
+  "sha256": "9b1b91faa09d1ea7507d6c5f4be5ab10e678d2fb4b50c7b8d6fe9812ee7bdfbe",
+  "ticker": "SWKS"
+ },
+ "4281": {
+  "domain": "howmet.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=howmet.com&sz=64",
+  "sha256": "e20a2150fcc9157444c6b233bd0f539c9d339722e5ed2af177504a190e1f6fb4",
+  "ticker": "HWM"
+ },
+ "45012": {
+  "domain": "halliburton.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=halliburton.com&sz=64",
+  "sha256": "6fadd8356a2d2b662672d31a669c5bb5bcd0a67445dc6c7907541ae930611029",
+  "ticker": "HAL"
+ },
+ "46080": {
+  "domain": "hasbro.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hasbro.com&sz=64",
+  "sha256": "5ec9c88b96a10035702f86b7f8f47e07f370400c8feca740833dfe5902bcda9c",
+  "ticker": "HAS"
+ },
+ "47111": {
+  "domain": "thehersheycompany.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=thehersheycompany.com&sz=64",
+  "sha256": "d01a841e0664d240a6f12e749def152d04512e9175bb01cf33f5e5fe757c4c8e",
+  "ticker": "HSY"
+ },
+ "47217": {
+  "domain": "hp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hp.com&sz=64",
+  "sha256": "d5491f8b0b4fd3e62f1af8502e5ab4b5f672f880bddb7269c4d5b947041ae660",
+  "ticker": "HPQ"
+ },
+ "48465": {
+  "domain": "hormel.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hormel.com&sz=64",
+  "sha256": "83cab75b3ea28e1d4b9324c2c52c71952eb4e64e31d45ae304b98a1a0758fb77",
+  "ticker": "HRL"
+ },
+ "48898": {
+  "domain": "hubbell.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hubbell.com&sz=64",
+  "sha256": "6434640659a5d5d1b75d4fc5b09a625d926a6d29f950ec13db59ee6d40bd74f7",
+  "ticker": "HUBB"
+ },
+ "4904": {
+  "domain": "aep.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aep.com&sz=64",
+  "sha256": "ef264e51ad6736f37596c1c5e4a7a6c0a5db389233fcd6eb25ddaf818e48f3b8",
+  "ticker": "AEP"
+ },
+ "49071": {
+  "domain": "humana.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=humana.com&sz=64",
+  "sha256": "b5002fbc1545c7331e59b6a7a898630c17255732508060591aeac19a5338bce9",
+  "ticker": "HUM"
+ },
+ "49196": {
+  "domain": "huntington.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=huntington.com&sz=64",
+  "sha256": "efc6089f689a00589f4cf3677a84441ac6ac2396fff95709ea2a457300b3dc1c",
+  "ticker": "HBAN"
+ },
+ "4962": {
+  "domain": "americanexpress.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=americanexpress.com&sz=64",
+  "sha256": "e5cf81fd1982e0bcb6f203e39b0336ec16f846f85a2786174388b716a9c56f51",
+  "ticker": "AXP"
+ },
+ "4977": {
+  "domain": "aflac.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aflac.com&sz=64",
+  "sha256": "15bd43ac9fd35e611e18e84329c71babe155f782acd22dbec367fda429ed5a7e",
+  "ticker": "AFL"
+ },
+ "49826": {
+  "domain": "itw.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=itw.com&sz=64",
+  "sha256": "d2d82b74d22a3ffc828237b553d4e2f051f6353ad8845202e169ab78cf3be966",
+  "ticker": "ITW"
+ },
+ "50863": {
+  "domain": "intel.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=intel.com&sz=64",
+  "sha256": "b61fa88637987b9a46d9001d41150e7b1f3dc2a89e7222f36149f835c2e63531",
+  "ticker": "INTC"
+ },
+ "51143": {
+  "domain": "ibm.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ibm.com&sz=64",
+  "sha256": "3b8bcc9c8f780c3b684af4f822767706d1c835b2fca485cc399b82a5961352e0",
+  "ticker": "IBM"
+ },
+ "51253": {
+  "domain": "iff.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=iff.com&sz=64",
+  "sha256": "62c3685f30d7a5e59ed0d07d8d23a239583429a82574e603b1a30415f992a3d7",
+  "ticker": "IFF"
+ },
+ "51434": {
+  "domain": "internationalpaper.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=internationalpaper.com&sz=64",
+  "sha256": "8b6c7818487cedd6bd93a7b2809a36240286983224c93851cf2411c8c16d178b",
+  "ticker": "IP"
+ },
+ "5272": {
+  "domain": "aig.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aig.com&sz=64",
+  "sha256": "985df437e2162a697566f2fb9758d5e9575d315c3abf9be49a7ca99df3e30512",
+  "ticker": "AIG"
+ },
+ "52988": {
+  "domain": "jacobs.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=jacobs.com&sz=64",
+  "sha256": "d63bee66e22881bf1e2645375ca85f2e399791a43a9250df5cd25eb0b5c75a43",
+  "ticker": "J"
+ },
+ "55785": {
+  "domain": "kimberly-clark.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=kimberly-clark.com&sz=64",
+  "sha256": "301312fbabb00b034454f8c27a726ea33e6cd15ff5710ffb6524ae1b31a5824c",
+  "ticker": "KMB"
+ },
+ "56873": {
+  "domain": "kroger.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=kroger.com&sz=64",
+  "sha256": "6d95a016cec1c55cec6a65fa061d3bbb16480f877100ed9dd589fb072e72a541",
+  "ticker": "KR"
+ },
+ "59478": {
+  "domain": "lilly.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lilly.com&sz=64",
+  "sha256": "3c0a7e71831517b599c3eb18da089d63538f66fbecd3da2b83e1220660069120",
+  "ticker": "LLY"
+ },
+ "60086": {
+  "domain": "loews.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=loews.com&sz=64",
+  "sha256": "56e28580754341ecb820fff5ee1e5f9439adb2ea7e2908303ba0912464907517",
+  "ticker": "L"
+ },
+ "60667": {
+  "domain": "lowes.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lowes.com&sz=64",
+  "sha256": "678bcd7de9120d1628efc6ea503cc5d61bcb01d072ffb6fcd3af3e006b161851",
+  "ticker": "LOW"
+ },
+ "62709": {
+  "domain": "mmc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mmc.com&sz=64",
+  "sha256": "0268b6a83788f31c709a7338664d9944c5af735e5896ebbc2f7e60c2c4292e71",
+  "ticker": "MRSH"
+ },
+ "6281": {
+  "domain": "analog.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=analog.com&sz=64",
+  "sha256": "712d414869b321a9ff92e1cfe0a9dce5d44ab06c645bc0a396a1feb1242dade1",
+  "ticker": "ADI"
+ },
+ "62996": {
+  "domain": "masco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=masco.com&sz=64",
+  "sha256": "a653b82ac4a0a5cea1b328f275e3a7bc5853315985176f115973ff3c2feaf6c4",
+  "ticker": "MAS"
+ },
+ "63754": {
+  "domain": "mccormickcorporation.com",
+  "fetched": "2026-10-24",
+  "icon": "https://mccormickcorporation.com/apple-touch-icon.png",
+  "sha256": "7a55643de8f26c83b40c653b35862be8c0456aa2bbb9a397dd335400c0096305",
+  "ticker": "MKC"
+ },
+ "63908": {
+  "domain": "mcdonalds.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mcdonalds.com&sz=64",
+  "sha256": "1b58d11d46c2879b752f43fcc25ee0af04c9b1f1a7da4a95b3e1e1cee474e9d9",
+  "ticker": "MCD"
+ },
+ "64040": {
+  "domain": "spglobal.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=spglobal.com&sz=64",
+  "sha256": "e94720fd4c7ecd92a6505b65682d8b17abc3edf05b03d3c8a0becb618164733a",
+  "ticker": "SPGI"
+ },
+ "64803": {
+  "domain": "cvshealth.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cvshealth.com&sz=64",
+  "sha256": "34533c9c1454f5ec5e00061d64d0c0b6c0b0f84522a1828f2688cfffe9ba829f",
+  "ticker": "CVS"
+ },
+ "65984": {
+  "domain": "entergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=entergy.com&sz=64",
+  "sha256": "77567072e73036916ed60bb077fe81cbd89d7458cfdfc30fe6ed5f8f6d4a3d49",
+  "ticker": "ETR"
+ },
+ "66740": {
+  "domain": "3m.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=3m.com&sz=64",
+  "sha256": "d7a8e6d21eb969abded9e9b535d9fe7990fd9496331f27e2a43821b7ad380c77",
+  "ticker": "MMM"
+ },
+ "68505": {
+  "domain": "motorola.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=motorola.com&sz=64",
+  "sha256": "f3b1f39ddd6d7bbb5b9df63fbe19dabfa2efb0c2085b9b6412f4c3e5f1fb2ba5",
+  "ticker": "MSI"
+ },
+ "6951": {
+  "domain": "appliedmaterials.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=appliedmaterials.com&sz=64",
+  "sha256": "f0b0fcec643393a8012120543773bd2fea85dadd515c28a839ef880deb00912e",
+  "ticker": "AMAT"
+ },
+ "702165": {
+  "domain": "nscorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nscorp.com&sz=64",
+  "sha256": "4954b12e3cc7cc712116635359bd2c79907cfb065b36658e9c489f75dd7e6934",
+  "ticker": "NSC"
+ },
+ "707549": {
+  "domain": "lamresearch.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lamresearch.com&sz=64",
+  "sha256": "61ea65f03f0e3a5249c83189b03e8f8959f452e8df04fedbfd3db78ff2be68e1",
+  "ticker": "LRCX"
+ },
+ "7084": {
+  "domain": "adm.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=adm.com&sz=64",
+  "sha256": "7b3e00476821f4f5f2b584197ab7a8f7e9f43484128e11a6b38645536f845a07",
+  "ticker": "ADM"
+ },
+ "70858": {
+  "domain": "bankofamerica.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bankofamerica.com&sz=64",
+  "sha256": "44f7b463d71ae5d2072bdba6098a39034cb3feb009095354b217555f50c26194",
+  "ticker": "BAC"
+ },
+ "711404": {
+  "domain": "coopercos.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=coopercos.com&sz=64",
+  "sha256": "2571079d6b1ad6902abd1fea36d9cfb55a0e3ebdf9508b2992a9e83264de5b71",
+  "ticker": "COO"
+ },
+ "713676": {
+  "domain": "pnc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pnc.com&sz=64",
+  "sha256": "2b90e9d92f9d9324da03ae6cea5c4607fc38dd4f54328f459ecb6bb235c40c8a",
+  "ticker": "PNC"
+ },
+ "715957": {
+  "domain": "dominionenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dominionenergy.com&sz=64",
+  "sha256": "19740da6aabda0800a5b93cbd62e192883fa3d19e857fe04b100c15653b7a778",
+  "ticker": "D"
+ },
+ "719955": {
+  "domain": "williams-sonomainc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.williams-sonomainc.com/corpimgs/i/202638/0004/images/wsi-logo60.png",
+  "sha256": "b232e640f7c3dd4d48d426ea12d335a9a9b71af54fc653543e6cc27bfa11dce4",
+  "ticker": "WSM"
+ },
+ "720005": {
+  "domain": "raymondjames.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=raymondjames.com&sz=64",
+  "sha256": "43b082d3814dc39529c29b878348207e6b5758586a974c6c2708e183792f6d25",
+  "ticker": "RJF"
+ },
+ "721371": {
+  "domain": "cardinalhealth.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cardinalhealth.com&sz=64",
+  "sha256": "6b75d7000f97e0caea84299300e22be13dbd7fad1e32b7a798982ad5533917d0",
+  "ticker": "CAH"
+ },
+ "723125": {
+  "domain": "micron.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=micron.com&sz=64",
+  "sha256": "0562029ed9bc6be84a94e8e0a2f5704587d853ee76753be0fc79d45c2459590e",
+  "ticker": "MU"
+ },
+ "723254": {
+  "domain": "cintas.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cintas.com&sz=64",
+  "sha256": "d7c0fddde07304cab2a59ac82bb3195bf09ee5df2cb8ebcf6a6192a7725d7117",
+  "ticker": "CTAS"
+ },
+ "72331": {
+  "domain": "nordson.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nordson.com&sz=64",
+  "sha256": "068c0028b4d53369666212af2916b471a9f402ea276cd535e78d4771aaac9207",
+  "ticker": "NDSN"
+ },
+ "723531": {
+  "domain": "paychex.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=paychex.com&sz=64",
+  "sha256": "c42bf6d79d731bbd0f693530cf86b541283da413794fbd39ef777e11328a72da",
+  "ticker": "PAYX"
+ },
+ "726728": {
+  "domain": "realtyincome.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=realtyincome.com&sz=64",
+  "sha256": "d6cf8188b3fbdd1ebd6813566e24e6ffcddfaef41907160c48063d0555f9a818",
+  "ticker": "O"
+ },
+ "726958": {
+  "domain": "caseys.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=caseys.com&sz=64",
+  "sha256": "da62709b03ae305dacff9563d21ac575112329de0e14899834ada39f4bf081b7",
+  "ticker": "CASY"
+ },
+ "72741": {
+  "domain": "eversource.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=eversource.com&sz=64",
+  "sha256": "efe0f34172b264fe2e15aa69a43fc9696776a1a3ac876dce09e22b3e63cf9453",
+  "ticker": "ES"
+ },
+ "728535": {
+  "domain": "jbhunt.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=jbhunt.com&sz=64",
+  "sha256": "58898d255b8cdce13cfbe90d14b14e76f8af49f05ff560745534b2aac22c4e36",
+  "ticker": "JBHT"
+ },
+ "72903": {
+  "domain": "xcelenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=xcelenergy.com&sz=64",
+  "sha256": "bf502c7cf20a6ae13255f266412955d544567f2fa3ce9a0f4cbd8e2dc82e00a0",
+  "ticker": "XEL"
+ },
+ "72971": {
+  "domain": "wellsfargo.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=wellsfargo.com&sz=64",
+  "sha256": "701b7b8c81cb8f3a700f590a3c208d6458c8b8f146d37a14e45aadb3c7a33654",
+  "ticker": "WFC"
+ },
+ "73124": {
+  "domain": "northerntrust.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=northerntrust.com&sz=64",
+  "sha256": "cec0b0a68ced8ad396c85a45490d65616bc3464e2d5cf5c82e07fb3b48038054",
+  "ticker": "NTRS"
+ },
+ "731766": {
+  "domain": "uhc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=uhc.com&sz=64",
+  "sha256": "71c2b442dc793c5ced1e58abd1e2a50be87ecfcf4fe8c7ca9705dcf5cade68b7",
+  "ticker": "UNH"
+ },
+ "731802": {
+  "domain": "atmosenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.atmosenergy.com/favicon-32x32.png?v=89e5585280cc5b3cf4367a1ab50af831",
+  "sha256": "15acf2b333b937c90cdbb2c4dcd48c453513317cd8fa07fca41a8955ef64e5ad",
+  "ticker": "ATO"
+ },
+ "732712": {
+  "domain": "verizon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=verizon.com&sz=64",
+  "sha256": "5befbb565b41b0888b309adb7637f5274028fc138591e6822311848cd16268bb",
+  "ticker": "VZ"
+ },
+ "732717": {
+  "domain": "att.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=att.com&sz=64",
+  "sha256": "7e0fc57b0f074ec053a6ccb798a7d5756417a7ddd792b1173875a00134dbdb57",
+  "ticker": "T"
+ },
+ "73309": {
+  "domain": "nucor.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nucor.com&sz=64",
+  "sha256": "b6440c751dac358ad8d34389d0d579b6c5508f311111b12d814ffd0e70024fce",
+  "ticker": "NUE"
+ },
+ "740260": {
+  "domain": "ventasreit.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ventasreit.com&sz=64",
+  "sha256": "cf156f51b5c09f3935d219780d0efc5f2a133e5a29507876e0a72985c2d3705f",
+  "ticker": "VTR"
+ },
+ "74208": {
+  "domain": "udr.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=udr.com&sz=64",
+  "sha256": "734cb7575afd6fd291a78969226e22bd9198ac58c5267dc887de93bf5c5b921e",
+  "ticker": "UDR"
+ },
+ "745732": {
+  "domain": "rossstores.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=rossstores.com&sz=64",
+  "sha256": "2bb8a82cc3906dab56034fa90c3ce1f1a812c25ec7df2e79493a413ed877fed6",
+  "ticker": "ROST"
+ },
+ "746515": {
+  "domain": "expeditors.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=expeditors.com&sz=64",
+  "sha256": "8688f24a772aee720e4e1163d75d1925ee90a28b475c8a0fe247ec16f20cb57f",
+  "ticker": "EXPD"
+ },
+ "749251": {
+  "domain": "gartner.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gartner.com&sz=64",
+  "sha256": "b2530740590d005f246374a6acac18932d9eab2c3f3f4c3e8a7d4e13ed10dfed",
+  "ticker": "IT"
+ },
+ "753308": {
+  "domain": "nexteraenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=nexteraenergy.com&sz=64",
+  "sha256": "566ef829e88ac5baa0690354508006fc49cdd11f6d828f22ce65b664be908e88",
+  "ticker": "NEE"
+ },
+ "75362": {
+  "domain": "paccar.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=paccar.com&sz=64",
+  "sha256": "af44c7e7f65f576c014479931e4ce9ebb1860ac460bd249e85755c0e764bca6c",
+  "ticker": "PCAR"
+ },
+ "75677": {
+  "domain": "packagingcorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=packagingcorp.com&sz=64",
+  "sha256": "1292092706e4f72b8bdd5cd83095cf321de284f3773a824cfdc822a866a0cac5",
+  "ticker": "PKG"
+ },
+ "759944": {
+  "domain": "citizensbank.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=citizensbank.com&sz=64",
+  "sha256": "142755d3df09e1a5bc07be655043ba8f7a83e4b9ce9acc61a48a43a8f1fe2037",
+  "ticker": "CFG"
+ },
+ "76334": {
+  "domain": "parker.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=parker.com&sz=64",
+  "sha256": "182ea76c5cce7ecf6f351648bcb057ea83618f22c41c3e75e31433fccf102054",
+  "ticker": "PH"
+ },
+ "764180": {
+  "domain": "altria.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=altria.com&sz=64",
+  "sha256": "458bedf118ddb8c930e6a74a624e92b1c34b7a8c1d1350391b016a2896a95cf3",
+  "ticker": "MO"
+ },
+ "764478": {
+  "domain": "bestbuy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bestbuy.com&sz=64",
+  "sha256": "c923e0a2fed900dd502afb4365c38be7c72f4b476df08fed606133dc08cc3d77",
+  "ticker": "BBY"
+ },
+ "764622": {
+  "domain": "pinnaclewest.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pinnaclewest.com&sz=64",
+  "sha256": "a5bdd94a4c73b3d099c50be6ff30ff4675f1dfa0fd29f512e2464118cd0a163e",
+  "ticker": "PNW"
+ },
+ "765880": {
+  "domain": "healthpeak.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=healthpeak.com&sz=64",
+  "sha256": "7f288065296768d559a2097c9f11747d7b64885804f5f1f7be0d5149ea741056",
+  "ticker": "DOC"
+ },
+ "766704": {
+  "domain": "welltower.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=welltower.com&sz=64",
+  "sha256": "128dcb604371e1e3a14a07f06e0165208b96492057b90df9e3f6b542a23786c1",
+  "ticker": "WELL"
+ },
+ "769397": {
+  "domain": "autodesk.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=autodesk.com&sz=64",
+  "sha256": "5a145c19cf815c3ca1a7b6f39a1e8d11e04ab77581ee218f7d03f2729af86baf",
+  "ticker": "ADSK"
+ },
+ "77360": {
+  "domain": "pentair.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pentair.com&sz=64",
+  "sha256": "718ab367f988408dbee89e0778fd2b65f276aed0500cfb51e081a3aac1fffb15",
+  "ticker": "PNR"
+ },
+ "773840": {
+  "domain": "honeywell.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=honeywell.com&sz=64",
+  "sha256": "d35ea7877854a23b05c7f3f62a1c0323d03b4d282c7cbaecbf867aa739831708",
+  "ticker": "HON"
+ },
+ "77476": {
+  "domain": "pepsico.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pepsico.com&sz=64",
+  "sha256": "07609b01e6b6c79a267c66c2b689582c943564eebcb4ac7fa800936ac382bcba",
+  "ticker": "PEP"
+ },
+ "779152": {
+  "domain": "jackhenry.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=jackhenry.com&sz=64",
+  "sha256": "3ed1f84657fe787685e787a5230e868df3037ad36d2ea237bde6a59f5fa00a0a",
+  "ticker": "JKHY"
+ },
+ "78003": {
+  "domain": "pfizer.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pfizer.com&sz=64",
+  "sha256": "d58567907ba2b296c8b997c8cfb8ac8966dc6e0b9e0537cc1a048b7ef1c8c105",
+  "ticker": "PFE"
+ },
+ "783325": {
+  "domain": "wecenergygroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=wecenergygroup.com&sz=64",
+  "sha256": "e85e9ec502a91a4f652788086dfbdc54adb281df06018dc1de4809582e9f082f",
+  "ticker": "WEC"
+ },
+ "788784": {
+  "domain": "pseg.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pseg.com&sz=64",
+  "sha256": "1ae6dc1869a920ec38a0cfbd2527c034afd098166a2312ea069c91952ce9328e",
+  "ticker": "PEG"
+ },
+ "789019": {
+  "domain": "microsoft.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=microsoft.com&sz=64",
+  "sha256": "384722231d904a766bcbbc7859f660835c3f91d170e6977edf83de75aa5d1534",
+  "ticker": "MSFT"
+ },
+ "789570": {
+  "domain": "mgmresorts.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mgmresorts.com&sz=64",
+  "sha256": "40eb812861c773b72b073588c287cdc14281ff559ea3a5eeed2d2faa0d715d66",
+  "ticker": "MGM"
+ },
+ "79282": {
+  "domain": "bbinsurance.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bbinsurance.com&sz=64",
+  "sha256": "946b0f2f8bb8bd6014a64aea5a855d1fbf9e8d5b6482a904144a4829273d068d",
+  "ticker": "BRO"
+ },
+ "796343": {
+  "domain": "adobe.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=adobe.com&sz=64",
+  "sha256": "f99571dea200f8ffa31b74aa1a2457d85e620352e0d6a4e09186a7a4f7eac60a",
+  "ticker": "ADBE"
+ },
+ "797468": {
+  "domain": "oxy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=oxy.com&sz=64",
+  "sha256": "59de784c491f43e56dfa883f6c98e2ce837b5866eb12c365ba50048185d81c8a",
+  "ticker": "OXY"
+ },
+ "798354": {
+  "domain": "fiserv.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fiserv.com&sz=64",
+  "sha256": "d3ceb75de8c5255431d32d6a829a0f35fef4571c09525924ffa3b7c1a7f8306e",
+  "ticker": "FISV"
+ },
+ "79879": {
+  "domain": "ppg.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ppg.com&sz=64",
+  "sha256": "536b6f5a9055f7396f23ca786537b913acf555f7dfdb2ad3af03fcb469a31b9f",
+  "ticker": "PPG"
+ },
+ "80424": {
+  "domain": "pg.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pg.com&sz=64",
+  "sha256": "cef0d437656ab44deae58642d433c096665edb2500a49e0431a6e1bbc6537c1c",
+  "ticker": "PG"
+ },
+ "804328": {
+  "domain": "qualcomm.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=qualcomm.com&sz=64",
+  "sha256": "738a027d92981a912cbc2a91bcccaaac671e018e8c006ea0f7ec3ed4eccab1b2",
+  "ticker": "QCOM"
+ },
+ "80661": {
+  "domain": "progressive.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=progressive.com&sz=64",
+  "sha256": "63db2051620e8fe0a7dbcabb7865549d849c0f945d093a5e7f73618b1df8a4f2",
+  "ticker": "PGR"
+ },
+ "811156": {
+  "domain": "cmsenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cmsenergy.com&sz=64",
+  "sha256": "a5e072af8af57a7d318519fceb51f063266192265e55f5f6a27539c3b4bd2980",
+  "ticker": "CMS"
+ },
+ "813672": {
+  "domain": "cadence.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cadence.com&sz=64",
+  "sha256": "005505847d3977899abc5fd98c283c82ce888ba14cf4a12c8a14f12346282cee",
+  "ticker": "CDNS"
+ },
+ "814547": {
+  "domain": "fico.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fico.com&sz=64",
+  "sha256": "296adf70768d8e1fb1f3f8bcd83e01c3c6b9b0a5f6821c12ce663aca0800aad4",
+  "ticker": "FICO"
+ },
+ "815097": {
+  "domain": "carnivalcorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=carnivalcorp.com&sz=64",
+  "sha256": "a25e86f49f248c76f14212430e31a76f38c1cb0ad1c32660bb0531ac2a657b48",
+  "ticker": "CCL"
+ },
+ "815556": {
+  "domain": "fastenal.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "FAST"
+ },
+ "820027": {
+  "domain": "ameriprise.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ameriprise.com&sz=64",
+  "sha256": "5d3ff51cca944715bc495add9b33ab74f5e200bbbc45b65520a89e4beef01812",
+  "ticker": "AMP"
+ },
+ "820313": {
+  "domain": "amphenol.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=amphenol.com&sz=64",
+  "sha256": "a8dfa62187372b37790db7dcc26bcb18f4409edb70e61cc9fd829d83e251e3fa",
+  "ticker": "APH"
+ },
+ "820318": {
+  "domain": "ii-vi.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ii-vi.com&sz=64",
+  "sha256": "235e5ede801ed1d18fa8029b240a58dd8281400747f9e6eaf3bcec23d11bb0f7",
+  "ticker": "COHR"
+ },
+ "821189": {
+  "domain": "eogresources.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=eogresources.com&sz=64",
+  "sha256": "d82d548861efb8008f882c21b36d282f84cb927232025a057444210e360c68ac",
+  "ticker": "EOG"
+ },
+ "822416": {
+  "domain": "pulte.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pulte.com&sz=64",
+  "sha256": "bfb82d3b7e2d0bf4aaa52584afd9f07ef07027a25665c2729f2ead5d5c74c836",
+  "ticker": "PHM"
+ },
+ "823768": {
+  "domain": "wm.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=wm.com&sz=64",
+  "sha256": "32efc1facf68329c15a63d3c8a77c461b763c0c2c38b1415db95c479bf6194d0",
+  "ticker": "WM"
+ },
+ "827052": {
+  "domain": "edison.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.edison.com/media/sites/406/images/favicon.ico",
+  "sha256": "06ba0c2de8007832d6aa92813a9648f3b580762c40017b96b6a0eb76cc101c6d",
+  "ticker": "EIX"
+ },
+ "827054": {
+  "domain": "microchip.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=microchip.com&sz=64",
+  "sha256": "7bc30c2c95babdf0db80383fec0d7bf65a0856de17050fec54ae5b437cb47f7c",
+  "ticker": "MCHP"
+ },
+ "829224": {
+  "domain": "starbucks.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=starbucks.com&sz=64",
+  "sha256": "0ec8e87bf00586f2d2e0bd635616abc0e7fe98568597feaec9da5919db7b07ff",
+  "ticker": "SBUX"
+ },
+ "831001": {
+  "domain": "citigroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=citigroup.com&sz=64",
+  "sha256": "4e44753e989a04f5c1dd3a4358dff2915daefb40861bcdcb9b41870f912c17e2",
+  "ticker": "C"
+ },
+ "831259": {
+  "domain": "fcx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=fcx.com&sz=64",
+  "sha256": "2b98827a5967aa6f668d87f2dacce2a58d13604e6055e2c09905025bb7ddc6dc",
+  "ticker": "FCX"
+ },
+ "832101": {
+  "domain": "idexcorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=idexcorp.com&sz=64",
+  "sha256": "ec95ef02fdbeb914934f22e5cb021741b0a82929148c517b2893aec2866263ee",
+  "ticker": "IEX"
+ },
+ "833444": {
+  "domain": "johnsoncontrols.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=johnsoncontrols.com&sz=64",
+  "sha256": "35325e138e0884c466508f37b27f7b55758aa16eb824bec73aa5dd5952895e97",
+  "ticker": "JCI"
+ },
+ "842023": {
+  "domain": "bio-techne.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bio-techne.com&sz=64",
+  "sha256": "a5391125168b852e17bd9cc853844234621e1cbacd8571c9e5275dc4af495895",
+  "ticker": "TECH"
+ },
+ "84839": {
+  "domain": "rollins.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=rollins.com&sz=64",
+  "sha256": "a8748cbe5e2df9da628f302761f855f3b1415d7c7f0bdd35e93ee8aaa7261da7",
+  "ticker": "ROL"
+ },
+ "849395": {
+  "domain": "crh.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=crh.com&sz=64",
+  "sha256": "d9d0cb2c1fc8e97fd998ddfb5539695fe216add927edd9db0d244b1c9081050e",
+  "ticker": "CRH"
+ },
+ "849399": {
+  "domain": "gendigital.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gendigital.com&sz=64",
+  "sha256": "aa045c6717ba20c97d0654cbc4151d138e7ad8b15d37812250697f728c198573",
+  "ticker": "GEN"
+ },
+ "857005": {
+  "domain": "ptc.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ptc.com&sz=64",
+  "sha256": "be36b4d2058a67f11dbd77909b4ac3dcd01a7733019b595148002d567414526a",
+  "ticker": "PTC"
+ },
+ "858877": {
+  "domain": "cisco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=cisco.com&sz=64",
+  "sha256": "c37c512d26b597cb40eb88233ef3e26cb1af513527110296b9f2c44af2f2093a",
+  "ticker": "CSCO"
+ },
+ "860730": {
+  "domain": "hcahealthcare.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=hcahealthcare.com&sz=64",
+  "sha256": "74cc422bf26a183d7899a49bc62ed34703892f93c225b2abe2c5cbddf6f5cd4c",
+  "ticker": "HCA"
+ },
+ "860731": {
+  "domain": "tylertech.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=tylertech.com&sz=64",
+  "sha256": "03015d1636caa4177afb8207fb3456f5b1ee48490387bc650801977cf428ffe5",
+  "ticker": "TYL"
+ },
+ "86312": {
+  "domain": "travelers.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=travelers.com&sz=64",
+  "sha256": "de12d0194311ac4add27aea7a4eadf8534f0d11cb1cce33ea51224d838ad02b1",
+  "ticker": "TRV"
+ },
+ "864749": {
+  "domain": "trimble.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=trimble.com&sz=64",
+  "sha256": "8b54861a530a05e4f0df75d96e2c95bb08c9eeff574a80991d8d1940925bedaa",
+  "ticker": "TRMB"
+ },
+ "865752": {
+  "domain": "monsterbevcorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://monsterbevcorp.com/apple-touch-icon.png",
+  "sha256": "0981997554636e3209034d3006c76113297e79756743e25a4e741de328cd2155",
+  "ticker": "MNST"
+ },
+ "866374": {
+  "domain": "flex.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=flex.com&sz=64",
+  "sha256": "e29b7d0122bf257f6908b554a8134e81fe5b71ea17decc827ea7eb6986d141d4",
+  "ticker": "FLEX"
+ },
+ "866787": {
+  "domain": "autozone.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=autozone.com&sz=64",
+  "sha256": "8d916f1584757dfd826b502e7c8376c6b01d127f70c16df9a2d7b55afef9a93f",
+  "ticker": "AZO"
+ },
+ "8670": {
+  "domain": "adp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=adp.com&sz=64",
+  "sha256": "8808db7bd4b231cc70877110d2f5c57779f27a1b2e353822710a3e72137438c2",
+  "ticker": "ADP"
+ },
+ "872589": {
+  "domain": "regeneron.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=regeneron.com&sz=64",
+  "sha256": "81c1a179e3f180b32306cefcc802f4bae713e5508cdec608bbe0205c113fb4fe",
+  "ticker": "REGN"
+ },
+ "87347": {
+  "domain": "slb.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=slb.com&sz=64",
+  "sha256": "81798526cf7cec463315a96da066be963c982725c8f63b3c5cb89e11b8756780",
+  "ticker": "SLB"
+ },
+ "874716": {
+  "domain": "idexx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=idexx.com&sz=64",
+  "sha256": "dc5d77b11a7facae947d28c9f4a1da12ebebe76b1e818d75a4747701cae9529b",
+  "ticker": "IDXX"
+ },
+ "874761": {
+  "domain": "aes.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aes.com&sz=64",
+  "sha256": "a74e2ae64469da17165dad1bb02982735fa7ff854897b1abe53ecf20eb9f044c",
+  "ticker": "AES"
+ },
+ "874766": {
+  "domain": "thehartford.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=thehartford.com&sz=64",
+  "sha256": "0734ccd686cb4c1388f27451943c5812a5ea5cdd8681bdee3ff07734ec2b45a2",
+  "ticker": "HIG"
+ },
+ "875045": {
+  "domain": "biogen.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=biogen.com&sz=64",
+  "sha256": "2c85bbb20b20b2d3576cb53578d6a942369d2eb65d649b5cac16f814f6c0da2c",
+  "ticker": "BIIB"
+ },
+ "875320": {
+  "domain": "vrtx.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=vrtx.com&sz=64",
+  "sha256": "90ad0da425776b3edb15e7b529b39af0710c5c6ea69ec096a4280c87848ec4a0",
+  "ticker": "VRTX"
+ },
+ "877212": {
+  "domain": "zebra.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=zebra.com&sz=64",
+  "sha256": "9a3c1905dd4010bfb46912c72e73b0e8ac8b5bab0dd9f3c5e2af3d2df09eed7c",
+  "ticker": "ZBRA"
+ },
+ "878927": {
+  "domain": "odfl.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=odfl.com&sz=64",
+  "sha256": "a3346033c210828e6ff2ad68c0cfddbab7b953acc4c6e54d182dcb2a83223feb",
+  "ticker": "ODFL"
+ },
+ "879101": {
+  "domain": "kimcorealty.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=kimcorealty.com&sz=64",
+  "sha256": "e4ff3e9d3131aafb38bdc3fe01cc5350b711bfd3175015e010c3a8c00f52d091",
+  "ticker": "KIM"
+ },
+ "879169": {
+  "domain": "incyte.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=incyte.com&sz=64",
+  "sha256": "124114a8166b0e28aeca491c6e9007d779e285d19bbaee97d5d9af9b67e52afb",
+  "ticker": "INCY"
+ },
+ "8818": {
+  "domain": "avery.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=avery.com&sz=64",
+  "sha256": "c09c8ec7498cf301534af4f58c21c1579d6623186528f0a9f48d3afe7d4e9fa6",
+  "ticker": "AVY"
+ },
+ "882095": {
+  "domain": "gilead.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=gilead.com&sz=64",
+  "sha256": "e5be8a128f73ba980699f6df6ede181cc201a5139511241f2223084d3d85986c",
+  "ticker": "GILD"
+ },
+ "882184": {
+  "domain": "drhorton.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=drhorton.com&sz=64",
+  "sha256": "bdd5569871427c28234de66e7676b2aa79d63635704ac355f10e9b20b1c0f503",
+  "ticker": "DHI"
+ },
+ "882835": {
+  "domain": "roperind.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "ROP"
+ },
+ "883241": {
+  "domain": "synopsys.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.synopsys.com/etc.clientlibs/synopsys/clientlibs/synopsys-pagelibs/resources/images/favicon.ico",
+  "sha256": "9c9ad265498063ade30f29f9d16a40bc4795b8c5462e7ba6bd41a2eec162217d",
+  "ticker": "SNPS"
+ },
+ "884887": {
+  "domain": "royalcaribbeangroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=royalcaribbeangroup.com&sz=64",
+  "sha256": "b995b3e18520bca9363f5c88473bc30b95b257be0985c4dacd4906d7a9fca83b",
+  "ticker": "RCL"
+ },
+ "885725": {
+  "domain": "bostonscientific.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=bostonscientific.com&sz=64",
+  "sha256": "0835f01247b5edeea0c06b0e388c1e6767709719955dedaa6d3bdbd323160adf",
+  "ticker": "BSX"
+ },
+ "886982": {
+  "domain": "goldmansachs.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=goldmansachs.com&sz=64",
+  "sha256": "97afc0f08b6b3af5d882e091bfffbceab27eb3dcb857ac0827dad9bd1faedf01",
+  "ticker": "GS"
+ },
+ "895126": {
+  "domain": "chk.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=chk.com&sz=64",
+  "sha256": "54fab41c47c1ace42771494dbc103e24aeb2f1ea7fae5c84da658aad7b7c9a3b",
+  "ticker": "EXE"
+ },
+ "895421": {
+  "domain": "morganstanley.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=morganstanley.com&sz=64",
+  "sha256": "5c9f7ff3a59e9c8488a91ddb14851fae8a793d0da7fda113510e2ee7c09b544e",
+  "ticker": "MS"
+ },
+ "896159": {
+  "domain": "chubb.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=chubb.com&sz=64",
+  "sha256": "dcc01dee0be0840c821c18916044447b38e9677fc883c55e9558864c71a11383",
+  "ticker": "CB"
+ },
+ "896878": {
+  "domain": "intuit.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=intuit.com&sz=64",
+  "sha256": "f7e9bfa59fc76d7ed11362d05d6b3b8776d49efcfece847bca5a1f7a5d85712c",
+  "ticker": "INTU"
+ },
+ "89800": {
+  "domain": "sherwin-williams.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=sherwin-williams.com&sz=64",
+  "sha256": "d35669971141eb8474e0c6b43c06e2d47e946b4f66761a178f3a29f0c1ff12e8",
+  "ticker": "SHW"
+ },
+ "898173": {
+  "domain": "oreillyauto.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=oreillyauto.com&sz=64",
+  "sha256": "9b62ccdbbb123d641d5607471d1eeedfa8f5c6d9c2a8a7caac377be54b62e357",
+  "ticker": "ORLY"
+ },
+ "898293": {
+  "domain": "jabil.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=jabil.com&sz=64",
+  "sha256": "1dea9213c8fd1e94a4c0273c22cfb263f4168f781c9ae8b8d370490035874892",
+  "ticker": "JBL"
+ },
+ "899051": {
+  "domain": "allstate.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "ALL"
+ },
+ "900075": {
+  "domain": "copart.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=copart.com&sz=64",
+  "sha256": "c6cebe794343d671ca039f9f84e994d342f112c4619c4bae7a67cf4e7abe2879",
+  "ticker": "CPRT"
+ },
+ "906107": {
+  "domain": "equityapartments.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=equityapartments.com&sz=64",
+  "sha256": "bfdac7d4a25b30c689c417dff5825e3c83bff16610122c844952746df82084f2",
+  "ticker": "VMRK"
+ },
+ "906163": {
+  "domain": "nvrinc.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "NVR"
+ },
+ "906345": {
+  "domain": "camdenliving.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=camdenliving.com&sz=64",
+  "sha256": "38a608fdf8dd12e34cc16c769e8602645d076a25fd5c74009ddde72d971541ae",
+  "ticker": "CPT"
+ },
+ "909832": {
+  "domain": "costco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://costco.com/apple-touch-icon.png",
+  "sha256": "707a2f7e52cd803796036867e8e439f63f6ee0ca579dd511f022151aae1b84dd",
+  "ticker": "COST"
+ },
+ "910521": {
+  "domain": "deckers.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "DECK"
+ },
+ "910606": {
+  "domain": "regencycenters.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=regencycenters.com&sz=64",
+  "sha256": "0b394ec6ed24a19c7826ec2fec4dae702bf71fadac239f42b0b6060f10267075",
+  "ticker": "REG"
+ },
+ "91142": {
+  "domain": "aosmith.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=aosmith.com&sz=64",
+  "sha256": "eb85ee8e6e51272cf6c988d4d23d872f4d9198357171a99fe60c9d5847cd93d0",
+  "ticker": "AOS"
+ },
+ "912595": {
+  "domain": "maac.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=maac.com&sz=64",
+  "sha256": "8f06bc3bd1713681494c93ac9d77b58af7322511b0a68acba955f4339fe95871",
+  "ticker": "MAA"
+ },
+ "91419": {
+  "domain": "jmsmucker.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "SJM"
+ },
+ "914208": {
+  "domain": "invesco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=invesco.com&sz=64",
+  "sha256": "ea2e449e065642ad05c1ad9dfd6496f9ae98e905e82e89fdc073f2a2b9a587de",
+  "ticker": "IVZ"
+ },
+ "91440": {
+  "domain": "snapon.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=snapon.com&sz=64",
+  "sha256": "7ba647d099b29f47e550699577a47d146f8884b0a02376bd21b54667548174f2",
+  "ticker": "SNA"
+ },
+ "91576": {
+  "domain": "key.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=key.com&sz=64",
+  "sha256": "85ca5ed91b7bc6b8f5bb2e6d05d4e656887c0e2ce0ae1b8a9667d403e6bd3530",
+  "ticker": "KEY"
+ },
+ "915913": {
+  "domain": "albemarle.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=albemarle.com&sz=64",
+  "sha256": "fdfa885d8849879cf40d369c7925e21afba9545d48a04980fbc08f16dd6c8c7c",
+  "ticker": "ALB"
+ },
+ "916076": {
+  "domain": "martinmarietta.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=martinmarietta.com&sz=64",
+  "sha256": "ac8dde30b601d2e835768acb2dc06fc746ca4b18483e2aa5d0342edc7d081f3e",
+  "ticker": "MLM"
+ },
+ "916365": {
+  "domain": "tractorsupply.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "TSCO"
+ },
+ "920148": {
+  "domain": "labcorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=labcorp.com&sz=64",
+  "sha256": "79dcd93aa053720e577b71f76d817aef6c87adab20f74eedf1f760feccb7f1ad",
+  "ticker": "LH"
+ },
+ "920522": {
+  "domain": "essexapartmenthomes.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=essexapartmenthomes.com&sz=64",
+  "sha256": "02b8e76f6a308389bed3571f82a7dd9f71d9833675cf3f18cdb4a6b6280ea8b0",
+  "ticker": "ESS"
+ },
+ "920760": {
+  "domain": "lennar.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=lennar.com&sz=64",
+  "sha256": "42768a9210c115412a2b0322bc78d659156ada36b3c93351ea78b89167a3d11a",
+  "ticker": "LEN"
+ },
+ "92122": {
+  "domain": "southerncompany.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=southerncompany.com&sz=64",
+  "sha256": "6772d190da2ed24ee3fc86091a51e01c6a575b0ef243d744e2bcfc232ad634b8",
+  "ticker": "SO"
+ },
+ "922224": {
+  "domain": "pplweb.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=pplweb.com&sz=64",
+  "sha256": "87467b9397e696dba64b5f87009d99dcb7171f798e642399c06c71128d3a7e37",
+  "ticker": "PPL"
+ },
+ "92230": {
+  "domain": "truist.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=truist.com&sz=64",
+  "sha256": "6665a957c059019e07013791496a58f127487c0614b4ad581f09fcde10866df8",
+  "ticker": "TFC"
+ },
+ "922621": {
+  "domain": "erieinsurance.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=erieinsurance.com&sz=64",
+  "sha256": "2c818c2b5d91091c6ec85be747b8ebfecba83a1b3ed89de72ca025b0cccfeb17",
+  "ticker": "ERIE"
+ },
+ "92380": {
+  "domain": "southwest.com",
+  "fetched": "2026-10-24",
+  "icon": "https://southwest.com/apple-touch-icon.png",
+  "sha256": "993bad061867ff813a0c22950ded39249fc25d19d1be4dbbfbc2718ed27fa544",
+  "ticker": "LUV"
+ },
+ "927066": {
+  "domain": "davita.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=davita.com&sz=64",
+  "sha256": "bd647493d41a30a59693ed84de339b6456fd66d167626874ddda942845d54440",
+  "ticker": "DVA"
+ },
+ "927628": {
+  "domain": "capitalone.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=capitalone.com&sz=64",
+  "sha256": "abd5a814a2a6f84672347fbe3726ece89e18382e50cee8838ae9c1cd466b72a6",
+  "ticker": "COF"
+ },
+ "927653": {
+  "domain": "mckesson.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=mckesson.com&sz=64",
+  "sha256": "9accb91bec117ae2760d1b538baca2032fbfb4cf6b67c619d14a58138edd7e88",
+  "ticker": "MCK"
+ },
+ "93410": {
+  "domain": "chevron.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=chevron.com&sz=64",
+  "sha256": "c988c894336f0d74afdd379ecf759f7ef2a94e61c4b26c5a5f3e77d0ef6830cb",
+  "ticker": "CVX"
+ },
+ "93556": {
+  "domain": "stanleyblackanddecker.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=stanleyblackanddecker.com&sz=64",
+  "sha256": "3736f658885aa756558f069779ef0fed8f733f76ff6d26b54caeffd9acbd662e",
+  "ticker": "SWK"
+ },
+ "935703": {
+  "domain": "dollartree.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dollartree.com&sz=64",
+  "sha256": "59bde473bcf903e830e534884e4ccb19f21f1b059b9ddf4fac54b7c5dcfd2dc6",
+  "ticker": "DLTR"
+ },
+ "936340": {
+  "domain": "dteenergy.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=dteenergy.com&sz=64",
+  "sha256": "1ce0dfc61a9d6b842dc3f7b4fd9cb174f6750115c5caf2365070a947140d72eb",
+  "ticker": "DTE"
+ },
+ "936395": {
+  "domain": "ciena.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ciena.com&sz=64",
+  "sha256": "faae91f0e2df1f040fd53c8bc3ebabe664ce8ee0df2df87c55e281e8ea47a0ec",
+  "ticker": "CIEN"
+ },
+ "936468": {
+  "domain": "lockheedmartin.com",
+  "fetched": "2026-10-24",
+  "icon": "https://lockheedmartin.com/apple-touch-icon.png",
+  "sha256": "1bd940dee260c2fcac82d0e2ade41f5b4e77c8433fa2f3b7728f490db2bcf349",
+  "ticker": "LMT"
+ },
+ "93751": {
+  "domain": "statestreet.com",
+  "fetched": "2026-10-24",
+  "icon": null,
+  "sha256": null,
+  "ticker": "STT"
+ },
+ "9389": {
+  "domain": "ball.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ball.com&sz=64",
+  "sha256": "6218fb3b232285be9bf71c0a48fb0891726aa4359241f1be398ab505ce5758b9",
+  "ticker": "BALL"
+ },
+ "940944": {
+  "domain": "darden.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=darden.com&sz=64",
+  "sha256": "3de91edbdc5d0ce988d106dbb510ddc5aef073d745cfb6939cb15bfaf6859147",
+  "ticker": "DRI"
+ },
+ "943452": {
+  "domain": "wabteccorp.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=wabteccorp.com&sz=64",
+  "sha256": "052344fa5602ec687e6064a72741fd3c249d8926b35a9ae94cc8d2fee88ce954",
+  "ticker": "WAB"
+ },
+ "943819": {
+  "domain": "resmed.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=resmed.com&sz=64",
+  "sha256": "c27d1aec2fb2c2b5350e86ebcb7878b6760d4cba1e7a8050acbaf6d9f60853b5",
+  "ticker": "RMD"
+ },
+ "946581": {
+  "domain": "take2games.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=take2games.com&sz=64",
+  "sha256": "4ac1f86dc900ac929bea5fd2a4412fedbb586fa9caf9a2c3661d98b7fa55b965",
+  "ticker": "TTWO"
+ },
+ "947484": {
+  "domain": "archcapgroup.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=archcapgroup.com&sz=64",
+  "sha256": "35f22b003879afc7ab041575f2dfae0fa4b3994cab0d66fd5e219b79b9e1c441",
+  "ticker": "ACGL"
+ },
+ "96021": {
+  "domain": "sysco.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=sysco.com&sz=64",
+  "sha256": "1383b75d4aadb88222153f9281ef880b85f4921ce2414e2b23490d7d7e402956",
+  "ticker": "SYY"
+ },
+ "97210": {
+  "domain": "teradyne.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=teradyne.com&sz=64",
+  "sha256": "a89542e8c64d3e3081012fdc47bc4ca32c50dd3208301366f449b2c1ab004dfd",
+  "ticker": "TER"
+ },
+ "97476": {
+  "domain": "ti.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=ti.com&sz=64",
+  "sha256": "98588c35302fd4982bab61a9a3046b1493fd34c10f4997051dbf2f223aa9d0e0",
+  "ticker": "TXN"
+ },
+ "97745": {
+  "domain": "thermofisher.com",
+  "fetched": "2026-10-24",
+  "icon": "https://www.google.com/s2/favicons?domain=thermofisher.com&sz=64",
+  "sha256": "99ea742d5606ac7cf7143c8d2fe38521f292751aff5bbb0b8820bbbed81f2681",
+  "ticker": "TMO"
+ }
+}

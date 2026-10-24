@@ -264,7 +264,7 @@ _FILINGS_SQL = """
            f.facts, f.statements, f.sha256, f.parser_version
     FROM eq_fin_filings f
     WHERE f.sec_code = ? AND f.status IN ('clean','partial')/*ASOF*/
-    ORDER BY f.period_end DESC, f.filed_date DESC
+    ORDER BY f.period_end DESC, f.filed_date DESC, f.doc_id DESC
 """
 
 
@@ -396,7 +396,8 @@ def build_panel(cur, filings, basis=None, as_filed_in=None, restated=None):
         if not chosen:
             raise HTTPException(404, "no accepted filing with fiscal year ending in %s"
                                 % as_filed_in)
-        chosen = chosen[:1]
+        # the year's latest period, as first published: a later correction is not
+        chosen = [f for f in chosen if f["period_end"] == chosen[0]["period_end"]][-1:]
     panel = {}
     for f in chosen:
         for (b, off), row in _panel_rows(cur, f).items():
@@ -683,7 +684,7 @@ def statements(sec_code: str,
         "filed_date": f["filed_date"].isoformat(), "status": f["status"],
         "detail": f["detail"], "sha256": f["sha256"],
         "available": avail,
-        "available_years": [str(x["period_end"].year) for x in filings],
+        "available_years": list(dict.fromkeys(str(x["period_end"].year) for x in filings)),
     })
     items = []
     for r in lines:
@@ -881,9 +882,11 @@ def summary():
     cur = _require()
     status = _rows(cur, "SELECT status, count(*) AS n FROM eq_fin_filings GROUP BY 1 ORDER BY 1")
     years = _rows(cur, """
-        SELECT CAST(year(period_end) AS VARCHAR) AS year, count(*) AS filings,
-               count(DISTINCT sec_code) AS companies
-        FROM eq_fin_filings WHERE status IN ('clean','partial') GROUP BY 1 ORDER BY 1 DESC""")
+        SELECT CAST(year(f.period_end) AS VARCHAR) AS year, count(*) AS filings,
+               count(DISTINCT f.sec_code) AS companies
+        FROM eq_fin_filings f WHERE f.status IN ('clean','partial')""" + asof.newest(
+            "f", "eq_fin_filings", ok="newer.status IN ('clean','partial')") + """
+        GROUP BY 1 ORDER BY 1 DESC""")
     totals = _rows(cur, """
         SELECT (SELECT count(*) FROM eq_fin_facts) AS facts,
                (SELECT count(*) FROM eq_fin_lines) AS lines,
@@ -892,8 +895,10 @@ def summary():
                  WHERE status IN ('clean','partial')) AS companies,
                (SELECT max(filed_date) FROM eq_fin_filings) AS latest_filed""")[0]
     stds = _rows(cur, """
-        SELECT accounting_standard, count(*) AS n FROM eq_fin_filings
-        WHERE status IN ('clean','partial') GROUP BY 1 ORDER BY 2 DESC""")
+        SELECT f.accounting_standard, count(*) AS n FROM eq_fin_filings f
+        WHERE f.status IN ('clean','partial')""" + asof.newest(
+            "f", "eq_fin_filings", ok="newer.status IN ('clean','partial')") + """
+        GROUP BY 1 ORDER BY 2 DESC""")
     if totals.get("latest_filed"):
         totals["latest_filed"] = totals["latest_filed"].isoformat()
     return {"status": status, "years": years, "totals": totals,
@@ -910,7 +915,8 @@ def companies(q: str = Query("", description="name or code substring"),
     return {"companies": _rows(cur, "WITH x AS (SELECT 1)" + NAME_CTES + """,
         latest AS (
             SELECT sec_code, max(filer_name) AS name, max(period_end) AS period_end,
-                   max(edinet_code) AS edinet_code, count(*) AS filings
+                   max(edinet_code) AS edinet_code,
+                   count(DISTINCT period_end) AS filings  -- a correction is not another year
             FROM eq_fin_filings WHERE sec_code IS NOT NULL AND status IN ('clean','partial')
             GROUP BY 1)
         SELECT l.sec_code, l.name, coalesce(n.name_en, s.name_en) AS name_en,

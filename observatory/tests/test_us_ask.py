@@ -92,6 +92,21 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(us_link.display_name("FEDERAL SIGNAL CORP /DE/"), "Federal Signal Corp")
         self.assertEqual(us_link.display_name("JPMORGAN CHASE & CO"), "JPMorgan Chase & Co")
         self.assertEqual(us_link.display_name("Apple Inc."), "Apple Inc.")
+        # 2026-10-24: the pay list showed "BROADCOM INC." beside "Apple Inc."
+        for filed, shown in [("BROADCOM INC.", "Broadcom Inc."),
+                             ("ELI LILLY AND COMPANY", "Eli Lilly and Company"),
+                             ("ARCHER-DANIELS-MIDLAND COMPANY", "Archer-Daniels-Midland Company"),
+                             ("EXXONMOBIL HOLDINGS CORP", "ExxonMobil Holdings Corp"),
+                             ("US BANCORP \\DE\\", "U.S. Bancorp"),
+                             ("VERTEX PHARMACEUTICALS INC / MA", "Vertex Pharmaceuticals Inc"),
+                             ("WALT DISNEY CO/", "Walt Disney Co"),
+                             ("TWILIO INC   A", "Twilio Inc"),
+                             ("ERIE INDEMNITY COMPANY CL A", "Erie Indemnity Company"),
+                             ("SCHWAB CHARLES CORP", "Charles Schwab Corp"),
+                             ("GARMIN LTD.", "Garmin Ltd."),
+                             ("KIMCO     REALTY CORP", "Kimco Realty Corp"),
+                             ("THE BANK OF NEW YORK MELLON CORPORATION", "The Bank of New York Mellon Corporation")]:
+            self.assertEqual(us_link.display_name(filed), shown)
 
     def test_index_and_year_words(self):
         today = datetime.date(2026, 10, 19)

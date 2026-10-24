@@ -32,7 +32,7 @@ import re
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import sec_api
+from . import sec_api, us_link
 
 router = APIRouter(prefix="/api/v1/us/pay", tags=["US executive pay"])
 
@@ -392,12 +392,24 @@ def _years(rows, names=None):
                 ceos.append(c)
             loose = list(dict.fromkeys(n for ind, n in window if ind is None))
             signed = _signers(certs, end)
+
+            def matched(c):
+                return [n for ind, n in window if ind == c["member"]] + [
+                    n for n in loose if _surname(n) and _surname(n) in c["member"].lower()]
+            # Intel's 2026 proxy names "Mr. Tan" and tags his pay to
+            # intc:TranMember: one name left over and one CEO left unnamed
+            # are the same person.
+            spare = [n for n in loose if not any(
+                _surname(n) and _surname(n) in c["member"].lower() for c in ceos)]
+            unnamed = [c for c in ceos if not matched(c)]
             for c in ceos:
                 own = [n for ind, n in window if ind == c["member"]]
                 by_surname = [n for n in loose if _surname(n) and _surname(n) in c["member"].lower()]
                 # Ceg tags "Mr. Dominguez" for a Peo1Member; Microsoft tags no
                 # name at all and the 10-K's signature names its one CEO.
                 alone = loose if len(ceos) == 1 and len(loose) == 1 else []
+                if not alone and len(spare) == 1 and unnamed == [c]:
+                    alone = spare
                 sole = _sole_signer(certs, end) if len(ceos) == 1 else None
                 label = spelled.get(c["member"]) or [_plain(_member_label(c["member"]))]
                 if re.fullmatch(r"(?i)(?:first |second )?peo\s*\d*", label[0]):
@@ -631,8 +643,9 @@ def index(basis: str = Query("latest", description="latest | first"),
                      (y["ceos"] and next(iter(y["ceos"][0].get("sources", {}).values()), None)))
         rows.append({
             "cik": m["cik"], "ticker": m["ticker"], "tickers": m["tickers"].split(","),
-            "name": names.get(m["cik"]) or m["fund_name"], "weight_pct": m["weight_pct"],
-            "status": status,
+            "name": us_link.display_name(names.get(m["cik"]) or m["fund_name"]),
+            "sec_name": names.get(m["cik"]) or m["fund_name"], "logo": us_link.logo(m["cik"]),
+            "weight_pct": m["weight_pct"], "status": status,
             "fiscal_year_end": y["fiscal_year_end"] if y else None,
             "ceo_names": names_now,
             "ceo_count": len(names_now),
@@ -690,7 +703,8 @@ def company(company: str,
         f["url"] = _source(m["cik"], f["accn"])
     name = _names(cur, [m["cik"]]).get(m["cik"]) or m["fund_name"]
     return {"company": {"cik": m["cik"], "ticker": m["ticker"], "tickers": m["tickers"].split(","),
-                        "name": name, "fund_name": m["fund_name"], "weight_pct": m["weight_pct"]},
+                        "name": us_link.display_name(name), "sec_name": name, "logo": us_link.logo(m["cik"]),
+                        "fund_name": m["fund_name"], "weight_pct": m["weight_pct"]},
             "index": snap, "years": years, "filings": filings, "basis": basis,
             "as_of": _d(ceiling), "calc": CALC, "provenance": PROVENANCE}
 

@@ -297,17 +297,21 @@ NAME_CTES = """,
 BASIS_WINDOW_DAYS = 550          # an annual filer, plus room for one missed year
 BASIS_MOVE_LIMIT = 1.5           # split or major issuance inside the window
 
-OWNERSHIP_CTE = (""",
+def ownership_cte():
+    """The issuer share-count CTEs, built per request: one filing per company
+    and year as of the ceiling in force (asof.newest)."""
+    return (""",
     issuer_shares AS (
         SELECT edinet_code, period_end, outstanding, share_classes,
                lag(outstanding) OVER (PARTITION BY edinet_code
                                       ORDER BY period_end) AS prev_outstanding
-        FROM (SELECT edinet_code, period_end, share_classes,
-                     issued_shares - coalesce(treasury_shares, 0) AS outstanding
-              FROM eq_filings
-              WHERE status IN ('clean','partial')
-                AND issued_shares IS NOT NULL
-                AND issued_shares - coalesce(treasury_shares, 0) > 0)
+        FROM (SELECT e.edinet_code, e.period_end, e.share_classes,
+                     e.issued_shares - coalesce(e.treasury_shares, 0) AS outstanding
+              FROM eq_filings e
+              WHERE e.status IN ('clean','partial')
+                AND e.issued_shares IS NOT NULL
+                AND e.issued_shares - coalesce(e.treasury_shares, 0) > 0""" + asof.newest(
+                    "e", "eq_filings", ok="newer.status IN ('clean','partial')") + """)
     ),
     basis_candidates AS (
         SELECT h.doc_id, h.held_edinet_code AS edinet_code,
@@ -712,8 +716,8 @@ def years():
     cur = _cur()
     return {"years": _rows(cur, """
         SELECT CAST(year(period_end) AS VARCHAR) AS year,
-               count(*) AS filings, min(period_end) AS first_period_end,
-               max(period_end) AS last_period_end
+               count(DISTINCT coalesce(edinet_code, doc_id)) AS filings,  -- a correction is not another filer
+               min(period_end) AS first_period_end, max(period_end) AS last_period_end
         FROM eq_filings WHERE status IN ('clean','partial') AND period_end IS NOT NULL
         GROUP BY 1 ORDER BY 1 DESC""")}
 
@@ -848,11 +852,11 @@ def company(sec_code: str):
         LEFT JOIN en_ecode n ON n.edinet_code = f.edinet_code
         LEFT JOIN en_scode s ON s.sec_code = f.sec_code
         WHERE f.sec_code = ?""" + asof.clause("filed_date", "f") + """
-        ORDER BY f.period_end DESC LIMIT 1""", [sec_code])
+        ORDER BY f.period_end DESC, f.filed_date DESC, f.doc_id DESC LIMIT 1""", [sec_code])
     holdings = []
     if filing:
         holdings = _rows(cur, """
-            WITH x AS (SELECT 1)""" + NAME_CTES + OWNERSHIP_CTE + """
+            WITH x AS (SELECT 1)""" + NAME_CTES + ownership_cte() + """
             SELECT h.holder_table, h.held_name_raw,
                    coalesce(n.name_en, s.name_en) AS held_name_en,
                    h.held_sec_code, h.match_status,
@@ -868,7 +872,7 @@ def company(sec_code: str):
             ORDER BY h.book_value_yen DESC NULLS LAST""", [filing[0]["doc_id"]])
     jp_enums.annotate_reciprocal(holdings)
     # one row per holder — its latest filing — not one row per holder per year
-    holders = _rows(cur, latest_filings() + NAME_CTES + OWNERSHIP_CTE + """
+    holders = _rows(cur, latest_filings() + NAME_CTES + ownership_cte() + """
         SELECT f.filer_name AS holder_name,
                coalesce(n.name_en, s.name_en) AS holder_name_en,
                f.sec_code AS holder_sec_code,
@@ -887,7 +891,8 @@ def company(sec_code: str):
         SELECT CAST(year(f.period_end) AS VARCHAR) AS year, f.period_end,
                count(*) AS named_holdings, sum(h.book_value_yen) AS book_value_yen
         FROM eq_holdings h JOIN eq_filings f USING (doc_id)
-        WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") + """
+        WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") +
+        asof.newest("f", "eq_filings", ok="newer.status IN ('clean','partial')") + """
         GROUP BY 1, 2 ORDER BY 1""", [sec_code])
     # The same reading, one point per annual report. Filed totals against filed
     # balance sheets, so the series is comparable year to year even though the
@@ -905,7 +910,8 @@ def company(sec_code: str):
                     THEN 100.0 * t.policy_total_yen / f.total_assets_yen END
                     AS pct_of_assets
         FROM eq_filings f JOIN tot t USING (doc_id)
-        WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") + """
+        WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") +
+        asof.newest("f", "eq_filings", ok="newer.status IN ('clean','partial')") + """
         ORDER BY 1""", [sec_code])
     reclassified, notes, flows = [], [], []
     scale, scale_entities = None, []
@@ -1068,7 +1074,8 @@ def history(limit: int = Query(40, ge=1, le=500)):
             FROM eq_holdings h JOIN eq_filings f USING (doc_id)
             LEFT JOIN en_ecode n ON n.edinet_code = f.edinet_code
             LEFT JOIN en_scode s ON s.sec_code = f.sec_code
-            WHERE f.status IN ('clean','partial') AND f.sec_code IS NOT NULL""" + asof.clause("filed_date", "f") + """
+            WHERE f.status IN ('clean','partial') AND f.sec_code IS NOT NULL""" + asof.clause("filed_date", "f") +
+            asof.newest("f", "eq_filings", ok="newer.status IN ('clean','partial')") + """
             GROUP BY 1, 2),
         ranked AS (
             SELECT sec_code, max(book_value_yen) AS peak FROM per_year GROUP BY 1
@@ -1363,9 +1370,10 @@ def claim_check(figure_yen: float = Query(..., description="the figure to check,
                    coalesce(f.filer_name_en, f.filer_name) AS name,
                    t.policy_total_yen, t.listed_yen
             FROM eq_filings f JOIN tot t USING (doc_id)
-            WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") + """
+            WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") +
+            asof.newest("f", "eq_filings", ok="newer.status IN ('clean','partial')") + """
               AND t.policy_total_yen IS NOT NULL
-            ORDER BY f.period_end""", [code])
+            ORDER BY f.period_end, f.filed_date, f.doc_id""", [code])
         if not rows:
             missing.append(code)
             continue

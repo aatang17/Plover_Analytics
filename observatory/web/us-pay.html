@@ -49,6 +49,11 @@
 .tbl-fin td.lbl.person { padding-left: 26px; color: var(--obs-text); }
 .tbl-fin tr.heading td { font-weight: 600; color: var(--obs-ink); background: var(--obs-surface-subtle);
   font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+/* Company logo: a fixed slot, empty when we hold none, so names line up. */
+.co-logo { display: inline-block; width: 20px; height: 20px; margin-right: 8px; vertical-align: -5px;
+  border-radius: 3px; background: var(--obs-logo-bg); }
+span.co-logo { background: none; }
+.co-head .co-logo { width: 32px; height: 32px; margin: 0; align-self: center; border: 1px solid var(--obs-border); }
 .tbl-fin td.ceo { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 /* Full CEO names widen the list: number headers wrap to two lines so every
    column fits at desktop width. */
@@ -104,6 +109,7 @@
   <section id="company-view" hidden>
     <p style="margin:16px 0 0"><a href="us-pay.html">← All S&amp;P 500 companies</a></p>
     <div class="co-head">
+      <img class="co-logo" id="co-logo" alt="" width="32" height="32" hidden>
       <h1 id="co-name"></h1>
       <span class="co-code" id="co-code"></span>
     </div>

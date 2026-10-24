@@ -41,6 +41,12 @@ Risk Factors are also cut into single risks: a styled (bold or italic) block
 that reads as a sentence is one risk's headline, a short styled block without
 a full stop is the category above it ("Risks Related to Our Industry").
 
+An amendment (10-K/A, 20-F/A) filed for the same year after that report is
+read too, and kept as a filing of its own: a restated 10-K/A carries the whole
+document again, and the API serves the newest filing of the year in which
+Business and Risk Factors were found. Most amendments add only the Part III
+pay and board items; those find no sections and change nothing shown.
+
 Status per filing: ok (business and risks found), partial (some sections),
 unsplit (no item headings found: nothing stored), failed (not fetched).
 
@@ -95,6 +101,7 @@ DOC_URL = "https://www.sec.gov/Archives/edgar/data/%d/%s/%s"
 PARSER_VERSION = "txt-3"
 EXTRACTOR = "sec-annual-text"
 FORMS = ("10-K", "10-KT", "20-F")
+AMENDMENTS = ("10-K/A", "10-KT/A", "20-F/A")
 RECENT_DAYS = 550               # an annual report older than this is not the company's latest
 RATE = 4.0
 WORKERS = 3
@@ -391,6 +398,7 @@ def risks(paras, heads, leads):
 
 def parse(body, form):
     """{"status", "note", "sections": [(key, item, title, paras, heads)], "risks": [...]}."""
+    form = form[:-2] if form.endswith("/A") else form          # an amendment is cut like its form
     bl = blocks(body)
     found = items(bl, form)
     if not found:
@@ -571,6 +579,14 @@ def targets(sec_db, con, limit, tickers=None):
                 WHERE f.cik = ? AND f.form IN (%s) AND f.filed >= current_date - %d
                 GROUP BY f.cik""" % (",".join("'%s'" % f for f in FORMS), RECENT_DAYS), [new, old]).fetchall()
             rows += old_rows                                      # fetched from the old number's archive
+        # amendments of each latest report, for the same year and filed after it
+        latest = {r[0]: (r[3], r[4]) for r in rows}
+        for cik, adsh, form, period, filed, instance in sec.execute("""
+                SELECT cik, adsh, form, period, filed, instance FROM sec_filings
+                WHERE form IN (%s) AND filed >= current_date - %d""" % (
+                ",".join("'%s'" % f for f in AMENDMENTS), RECENT_DAYS)).fetchall():
+            if cik in latest and period == latest[cik][0] and filed >= latest[cik][1]:
+                rows.append((cik, adsh, form, period, filed, instance, next(r[6] for r in rows if r[0] == cik)))
     finally:
         sec.close()
     have = {a: s for a, s in con.execute("SELECT adsh, parser FROM sec_text_filings WHERE status <> 'failed'").fetchall()}

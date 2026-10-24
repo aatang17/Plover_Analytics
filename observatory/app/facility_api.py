@@ -83,8 +83,8 @@ CALC = {
 _LATEST_FAC = """
     WITH scoped AS (
         SELECT *, coalesce(sec_code, edinet_code, doc_id) AS filer_key
-        FROM eq_fac_filings
-        WHERE status = 'clean'/*ASOF*/
+        FROM eq_fac_filings fac
+        WHERE status = 'clean'/*ASOF*//*NEWEST*/
           AND (CAST(? AS VARCHAR) IS NULL
                OR CAST(year(period_end) AS VARCHAR) = CAST(? AS VARCHAR))
     ),
@@ -100,7 +100,11 @@ _LATEST_FAC = """
 
 def latest_fac():
     """Latest Fac, with the point-in-time ceiling in force (app/asof.py)."""
-    return _LATEST_FAC.replace("/*ASOF*/", asof.clause("filed_date", ""))
+    # A clean report a correction has since replaced is out, even where the
+    # correction itself only parsed in part: aggregates never use the stale one.
+    return (_LATEST_FAC.replace("/*ASOF*/", asof.clause("filed_date", ""))
+            .replace("/*NEWEST*/", asof.newest("fac", "eq_fac_filings",
+                                               ok="newer.status IN ('clean','partial')")))
 
 
 def _year_params(year):
@@ -123,7 +127,8 @@ def years():
     """Fiscal years available, newest first — the feed for a year picker."""
     cur = _require()
     return {"years": _rows(cur, """
-        SELECT CAST(year(period_end) AS VARCHAR) AS year, count(*) AS filings
+        SELECT CAST(year(period_end) AS VARCHAR) AS year,
+               count(DISTINCT coalesce(edinet_code, doc_id)) AS filings  -- a correction is not another filer
         FROM eq_fac_filings
         WHERE status = 'clean' AND period_end IS NOT NULL
         GROUP BY 1 ORDER BY 1 DESC""")}
@@ -252,8 +257,8 @@ RENTAL_PROVENANCE = {
 _LATEST_RENT = """
     WITH scoped_r AS (
         SELECT *, coalesce(sec_code, edinet_code, doc_id) AS filer_key
-        FROM eq_rental_filings
-        WHERE status = 'clean'/*ASOF*/
+        FROM eq_rental_filings rent
+        WHERE status = 'clean'/*ASOF*//*NEWEST*/
           AND (CAST(? AS VARCHAR) IS NULL
                OR CAST(year(period_end) AS VARCHAR) = CAST(? AS VARCHAR))
     ),
@@ -269,7 +274,9 @@ _LATEST_RENT = """
 
 def latest_rent():
     """Latest Rent, with the point-in-time ceiling in force (app/asof.py)."""
-    return _LATEST_RENT.replace("/*ASOF*/", asof.clause("filed_date", ""))
+    return (_LATEST_RENT.replace("/*ASOF*/", asof.clause("filed_date", ""))
+            .replace("/*NEWEST*/", asof.newest("rent", "eq_rental_filings",
+                                               ok="newer.status IN ('clean','partial')")))
 
 
 def _require_rental():
@@ -392,7 +399,7 @@ def company(sec_code: str, year: str = Query("")):
           + asof.clause("filed_date") + """
           AND (CAST(? AS VARCHAR) IS NULL
                OR CAST(year(period_end) AS VARCHAR) = CAST(? AS VARCHAR))
-        ORDER BY period_end DESC LIMIT 1""", [sec_code[:4]] + p)
+        ORDER BY period_end DESC, filed_date DESC, doc_id DESC LIMIT 1""", [sec_code[:4]] + p)
     if not filings:
         raise HTTPException(404, "no facilities filing for %s" % sec_code)
     f = filings[0]
@@ -428,7 +435,7 @@ def company(sec_code: str, year: str = Query("")):
         WHERE sec_code = ? AND status = 'clean'""" + asof.clause("filed_date") + """
           AND (CAST(? AS VARCHAR) IS NULL
                OR CAST(year(period_end) AS VARCHAR) = CAST(? AS VARCHAR))
-        ORDER BY period_end DESC LIMIT 1""", [sec_code[:4]] + p)
+        ORDER BY period_end DESC, filed_date DESC, doc_id DESC LIMIT 1""", [sec_code[:4]] + p)
     f["rental"] = rent[0] if rent else None
     f["provenance"] = PROVENANCE
     f["calc"] = CALC

@@ -537,7 +537,7 @@ def check(db_path=None):
         names = {r[0]: r[1] for r in con.execute("""
             WITH latest AS (SELECT doc_id FROM (
                 SELECT doc_id, row_number() OVER (PARTITION BY coalesce(sec_code, edinet_code)
-                       ORDER BY period_end DESC) rn
+                       ORDER BY period_end DESC, filed_date DESC, doc_id DESC) rn
                 FROM eq_seg_filings WHERE status IN ('clean','partial')) WHERE rn = 1)
             SELECT c.customer_name, count(*) FROM eq_seg_customers c
             JOIN latest USING(doc_id) WHERE c.year_offset = 0 GROUP BY 1""").fetchall()}

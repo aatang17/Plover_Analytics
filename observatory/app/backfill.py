@@ -38,6 +38,10 @@ Environment (all optional):
                             present, loaded in slices otherwise)
   BACKFILL_CATCH_UP_DAYS    archive days per equity slice (default 40)
   BACKFILL_MAX_SLICES       stop after this many equity slices (default 400)
+  BACKFILL_CORRECTIONS      0 to skip reading the archived corrections the
+                            annual-report and buyback readers took no notice of
+                            before 2026-10-24 (default: on; one quick pass a
+                            day once they are all read)
   BACKFILL_SEC_QUARTERS     quarterly SEC data sets to hold in all (default 12; 0 = none)
   BACKFILL_US_PRICES        fetch yesterday's US closes from Databento each cycle (default 1);
                             DATABENTO_DAILY_MAX_USD caps one day's spend (default 0.50)
@@ -433,6 +437,48 @@ def backfill_equity(days, max_slices):
             return
         swap(work, LIVE_EQUITY)
         log("equity slice %d landed (%.0fs): %s" % (n, took, ", ".join(sorted(moved))))
+
+
+def backfill_corrections(max_slices=8):
+    """The corrections filed before the readers took them (2026-10-24): every
+    listed company's 訂正有価証券報告書 and buyback correction already in the
+    archive, a batch per reader per slice (equity/catch_up_corrections.py),
+    each slice on a copy swapped in when something landed. Nothing to read is
+    one quick pass a day."""
+    if not os.environ.get("EDINET_S3_BUCKET"):
+        log("no EDINET_S3_BUCKET; archived corrections stay unread")
+        return
+    work = DATA_DIR / "equity.corrections.duckdb"
+    script = ROOT / "equity" / "catch_up_corrections.py"
+    for n in range(1, max_slices + 1):
+        if _stopping:
+            return
+        if fresh_copy(LIVE_EQUITY, work) is None:
+            return
+        started = time.time()
+        rc = _run([sys.executable, str(script), "--db", str(work)], dict(os.environ), ROOT)
+        took = time.time() - started
+        if rc == 3:
+            log("corrections: every archived correction is read (%.0fs)" % took)
+            _discard(work)
+            return
+        landed = _landed_since(work)
+        if not landed:
+            log("corrections slice %d stored nothing (exit %s, %.0fs); served data untouched"
+                % (n, rc, took))
+            _discard(work)
+            return
+        swap(work, LIVE_EQUITY)
+        log("corrections slice %d landed (%.0fs, exit %s): %d filings" % (n, took, rc, landed))
+
+
+def _landed_since(work):
+    """Filings in the copy that the served file does not hold, across the
+    tables catch_up_corrections.py writes."""
+    tables = ("eq_fin_filings", "eq_filings", "eq_own_filings", "eq_company_year",
+              "eq_fac_filings", "eq_rental_filings", "eq_seg_filings", "eq_risk_filings",
+              "eq_buyback_filings")
+    return sum(max(0, _table_count(work, t) - _table_count(LIVE_EQUITY, t)) for t in tables)
 
 
 # --- the US shelf ------------------------------------------------------------
@@ -988,6 +1034,8 @@ def main():
     # already complete on the production volume.
     if days > 0 and not _stopping:
         _phase("equity", backfill_equity, days, max_slices)
+    if os.environ.get("BACKFILL_CORRECTIONS", "1") not in ("", "0") and not _stopping:
+        _phase("corrections", backfill_corrections)
     if gdp_vintages and not _stopping:
         _phase("GDP vintages", backfill_gdp_vintages)
     # The US shelf: how many quarterly SEC data sets to hold in all (each is

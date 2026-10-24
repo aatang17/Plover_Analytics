@@ -426,8 +426,9 @@ def company(sec_code: str, year: str = Query("")):
     f["history"] = _rows(cur, """
         SELECT doc_id, period_end, filed_date, status, securities_yen, loans_yen, deposits_yen,
                afs_diff_yen, afs_bond_diff_yen, afs_jgb_diff_yen, var_banking_yen
-        FROM eq_bank_filings WHERE sec_code = ? AND status IN ('clean','partial')"""
-        + asof.clause("filed_date") + " ORDER BY period_end", [sec])
+        FROM eq_bank_filings b WHERE b.sec_code = ? AND b.status IN ('clean','partial')"""
+        + asof.clause("filed_date", "b") + asof.newest(
+            "b", "eq_bank_filings", ok="newer.status IN ('clean','partial')") + " ORDER BY b.period_end", [sec])
     _, sec_to_fi = _links(cur)
     irrbb = _irrbb_latest(cur)
     f["fi_codes"] = sec_to_fi.get(sec, [])

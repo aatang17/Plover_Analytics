@@ -30,6 +30,8 @@
   /* section header band — same fill as the site header */
   --obs-band-bg: #1a4d8f;
   --obs-band-ink: #ffffff;
+  /* Company logos are drawn for white pages: they keep a white tile in both themes. */
+  --obs-logo-bg: #ffffff;
   --obs-band-muted: #c5d7ec;
 
   /* categorical series palette — assigned by stable series identity */
@@ -91,6 +93,7 @@
 
   --obs-band-bg: #16406f;
   --obs-band-ink: #f1f5f9;
+  --obs-logo-bg: #ffffff;
   --obs-band-muted: #a9c2dd;
 
   --obs-series-1: #5b9bd8;
@@ -144,6 +147,7 @@
 
     --obs-band-bg: #16406f;
     --obs-band-ink: #f1f5f9;
+    --obs-logo-bg: #ffffff;
     --obs-band-muted: #a9c2dd;
 
     --obs-series-1: #5b9bd8;

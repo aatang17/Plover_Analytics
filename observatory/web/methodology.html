@@ -237,6 +237,15 @@
     reconstructed, and claiming otherwise would be a fiction dressed as a vintage. What the
     market could read on a date is in any case the more useful basis for testing a signal.
     Every response states its basis.</li>
+    <li><b>A corrected filing replaces the original from the day it was filed.</b> When a
+    company refiles a report it got wrong (a corrected annual report, 訂正有価証券報告書; a
+    corrected buyback report; a revised US proxy, DEFR14A; an amended US annual report, 10-K/A),
+    the correction is stored beside the original, which is kept. Each fiscal year, or each
+    buyback report, then shows the latest filed version. With <code>?as_of=</code> set before
+    the correction was filed, the original is shown, because that is what was public then. A
+    US amendment that covers only the pay and board items does not replace the annual report's
+    business description or risks. The financials view <code>?as_filed_in=</code> reads a year
+    as first published, before any correction.</li>
     <li><b>One figure is withheld rather than answered wrongly.</b> The buyback programme rollup
     aggregates every monthly filing of an authorisation into one row, so under an as-of date
     those totals would include months filed afterwards. It returns empty with the reason

@@ -140,7 +140,8 @@ def _notes(head):
 def years():
     u"""Fiscal years available, newest first — the feed for a year picker."""
     return {"years": _rows(_require(), """
-        SELECT CAST(year(period_end) AS VARCHAR) AS year, count(*) AS filings,
+        SELECT CAST(year(period_end) AS VARCHAR) AS year,
+               count(DISTINCT coalesce(edinet_code, doc_id)) AS filings,  -- a correction is not another filer
                min(period_end) AS first_period_end, max(period_end) AS last_period_end
         FROM eq_own_filings
         WHERE status IN ('clean','partial') AND period_end IS NOT NULL
@@ -253,9 +254,10 @@ def company(sec_code: str,
                majors_ratio_filed_pct, nominee_ratio_pct, foreign_pct,
                individuals_pct, financial_institutions_pct,
                other_corporations_pct, shareholders_total, status
-        FROM eq_own_filings
-        WHERE (sec_code = ? OR edinet_code = ?) AND status IN ('clean','partial')
-        ORDER BY period_end DESC""", [code, head.get("edinet_code")]))
+        FROM eq_own_filings o
+        WHERE (o.sec_code = ? OR o.edinet_code = ?) AND o.status IN ('clean','partial')""" + asof.newest(
+            "o", "eq_own_filings", ok="newer.status IN ('clean','partial')") + """
+        ORDER BY o.period_end DESC""", [code, head.get("edinet_code")]))
     plausibility.own_rows([head])
     return _notes(head)
 

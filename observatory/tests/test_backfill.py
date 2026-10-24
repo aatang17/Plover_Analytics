@@ -431,7 +431,7 @@ class PhaseIsolationTest(unittest.TestCase):
             "backfill_macro", "stamp_cycle", "backfill_gdp_vintages",
             "backfill_equity", "backfill_sec", "refresh_us_companies", "refresh_us_pay",
             "refresh_us_holdings", "refresh_us_prices", "refresh_us_events", "refresh_us_shares", "refresh_us_listings",
-            "refresh_us_text")}
+            "refresh_us_text", "backfill_corrections")}
         self.addCleanup(lambda: [setattr(backfill, n, f) for n, f in self._saved.items()])
         # a phase added to main() without a stub here runs for real (2026-10-19:
         # refresh_us_text swapped a half-copied data/sec_text.duckdb over the live one)
@@ -453,6 +453,7 @@ class PhaseIsolationTest(unittest.TestCase):
         backfill.refresh_us_shares = lambda: self.ran.append("shares")
         backfill.refresh_us_listings = lambda: self.ran.append("listings")
         backfill.backfill_equity = lambda d, m: self.ran.append("equity")
+        backfill.backfill_corrections = lambda: self.ran.append("corrections")
         backfill.backfill_sec = lambda q: self.ran.append("sec")
         for key in ("BACKFILL_DATASETS", "BACKFILL_GDP_VINTAGES",
                     "BACKFILL_CATCH_UP_DAYS", "BACKFILL_SEC_QUARTERS"):
@@ -492,6 +493,10 @@ class PhaseIsolationTest(unittest.TestCase):
         backfill.main()
         self.assertLess(self.ran.index("shares"), self.ran.index("listings"))
         self.assertLess(self.ran.index("listings"), self.ran.index("equity"))
+
+    def test_corrections_follow_the_equity_catch_up(self):
+        self.assertEqual(backfill.main(), 0)
+        self.assertLess(self.ran.index("equity"), self.ran.index("corrections"))
 
     def test_equity_runs_before_the_gdp_archive(self):
         backfill.backfill_gdp_vintages = lambda: self.ran.append("gdp")

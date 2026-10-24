@@ -60,7 +60,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import duckdb
 
-from extract import (LocalSource, S3Source, load_codelist, compact,
+from extract import (LocalSource, S3Source, annual, load_codelist, compact,
                      DB_PATH, incremental_window, record_run,
                      select_pending, catch_up_start, CATCH_UP_DAYS,
                      recorded_floor, sec_code_of)
@@ -329,7 +329,7 @@ def main():
     targets = []
     for doc_id, rec in sorted(pending.items()):
         m = meta.get(doc_id) or {}
-        if (m.get("docTypeCode") or rec.get("doc_type")) != "120":
+        if not annual(m, rec):
             continue
         # Listed today, or carrying a securities code on the filing itself —
         # so a company since delisted keeps its history and the record is

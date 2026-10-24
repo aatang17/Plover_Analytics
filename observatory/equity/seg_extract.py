@@ -77,7 +77,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import duckdb
 
-from extract import (LocalSource, S3Source, load_codelist, compact, DB_PATH,
+from extract import (LocalSource, S3Source, annual, load_codelist, compact, DB_PATH,
                      incremental_window, record_run, seek_key,
                      select_pending, catch_up_start, CATCH_UP_DAYS,
                      recorded_floor,
@@ -821,8 +821,12 @@ def extract(block_html, period_end, consolidated=None):
     return regions, customers, products, basis, omitted, len(tables), sorted(set(notes))
 
 
-def consolidated_revenue(con, doc_ids):
-    """{doc_id: yen} from the financials extractor, best element available."""
+def consolidated_revenue(con, doc_ids, years=None):
+    """{doc_id: yen} from the financials extractor, best element available.
+
+    `years` ({doc_id: (edinet_code, period_end)}) lets a filing the financials
+    extractor has not read — a correction it skipped or failed — take the
+    revenue of the newest one it read for the same company and year."""
     out = {}
     if not doc_ids:
         return out
@@ -842,7 +846,19 @@ def consolidated_revenue(con, doc_ids):
         r = rank[element]
         if doc_id not in best or r < best[doc_id][0]:
             best[doc_id] = (r, value)
-    return {d: v for d, (_r, v) in best.items()}
+    out = {d: v for d, (_r, v) in best.items()}
+    for doc_id, (code, period) in (years or {}).items():
+        if doc_id in out or not code or not period:
+            continue
+        row = con.execute(
+            "SELECT doc_id FROM eq_fin_filings WHERE edinet_code = ? AND period_end = ? "
+            "AND status IN ('clean','partial') ORDER BY filed_date DESC, doc_id DESC LIMIT 1",
+            [code, period]).fetchone()
+        if row and row[0] != doc_id:
+            got = consolidated_revenue(con, {row[0]})
+            if row[0] in got:
+                out[doc_id] = got[row[0]]
+    return out
 
 
 def reconcile(regions, consolidated):
@@ -916,7 +932,7 @@ def main():
     targets = []
     for doc_id, rec in sorted(pending.items()):
         m = meta.get(doc_id) or {}
-        if (m.get("docTypeCode") or rec.get("doc_type")) != "120":
+        if not annual(m, rec):
             continue
         if args.all or m.get("edinetCode") in listed:
             targets.append((doc_id, rec, m))
@@ -932,7 +948,8 @@ def main():
 
     con = duckdb.connect(args.db)
     con.execute(SCHEMA_SQL)
-    revenue = consolidated_revenue(con, {t[0] for t in targets})
+    revenue = consolidated_revenue(con, {t[0] for t in targets},
+                                   {t[0]: (t[2].get("edinetCode"), t[2].get("periodEnd")) for t in targets})
 
     def fetch_and_parse(t):
         doc_id, rec, m = t

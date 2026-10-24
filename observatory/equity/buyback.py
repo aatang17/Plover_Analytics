@@ -54,6 +54,13 @@ DB_PATH = os.environ.get(
     "EQUITY_DB_PATH", os.path.join(HERE, "..", "data", "equity.duckdb"))
 PARSER_VERSION = "bb-2"
 DOC_TYPE = "220"
+# A correction (訂正自己株券買付状況報告書, 230) carries the whole corrected
+# report and names the one it corrects (parentDocID). It is stored as a filing
+# of its own and linked in eq_buyback_corrections; every rollup reads only the
+# newest of a report and its corrections (CURRENT below). Not "newest per
+# month": the as_of a report states repeats across months for some filers
+# (住友不動産, ハリマビステム), so a month is not one report.
+DOC_TYPES = (DOC_TYPE, "230")
 DOCS = os.path.join(_ARCHIVE, "docs")
 
 ROW_AUTHORISED, ROW_MONTH_TOTAL = "決議状況", "計"
@@ -355,7 +362,7 @@ def targets_from_s3(src, since, have):
     out = {}
     for doc_id, day in pending.items():
         r = meta.get(doc_id) or {}
-        if r.get("docTypeCode") == DOC_TYPE and not r.get("fundCode"):
+        if r.get("docTypeCode") in DOC_TYPES and not r.get("fundCode"):
             out[doc_id] = (day, r)
     return out, through, len(filings)
 
@@ -369,7 +376,7 @@ def targets_from_lists():
         except ValueError:
             continue
         for r in rows:
-            if r.get("docTypeCode") == DOC_TYPE and not r.get("fundCode"):
+            if r.get("docTypeCode") in DOC_TYPES and not r.get("fundCode"):
                 out[r["docID"]] = (day, r)
     return out
 
@@ -407,7 +414,18 @@ CREATE TABLE IF NOT EXISTS eq_buyback_treasury (
     total_shares BIGINT, total_yen BIGINT,
     shares_outstanding BIGINT, treasury_shares BIGINT,
     status VARCHAR, detail VARCHAR);
+CREATE TABLE IF NOT EXISTS eq_buyback_corrections (
+    doc_id VARCHAR PRIMARY KEY, corrects_doc_id VARCHAR);
 """
+
+# The filing aliased f is the newest of its report and that report's
+# corrections. app/buyback_api.py builds the same test, with a date ceiling.
+CURRENT = """NOT EXISTS (
+    SELECT 1 FROM eq_buyback_corrections c JOIN eq_buyback_filings n ON n.doc_id = c.doc_id
+    WHERE c.corrects_doc_id = coalesce((SELECT c2.corrects_doc_id FROM eq_buyback_corrections c2
+                                        WHERE c2.doc_id = f.doc_id), f.doc_id)
+      AND n.doc_id <> f.doc_id AND n.status <> 'failed'
+      AND (n.submitted > f.submitted OR (n.submitted = f.submitted AND n.doc_id > f.doc_id)))"""
 
 # One row per authorisation, from its latest filing. A view, not a table: the
 # rollup is derived, so it can never go stale against the filings behind it.
@@ -423,7 +441,8 @@ WITH ranked AS (
                               ORDER BY f.as_of DESC, f.submitted DESC) AS rn,
            count(*) OVER (PARTITION BY f.edinet_code, p.resolution_type,
                                        p.resolution_date) AS filings
-    FROM eq_buyback_programs p JOIN eq_buyback_filings f USING (doc_id))
+    FROM eq_buyback_programs p JOIN eq_buyback_filings f USING (doc_id)
+    WHERE """ + CURRENT + """)
 SELECT edinet_code, sec_code, filer_name, resolution_type, resolution_date,
        window_start, window_end, authorised_shares, authorised_yen,
        cumulative_shares, cumulative_yen, filings,
@@ -456,7 +475,7 @@ SELECT f.edinet_code, f.sec_code, f.filer_name, t.as_of, t.doc_id,
        t.cancelled_shares, t.cancelled_yen,
        t.shares_outstanding, t.treasury_shares, t.status
 FROM eq_buyback_treasury t JOIN eq_buyback_filings f USING (doc_id)
-WHERE t.cancelled_shares > 0;
+WHERE t.cancelled_shares > 0 AND """ + CURRENT + """;
 """
 
 
@@ -478,6 +497,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--docs", help="comma-separated docIDs, as the other readers take")
     ap.add_argument("--source", choices=("s3", "local"), default="s3")
     ap.add_argument("--new-only", action="store_true",
                     help="extract only filings archived since the last "
@@ -507,6 +527,9 @@ def main():
         s3src = S3Source(args.workers)
         found, through, seen = targets_from_s3(s3src, since, have)
         targets = sorted(found.items())
+    if args.docs:
+        want = {d.strip() for d in args.docs.split(",") if d.strip()}
+        targets = [t for t in targets if t[0] in want]
     if args.limit:
         targets = targets[:args.limit]
     print("buyback filings to extract: %d" % len(targets))
@@ -538,6 +561,9 @@ def main():
                 sys.stdout.flush()
             base = (doc_id, meta.get("edinetCode"), sec_code_of(meta),
                     meta.get("filerName"), day)
+            if meta.get("docTypeCode") == "230" and meta.get("parentDocID"):
+                con.execute("INSERT OR REPLACE INTO eq_buyback_corrections VALUES (?, ?)",
+                            [doc_id, meta["parentDocID"]])
             if err:
                 con.execute("INSERT OR REPLACE INTO eq_buyback_filings VALUES (?,?,?,?,?,?,?,?,?,?)",
                             base + (None, sha, PARSER_VERSION, "failed", err))

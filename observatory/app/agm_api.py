@@ -141,7 +141,7 @@ BOARD_EN_CTE = u""",
     board_en AS (
         SELECT f.sec_code,
                replace(replace(b.name_ja, ' ', ''), '\u3000', '') AS name_key,
-               max_by(b.name_en, f.period_end) AS name_en
+               max_by(b.name_en, f.filed_date) AS name_en   -- a correction's spelling wins
         FROM eq_board b JOIN eq_filings f USING (doc_id)
         WHERE b.name_ja IS NOT NULL AND b.name_en IS NOT NULL
               AND f.sec_code IS NOT NULL

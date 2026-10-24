@@ -100,6 +100,11 @@
       esc(foot) + "</div></div>";
   }
 
+  function logo(c) {
+    return c.logo ? "<img class='co-logo' src='" + esc(c.logo) + "' alt='' width='20' height='20' loading='lazy'>"
+                  : "<span class='co-logo'></span>";
+  }
+
   function ceoCell(c, name) {
     if (c.status !== "ok") return "<td class='muted'>" + esc(STATUS[c.status] || c.status) + "</td>";
     return "<td class='ceo'>" + esc(name || MISSING) + "</td>";
@@ -155,7 +160,8 @@
         }
         var base = c.tsr_base ? "Value of $100 invested on " + c.tsr_base : null;
         return lines(c).map(function (l) {
-          return "<tr><td><a href='us-pay.html?t=" + encodeURIComponent(c.ticker) + "'>" +
+          return "<tr><td>" + logo(c) +
+            "<a href='us-pay.html?t=" + encodeURIComponent(c.ticker) + "'>" +
             esc(c.name) + "</a></td><td class='mono'>" + esc(c.ticker) + "</td><td data-sort='" +
             esc(c.fiscal_year_end || "") + "'>" + esc(c.fiscal_year_end ? fy(c.fiscal_year_end) : MISSING) +
             "</td>" + ceoCell(c, l.name) + num(l.total, mn) + num(l.paid, mn) +
@@ -222,6 +228,8 @@
     var c = co.company, ys = years();
     document.title = c.name + " (" + c.ticker + ") · US Executive Pay · Plover Analytics";
     $("co-name").textContent = c.name;
+    $("co-logo").hidden = !c.logo;
+    if (c.logo) $("co-logo").src = c.logo;
     $("co-code").textContent = c.ticker;
     var read = co.filings.filter(function (f) { return f.status === "ok"; }).length;
     $("co-meta").innerHTML = "CIK <span class='mono'>" + c.cik + "</span> · " +

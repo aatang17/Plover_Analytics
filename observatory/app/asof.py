@@ -103,6 +103,22 @@ def clause(column="filed_date", alias=""):
     return " AND %s%s <= %s" % (prefix, column, literal(ceiling))
 
 
+def newest(alias, table, key="edinet_code", ok="", period="period_end", filed="filed_date"):
+    """` AND NOT EXISTS (…)`: the row aliased `alias` is the newest filing of
+    its company and fiscal year that existed by the ceiling — a correction
+    (訂正有価証券報告書) shadows the report it corrects, and before the
+    correction was filed the report stands. `ok` is a condition on the other
+    filing (alias newer), e.g. "newer.status IN ('clean','partial')", so a correction
+    that failed to parse shadows nothing. For per-year series; a latest view
+    already ranks by period_end, filed_date. `period` and `filed` name the
+    table's own columns (a buyback report: as_of, submitted)."""
+    a = alias
+    return (" AND NOT EXISTS (SELECT 1 FROM {t} newer WHERE newer.{k} = {a}.{k} AND newer.{p} = {a}.{p}"
+            " AND (newer.{f} > {a}.{f} OR (newer.{f} = {a}.{f} AND newer.doc_id > {a}.doc_id)){ok}{asof})"
+            .format(t=table, k=key, a=a, p=period, f=filed, ok=(" AND " + ok) if ok else "",
+                    asof=clause(filed, "newer")))
+
+
 def vintage(unit="filing"):
     """The `vintage` block a point-in-time response carries."""
     ceiling = _CEILING.get()

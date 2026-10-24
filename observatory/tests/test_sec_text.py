@@ -172,6 +172,22 @@ class Api(unittest.TestCase):
         got = sec_text_api.summary(self.c, "a")
         self.assertTrue(got[0].startswith("NVIDIA pioneered"))
 
+    def test_a_part_iii_amendment_does_not_hide_the_report(self):
+        # 2026-10-24: amendments are read now; most add only the pay items
+        row = "INSERT INTO sec_text_filings (adsh, cik, form, period, filed, status) VALUES (?, 7, ?, ?, ?, ?)"
+        self.c.execute(row, ["k24", "10-K", "2024-12-31", "2025-02-20", "ok"])
+        self.c.execute(row, ["k25", "10-K", "2025-12-31", "2026-02-20", "ok"])
+        self.c.execute(row, ["a25", "10-K/A", "2025-12-31", "2026-04-28", "unsplit"])
+        self.assertEqual(sec_text_api.latest(self.c, 7)["adsh"], "k25")
+        # a restated 10-K/A carrying the whole document is the newer word
+        self.c.execute(row, ["r25", "10-K/A", "2025-12-31", "2026-06-02", "ok"])
+        self.assertEqual(sec_text_api.latest(self.c, 7)["adsh"], "r25")
+
+    def test_an_amendment_is_cut_like_its_form(self):
+        body = page(toc(), b("Item 1. Business"), p(PARA), b("Item 1A. Risk Factors"),
+                    b("Demand for chips may fall in a downturn."), p(PARA), b("Item 2. Properties"), p(PARA))
+        self.assertEqual(x.parse(body, "10-K/A")["status"], x.parse(body, "10-K")["status"])
+
     def test_mentions_find_every_word(self):
         hits = sec_text_api.mentions(self.c, "a", "tariffs")
         self.assertEqual(len(hits), 1)

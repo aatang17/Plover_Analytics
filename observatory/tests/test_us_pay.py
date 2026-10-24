@@ -94,6 +94,27 @@ class ExtractorParseTest(unittest.TestCase):
         self.assertEqual(rows[0], ("NVIDIA CORP", "NVDA", 8.27))
         self.assertEqual(rows[1][1], "BRK.B")
 
+    def test_a_revised_proxy_is_listed(self):
+        # 2026-10-24: Intel's tagged 2026 proxy was a DEFR14A, and the feed
+        # asked for DEF 14A never lists one.
+        def feed(*entries):
+            return ('<feed xmlns="http://www.w3.org/2005/Atom">' + "".join(
+                "<entry><content><filing-type>%s</filing-type><accession-number>%s</accession-number>"
+                "<filing-date>%s</filing-date></content></entry>" % e for e in entries) + "</feed>").encode()
+
+        class Fetcher(object):
+            asked = []
+
+            def get(self, url):
+                self.asked.append(url)
+                if "type=DEFR14A" in url:
+                    return feed(("DEFR14A", "R26", "2026-03-24"))
+                return feed(("DEF 14A", "D26", "2026-03-23"), ("DEF 14A/A", "X26", "2026-04-02"),
+                            ("DEF 14A", "D22", "2022-03-30"))
+        self.assertEqual(PX.list_proxies(Fetcher(), 50863),
+                         [("R26", datetime.date(2026, 3, 24), "DEFR14A"),
+                          ("D26", datetime.date(2026, 3, 23), "DEF 14A")])
+
     def test_not_a_workbook_is_refused(self):
         with self.assertRaises(PX.PullError):
             PX.parse_holdings(b"<html>moved</html>")
@@ -159,6 +180,20 @@ class YearsTest(unittest.TestCase):
             fact(1, "PeoTotalCompAmt", "2025-01-01", "2025-12-31", 60938062,
                  dims="ecd:IndividualAxis=unh:StephenHemsleyMember")])
         self.assertEqual(y["ceos"][0]["name"], "Hemsley")
+
+    def test_a_misspelled_member_takes_the_one_name_left_over(self):
+        """Intel 2026: 'Mr. Tan' tagged plain, his pay to intc:TranMember."""
+        y = self.year([
+            fact(1, "PeoName", "2025-03-18", "2025-12-27", text="Mr. Tan"),
+            fact(1, "PeoName", "2024-12-29", "2025-03-17", text="Mr. Zinsner",
+                 dims="ecd:IndividualAxis=intc:ZinsnerMember"),
+            fact(1, "PeoTotalCompAmt", "2024-12-29", "2025-12-27", 92990900,
+                 dims="ecd:IndividualAxis=intc:TranMember"),
+            fact(1, "PeoTotalCompAmt", "2024-12-29", "2025-12-27", 18174100,
+                 dims="ecd:IndividualAxis=intc:ZinsnerMember")], end="2025-12-27")
+        self.assertEqual({c["name"]: c["total_pay"] for c in y["ceos"]},
+                         {"Tan": 92990900, "Zinsner": 18174100})
+        self.assertEqual(y["year_end_ceos"], ["Tan"])
 
     def test_an_unnamed_member_gets_its_own_label(self):
         y = self.year([fact(1, "PeoTotalCompAmt", "2025-01-01", "2025-12-31", 1,

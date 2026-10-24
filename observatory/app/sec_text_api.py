@@ -89,7 +89,10 @@ def latest(c, cik):
     """The company's latest annual report read, as a dict, or None."""
     row = c.execute("""SELECT adsh, form, period, filed, url, status, note FROM sec_text_filings
                        WHERE cik = ? AND status NOT IN ('failed', 'no_doc')
-                       ORDER BY filed DESC LIMIT 1""", [cik]).fetchone()
+                       -- the year's newest filing with Business and Risk Factors: a
+                       -- 10-K/A that adds only the Part III items does not hide them
+                       ORDER BY period DESC NULLS LAST, status = 'ok' DESC, filed DESC
+                       LIMIT 1""", [cik]).fetchone()
     if not row:
         return None
     return dict(zip(("adsh", "form", "period", "filed", "url", "status", "note"), row))

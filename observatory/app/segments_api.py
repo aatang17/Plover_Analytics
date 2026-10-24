@@ -208,7 +208,7 @@ def _entity(cur, sec_code):
     rows = _rows(cur, "SELECT edinet_code, sec_code, filer_name AS name_ja, NULL AS name_en, "
                       "NULL AS industry, NULL AS listed FROM eq_seg_filings "
                       "WHERE sec_code = ?" + asof.clause("filed_date")
-                      + " ORDER BY period_end DESC LIMIT 1", [sec_code])
+                      + " ORDER BY period_end DESC, filed_date DESC, doc_id DESC LIMIT 1", [sec_code])
     if rows:
         return rows[0]
     raise HTTPException(404, "no company with securities code %s" % sec_code)
@@ -223,7 +223,7 @@ def _latest_filing(cur, sec_code):
                reconciliation, sha256_t1
         FROM eq_seg_filings WHERE sec_code = ? AND status IN ('clean', 'partial')"""
         + asof.clause("filed_date") + """
-        ORDER BY period_end DESC, filed_date DESC LIMIT 1""", [sec_code])
+        ORDER BY period_end DESC, filed_date DESC, doc_id DESC LIMIT 1""", [sec_code])
     return rows[0] if rows else None
 
 
@@ -304,7 +304,7 @@ def companies(q: str = Query("", description="name or code substring"),
             latest AS (
                 SELECT sec_code, max(edinet_code) AS edinet_code,
                        max(filer_name) AS name, max(period_end) AS period_end,
-                       count(*) AS filings
+                       count(DISTINCT period_end) AS filings  -- a correction is not another year
                 FROM eq_seg_filings
                 WHERE sec_code IS NOT NULL AND status IN ('clean','partial')"""
             + asof.clause("filed_date") + """

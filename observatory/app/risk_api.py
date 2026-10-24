@@ -170,7 +170,7 @@ def company(sec_code: str, year: str = Query("", description="fiscal year the re
                preamble, full_text, sha256_t1, parser_version
         FROM eq_risk_filings
         WHERE sec_code = ? AND status IN ('clean','partial','unsplit')""" + ceiling + """
-        ORDER BY period_end DESC, filed_date DESC""", [code])
+        ORDER BY period_end DESC, filed_date DESC, doc_id DESC""", [code])
     if not filings:
         raise HTTPException(404, "no business-risks section on file for %s" % code)
     # One report per fiscal year: an amended or duplicate filing for the same

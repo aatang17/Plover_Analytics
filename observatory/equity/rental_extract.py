@@ -55,7 +55,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import duckdb
 
-from extract import (LocalSource, S3Source, load_codelist, compact,
+from extract import (LocalSource, S3Source, annual, load_codelist, compact,
                      DB_PATH, incremental_window, record_run,
                      seek_key,
                      select_pending, catch_up_start, CATCH_UP_DAYS,
@@ -296,7 +296,7 @@ def main():
     targets = []
     for doc_id, rec in sorted(pending.items()):
         m = meta.get(doc_id) or {}
-        if (m.get("docTypeCode") or rec.get("doc_type")) != "120":
+        if not annual(m, rec):
             continue
         if args.all or m.get("edinetCode") in listed:
             targets.append((doc_id, rec, m))

@@ -240,7 +240,8 @@ def years():
     """Fiscal years available, newest first — the feed for a year picker."""
     cur = _require()
     return {"years": _rows(cur, """
-        SELECT CAST(year(period_end) AS VARCHAR) AS year, count(*) AS filings,
+        SELECT CAST(year(period_end) AS VARCHAR) AS year,
+               count(DISTINCT coalesce(edinet_code, doc_id)) AS filings,  -- a correction is not another filer
                min(period_end) AS first_period_end, max(period_end) AS last_period_end
         FROM eq_company_year
         WHERE status IN ('clean','partial') AND period_end IS NOT NULL
@@ -368,9 +369,10 @@ def company(sec_code: str,
                voluntary_below_100m, on_board_at_filing
         FROM eq_pay_named WHERE doc_id = ? ORDER BY consolidated_pay_yen DESC""", [doc]))
     f["available_years"] = [r["year"] for r in _rows(cur, """
-        SELECT CAST(year(period_end) AS VARCHAR) AS year FROM eq_company_year
-        WHERE sec_code = ? AND status IN ('clean','partial') ORDER BY period_end DESC""",
-        [code])]
+        SELECT CAST(year(y.period_end) AS VARCHAR) AS year FROM eq_company_year y
+        WHERE y.sec_code = ? AND y.status IN ('clean','partial')""" + asof.newest(
+            "y", "eq_company_year", ok="newer.status IN ('clean','partial')") + """
+        ORDER BY y.period_end DESC""", [code])]
     f["consolidated_pay_note"] = CONSOLIDATED_NOTE
     f["pay_consistency_note"] = PAY_FLAG_NOTE
     f["components_note"] = COMPONENTS_NOTE
@@ -387,7 +389,7 @@ def history(sec_code: str = Query(..., description="4-digit securities code")):
     """One company across every fiscal year it has been extracted for."""
     cur = _require()
     code = sec_code.strip()
-    series = _rows(cur, """
+    series = _rows(cur, ("""
         SELECT CAST(year(g.period_end) AS VARCHAR) AS year, g.period_end, g.doc_id,
                g.status, g.board_size, g.avg_director_age, g.directors_70_plus,
                g.female_officers, g.female_ratio_filed, g.avg_salary_yen,
@@ -401,8 +403,9 @@ def history(sec_code: str = Query(..., description="4-digit securities code")):
                    AND p.total_yen IS NOT NULL AND p.headcount IS NOT NULL)
                    AS pay_per_officer_yen
         FROM eq_company_year g
-        WHERE g.sec_code = ? AND g.status IN ('clean','partial')
-        ORDER BY g.period_end"""
+        WHERE g.sec_code = ? AND g.status IN ('clean','partial')""" + asof.newest(
+            "g", "eq_company_year", ok="newer.status IN ('clean','partial')") + """
+        ORDER BY g.period_end""")
         .replace("{INSIDE}", INSIDE_KEYS_SQL)
         .replace("{NOTOFWHICH}", NOT_OF_WHICH), [code])
     if not series:
@@ -495,7 +498,8 @@ def trend(years_back: int = Query(5, ge=2, le=6),
             SELECT g.*, year(g.period_end) AS fy
             FROM eq_company_year g
             LEFT JOIN eq_entities ent ON ent.edinet_code = g.edinet_code
-            WHERE g.status = 'clean' AND g.board_size > 0
+            WHERE g.status = 'clean' AND g.board_size > 0""" + asof.newest(
+                "g", "eq_company_year", ok="newer.status IN ('clean','partial')") + """
               AND year(g.period_end) BETWEEN ? AND ?
               AND (CAST(? AS VARCHAR) IS NULL
                    OR coalesce(ent.listed, FALSE) = (CAST(? AS VARCHAR) = 'true'))
