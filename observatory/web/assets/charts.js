@@ -654,7 +654,9 @@ function colsOptions(cfg, pal, narrow, below) {
     }),
     tooltip: {
       trigger: "axis",
-      axisPointer: { type: "shadow", shadowStyle: { color: pal.subtle } },
+      // The band is opaque, so it sits behind the bars (series z is 2);
+      // at ECharts' default z of 50 it hides the column being read.
+      axisPointer: { type: "shadow", z: 1, shadowStyle: { color: pal.subtle } },
       backgroundColor: pal.surface,
       borderColor: pal.border,
       textStyle: { color: pal.text, fontSize: 12 },
