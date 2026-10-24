@@ -127,7 +127,9 @@
       cs.map(function (c) {
         var f = c.facts + c.predecessors.reduce(function (a, p) { return a + p.facts; }, 0);
         var n = c.filings + c.predecessors.reduce(function (a, p) { return a + p.filings; }, 0);
-        return "<tr><td><a href='us-companies.html?t=" + encodeURIComponent(c.ticker) + "'>" +
+        return "<tr><td>" + (c.logo ? "<img class='logo' src='" + esc(c.logo) + "' alt='' width='20' height='20' loading='lazy'>"
+                                    : "<span class='logo'></span>") +
+          "<a href='us-companies.html?t=" + encodeURIComponent(c.ticker) + "'>" +
           esc(c.name) + "</a></td><td class='mono'>" + esc(c.ticker) + "</td><td>" +
           esc(c.sector) + "</td><td class=r>" + esc(c.history_from) + "</td><td class=r>" +
           esc(c.last_filed) + "</td><td class=r data-sort='" + n + "'>" + count(n) +

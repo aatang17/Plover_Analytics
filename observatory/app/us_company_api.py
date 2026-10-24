@@ -15,6 +15,7 @@ on file here, not statistics; each item names its API address.
 
   GET /api/v1/us/company?q=apple        search: ticker or name, up to 20
   GET /api/v1/us/company/AAPL           the record (ticker or CIK)
+  GET /api/v1/us/company/logos          every logo, by ticker and "cik:N"
   GET /logos/us/<cik>-<sha>.<ext>       a logo uploaded in the admin console
 """
 import json
@@ -191,6 +192,24 @@ def search(q: str = Query(..., min_length=1, max_length=80, description="ticker 
                            "name": us_link.company_name(r["cik"], r.get("sec_name") or r.get("name"), cur),
                            "exchange": r.get("exchange"), "logo": us_link.logo(r["cik"])} for r in hits[:20]],
             "count": len(hits[:20])}
+
+
+@router.get("/logos", openapi_extra={"x-example": "/api/v1/us/company/logos"})
+def logos():
+    """Every company logo on file, by ticker and by "cik:N": one small map a
+    page fetches once to put a logo beside any company it lists."""
+    cur = sec_api._cur()
+    out = {}
+    for rec in us_link.companies(cur)["by_cik"].values():
+        url = us_link.logo(rec["cik"])
+        if not url:
+            continue
+        out["cik:%d" % rec["cik"]] = url
+        for t in rec.get("tickers") or [rec.get("ticker")]:
+            if t:
+                out[t.upper()] = url
+                out[t.upper().replace("-", ".")] = url
+    return {"logos": out, "count": sum(1 for k in out if k.startswith("cik:"))}
 
 
 @router.get("/{company}", openapi_extra={"x-example": "/api/v1/us/company/AAPL"})

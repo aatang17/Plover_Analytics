@@ -134,7 +134,7 @@
     if (/^\d{4}-\d{2}$/.test(String(v))) return "<td>" + esc(v) + "</td>";
     var s = String(v);
     if (/^cik:|^\d{10}-\d{2}-\d{6}$/.test(s)) return "<td class='quiet'>" + esc(s) + "</td>";
-    if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(s) && /ticker/.test(col.toLowerCase())) return "<td><a href='/?t=" + encodeURIComponent(s) + "'>" + esc(s) + "</a></td>";
+    if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(s) && /ticker/.test(col.toLowerCase())) return "<td>" + (window.usLogos ? usLogos.img(s, 16) : "") + "<a href='/?t=" + encodeURIComponent(s) + "'>" + esc(s) + "</a></td>";
     return "<td class='txt'>" + esc(s.length > 60 ? s.slice(0, 57) + "…" : s) + "</td>";
   }
 

@@ -76,6 +76,10 @@ input[type="date"] { font: inherit; font-size: 13px; color: var(--obs-ink); back
 .more-row { margin: 8px 0 0; }
 #cn-detail h3 { margin: 22px 0 4px; font-size: 16px; }
 #cn-detail h3 .mono { font-size: 12.5px; font-weight: 400; color: var(--obs-text-muted); margin-left: 6px; }
+/* the company's logo in the list: a fixed slot, empty when we hold none */
+.tbl-fin img.logo, .tbl-fin span.logo { display: inline-block; width: 20px; height: 20px; margin-right: 8px;
+  vertical-align: -5px; border-radius: 3px; background: var(--obs-logo-bg); object-fit: contain; }
+.tbl-fin span.logo { background: none; }
 .co-logo { width: 32px; height: 32px; align-self: center; border-radius: 3px;
   border: 1px solid var(--obs-border); background: var(--obs-logo-bg); object-fit: contain; }
 @media (max-width: 700px) {

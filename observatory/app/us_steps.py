@@ -231,7 +231,7 @@ def _build_base_rows(cur, v):
         usd = r.get("unit") == "USD"
         m = r.get("metrics") or {}
         hit = debt.get(r["cik"]) if usd else None
-        rec = {"ticker": t, "name": us_link.display_name(r.get("name")), "sector": sector_for(r.get("sic")),
+        rec = {"ticker": t, "name": us_link.company_name(r["cik"], r.get("name"), cur), "sector": sector_for(r.get("sic")),
                "industry": r.get("industry"), "exchange": r.get("exchange"), "country": r.get("country"),
                "borrowings_usd": hit[0] if hit else None,
                "revenue_prior_usd": ((r.get("prior") or {}).get("revenue")) if usd else None,

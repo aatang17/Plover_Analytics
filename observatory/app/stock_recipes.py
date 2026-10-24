@@ -2979,7 +2979,7 @@ def _rank(cur, q, e, rows, scope_label, recipe):
                                   "%s (%s)" % (r["ticker"], short_name(r["name"])) for r in missing[:5]))
     if window:
         table = {"columns": ["Rank", "Ticker", "Company", "Industry", label.capitalize() + " %", "First close", "Last close", "Market value"],
-                 "rows": [[i + 1, r["ticker"], us_link.display_name(r["name"]), r["industry"], v,
+                 "rows": [[i + 1, r["ticker"], us_link.company_name(r["cik"], r["name"], cur), r["industry"], v,
                            (r.get("window") or (None, None))[1], (r.get("window") or (None,) * 4)[3], r["metrics"].get("market_cap")]
                           for i, (v, r) in enumerate(top)], "unit": unit}
     else:
@@ -2990,7 +2990,7 @@ def _rank(cur, q, e, rows, scope_label, recipe):
                              ("1-year change", "price_change_1y_pct", lambda r: r["metrics"].get("price_change_1y_pct")))
                  if c[1] != key]
         table = {"columns": ["Rank", "Ticker", "Company", "Industry", label.title()] + [c[0] for c in extra],
-                 "rows": [[i + 1, r["ticker"], us_link.display_name(r["name"]), r["industry"], v] + [c[2](r) for c in extra]
+                 "rows": [[i + 1, r["ticker"], us_link.company_name(r["cik"], r["name"], cur), r["industry"], v] + [c[2](r) for c in extra]
                           for i, (v, r) in enumerate(top)], "unit": unit}
     chart = {"kind": "bars", "title": "%s, %s" % (label.title(), scope_label), "unit": unit,
              "series": [{"name": label, "points": [[r["ticker"] or r["name"][:18], v] for v, r in top]}]}
@@ -3265,7 +3265,7 @@ def r_holders_increase_industry(cur, q, e):
         rec = cmap[cusip]
         co = idx.get(rec["cik"]) or {}
         chg = (sh or 0) - (psh or 0) if psh is not None else None
-        out.append({"ticker": co.get("ticker"), "name": us_link.display_name(co.get("sec_name") or co.get("name")), "cusip": cusip, "shares": sh, "prior_shares": psh,
+        out.append({"ticker": co.get("ticker"), "name": us_link.company_name(rec["cik"], co.get("sec_name") or co.get("name"), cur), "cusip": cusip, "shares": sh, "prior_shares": psh,
                     "change_shares": chg, "change_pct": (chg / psh * 100) if (psh and chg is not None) else None,
                     "value": val, "holders": hold, "prior_holders": phold})
     out = [o for o in out if o["change_shares"] is not None]

@@ -314,6 +314,11 @@
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return "<td>" + esc(day(v)) + "</td>";
     var t = String(v);
+    // a ticker: the company's logo, and its record
+    if (/ticker/i.test(col) && /^[A-Z][A-Z0-9.-]{0,9}$/.test(t)) {
+      return "<td>" + (window.usLogos ? usLogos.img(t, 16) : "") +
+        '<a href="us-company.html?t=' + encodeURIComponent(t) + '">' + esc(t) + "</a></td>";
+    }
     return "<td>" + esc(t.length > 60 ? t.slice(0, 57) + "…" : t) + "</td>";
   }
   // Columns that are bookkeeping, not reading: the filing's tag, its
@@ -622,7 +627,7 @@
         if (!b) { cell.textContent = "—"; return; }
         if (b.ticker) {
           meta.textContent = b.ticker + (b.exchange ? " · " + b.exchange : "");
-          link.setAttribute("href", "us-companies.html?t=" + encodeURIComponent(b.ticker));
+          link.setAttribute("href", "us-company.html?t=" + encodeURIComponent(b.ticker));
         }
         var next = (b.upcoming || []).filter(function (u) { return u.status === "expected" && u.expected_date; })[0];
         if (!next) { cell.textContent = "No filing date expected"; return; }
@@ -648,13 +653,21 @@
       list.innerHTML = rows.map(function (c) {
         var us = isUS(c.sec_code);
         return '<li class="my-row" data-code="' + esc(c.sec_code) + '"><a class="my-open" href="' +
-          (us ? "us-companies.html" : "company.html?code=" + encodeURIComponent(c.sec_code)) + '">' +
+          (us ? "us-company.html?t=" + encodeURIComponent(c.sec_code.slice(4))
+              : "company.html?code=" + encodeURIComponent(c.sec_code)) + '">' +
           '<span class="my-name">' + esc(c.name || c.name_ja || c.sec_code) + "</span>" +
           '<span class="my-meta">' + (us ? "United States" : esc(c.sec_code) + (c.name_ja && c.name_ja !== c.name ? " · " + esc(c.name_ja) : "")) + "</span></a>" +
           '<span class="my-when" data-code="' + esc(c.sec_code) + '">…</span>' +
           '<button type="button" class="my-del" data-code="' + esc(c.sec_code) + '" aria-label="Remove ' +
           esc(c.name || c.sec_code) + '">Remove</button></li>';
       }).join("");
+      // each US company's logo beside its name, once the logo map is in
+      if (window.usLogos) usLogos.ready.then(function () {
+        Array.prototype.forEach.call(list.querySelectorAll(".my-row"), function (row) {
+          var code = row.getAttribute("data-code"), name = $(".my-name", row);
+          if (isUS(code) && name && !name.querySelector("img")) name.insertAdjacentHTML("afterbegin", usLogos.img(code, 18));
+        });
+      });
       Array.prototype.forEach.call(list.querySelectorAll(".my-row"), function (row) {
         var code = row.getAttribute("data-code");
         if (isUS(code)) usDetails(code, row); else nextResults(code, $(".my-when", row));
