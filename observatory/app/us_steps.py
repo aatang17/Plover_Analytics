@@ -171,6 +171,7 @@ _RATIOS = ["revenue_growth_pct", "operating_margin_pct", "net_margin_pct", "prof
 
 _BASE = {}
 _BASE_LOCK = threading.Lock()
+_BASE_BUILD = threading.Lock()
 
 
 def _sym(t):
@@ -195,6 +196,15 @@ def base_rows(cur):
     with _BASE_LOCK:
         if _BASE.get("v") == v:
             return _BASE["rows"]
+    with _BASE_BUILD:                    # one build at a time: a second caller waits for the first one's rows
+        with _BASE_LOCK:
+            if _BASE.get("v") == v:
+                return _BASE["rows"]
+        return _build_base_rows(cur, v)
+
+
+def _build_base_rows(cur, v):
+    from . import stock_recipes
     rows = list(stock_recipes.metric_rows(cur))
     have = {r["cik"] for r in rows}
     members = {}
@@ -600,6 +610,7 @@ def fill_headline(template, cols, row, words, question, sql=""):
         return fmt_value(k, row[cols.index(k)])
     text = re.sub(r"\{([^}]*)\}", sub, template)
     text = text.replace("\u00d7\u00d7", "\u00d7").replace("\u00d7x", "\u00d7").replace("%%", "%")        # "{pe_x}\u00d7" doubled the sign
+    text = re.sub(r"\b(?:from|over|during|in) (since|so far in|over the past|from|in) ", r"\1 ", text)   # "from {period}" read "from since 1 January 2018"
     return text if ok else None
 
 

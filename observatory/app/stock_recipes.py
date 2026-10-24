@@ -4390,6 +4390,7 @@ def warm_once():
     try:
         from . import us_tables
         us_tables.sandbox(cur)                 # the step route's tables, so no reader waits for their build
+        us_steps.base_rows(cur)                # and its stock list (7 s cold locally)
     except Exception:                          # noqa: BLE001 — a warm-up never takes the server down
         pass
 

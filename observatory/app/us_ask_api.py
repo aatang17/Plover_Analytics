@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from . import ask_log, ask_miss, ask_progress, sec_api, stock_recipes
 
 router = APIRouter(prefix="/api/v1/us/ask", tags=["US ask"])
+KEEPALIVE_SECONDS = 15
 
 
 @router.get("", openapi_extra={"x-example": "/api/v1/us/ask?q=who+owns+apple"})
@@ -95,11 +96,24 @@ async def ask_stream(q: str = Query(..., min_length=2, max_length=300, descripti
     threading.Thread(target=work, name="us-ask-stream", daemon=True).start()
 
     async def events():
-        while True:
-            item = await queue.get()
-            if item is None:
-                return
-            yield "data: %s\n\n" % json.dumps(jsonable_encoder(item), ensure_ascii=False)
+        get = None
+        try:
+            while True:
+                # the same get waits across timeouts, so no item is lost to a cancel
+                get = get or asyncio.ensure_future(queue.get())
+                done, _ = await asyncio.wait({get}, timeout=KEEPALIVE_SECONDS)
+                if not done:
+                    # a comment line the page skips: Cloudflare closes a stream silent for 100 s
+                    # (2026-10-24: a cold step answer was cut off after "Running the steps")
+                    yield ": still working\n\n"
+                    continue
+                item, get = get.result(), None
+                if item is None:
+                    return
+                yield "data: %s\n\n" % json.dumps(jsonable_encoder(item), ensure_ascii=False)
+        finally:
+            if get is not None:
+                get.cancel()           # the reader left mid-answer
 
     # identity encoding: a proxy that compresses would hold the lines back until the end
     return StreamingResponse(events(), media_type="text/event-stream",

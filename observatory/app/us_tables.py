@@ -43,6 +43,7 @@ import threading
 from . import sec_api
 
 _LOCK = threading.Lock()
+_BUILD_LOCK = threading.Lock()     # one build at a time: a question during the warm-up waits for it, not a second build
 _STATE = {}
 MEMORY_LIMIT = "512MB"
 
@@ -635,6 +636,18 @@ def sandbox(cur):
     with _LOCK:
         if _STATE.get("v") == v and _STATE.get("db") is not None:
             return _STATE["db"]
+    # 2026-10-24: a front-page question just after a deploy started its own
+    # build beside the warm-up's; both took over 100 s on the server and
+    # Cloudflare cut the reader off
+    with _BUILD_LOCK:
+        with _LOCK:
+            if _STATE.get("v") == v and _STATE.get("db") is not None:
+                return _STATE["db"]
+        return _build_sandbox(cur, v)
+
+
+def _build_sandbox(cur, v):
+    import duckdb
     data = build(cur)
     db = duckdb.connect(":memory:")
     for name, (_, cols) in TABLES.items():

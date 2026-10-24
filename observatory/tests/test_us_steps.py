@@ -52,6 +52,31 @@ class PlainTest(unittest.TestCase):
         self.assertIsNotNone(us_steps.fill_headline("{beat} fell more than 20%.", cols, row, "", "fell more than 20%"))
         self.assertIsNotNone(us_steps.fill_headline("{beat} above $50mn and $2bn.", cols, row, "", "how many", "WHERE a >= 5e7 AND b >= 2e9"))
         self.assertIsNone(us_steps.fill_headline("{beat} above $50mn.", cols, row, "", "how many", "WHERE a >= 2e9"))
+        # "from {period}" never reads "from since" (the shutdown example on the front page, 2026-10-24)
+        self.assertEqual(us_steps.fill_headline("{beat} rose from {period}.", cols, row, "since 1 January 2018", "q"),
+                         "202 rose since 1 January 2018.")
+        self.assertEqual(us_steps.fill_headline("{beat} rose during {period}.", cols, row, "from 1 May 2025 to 2 June 2025", "q"),
+                         "202 rose from 1 May 2025 to 2 June 2025.")
+
+    def test_a_slow_answer_keeps_the_stream_open(self):
+        """Cloudflare closes a stream silent for 100 s: a slow answer sends comment
+        lines while it works, and the answer still arrives whole."""
+        import time
+        from unittest import mock
+        from fastapi import FastAPI
+        from app import sec_api, stock_recipes, us_ask_api
+
+        def slow(cur, q, prev):
+            time.sleep(0.5)
+            return {"headline": "done", "match": {}}
+        app = FastAPI()
+        app.include_router(us_ask_api.router)
+        with mock.patch.object(us_ask_api, "KEEPALIVE_SECONDS", 0.1), \
+                mock.patch.object(sec_api, "_require", lambda: None), \
+                mock.patch.object(stock_recipes, "answer", slow):
+            body = TestClient(app).get("/api/v1/us/ask/stream?q=slow+question").text
+        self.assertIn(": still working", body)
+        self.assertIn('"headline": "done"', body)
 
     def test_value_formats_follow_the_column_suffix(self):
         self.assertEqual(us_steps.fmt_value("change_period_pct", -3.21), "−3.2%")
