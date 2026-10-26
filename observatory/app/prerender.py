@@ -190,8 +190,8 @@ def summary_text(dataset):
 # characters, which is where search engines cut.
 DESCRIPTIONS = {
     "index.html":
-        "Ask about US stocks and the US economy: owners, earnings, buybacks, insider trades, "
-        "inflation, wages and Treasury yields, with the source of every number.",
+        "Ask about any US-listed company and the economies of the US, Japan and Hong Kong: "
+        "earnings, owners, inflation, jobs, wages and rates, each with its source.",
     "cpi.html":
         "Japan's Consumer Price Index — headline, core and core-core inflation with "
         "contributions by expenditure group, monthly from 1970, as published by the Statistics Bureau.",

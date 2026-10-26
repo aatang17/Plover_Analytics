@@ -771,6 +771,7 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
              industry: str = Query("", description="substring of the SIC industry title, e.g. motor vehicles"),
              exchange: str = Query("", description="Nasdaq | NYSE | OTC | CBOE | TXSE"),
              tickers: str = Query("", description="comma-separated tickers to rank within"),
+             q: str = Query("", max_length=80, description="part of the company's name, its ticker, or its SEC number"),
              unit: str = Query("USD", description="reporting currency ranked; size sorts never mix units"),
              min_revenue: str = Query(""), min_assets: str = Query(""),
              roe_min: str = Query(""), roe_max: str = Query(""), roa_min: str = Query(""),
@@ -810,6 +811,7 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
     ind_q = (industry or "").strip().lower()
     ex_q = (exchange or "").strip().lower()
     want = {t.strip().upper().replace(".", "-") for t in (tickers or "").split(",") if t.strip()}
+    name_q = " ".join((q or "").split()).lower()
     u = (unit or "USD").strip().upper()
     size_sort = sort in sec_metrics.SIZE_FIELDS
 
@@ -833,6 +835,10 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
             continue
         if want and (r.get("ticker") or "") not in want:
             continue
+        if name_q and name_q not in (r.get("name") or "").lower() and \
+                name_q.upper().replace(".", "-") != (r.get("ticker") or "") and \
+                not (name_q.isdigit() and int(name_q) == r["cik"]):
+            continue
         if (size_sort or f["min_revenue"] is not None or f["min_assets"] is not None) and r["unit"] != u:
             continue
         if not (ge(z["revenue"], f["min_revenue"]) and ge(z["total_assets"], f["min_assets"])
@@ -853,9 +859,12 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
     missing = len(kept) - len(ranked)
     ranked.sort(key=key, reverse=not asc)
     page = []
+    from . import us_link
     for i, r in enumerate(ranked[offset:offset + limit], offset + 1):
         page.append({
             "rank": i, "cik": r["cik"], "sec_code": r["sec_code"], "name": r["name"],
+            # the name every US page shows, and the company's icon (app/us_link.py)
+            "display_name": us_link.company_name(r["cik"], r["name"], cur), "logo": us_link.logo(r["cik"]),
             "ticker": r.get("ticker"), "exchange": r.get("exchange"), "sic": r.get("sic"),
             "industry": r.get("industry"), "country": r.get("country"), "form": r["form"],
             "period_end": r["period_end"], "fy": r["fy"], "filed": r["filed"], "status": r["status"],
@@ -865,7 +874,7 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
             "source_url": r["source_url"],
         })
     return {"sort": sort, "order": "asc" if asc else "desc",
-            "filters": {"sic": sic_q or None, "industry": ind_q or None, "exchange": ex_q or None,
+            "filters": {"sic": sic_q or None, "industry": ind_q or None, "exchange": ex_q or None, "q": name_q or None,
                         "tickers": sorted(want) or None, "unit": u,
                         **{k: v for k, v in f.items() if v is not None}},
             "universe": len(rows), "matched": len(kept), "ranked": len(ranked),

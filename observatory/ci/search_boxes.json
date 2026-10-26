@@ -288,7 +288,9 @@
     "us-companies-admin.js#uca-q": "The company search on the signed-in admin US Companies tab. It runs the same search as us-company.html#uc-q (/api/v1/us/company?q=), whose examples are typed in a real browser; tests/test_us_company.py checks the admin route.",
     "admin.js#rh-find": "Filters the datasets already listed on the signed-in admin Release History page; there is nothing to fetch.",
     "assistant.js#cat-q": "Filters the specialists already listed; there is nothing to fetch.",
-    "assistant.js#class=st-pick": "Studies: picks a series for a ready-made analysis through /api/v1/assistant/studies/series. The Assistant needs a signed-in account, which this check does not have; tests/test_studies.py exercises the endpoint with CPI and 10-year examples."
+    "assistant.js#class=st-pick": "Studies: picks a series for a ready-made analysis through /api/v1/assistant/studies/series. The Assistant needs a signed-in account, which this check does not have; tests/test_studies.py exercises the endpoint with CPI and 10-year examples.",
+    "us-stocks.js#an-q": "The follow-up box under an answer on the home page. It sends its question through the same ask() as index.html#q, whose examples are typed in a real browser by ci/search_examples.py; it only exists once an answer is showing.",
+    "my.html#ov-q": "The question box on Your Plover's Overview, for a signed-in reader. It sends its question into a new chat through the same send() as the chat box on the same page (my.html#my-q), so it answers exactly as that box does; the reader check cannot sign in."
   },
   "not_searches": {
     "assistant.js#l-name": "A name for a new list.",

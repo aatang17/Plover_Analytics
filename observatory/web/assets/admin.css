@@ -13,6 +13,7 @@
   width: 220px;
   flex: 0 0 220px;
   background: var(--obs-header-bg);
+  border-right: 1px solid var(--obs-header-border);
   color: var(--obs-header-text);
   position: sticky;
   top: 0;
@@ -43,7 +44,6 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--obs-header-muted);
-  opacity: 0.8;
 }
 .admin-nav-item {
   display: block;
@@ -52,15 +52,18 @@
   font-size: 13.5px;
   text-decoration: none;
 }
+/* the light sidebar (finance redesign, 2026-10-26): the current page is tinted
+   with the accent and marked by a bar on its left edge */
 .admin-nav-item:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--obs-surface-subtle);
   color: var(--obs-header-ink);
   text-decoration: none;
 }
 .admin-nav-item[aria-current="page"] {
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--obs-header-ink);
-  box-shadow: inset 3px 0 0 var(--obs-header-ink);
+  background: var(--obs-accent-soft);
+  color: var(--obs-accent-dark);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--obs-accent);
 }
 
 .admin-side-foot {
@@ -89,9 +92,11 @@
 .admin-main {
   flex: 1;
   min-width: 0; /* wide tables scroll in their own wrapper, never the page */
-  background: var(--obs-surface-subtle);
+  background: var(--obs-ground);
 }
-.admin-container { max-width: 1100px; padding: 28px 36px 56px; }
+.admin-container { max-width: 1180px; padding: 24px 28px 56px; }
+/* tables sit on white over the grey ground, like the site's panels */
+.admin-main .table-wrap { background: var(--obs-surface); border-radius: 4px; }
 
 /* ---------- page header: h1 + subtitle, action right-aligned ---------- */
 
@@ -721,3 +726,4 @@ tr.clickable { cursor: pointer; }
 
 /* Ask Box tables (admin.js trafficAsk): a date or time stays on one line on a phone; the table scrolls instead */
 .ask-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.data td.attn { color: var(--obs-trust-stale); white-space: normal; }

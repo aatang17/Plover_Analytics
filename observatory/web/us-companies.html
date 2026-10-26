@@ -6,6 +6,7 @@
 <title>US Company Financials · Plover Analytics</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/co-page.css">
 <style>
 /* page-local layout only — tokens and components come from app.css.
    Mirrors financials.html (the Japanese companies) so the two markets read alike. */
@@ -80,6 +81,12 @@ input[type="date"] { font: inherit; font-size: 13px; color: var(--obs-ink); back
 .tbl-fin img.logo, .tbl-fin span.logo { display: inline-block; width: 20px; height: 20px; margin-right: 8px;
   vertical-align: -5px; border-radius: 3px; background: var(--obs-logo-bg); object-fit: contain; }
 .tbl-fin span.logo { background: none; }
+/* each headline figure's change from the year before and its last ten years */
+.fact-row .trend { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-height: 22px; }
+.fact-row .chg { font-size: 12.5px; font-weight: 600; color: var(--obs-ink); font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+.spark { color: var(--obs-primary); display: block; }
+.tbl-fin td.trend, .tbl-fin th.trend { width: 76px; padding-left: 4px; padding-right: 4px; }
 .co-logo { width: 32px; height: 32px; align-self: center; border-radius: 3px;
   border: 1px solid var(--obs-border); background: var(--obs-logo-bg); object-fit: contain; }
 @media (max-width: 700px) {
@@ -122,18 +129,13 @@ input[type="date"] { font: inherit; font-size: 13px; color: var(--obs-ink); back
 
   <!-- company view -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="us-companies.html">← All US companies</a></p>
-    <div class="co-head">
-      <img class="co-logo" id="co-logo" alt="" width="32" height="32" hidden>
-      <h1 id="co-name"></h1>
-      <span class="co-code" id="co-code"></span>
-      <span class="co-industry" id="co-sector"></span>
-    </div>
-    <p class="filing-meta" id="co-meta"></p>
-    <dl class="fact-row" id="co-facts"></dl>
-    <p class="facts-foot" id="co-facts-foot"></p>
+    <!-- the company's header card and tabs (co-head.js); the key figures are on its Overview -->
+    <div id="co-card"><section class="cp-card"><div class="cp-id"><div class="cp-who"><h1 id="co-name"></h1></div></div></section></div>
+    <p class="cp-msg" id="co-msg"></p>
 
-    <h2>Key Indicators <span class="h2-note" id="ki-note"></span></h2>
+    <section class="cp-panel cp-sec">
+    <div class="cp-head"><h2>Key Indicators</h2><span class="note" id="ki-note"></span></div>
+    <div class="cp-body">
     <div class="controls">
       <div class="seg" role="group" aria-label="Frequency" id="freq-seg">
         <button type="button" data-freq="annual" aria-pressed="true">Annual</button>
@@ -164,11 +166,16 @@ input[type="date"] { font: inherit; font-size: 13px; color: var(--obs-ink); back
     </div>
     <p class="sec-note" style="margin:12px 0 8px" id="ki-explain"></p>
     <div class="table-wrap" id="ki-wrap"><table class="tbl-fin" id="ki-table" data-no-enhance></table></div>
+    <p class="more-row" id="ki-more"></p>
     <details class="calc"><summary>Show calculation</summary>
       <div class="calc-body" id="ki-calc"></div>
     </details>
+    </div>
+    </section>
 
-    <h2>Every Filed Concept <span class="h2-note" id="cn-note"></span></h2>
+    <section class="cp-panel cp-sec">
+    <div class="cp-head"><h2>Every Filed Concept</h2><span class="note" id="cn-note"></span></div>
+    <div class="cp-body">
     <p class="sec-note" style="margin:0 0 8px">Every XBRL concept this company has filed a value
       for, newest first. Choose one for its full history and the filing behind each value.</p>
     <div class="controls">
@@ -196,6 +203,8 @@ input[type="date"] { font: inherit; font-size: 13px; color: var(--obs-ink); back
       </div>
       <div class="table-wrap" style="margin-top:10px"><table class="tbl-fin" id="cn-values" data-no-enhance></table></div>
     </div>
+    </div>
+    </section>
   </section>
 
 </main>
@@ -214,6 +223,7 @@ input[type="date"] { font: inherit; font-size: 13px; color: var(--obs-ink); back
 <script src="assets/format.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
+<script src="assets/co-head.js"></script>
 <script src="assets/us-companies.js"></script>
 </body>
 </html>

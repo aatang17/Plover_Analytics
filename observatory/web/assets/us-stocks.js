@@ -119,6 +119,8 @@
     if (typeof v === "number") {
       var c = col.toLowerCase();
       if (/\(usd\)/.test(c)) return "<td class='r'>" + money(v) + "</td>";
+      // a change counted in shares is a number of shares, not a percent ("Change in shares": +16,385,212)
+      if (/change/.test(c) && /shares/.test(c) && !/%/.test(c)) return "<td class='r'>" + (v > 0 ? "+" : v < 0 ? MINUS : "") + fmtNum(Math.abs(v), 0) + "</td>";
       if (/change/.test(c) && !/close|price/.test(c)) return "<td class='r'>" + pct(v, 1, true) + "</td>";
       if (/\(\u00d7\)/.test(c)) return "<td class='r'>" + mult(v) + "</td>";
       if (/\(pp\)/.test(c)) return "<td class='r'>" + (v > 0 ? "+" : v < 0 ? "\u2212" : "") + fmtNum(Math.abs(v), 2) + " pp</td>";
@@ -146,11 +148,11 @@
   /* ---- pieces ---------------------------------------------------------- */
   function figuresHtml(figs) {
     var cells = (figs || []).filter(function (f) { return f && (f.value !== undefined); }).map(function (f) {
-      var qual = f.as_of ? "<span class='qual'>" + (f.unit === "date" ? "" : "as of " + dateWords(f.as_of)) + "</span>" : "";
+      var qual = f.as_of && f.unit !== "date" ? "<small>as of " + dateWords(f.as_of) + "</small>" : "";
       var title = f.formula ? " title='" + esc(f.formula) + "'" : "";
       return "<div class='hit'" + title + "><dt>" + esc(f.label) + "</dt><dd>" + fmtBy(f.unit, f.value) + qual + "</dd></div>";
     });
-    return cells.length ? "<dl class='fact-row'>" + cells.join("") + "</dl>" : "";
+    return cells.length ? "<section class='hp-panel'><dl class='an-figs'>" + cells.join("") + "</dl></section>" : "";
   }
 
   function tableHtml(t, id) {
@@ -289,50 +291,125 @@
   }
 
   /* ---- the answer ------------------------------------------------------ */
-  function renderAnswer(a) {
+  // A formula's key as a reader's words: "share_of_reported_pct" → "Share of reported".
+  function calcLabel(k) {
+    var s = String(k).replace(/_(pct|x|usd)$/, "").replace(/_/g, " ");
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function panel(title, note, body, cls) {
+    return "<section class='hp-panel" + (cls ? " " + cls : "") + "'>" +
+      (title ? "<div class='an-head'><h2>" + esc(title) + "</h2>" + (note ? "<span class='note'>" + esc(note) + "</span>" : "") + "</div>" : "") +
+      body + "</section>";
+  }
+  function copyText(btn, text) {
+    var done = function (word) {
+      var was = btn.getAttribute("data-label") || btn.textContent;
+      btn.setAttribute("data-label", was);
+      btn.textContent = word;
+      setTimeout(function () { btn.textContent = was; }, 1800);
+    };
+    if (!navigator.clipboard) { done("Copy blocked"); return; }
+    navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Copy blocked"); });
+  }
+
+  function renderAnswer(a, trail) {
     disposeCharts();
     var el = $("answer");
-    var co = a.entities && a.entities.company;
+    el.classList.remove("an-stale");
+    var worked = "";
+    var calc = a.calc || {};
+    var co = (a.entities && a.entities.company) || ((a.entities && a.entities.mentioned_companies) || [])[0] || null;
     var link = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/?t=" + encodeURIComponent(co.ticker) : null);
+    var logo = co && co.ticker && window.usLogos ? usLogos.img(co.ticker, 16) : "";
     var src = (a.sources || []).map(function (s) { return s.credit; }).join(" ");
     var readAs = a.match && a.match.read_as ? String(a.match.read_as).replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return dateWords(d); }) : "";
-    var html = (readAs ? "<p class='quiet read-as'>Read as: " + esc(readAs) + "</p>" : "") +
+    var when = a.period && a.period.text ? a.period.text : (typeof calc.period === "string" ? calc.period.replace(/\s*\(\d{4}-.*\)$/, "") : "");
+    var hasTable = !!(a.table && a.table.rows && a.table.rows.length);
+    var stamp = "Plover Analytics, " + location.origin + "/?q=" + encodeURIComponent(a.question || lastAsked);
+    var csvHead = [a.headline, src, "Formulas: " + Object.keys(calc).filter(function (k) { return k !== "query" && k !== "steps"; })
+      .map(function (k) { return calcLabel(k) + " = " + calc[k]; }).join("; "), stamp];
+
+    // the main column: the question and its answer, the figures, the chart, the table, a follow-up
+    var main = panel("", "",
+      "<div class='an-asked'><span>You asked</span><b>" + esc(a.question || lastAsked) + "</b>" +
+        (co && link ? "<a class='an-co' href='" + esc(link) + "'>" + logo + esc(co.name) + "</a>" : "") +
+        (when ? "<span class='when'>" + esc(when) + "</span>" : "") + "</div>" +
+      // how a question was read matters only when it was read as another (a follow-up made whole)
+      (readAs && a.question && a.question !== lastAsked ? "<p class='quiet read-as'>Read as: " + esc(readAs) + "</p>" : "") +
       "<p class='headline hit'>" + esc(a.headline) + "</p>" +
-      (a.period && a.period.text ? "<p class='period-line'>" + esc(a.period.text) + "</p>" : "") +
       (a.answer ? "<p class='answer-text'>" + esc(a.answer) + "</p>" : "") +
-      quotesHtml(a.quotes) +
-      (a.steps && a.steps.length ? "<ol class='steps'>" + a.steps.map(function (st) { return "<li>" + esc(st) + "</li>"; }).join("") + "</ol>" : "") +
-      figuresHtml(a.figures) +
-      (link ? "<p class='quiet' style='margin:6px 0 0'><a href='" + esc(link) + "'>Open " + esc(co ? co.name : "the company") + "'s page →</a></p>" : "");
+      quotesHtml(a.quotes), "an-q") +
+      figuresHtml(a.figures);
     if (a.chart) {
-      html += "<h2>" + esc(a.chart.title || "Chart") + " <span class='h2-note'>" + esc(a.chart.unit || "") + "</span></h2>" +
-        "<div class='controls'><span class='spacer'></span><button type='button' class='btn' id='an-png'>Download PNG</button>" +
-        "<button type='button' class='btn' id='an-csv'>Download CSV</button></div>" +
-        "<div class='chart-block'><div class='chart-el' id='an-chart'></div><div class='chart-foot'><span>" + esc(src) + "</span></div></div>";
+      main += panel(a.chart.title || "Chart", a.chart.unit || "",
+        "<div class='an-chart'><div class='chart-el' id='an-chart'></div></div>" +
+        "<div class='an-foot'><span>" + esc(src) + "</span><span class='acts'>" +
+        "<button type='button' class='an-link' id='an-png'>Download PNG</button>" +
+        "<button type='button' class='an-link' id='an-csv'>Download CSV</button></span></div>", "an-chart-panel");
     }
-    html += listsHtml(a.lists);
-    if (a.table && a.table.rows && a.table.rows.length) {
-      html += "<h2>Detail <span class='h2-note'>" + count(a.table.rows.length) + " rows" + (a.table.unit ? " · " + esc(a.table.unit) : "") + "</span></h2>" + tableHtml(a.table, "an-table");
-    }
-    if (a.notes && a.notes.length) html += "<p class='sec-note' style='margin:10px 0 0'>" + a.notes.map(esc).join(" ") + "</p>";
-    html += sourcesHtml(a.sources, a.calc, a.entities, a.match);
+    if (a.lists) main += "<section class='hp-panel an-list'>" + listsHtml(a.lists) + "</section>";
+    if (hasTable) main += panel("Detail", count(a.table.rows.length) + " rows" + (a.table.unit ? " · " + a.table.unit : ""), tableHtml(a.table, "an-table"));
     var fu = followupsFor(a);
-    if (fu.length) html += "<div class='followups'>" + fu.map(function (f) { return "<a href='/?q=" + encodeURIComponent(f.q) + "'>" + esc(f.label) + "</a>"; }).join("") + "</div>";
-    el.innerHTML = html;
+    main += panel("", "", "<form id='an-ask' autocomplete='off'><label for='an-q' class='fp-sr'>Ask a follow-up</label>" +
+      "<input type='search' id='an-q' maxlength='300' placeholder='Ask a follow-up, e.g. and Microsoft?'><button type='submit'>Ask</button></form>" +
+      (fu.length ? "<div class='an-chips'>" + fu.map(function (f) { return "<a href='/?q=" + encodeURIComponent(f.q) + "'>" + esc(f.label) + "</a>"; }).join("") + "</div>" : ""), "an-ask");
+
+    // the rail: what to do with it, how it was worked out, what to read with care, where it came from
+    var formulas = Object.keys(calc).filter(function (k) { return k !== "query" && k !== "steps" && k !== "period"; }).map(function (k) {
+      return "<li><b>" + esc(calcLabel(k)) + ":</b> " + esc(calc[k]) + "</li>";
+    }).join("");
+    var steps = a.steps && a.steps.length ? "<ol>" + a.steps.map(function (st) { return "<li>" + esc(st) + "</li>"; }).join("") + "</ol>" : "";
+    var query = !worked && calc.query ? "<details><summary>Show the query</summary><pre class='sql'>" + esc(calc.query) + "</pre></details>" : "";
+    var rail = panel("", "", "<div class='an-acts'>" +
+      "<button type='button' id='an-copy'>Copy link</button><button type='button' id='an-cite'>Cite</button></div>");
+    if (worked || steps || formulas || query) {
+      rail += panel("How This Was Worked Out", "", "<div class='an-body'>" + steps +
+        (formulas ? "<ul class='plain'" + (steps ? " style='margin-top:10px'" : "") + ">" + formulas + "</ul>" : "") + query + worked + "</div>");
+    }
+    if (a.notes && a.notes.length) rail += panel("Read With Care", "", "<div class='an-body'><ul class='plain'>" + a.notes.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") + "</ul></div>");
+    if ((a.sources || []).length) {
+      rail += panel("Sources", "", "<div class='an-body'><ul class='plain'>" + a.sources.map(function (s) {
+        return "<li>" + esc(s.credit) + (s.note ? " " + esc(s.note) : "") + "</li>";
+      }).join("") + (a.links && a.links.filing ? "<li><a href='" + esc(a.links.filing) + "' rel='noopener'>The filing on EDGAR</a></li>" : "") + "</ul></div>");
+    }
+    if (co && link) {
+      rail += panel("Company", "", "<div class='an-company'><a class='name' href='" + esc(link) + "'>" +
+        (co.ticker && window.usLogos ? usLogos.img(co.ticker, 28) : "") + esc(co.name) + "</a>" +
+        "<a href='" + esc(link) + "'>Open the company page</a></div>");
+    }
+
+    el.innerHTML = "<div class='an-grid'><div class='an-col'>" + main + "</div><aside class='an-rail' aria-label='About this answer'>" + rail + "</aside></div>";
     el.hidden = false;
     $("stock").hidden = true;
     $("home-note").hidden = true;
+
+    var c = null;
     if (a.chart) {
-      var c = drawChart($("an-chart"), a.chart, src);
+      c = drawChart($("an-chart"), a.chart, src);
       if (c) {
         charts.push(c);
         $("an-png").onclick = function () { c.exportPNG("plover-" + a.recipe + ".png"); };
-        $("an-csv").onclick = function () { c.exportCSV("plover-" + a.recipe + ".csv", [a.headline, src, "Formulas: " + JSON.stringify(a.calc || {})]); };
+        $("an-csv").onclick = function () { c.exportCSV("plover-" + a.recipe + ".csv", csvHead); };
       } else {
-        $("an-chart").parentElement.parentElement.previousElementSibling.remove();
-        $("an-chart").parentElement.parentElement.remove();
+        $("an-chart").closest(".hp-panel").remove();
       }
     }
+    $("an-copy").onclick = function () { copyText(this, location.origin + "/?q=" + encodeURIComponent(a.question || lastAsked)); };
+    $("an-cite").onclick = function () { copyText(this, a.headline + " " + stamp + " (answered " + dateWords(new Date().toISOString()) + ")."); };
+    $("an-ask").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var nq = $("an-q").value.trim();
+      if (nq) { window.scrollTo(0, 0); ask(nq, true); }
+    });
+    Array.prototype.forEach.call(el.querySelectorAll(".an-chips a"), function (x) {
+      x.addEventListener("click", function (ev) {
+        var nq = new URL(x.href, location.href).searchParams.get("q");
+        if (!nq) return;
+        ev.preventDefault();
+        window.scrollTo(0, 0);
+        ask(nq, true);
+      });
+    });
     if (window.enhanceTables) window.enhanceTables(el);
     document.title = a.headline.slice(0, 70) + " · Plover Analytics";
   }
@@ -358,13 +435,25 @@
   // so the ask log can tell a click from a question somebody typed (app/ask_log.py)
   function ask(q, push, via) {
     via = exampleVia(q, via);
+    placeBox(true);
+    window.scrollTo(0, 0);
+    // The last answer and the front page's examples go at once: the question
+    // shows straight away in a card where its answer will appear, with the
+    // server's steps as they happen, and the answer takes that card's place.
+    // A previous answer stays, faded back, until the new one replaces it: the
+    // answer area changes only when an answer arrives.
     var el = $("answer");
-    el.hidden = false;
+    if (!el.hidden && el.innerHTML) el.classList.add("an-stale");
     $("stock").hidden = true;
-    // The wait text lives outside #answer, so the answer area changes only
+    $("home-note").hidden = true;
+    // The wait card lives outside #answer, so the answer area changes only
     // when an answer arrives — a reader (or the example checker) never counts
     // "working…" as a result. It follows the server's steps (askStream).
-    $("status").textContent = "Reading your question…";
+    var trail = [];
+    $("status").innerHTML = "<section class='hp-panel an-q an-wait'><div class='an-asked'><span>You asked</span><b>" + esc(q) + "</b></div>" +
+      "<div class='an-skel' aria-hidden='true'><i></i><i></i><i></i></div><div id='wait-trail'></div></section>";
+    function heard(text) { if ($("wait-trail")) $("wait-trail").textContent = text; }
+    heard("Reading your question…");
     $("status").hidden = false;
     if ($("q").value.trim() !== q) $("q").value = q;
     lastAsked = q;
@@ -376,11 +465,12 @@
       (via ? "&via=" + encodeURIComponent(via) : "");
     function full() {
       return askStream("/ask?q=" + encodeURIComponent(q) + tail, function (text) {
-        if (lastAsked === q) $("status").textContent = text;
+        if (lastAsked === q) heard(text);
       }).then(function (a) {
         $("status").hidden = true;
+        heard("Answered.");
         rememberQuestion(a.question || q);
-        renderAnswer(a);
+        renderAnswer(a, trail);
       }, function (e) {
         // not a stock question the box answers: the US economy may (inflation, wages, Treasury yields)
         if (e.status !== 422 && e.status !== 404) throw e;
@@ -420,6 +510,7 @@
   function renderMiss(text, tries, kind, q) {
     disposeCharts();
     var el = $("answer");
+    el.classList.remove("an-stale");
     el.hidden = false;
     $("stock").hidden = true;
     var list = (tries || []).map(function (t) {
@@ -461,11 +552,69 @@
 
   function account() {
     var slot = $("fp-account");
+    var back = "signin.html?returnTo=" + encodeURIComponent("/" + location.search);
     if (slot) {
-      slot.innerHTML = !me.on ? "" : me.email ? "<a href='my.html'>Your Plover</a>"
-        : "<a href='signin.html?returnTo=" + encodeURIComponent("/" + location.search) + "'>Sign in</a>";
+      slot.innerHTML = !me.on ? "" : me.email ? "<a class='hp-mine' href='my.html'>Your Plover</a>"
+        : "<a class='hp-signin' href='" + back + "'>Sign in</a><a class='hp-join' href='" + back + "'>Create free account</a>";
     }
-    if ($("gate-note")) $("gate-note").hidden = !gated();
+    if ($("gate-cta")) {
+      $("gate-cta").hidden = !gated();
+      $("gate-cta-link").href = back;
+    }
+  }
+
+  // The box sits on the front band until something is asked, then in the
+  // header above the answer, so the next question is always in the same place.
+  function placeBox(asked) {
+    document.body.classList.toggle("asked", asked);
+    var f = $("ask-form"), slot = $(asked ? "box-top" : "box-hero");
+    if (f && slot && f.parentNode !== slot) slot.appendChild(f);
+  }
+
+  // The strip under the front band: US CPI and core CPI on the year, the 2- and
+  // 10-year Treasury yields and the gap between them, each linked to its page.
+  // A rate's change is in pp, warm when rising and cool when falling. If either
+  // source fails its half is left out; if both fail the strip stays hidden.
+  function strip() {
+    var el = $("strip");
+    if (!el) return;
+    var since = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
+    var quiet = function (p) { return p.catch(function () { return null; }); };
+    Promise.all([quiet(getJSON("/api/v1/cpi-us/overview")),
+                 quiet(getJSON("/api/v1/ust-yields/observations?series=2Y,10Y&start=" + since))]).then(function (r) {
+      var parts = [], when = [];
+      var pp = function (v) { return (v > 0 ? "▲ +" : v < 0 ? "▼ " + MINUS : "") + fmtNum(Math.abs(v), 2) + "pp"; };
+      var ov = r[0];
+      if (ov && ov.tiles) {
+        var month = ov.release && ov.release.latest_period ? MONTHS[+ov.release.latest_period.slice(5, 7) - 1] : "";
+        [["headline_yoy", "US CPI"], ["core_yoy", "Core CPI"]].forEach(function (k) {
+          var t = ov.tiles.filter(function (x) { return x.key === k[0]; })[0];
+          if (!t || t.value == null) return;
+          parts.push("<a href='us-inflation.html' title='" + esc(t.calc || "") + "'>" + k[1] + " <b>" + fmtNum(t.value, 1) + "%</b> " + esc(month) +
+            (t.delta_pp != null ? " <span class='" + (t.delta_pp > 0 ? "rise" : "fall") + "'>" + pp(t.delta_pp) + "</span>" : "") + "</a>");
+        });
+        if (ov.release && ov.release.latest_period) when.push("CPI data through " + MONTHS[+ov.release.latest_period.slice(5, 7) - 1] + " " + ov.release.latest_period.slice(0, 4));
+      }
+      var ys = r[1] && r[1].series;
+      if (ys) {
+        var last = function (code) {
+          var s = ys.filter(function (x) { return x.code === code; })[0];
+          var pts = s ? s.points.filter(function (p) { return p[1] != null; }) : [];
+          return pts.length ? pts[pts.length - 1] : null;
+        };
+        var y2 = last("2Y"), y10 = last("10Y");
+        if (y2) parts.push("<a href='us-treasury.html'>2Y <b>" + fmtNum(y2[1], 2) + "%</b></a>");
+        if (y10) parts.push("<a href='us-treasury.html'>10Y <b>" + fmtNum(y10[1], 2) + "%</b></a>");
+        if (y2 && y10 && y2[0] === y10[0]) {
+          var gap = y10[1] - y2[1];
+          parts.push("<a href='us-treasury.html' title='10-year yield − 2-year yield'>10Y − 2Y <b>" + (gap > 0 ? "+" : gap < 0 ? MINUS : "") + fmtNum(Math.abs(gap), 2) + "pp</b></a>");
+        }
+        if (y10) when.unshift("Yields " + dateWords(y10[0]));
+      }
+      if (!parts.length) return;
+      el.innerHTML = "<div class='hp-strip-in'>" + parts.join("") + "<span class='when'>" + esc(when.join(" · ")) + "</span></div>";
+      el.hidden = false;
+    });
   }
 
   function previewValue(f) {
@@ -482,6 +631,7 @@
   function renderPreview(p, q) {
     disposeCharts();
     var el = $("answer");
+    el.classList.remove("an-stale");
     el.hidden = false;
     $("stock").hidden = true;
     if (p.kind === "none") {
@@ -497,7 +647,7 @@
         (f.as_of ? "<small>" + esc(f.as_of_label || dateWords(f.as_of)) + "</small>" : "") + "</dd></div>";
     }).join("");
     el.innerHTML = "<article class='fp-card'>" +
-      (p.read_as ? "<p class='fp-read'>Read as: " + esc(p.read_as) + "</p>" : "") +
+      "<div class='an-asked'><span>You asked</span><b>" + esc(q) + "</b></div>" +
       "<p class='fp-head hit'>" + esc(p.headline) + "</p>" +
       (p.period && p.period.text ? "<p class='period-line'>" + esc(p.period.text) + "</p>" : "") +
       (p.lead ? "<p class='fp-lead'>" + esc(p.lead) + "</p>" : "") +
@@ -524,20 +674,18 @@
   }
 
   /* ---- one company ----------------------------------------------------- */
-  function renderStock(t, m, px, ins, hold, cal) {
+  function renderStock(t, m, px, ins, hold) {
     disposeCharts();
     var el = $("stock");
     var mt = m.metrics || {}, p = m.price || {}, ps = m.per_share || {}, mvb = m.market_value_basis || {};
     // a split read from prices in the last year that no filing confirms makes the one-year change doubtful
     var yearAgo = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
     var doubtfulSplit = !!(px && px.splits && px.splits.some(function (s) { return s.status && s.status !== "confirmed" && s.date >= yearAgo; }));
-    var html = "<div class='co-head'>" + (m.logo ? "<img class='co-logo' src='" + esc(m.logo) + "' alt='' width='32' height='32' " +
-      "style='align-self:center;border-radius:3px;border:1px solid var(--obs-border);background:var(--obs-logo-bg);object-fit:contain'>" : "") +
-      "<h1>" + esc(m.name) + "</h1><span class='co-code'>" + esc(m.ticker || ("cik:" + m.cik)) + "</span>" +
-      "<span class='co-industry'>" + esc([m.exchange, m.industry].filter(Boolean).join(" · ")) + "</span></div>" +
+    // the company's header card and tabs (co-head.js) replace this placeholder once loaded
+    var html = "<div id='stock-card'><section class='cp-card'><div class='cp-id'><div class='cp-who'><h1>" + esc(m.name) +
+      "</h1></div></div></section></div>" +
       "<p class='sec-note'>Latest annual report: year to " + dateWords(m.period_end) + ", filed " + dateWords(m.filed) + " · " +
-      "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>filing on EDGAR</a> · " +
-      "<a href='us-company.html?t=" + encodeURIComponent(m.ticker || m.cik) + "'>Everything held for this company</a></p>" +
+      "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>filing on EDGAR</a></p>" +
       "<dl class='fact-row'>" +
       "<div><dt>Close</dt><dd>" + money(p.close, 2) + "<span class='qual'>" + (p.date ? dateWords(p.date) : "no price on file") + "</span></dd></div>" +
       "<div><dt>Market value</dt><dd>" + money(mt.market_cap) + "<span class='qual'>" +
@@ -557,8 +705,7 @@
     }
     // price
     html += "<h2>Share Price <span class='h2-note'>USD, daily close, since " + (px && px.bars.length ? dateWords(px.bars[0].date) : "—") + "</span></h2>" +
-      "<div class='controls'><span class='spacer'></span><button type='button' class='btn' id='px-png'>Download PNG</button><button type='button' class='btn' id='px-csv'>Download CSV</button></div>" +
-      "<div class='chart-block'><div class='chart-el' id='px-chart'></div><div class='chart-foot'><span id='px-src'></span></div></div>";
+      "<div id='px-range'></div><div class='chart-foot'><span id='px-src'></span></div>";
     if (px && px.splits && px.splits.length) {
       html += "<p class='sec-note' style='margin:8px 0 0'>" + px.splits.map(function (s) {
         return s.note ? esc(s.note) : "Closes before " + dateWords(s.date) + " are adjusted for the " +
@@ -603,13 +750,6 @@
     } else {
       html += "<h2>Largest 13F Holders</h2><p class='sec-note'>No 13F positions could be matched to this company by name.</p>";
     }
-    // calendar
-    if (cal) {
-      var up = cal.upcoming && cal.upcoming[0];
-      html += "<h2>Reporting Calendar <span class='h2-note'>10-K and 10-Q filing dates</span></h2>" +
-        (up ? "<p class='answer-text'>Next " + esc(up.report) + " expected around <b>" + dateWords(up.expected_date) + "</b>, resting on last year's filing of " + dateWords(up.basis.filed) + ". Not an announced date, and not the earnings-release date.</p>" : "") +
-        tableHtml({ columns: ["Form", "Period end", "Filed", "Days after period end"], rows: (cal.filings || []).slice(0, 8).map(function (f) { return [f.form, f.period, f.filed, f.lag_days]; }) }, "cal-table");
-    }
     html += sourcesHtml([
       { name: "SEC filings", credit: "Source: U.S. Securities and Exchange Commission, EDGAR.", note: "Figures as filed and extracted by the SEC." },
       { name: "Daily prices", credit: "Source: Databento (EQUS.SUMMARY). Market data provided by Databento.", note: "Consolidated end-of-day closes, one-day delay." },
@@ -620,33 +760,80 @@
               [t + " over the past year", "How has " + t + " stock done over the past year?"], ["When " + t + " reports", "When does " + t + " report next?"]];
     html += "<div class='followups'>" + fu.map(function (f) { return "<a href='/?q=" + encodeURIComponent(f[1]) + "'>" + esc(f[0]) + "</a>"; }).join("") + "</div>";
     el.innerHTML = html;
+    panelize(el, "Market Data");
+    // two tabs of the company's pages share this view: Price (the market data,
+    // the price chart and the latest annual report's ratios) and Insiders and
+    // holders; panels with no heading (sources, follow-ups) show on both
+    var KEEP = stockView === "owners" ? ["Insider Trades", "Largest 13F Holders"] : ["Market Data", "Share Price", "Latest Annual Report"];
+    Array.prototype.forEach.call(el.querySelectorAll(".cp-sec"), function (sec) {
+      var h = sec.querySelector(".cp-head h2");
+      if (h && KEEP.indexOf(h.textContent) < 0) sec.remove();
+    });
     el.hidden = false;
     $("answer").hidden = true;
     $("home-note").hidden = true;
+    if (window.coHead) {
+      coHead.load(m.ticker || t).then(function (d) { if ($("stock-card")) { $("stock-card").innerHTML = coHead.html(d, stockView); coHead.reveal($("stock-card")); } })
+        .catch(function () { /* the placeholder keeps the name */ });
+    }
     document.title = m.name + " (" + (m.ticker || t) + ") · Plover Analytics";
     var srcLine = "Source: Databento (EQUS.SUMMARY), consolidated end-of-day closes, one-day delay" + (px && px.splits && px.splits.length ? ", split-adjusted" : "") + ".";
-    $("px-src").textContent = srcLine;
-    if (px && px.bars.length) {
-      var c = obsChart($("px-chart"), "line", { unit: "", unitSuffix: " $", dp: 2, trust: "official", sourceLine: srcLine, isoPeriods: true, yAxisName: "USD",
-        series: [{ name: m.ticker || t, points: px.bars.map(function (b) { return [b.date, b.adjusted_close]; }) }] });
-      charts.push(c);
-      $("px-png").onclick = function () { c.exportPNG("plover-" + t + "-price.png"); };
-      $("px-csv").onclick = function () { c.exportCSV("plover-" + t + "-price.csv", [m.name + " daily close, split-adjusted", srcLine]); };
-    } else {
-      $("px-chart").innerHTML = "<p class='state-empty'>No daily prices on file for " + esc(t) + ".</p>";
-    }
+    if ($("px-src")) $("px-src").textContent = srcLine;
+    // the range (1M to Max, the year to date, or from–to) and its change: price-range.js
+    if ($("px-range")) charts.push(priceRange.mount($("px-range"), { bars: (px && px.bars) || [], ticker: m.ticker || t, name: m.name, source: srcLine }));
     if (window.enhanceTables) window.enhanceTables(el);
   }
 
-  function openStock(t, push) {
+  // A page drawn as one run of headings and blocks becomes panels (co-page.css):
+  // each h2 opens a panel whose head is the heading and its note; the blocks
+  // before the first heading go under `first`; the sources and the follow-ups
+  // each get a panel of their own. Runs before any chart is drawn, so each
+  // chart is sized in its final place.
+  function panelize(el, first) {
+    var out = document.createDocumentFragment(), body = null;
+    function start(title, note) {
+      var sec = document.createElement("section");
+      sec.className = "cp-panel cp-sec";
+      if (title) {
+        var head = document.createElement("div");
+        head.className = "cp-head";
+        head.innerHTML = "<h2>" + esc(title) + "</h2>" + (note ? "<span class='note'>" + esc(note) + "</span>" : "");
+        sec.appendChild(head);
+      }
+      body = document.createElement("div");
+      body.className = "cp-body";
+      sec.appendChild(body);
+      out.appendChild(sec);
+    }
+    Array.prototype.slice.call(el.childNodes).forEach(function (n) {
+      if (n.id === "stock-card") { out.appendChild(n); body = null; return; }
+      if (n.nodeType === 1 && n.tagName === "H2") {
+        var note = n.querySelector(".h2-note"), words = note ? note.textContent : "";
+        if (note) note.remove();
+        start(n.textContent.trim(), words);
+        return;
+      }
+      if (n.nodeType === 1 && (n.matches("details.calc") || n.matches(".followups"))) start("", "");
+      if (!body) start(first, "");
+      body.appendChild(n);
+    });
+    el.innerHTML = "";
+    el.appendChild(out);
+  }
+
+  // which of the company's tabs this view shows: "price" or "owners"
+  var stockView = "price";
+  function openStock(t, push, view) {
     t = String(t || "").toUpperCase().replace(/\s+/g, "");
+    stockView = view === "owners" ? "owners" : "price";
     if (gated()) return ask(t, push);          // signed out, a company page is the start of its answer
+    placeBox(true);
     var el = $("stock");
     el.hidden = false;
     $("answer").hidden = true;
     el.innerHTML = "<p class='state-wait' aria-live='polite'>Loading " + esc(t) + "…</p>";
-    if (push) history.pushState({ t: t }, "", "/?t=" + encodeURIComponent(t));
-    var since = new Date(); since.setUTCFullYear(since.getUTCFullYear() - 2);
+    if (push) history.pushState({ t: t }, "", "/?t=" + encodeURIComponent(t) + (stockView === "owners" ? "&view=owners" : ""));
+    var since = new Date("2000-01-01T00:00:00Z");     // every close on file, so any range can be read
     var quiet = function (p) { return p.catch(function () { return null; }); };
     return getJSON(API + "/financials/metrics/" + encodeURIComponent(t)).then(function (m) {
       var tk = m.ticker || t;
@@ -657,8 +844,7 @@
           // the recipe already picked the common-stock CUSIP and the window
           return getJSON(API + "/holdings/issuer?cusip=" + encodeURIComponent(a.entities.cusip) + "&limit=15");
         })),
-        quiet(getJSON(API + "/earnings/company/cik:" + m.cik)),
-      ]).then(function (r) { renderStock(tk, m, r[0], r[1], r[2], r[3]); });
+      ]).then(function (r) { renderStock(tk, m, r[0], r[1], r[2]); });
     }).catch(function (e) {
       el.innerHTML = "<p class='state-error'>" + esc(e.message) + "</p><p class='sec-note'>Try the ticker as it trades (AAPL, BRK.B) or ask by name in the box above.</p>";
       $("home-note").hidden = false;
@@ -670,7 +856,7 @@
     var u = new URL(location.href);
     var q = (u.searchParams.get("q") || "").trim();
     var t = (u.searchParams.get("t") || "").trim();
-    if (t) return openStock(t, false);
+    if (t) return openStock(t, false, u.searchParams.get("view"));
     if (q) {
       // a bare ticker typed into the box opens the company page
       if (/^[A-Za-z]{1,5}([.-][A-Za-z])?$/.test(q) && q.toUpperCase() === q) return openStock(q, false);
@@ -679,6 +865,7 @@
     $("answer").hidden = true;
     $("stock").hidden = true;
     $("home-note").hidden = false;
+    placeBox(false);
     $("q").focus();
   }
 
@@ -710,8 +897,8 @@
   initThemeToggle(function () { if (charts.length) location.reload(); });
   window.addEventListener("popstate", function () { route(false); });
   window.addEventListener("resize", function () { charts.forEach(function (c) { c.resize && c.resize(); }); });
-  // An example question answers in place, without reloading the page.
-  Array.prototype.forEach.call(document.querySelectorAll("#examples a"), function (a) {
+  // An example question, or an example answer's Open Answer, answers in place without reloading the page.
+  Array.prototype.forEach.call(document.querySelectorAll("#examples a, a.hp-open"), function (a) {
     a.addEventListener("click", function (ev) {
       var q = new URL(a.href, location.href).searchParams.get("q");
       if (!q) return;
@@ -721,4 +908,5 @@
   });
   // who is reading decides how much of an answer shows, so the page waits for that first
   reader.then(function () { route(false); });
+  strip();
 })();

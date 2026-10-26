@@ -4,11 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
-<title>Plover Analytics — Ask about US stocks and the US economy</title>
+<title>Plover Analytics — Ask about companies, markets and economies</title>
+<link rel="preload" href="assets/fonts/ibm-plex-sans-latin-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/ibm-plex-sans-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/front.css">
 <link rel="stylesheet" href="assets/ask.css">
+<link rel="stylesheet" href="assets/co-page.css">
+<link rel="stylesheet" href="assets/home.css">
 <script>
 /* The CPI overview used to live at this address. Anything already published
    against its section anchors — an exported chart's permalink, a newsletter
@@ -23,42 +27,43 @@
 })();
 </script>
 </head>
-<body class="fp-body">
+<body class="fp-body hp">
 
 <!-- The home page is the question box (2026-10-19), and answers appear here,
-     under it, like a conversation: a follow-up ("and Microsoft?") reads the
-     question before it. Signed out, a question shows the start of its answer;
-     the full answer (chart, table, every source, follow-ups) is one sign-up
-     away. Signed in, the full answer is here. us-stocks.js runs the page;
-     the old address, us-stocks.html, redirects here with its ?q= or ?t=. -->
-<header class="fp-header">
-  <a class="fp-brand" href="/"><svg width="26" height="26" viewBox="0 0 128 128" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"><circle cx="64" cy="64" r="54"/><path d="M22 86 L46 56 L62 70 L86 44 L106 58"/></g><g fill="currentColor"><circle cx="46" cy="56" r="8"/><circle cx="86" cy="44" r="8"/></g><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" opacity="0.55"><path d="M30 100 H62"/><path d="M74 100 H98"/></g></svg>Plover Analytics</a>
-  <span class="fp-account" id="fp-account"></span>
+     under it: a follow-up ("and Microsoft?") reads the question before it.
+     Signed out, a question shows the start of its answer; the full answer is
+     one sign-up away. us-stocks.js runs the page and moves the box from the
+     front of the page into the header once something has been asked.
+     Layout: the finance redesign of 2026-10-25 (home.css). -->
+<header class="hp-header">
+  <div class="hp-bar">
+    <a class="hp-brand" href="/"><svg viewBox="0 0 128 128" width="22" height="22" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"><circle cx="64" cy="64" r="54"/><path d="M22 86 L46 56 L62 70 L86 44 L106 58"/></g><g fill="currentColor"><circle cx="46" cy="56" r="8"/><circle cx="86" cy="44" r="8"/></g><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" opacity=".55"><path d="M30 100 H62"/><path d="M74 100 H98"/></g></svg>Plover Analytics</a>
+    <nav class="hp-nav" aria-label="Markets">
+      <a href="us-treasury.html">United States</a>
+      <a href="macro.html">Japan</a>
+      <a href="hk-economy.html">Hong Kong</a>
+      <a href="/research/">Research</a>
+    </nav>
+    <div class="hp-slot" id="box-top"></div>
+    <span class="hp-account" id="fp-account"></span>
+  </div>
 </header>
 
-<main class="fp-main ask-main">
-  <div id="stale-banner"></div>
-
-  <div class="home-wrap">
-    <h1 class="fp-title home-only">Ask about US stocks and the US economy.</h1>
-    <p class="fp-sub home-only">Who owns a company, what it earns, what it returns to shareholders, what insiders are doing, and where inflation, wages and Treasury yields stand. Every number comes from official filings and statistics, with its source.</p>
-    <form class="fp-box" id="ask-form" role="search" action="/" method="get" autocomplete="off">
-      <label for="q" class="fp-sr">Your question about a stock or the US economy</label>
-      <input type="search" id="q" name="q" maxlength="300" spellcheck="false"
-             placeholder="Ask, e.g. who owns Nvidia"
-             aria-label="Ask about a US stock or the US economy">
-      <button type="submit" class="fp-go" id="ask-btn" aria-label="Ask">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
-      </button>
-    </form>
-  </div>
-
-  <div id="status" class="state-wait" aria-live="polite" hidden></div>
-  <section id="answer" hidden></section>
-  <section id="stock" hidden></section>
-
-  <section id="home-note">
-    <ul class="fp-examples" id="examples" aria-label="Example questions">
+<section class="hp-hero" id="hero">
+  <div class="hp-hero-in">
+    <h1>Ask about companies, markets and economies</h1>
+    <p>Any company listed in the US, and inflation, jobs, wages, growth and interest rates in the US, Japan and Hong Kong.
+      Every number comes from company filings, official statistics or market prices, with its source.</p>
+    <div id="box-hero">
+      <form class="hp-box" id="ask-form" role="search" action="/" method="get" autocomplete="off">
+        <label for="q" class="fp-sr">Your question about a stock or the US economy</label>
+        <input type="search" id="q" name="q" maxlength="300" spellcheck="false"
+               placeholder="Ask, e.g. who owns Nvidia"
+               aria-label="Ask about a US stock or the US economy">
+        <button type="submit" id="ask-btn">Ask</button>
+      </form>
+    </div>
+    <ul class="hp-chips" id="examples" aria-label="Example questions">
       <li><a href="/?q=How%20did%20the%20S%26P%20500%20do%20on%20CPI%20days%3F">How did the S&amp;P 500 do on CPI days?</a></li>
       <li><a href="/?q=Which%20companies%20does%20Berkshire%20Hathaway%20own%3F">Which companies does Berkshire Hathaway own?</a></li>
       <li><a href="/?q=How%20much%20of%20Apple%27s%20revenue%20comes%20from%20China%3F">How much of Apple's revenue comes from China?</a></li>
@@ -68,7 +73,95 @@
       <li><a href="/?q=Is%20the%20US%20yield%20curve%20inverted%3F">Is the US yield curve inverted?</a></li>
       <li><a href="/?q=Is%20US%20core%20inflation%20falling%3F">Is US core inflation falling?</a></li>
     </ul>
-    <p class="fp-note" id="gate-note" hidden>See the start of any answer free. Sign up to see all of it.</p>
+  </div>
+</section>
+
+<!-- filled from the CPI and Treasury APIs (us-stocks.js strip()); empty if they fail -->
+<div class="hp-strip" id="strip" aria-label="US inflation and Treasury yields" hidden></div>
+
+<main class="hp-main ask-main">
+  <div id="stale-banner"></div>
+
+  <div id="status" class="state-wait" aria-live="polite" hidden></div>
+  <section id="answer" hidden></section>
+  <section id="stock" hidden></section>
+
+  <section id="home-note">
+    <div class="hp-sec-head"><h2>Example Answers</h2></div>
+    <!-- Figures as the live answers gave them on 2026-10-25; Open Answer asks again on today's data. -->
+    <div class="hp-cards">
+      <article class="hp-card">
+        <p class="hp-card-q">Who owns Nvidia?</p>
+        <h3>BlackRock is the largest reported holder, with 12.0% of reported value.</h3>
+        <div class="hp-card-body hp-bars">
+          <div><span>BlackRock</span><i><b style="width:100%"></b></i><span class="n">$388.6bn</span></div>
+          <div><span>Vanguard Capital</span><i><b style="width:79.3%"></b></i><span class="n">$308.3bn</span></div>
+          <div><span>FMR (Fidelity)</span><i><b style="width:52.8%"></b></i><span class="n">$205.3bn</span></div>
+          <div><span>State Street</span><i><b style="width:52%"></b></i><span class="n">$202.0bn</span></div>
+          <div><span>Geode Capital</span><i><b style="width:31.1%"></b></i><span class="n">$121.0bn</span></div>
+        </div>
+        <div class="hp-card-foot"><span>Form 13F · quarter to 30 Jun 2026</span><a class="hp-open" href="/?q=Who%20owns%20Nvidia%3F">Open answer</a></div>
+      </article>
+      <article class="hp-card">
+        <p class="hp-card-q">How did the market do during government shutdowns?</p>
+        <h3>The S&amp;P 500 rose during 3 of the 4 shutdowns since 2018, by a median of +4.0%.</h3>
+        <div class="hp-card-body">
+          <table class="hp-mini" data-no-enhance>
+            <thead><tr><th>Shutdown</th><th class="r">Days</th><th class="r">S&amp;P 500</th></tr></thead>
+            <tbody>
+              <tr><td>Dec 2018 – Jan 2019</td><td class="r">35</td><td class="r up">▲ +10.4%</td></tr>
+              <tr><td>Oct – Nov 2025</td><td class="r">43</td><td class="r up">▲ +2.6%</td></tr>
+              <tr><td>31 Jan – 3 Feb 2026</td><td class="r">4</td><td class="r down">▼ −0.4%</td></tr>
+              <tr><td>Feb – Apr 2026, Homeland Security</td><td class="r">76</td><td class="r up">▲ +5.4%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="hp-card-foot"><span>Daily closes of the S&amp;P 500 fund (SPY)</span><a class="hp-open" href="/?q=How%20did%20the%20market%20do%20during%20the%20government%20shutdown%3F">Open answer</a></div>
+      </article>
+      <article class="hp-card">
+        <p class="hp-card-q">How much of Apple's revenue comes from China?</p>
+        <h3>Greater China brought in $64.4bn in the year to September 2025.</h3>
+        <div class="hp-card-body">
+          <dl class="hp-tiles">
+            <div><dt>Revenue</dt><dd>$64.4bn</dd></div>
+            <div><dt>Share of Apple</dt><dd>15.5%</dd></div>
+            <div><dt>On the year</dt><dd class="down">▼ −3.8%</dd></div>
+          </dl>
+          <p class="hp-card-note">Operating income from the region was $26.9bn.</p>
+        </div>
+        <div class="hp-card-foot"><span>Apple 10-K, segment note</span><a class="hp-open" href="/?q=How%20much%20of%20Apple%27s%20revenue%20comes%20from%20China%3F">Open answer</a></div>
+      </article>
+    </div>
+
+    <div class="hp-panel hp-cover">
+      <div class="hp-panel-head"><h2>What Plover Covers</h2></div>
+      <div class="hp-cover-grid">
+        <div><h3>United States</h3><ul>
+          <li><a href="us-companies.html">Companies</a></li>
+          <li><a href="us-pay.html">Executive pay</a></li>
+          <li><a href="us-inflation.html">Consumer prices</a></li>
+          <li><a href="us-treasury.html">Treasury yields</a></li>
+        </ul></div>
+        <div><h3>Japan</h3><ul>
+          <li><a href="company.html">Companies</a></li>
+          <li><a href="holdings.html">Cross-shareholdings</a></li>
+          <li><a href="cpi.html">Consumer prices</a></li>
+          <li><a href="macro.html">Economy</a></li>
+        </ul></div>
+        <div><h3>Hong Kong</h3><ul>
+          <li><a href="hk-prices.html">Consumer prices</a></li>
+          <li><a href="hk-economy.html">Economy</a></li>
+        </ul></div>
+      </div>
+    </div>
+
+    <div class="hp-panel hp-cta" id="gate-cta" hidden>
+      <div>
+        <h2>See Every Answer in Full</h2>
+        <p>The start of each answer is free. An account shows all of it: the chart, the table and the download.</p>
+      </div>
+      <a class="hp-btn" id="gate-cta-link" href="signin.html">Create free account</a>
+    </div>
   </section>
 </main>
 
@@ -89,6 +182,8 @@
 <script src="assets/us-logos.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
+<script src="assets/co-head.js"></script>
+<script src="assets/price-range.js"></script>
 <script src="assets/us-stocks.js"></script>
 </body>
 </html>

@@ -51,15 +51,16 @@ Hard rules:
 
 - **One** filled primary action per view. Secondary actions = text/outline, lower weight.
 - Show importance with **type scale, weight, colour** — not by drawing a border around everything.
-- **Every top-level `h2` is a filled navy band** across the content width — uppercase, tracked, white on
-  `--obs-band-bg`, with at most one short qualifier (a count, an as-of) right-aligned inside it. This is
-  the platform's section marker; `h3` stays plain text, and a section that is already a bordered panel
-  gets a plain title instead. **The band carries its own top margin (32px)** — its clearance from the
-  content above must never depend on a `<section>`/`.prose` wrapper, and no negative margins to
-  tighten text against it. Spec → [reference.md](reference.md#section-header-band).
+- **Every top-level `h2` is a quiet label over a rule** — small capitals (12.5px, 600, tracked) in
+  `--obs-ink`, a 1px `--obs-border` line under it, with at most one short qualifier (a count, an as-of)
+  right-aligned and muted. No filled band: the user replaced the navy band on 2026-10-26 ("the site was an
+  adaptation of the GSA design, not suited to finance"). `h3` stays plain text, and a section that is
+  already a bordered panel gets the same label as its panel head. **The heading carries its own top margin
+  (32px)** — its clearance from the content above must never depend on a `<section>`/`.prose` wrapper,
+  and no negative margins to tighten text against it.
 - Dashboard order: headline stat row → the primary chart → supporting breakdown → the full table → provenance/methodology. Not a grid of equal-weight boxes.
-- **Signed-in workspace pages (an app with a left menu) use the workspace app shell**: navy bar across
-  the top, white sidebar, stat strip, `h2` bands, lists instead of card grids. Spec →
+- **Signed-in workspace pages (an app with a left menu) use the workspace app shell**: a light bar across
+  the top (the header tokens), white sidebar, stat strip, `h2` labels, lists instead of card grids. Spec →
   [reference.md](reference.md#workspace-app-shell).
 - One border, one background per panel. **No box nested inside a box.** No scrollable inner box except a genuinely wide data table wrapped in `overflow-x: auto`.
 - Spacing: nothing touches. Min 8px between unrelated elements, 4px between closely related.
@@ -129,8 +130,9 @@ Reject the design if ANY of these are present:
 1. border-radius > 4px
 2. box-shadow
 3. gradient (esp. purple→blue / purple→pink), including gradient-filled chart areas
-4. **filled** coloured badge/pill/chip background (use **outline-only**) — the `h2` section band and the
-   site header are the only sanctioned filled colour blocks; a filled *badge* is still a reject
+4. a status label drawn as a box — filled **or outlined** green/red/coloured badges, pills or status chips.
+   A label (Official Statistic, Stale, OK) is coloured words in weight 600, no border, no background; the
+   user asked for no rectangular green or red boxes on 2026-10-26. Direction is coloured text with an arrow.
 5. icon inside a coloured circle/square
 6. glassmorphism / frosted / backdrop-blur
 7. 2×2 or 3×3 "feature card" grid
@@ -145,21 +147,22 @@ Reject the design if ANY of these are present:
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--obs-primary` | `#1a4d8f` | Buttons, links, primary series |
-| `--obs-primary-dark` | `#123a6d` | Hover |
+| `--obs-primary` | `#1d5bd8` | Buttons, links |
+| `--obs-primary-dark` | `#123f9c` | Hover |
 | `--obs-ink` | `#0f172a` | Primary text, key figures |
 | `--obs-text-muted` | `#64748b` | Labels, secondary text, axis text |
 | `--obs-border` | `#e2e8f0` | Borders, dividers |
 | `--obs-grid` | `#eef2f7` | Chart gridlines |
 | `--obs-surface` / `--obs-surface-subtle` | `#ffffff` / `#f8fafc` | Panels, hover rows |
-| `--obs-header-bg` / `--obs-band-bg` | `#1a4d8f` | Site header bar and `h2` section band — one shared navy |
+| `--obs-header-bg` | `#ffffff` | Site header: light, a 1px `--obs-header-border` rule under it, never navy |
+| `--obs-accent` / `--obs-ground` / `--obs-up` / `--obs-down` | `#1d5bd8` / `#f4f6f9` / `#0b8a5c` / `#c2410c` | Front page and answers: accent, grey page ground under white panels, a share price's up and down |
 
-- Both filled navy surfaces carry their own `-ink` / `-muted` foreground tokens, since body text tokens
-  are dark-on-light and vanish on them. Full set → [reference.md](reference.md#filled-navy-chrome).
-- Because header and band share a fill, **the header needs a translucent-white bottom rule** so a band
-  scrolling under it doesn't merge into one slab. Never a `box-shadow` for this.
+- The header keeps its own `-ink` / `-text` / `-muted` tokens so the workspace bars follow it. Never a
+  `box-shadow` under it. `--obs-band-bg` (navy) survives only as the PloverResearch accent rule.
 - Series palette, diverging scale, and trust-label colours → [reference.md](reference.md#colour-system).
-- UI font: Inter stack. **Numeric font: a tabular-figure face** — Inter with `tabular-nums`, or IBM Plex Mono / JetBrains Mono for dense grids. Self-host everything; no CDN `@import`.
+- **One font: IBM Plex Sans** (self-hosted in `assets/fonts/`, declared in app.css), numbers in its
+  tabular figures — never a monospaced face for figures. Inter was dropped on 2026-10-26 because it read
+  as AI-made. Monospace only for code, IDs and checksums. No CDN `@import`.
 - Tokens live in **one** file. Never redefine `--obs-*` in an app's own CSS; never hard-code a hex in a component or a chart config.
 - Dark mode is a first-class requirement, not a filter — see [reference.md](reference.md#dark-mode).
 

@@ -1,0 +1,157 @@
+/* One US company's pages (the design canvas's company board, 2026-10-26):
+   a grey ground, the company's header card with its tabs, then white panels —
+   a main column beside a side column. us-company.html (Overview) and
+   us-companies.html (Financials) share it through co-head.js. Tokens only, so
+   dark mode follows the theme; no shadows, corners at most 4px, and no boxed
+   status labels: a change is coloured text with an arrow. */
+
+body.co-ground { background: var(--obs-ground); }
+body.co-ground .site-footer { background: var(--obs-surface); }
+.co-ground .container { max-width: 1360px; }
+
+.cp-crumbs { font-size: 12.5px; color: var(--obs-text-muted); margin: 4px 0 14px; }
+.cp-crumbs a { color: var(--obs-primary); }
+
+/* ---- header card and tabs ---- */
+.cp-card { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; }
+.cp-id { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 18px 20px; }
+.cp-logo { width: 44px; height: 44px; border: 1px solid var(--obs-border); border-radius: 4px; background: var(--obs-logo-bg);
+  object-fit: contain; flex: 0 0 auto; }
+.cp-who { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cp-who h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.015em; color: var(--obs-ink); }
+.cp-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--obs-text); }
+.cp-tags span { border: 1px solid var(--obs-border); border-radius: 3px; padding: 1px 6px; }
+.cp-tags .tk { font-weight: 600; color: var(--obs-ink); }
+.cp-meta { font-size: 12px; color: var(--obs-text-muted); }
+.cp-meta a { color: var(--obs-primary); }
+.cp-price { margin-left: auto; text-align: right; }
+.cp-price .px { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; color: var(--obs-ink); line-height: 1.15; }
+.cp-price .px-sub { font-size: 12.5px; color: var(--obs-text-muted); }
+.cp-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 0 12px; border-top: 1px solid var(--obs-border); font-size: 13.5px; }
+.cp-tabs a { padding: 11px 10px 9px; color: var(--obs-text); border-bottom: 2px solid transparent; text-decoration: none; }
+.cp-tabs a:hover { color: var(--obs-ink); }
+.cp-tabs a[aria-current="page"] { color: var(--obs-ink); font-weight: 600; border-bottom-color: var(--obs-primary); }
+.co-ground .up { color: var(--obs-up); }
+.co-ground .down { color: var(--obs-down); }
+.co-ground .up, .co-ground .down { font-weight: 600; }
+
+/* ---- panels ---- */
+.cp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; margin-top: 16px; }
+.cp-col, .cp-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cp-panel { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; margin: 0; }
+.cp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 12px 16px; border-bottom: 1px solid var(--obs-border); }
+.cp-head h2 { margin: 0; padding: 0; border: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--obs-text); background: none; }
+.cp-head .note { font-size: 12px; color: var(--obs-text-muted); }
+.cp-head .right { margin-left: auto; display: flex; gap: 12px; align-items: baseline; font-size: 12.5px; }
+.cp-foot { padding: 10px 16px; border-top: 1px solid var(--obs-grid); font-size: 12px; color: var(--obs-text-muted); }
+.cp-link { border: 0; background: none; padding: 0; font: inherit; color: var(--obs-primary); cursor: pointer; }
+.cp-link:hover { color: var(--obs-primary-dark); text-decoration: underline; }
+
+/* key figures: six tiles, each a value, its change and its last ten years */
+.cp-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cp-tile { padding: 14px 16px; border-bottom: 1px solid var(--obs-grid); }
+.cp-tile:not(:nth-child(3n + 1)) { border-left: 1px solid var(--obs-grid); }
+.cp-tile .lb { font-size: 12px; color: var(--obs-text-muted); font-weight: 500; }
+.cp-tile .vl { font-size: 22px; font-weight: 600; color: var(--obs-ink); margin: 4px 0 6px; letter-spacing: -0.01em; }
+.cp-tile .tr { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; min-height: 24px; }
+.cp-tile svg { color: var(--obs-primary); flex: 0 0 auto; }
+.cp-chart { padding: 10px 16px 4px; }
+.cp-chart .chart-el { height: 280px; }
+
+.cp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cp-table th { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--obs-text-muted);
+  text-align: right; padding: 8px 12px; border-bottom: 1px solid var(--obs-border); white-space: nowrap; }
+.cp-table th:first-child, .cp-table td:first-child { text-align: left; }
+.cp-table td { padding: 8px 12px; border-bottom: 1px solid var(--obs-grid); text-align: right; white-space: nowrap; color: var(--obs-ink); }
+.cp-table td.sp { text-align: left; color: var(--obs-primary); }
+.cp-table tr:last-child td { border-bottom: 0; }
+
+/* side column */
+.cp-dl { margin: 0; padding: 4px 16px 6px; }
+.cp-dl div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--obs-grid); font-size: 13px; }
+.cp-dl div:last-child { border-bottom: 0; }
+.cp-dl dt { color: var(--obs-text-muted); }
+.cp-dl dd { margin: 0; font-weight: 600; color: var(--obs-ink); }
+.cp-side details { padding: 0 16px 12px; font-size: 12.5px; }
+.cp-side summary { color: var(--obs-primary); cursor: pointer; }
+.cp-side details ul { margin: 8px 0 0; padding-left: 16px; color: var(--obs-text); display: flex; flex-direction: column; gap: 6px; }
+.cp-pxchart { padding: 12px 16px; }
+.cp-pxchart svg { display: block; width: 100%; height: 90px; color: var(--obs-primary); }
+.cp-pxchart .ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--obs-text-muted); margin-top: 6px; }
+.cp-files { list-style: none; margin: 0; padding: 4px 16px 8px; }
+.cp-files li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--obs-grid); font-size: 13px; }
+.cp-files li:last-child { border-bottom: 0; }
+.cp-files span { color: var(--obs-text-muted); white-space: nowrap; }
+
+@media (max-width: 1080px) {
+  .cp-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .cp-id { padding: 14px; }
+  .cp-price { margin-left: 0; text-align: left; flex-basis: 100%; }
+  .cp-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .cp-tabs a { white-space: nowrap; }
+  .cp-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cp-tile:not(:nth-child(3n + 1)) { border-left: 0; }
+  .cp-tile:nth-child(2n) { border-left: 1px solid var(--obs-grid); }
+  .cp-tile .vl { font-size: 19px; }
+  .cp-chart .chart-el { height: 240px; }
+}
+
+/* a page whose sections are panels (the Financials tab): each panel sits 16px below the last */
+.cp-sec { margin-top: 16px; }
+.cp-body { padding: 14px 16px; }
+.cp-body > .controls:first-child { margin-top: 0; }
+.cp-msg { margin: 12px 0 0; font-size: 13px; color: var(--obs-text); }
+.cp-msg:empty { display: none; }
+.cp-tile .tr span { white-space: nowrap; }
+
+/* the company list (us-company.html with no company chosen) */
+.cl-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 16px; margin-top: 14px; font-size: 13px; }
+.cl-tools label { color: var(--obs-text-muted); }
+.cl-tools input[type="search"] { flex: 1 1 280px; max-width: 420px; min-width: 0; }
+.cl-count { margin-left: auto; font-size: 12.5px; color: var(--obs-text-muted); }
+.cl-table td.nm { white-space: normal; min-width: 220px; }
+.cl-table td.nm a { color: var(--obs-ink); font-weight: 500; }
+.cl-table td.nm a:hover { color: var(--obs-primary); }
+.cl-table td.nm img, .cl-table td.nm .nologo { display: inline-block; width: 20px; height: 20px; margin-right: 10px; vertical-align: -5px;
+  border-radius: 3px; border: 1px solid var(--obs-border); background: var(--obs-logo-bg); object-fit: contain; }
+.cl-table td.nm .nologo { background: none; }
+.cl-table td.tk { font-weight: 600; color: var(--obs-text); text-align: left; }
+.cl-table th.tk { text-align: left; }
+.cl-table td.rk { color: var(--obs-text-muted); width: 36px; }
+.cl-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.cl-pages { margin-left: auto; display: flex; gap: 8px; }
+@media (max-width: 700px) {
+  .cl-count { margin-left: 0; flex-basis: 100%; }
+  .cl-table .hide-sm { display: none; }
+}
+.cl-table td.nm { text-align: left; }
+/* the Overview's results calendar */
+.cal-body { padding: 10px 16px 6px; font-size: 13px; }
+.cal-next { margin: 0; color: var(--obs-ink); }
+.cal-next span { color: var(--obs-text-muted); }
+.cal-why { margin: 2px 0 8px; font-size: 12px; color: var(--obs-text-muted); }
+.cal-table th, .cal-table td { padding: 6px 4px; }
+.cal-table th:first-child, .cal-table td:first-child { padding-left: 0; }
+.cal-table th:last-child, .cal-table td:last-child { padding-right: 0; }
+.cp-chart .cp-pxel { height: 240px; }
+
+/* a share price over a chosen range (price-range.js): presets, a custom from–to,
+   the change over the range, then the chart */
+.pr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 12.5px; }
+.pr-custom { display: inline-flex; gap: 10px; color: var(--obs-text-muted); }
+.pr-custom input[type="date"] { font: inherit; font-size: 12.5px; padding: 3px 6px; margin-left: 4px; }
+.pr-acts { margin-left: auto; display: inline-flex; gap: 14px; }
+.pr-link { border: 0; background: none; padding: 0; font: inherit; color: var(--obs-primary); cursor: pointer; }
+.pr-link:hover { text-decoration: underline; }
+.pr-perf { margin: 10px 0 2px; font-size: 13px; }
+.pr-up { color: var(--obs-up); font-weight: 700; font-size: 16px; }
+.pr-down { color: var(--obs-down); font-weight: 700; font-size: 16px; }
+.pr-sub { color: var(--obs-text-muted); margin-left: 6px; }
+.pr-chart { height: 280px; }
+@media (max-width: 700px) {
+  .pr-acts { margin-left: 0; }
+  .pr-chart { height: 240px; }
+}

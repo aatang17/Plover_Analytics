@@ -584,6 +584,11 @@
       var list = $("#my-chats");
       if (!r.ok) { list.innerHTML = '<li class="my-empty">' + esc(detail(r, "Your chats could not be loaded")) + "</li>"; return; }
       var items = r.body.studies || [];
+      // the Overview offers the three latest chats to carry on
+      $("#ov-cont").hidden = !items.length;
+      $("#ov-cont").innerHTML = items.length ? "Continue: " + items.slice(0, 3).map(function (x) {
+        return '<a href="#chat/' + x.id + '">' + esc(x.title || x.question) + "</a>";
+      }).join("") : "";
       if (!items.length) { list.innerHTML = '<li class="my-empty">No chats yet.</li>'; return; }
       list.innerHTML = items.map(function (s) {
         return '<li class="my-chat-row" data-id="' + s.id + '"><a href="#chat/' + s.id + '">' +
@@ -629,6 +634,15 @@
           meta.textContent = b.ticker + (b.exchange ? " · " + b.exchange : "");
           link.setAttribute("href", "us-company.html?t=" + encodeURIComponent(b.ticker));
         }
+        // the name every US page shows, in place of the SEC's capitals
+        fetch("/api/v1/us/company/" + encodeURIComponent(code.slice(4)), { headers: { Accept: "application/json" } })
+          .then(function (r) { return r.ok ? r.json() : null; }).then(function (rec) {
+            var n = rec && rec.company && rec.company.name, el = $(".my-name", row);
+            if (!n || !el) return;
+            var img = el.querySelector("img");
+            el.textContent = n;
+            if (img) el.insertBefore(img, el.firstChild);
+          }).catch(function () { /* the filed name stays */ });
         var next = (b.upcoming || []).filter(function (u) { return u.status === "expected" && u.expected_date; })[0];
         if (!next) { cell.textContent = "No filing date expected"; return; }
         var what = /annual/i.test(next.report || "") ? "Annual report" : "Quarterly report";
@@ -636,6 +650,152 @@
         cell.title = "Estimated from the same filing a year earlier";
       })
       .catch(function () { cell.textContent = "—"; });
+  }
+
+  /* ------------------------------------------------------------ overview */
+  // The watchlist (the companies on the reader's list) with each US company's
+  // latest close, its change over a day, the year to date and a year, and its
+  // last 60 closes; what changed at those companies (insider purchases and
+  // sales, results filed) in the last 90 days; and the results coming up in
+  // the next six weeks. Japanese companies show their announced results date;
+  // their prices need a Japanese price source, so they show —.
+  var ovFeed = [], ovSoon = [], ovSeq = 0, ovClose = null;
+  function jget(path) {
+    return fetch(path, { headers: { Accept: "application/json" } }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+  function iso(d) { return d.toISOString().slice(0, 10); }
+  function upDown(v) {
+    if (v == null) return MISSING;
+    return '<span class="' + (v >= 0 ? "ov-up" : "ov-down") + '">' + (v >= 0 ? "▲ +" : "▼ " + MINUS) + fmtNum(Math.abs(v), 1) + "%</span>";
+  }
+  function sparkSvg(vals) {
+    if (vals.length < 2) return "";
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), span = hi - lo || 1;
+    var d = vals.map(function (v, i) { return (i ? "L" : "M") + (2 + i * 84 / (vals.length - 1)).toFixed(1) + " " + (2 + 20 * (1 - (v - lo) / span)).toFixed(1); }).join(" ");
+    return '<svg class="' + (vals[vals.length - 1] >= vals[0] ? "ov-up" : "ov-down") + '" width="88" height="24" viewBox="0 0 88 24" aria-hidden="true">' +
+      '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+  }
+  // Form 4 files the surname first: "Teter Timothy S." → "Timothy S. Teter"
+  function personName(n) {
+    var w = String(n || "").split(/\s+/).filter(Boolean);
+    if (String(n) === String(n).toUpperCase()) w = w.map(function (x) { return x.charAt(0) + x.slice(1).toLowerCase(); });
+    return w.slice(1).concat(w.slice(0, 1)).join(" ");
+  }
+  function moneyShort(v) { return v >= 1e6 ? "$" + fmtNum(v / 1e6, 1) + "mn" : "$" + fmtNum(Math.round(v / 1e3), 0) + "k"; }
+  function renderOvLists() {
+    var cut = iso(new Date(Date.now() - 90 * 864e5)), soonCut = iso(new Date(Date.now() + 42 * 864e5)), today = iso(new Date());
+    var feed = ovFeed.filter(function (x) { return x.date >= cut; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 8);
+    $("#ov-feed").innerHTML = feed.length ? feed.map(function (x) {
+      return '<li><span class="ov-tk">' + esc(x.tk) + '</span><span><span class="ov-txt">' + esc(x.text) + '</span><span class="ov-sub">' +
+        esc(x.kind) + " · " + esc(x.when) + (x.url ? ' · <a href="' + esc(x.url) + '" rel="noopener">Source filing</a>' : "") + "</span></span></li>";
+    }).join("") : '<li class="my-empty">Nothing filed by your companies in the last 90 days.</li>';
+    var soon = ovSoon.filter(function (x) { return x.date >= today && x.date <= soonCut; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    $("#ov-soon").innerHTML = soon.length ? soon.map(function (x) {
+      return '<li><span class="ov-tk">' + esc(day(x.date)) + '</span><span><span class="ov-txt">' + esc((x.co && x.co.shown) || x.name) + '</span><span class="ov-sub">' +
+        esc(x.what) + "</span></span></li>";
+    }).join("") : '<li class="my-empty">No results due from your companies in the next six weeks.</li>';
+  }
+  function usOverview(c, tr, mine) {
+    var code = c.sec_code;
+    // the name every US page shows ("NVIDIA Corporation", not the SEC's "NVIDIA CORP")
+    jget("/api/v1/us/company/" + encodeURIComponent(code.slice(4))).then(function (rec) {
+      var n = rec && rec.company && rec.company.name, cell = $(".ov-name", tr);
+      if (mine !== ovSeq || !n || !cell) return;
+      var img = cell.querySelector("img");
+      cell.textContent = n;
+      if (img) cell.insertBefore(img, cell.firstChild);
+      c.shown = n;
+      renderOvLists();
+    });
+    jget("/api/v1/us/earnings/company/" + encodeURIComponent(code)).then(function (e) {
+      if (mine !== ovSeq || !e) { if (mine === ovSeq) $(".ov-next", tr).textContent = MISSING; return; }
+      var tk = e.ticker || code.slice(4);
+      $(".ov-meta", tr).textContent = tk;
+      var next = (e.upcoming || []).filter(function (u) { return u.status === "expected" && u.expected_date; })[0];
+      if (next) {
+        $(".ov-next", tr).innerHTML = esc(day(next.expected_date)) + ' <span class="ov-faint">about</span>';
+        ovSoon.push({ date: next.expected_date, co: c, name: c.name || tk, what: (/annual/i.test(next.report) ? "Annual report" : "Quarterly report") + " due about this day, estimated from last year" });
+      } else $(".ov-next", tr).textContent = MISSING;
+      var f = (e.filings || [])[0];
+      if (f) ovFeed.push({ date: f.filed, tk: tk, kind: "Results filed", when: f.form + " filed " + day(f.filed), url: f.source_url,
+        text: "Filed its " + (f.form === "10-K" ? "annual" : "quarterly") + " report for the period to " + day(f.period) + "." });
+      var since = new Date(); since.setUTCFullYear(since.getUTCFullYear() - 1, 0, 1);
+      return Promise.all([jget("/api/v1/us/prices/" + encodeURIComponent(tk) + "?start=" + iso(since)),
+                          jget("/api/v1/us/insiders/company/" + encodeURIComponent(code) + "?months=3&limit=40")]).then(function (r) {
+        if (mine !== ovSeq) return;
+        var bars = ((r[0] && r[0].bars) || []).filter(function (b) { return (b.adjusted_close || b.close) != null; });
+        var v = function (b) { return b.adjusted_close || b.close; };
+        if (bars.length > 1) {
+          var last = bars[bars.length - 1], jan = iso(new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)));
+          var yearAgo = iso(new Date(new Date(last.date + "T00:00:00Z").getTime() - 365 * 864e5));
+          var before = function (d) { var x = bars.filter(function (b) { return b.date < d; }); return x.length ? x[x.length - 1] : null; };
+          var ytd = before(jan), ya = before(yearAgo) || null;
+          $(".ov-px", tr).textContent = fmtNum(last.close, 2);
+          $(".ov-px", tr).title = "Close, " + day(last.date);
+          $(".ov-d1", tr).innerHTML = upDown((v(last) / v(bars[bars.length - 2]) - 1) * 100);
+          $(".ov-ytd", tr).innerHTML = ytd ? upDown((v(last) / v(ytd) - 1) * 100) : MISSING;
+          $(".ov-y1", tr).innerHTML = ya ? upDown((v(last) / v(ya) - 1) * 100) : MISSING;
+          $(".ov-sp", tr).innerHTML = sparkSvg(bars.slice(-60).map(v));
+          if (!ovClose || last.date > ovClose) ovClose = last.date;
+        } else ["ov-px", "ov-d1", "ov-ytd", "ov-y1"].forEach(function (k) { $("." + k, tr).textContent = MISSING; });
+        ((r[1] && r[1].trades) || []).filter(function (t) { return t.trans_code === "P" || t.trans_code === "S"; }).slice(0, 2).forEach(function (t) {
+          var acc = String(t.accession || "").replace(/-/g, "");
+          ovFeed.push({ date: t.filed, tk: tk, kind: "Insider trade", when: "Form 4 filed " + day(t.filed),
+            url: acc ? "https://www.sec.gov/Archives/edgar/data/" + (t.issuer_cik || code.slice(4)) + "/" + acc + "/" : "",
+            text: personName(t.owner_name) + (t.title ? " (" + t.title + ")" : "") + (t.trans_code === "P" ? " bought " : " sold ") +
+              fmtNum(t.shares, 0) + " shares" + (t.price ? " at $" + fmtNum(t.price, 2) : "") + (t.value ? ", " + moneyShort(t.value) : "") + "." });
+        });
+        renderOvLists();
+        if (ovClose) $("#ov-wl-note").textContent = $("#ov-wl-note").textContent.replace(/ · US closes .*$/, "") + " · US closes " + day(ovClose);
+      });
+    }).then(function () { if (mine === ovSeq) renderOvLists(); });
+  }
+  function jpOverview(c, tr, mine) {
+    ["ov-px", "ov-d1", "ov-ytd", "ov-y1"].forEach(function (k) {
+      var cell = $("." + k, tr); cell.textContent = MISSING; cell.title = "Japanese share prices are not on this page yet";
+    });
+    $(".ov-sp", tr).textContent = "";
+    jget("/api/v1/equity/calendar/company/" + encodeURIComponent(c.sec_code)).then(function (b) {
+      if (mine !== ovSeq) return;
+      var cur = b && b.current && b.current[0];
+      if (cur && cur.announce_date) {
+        $(".ov-next", tr).innerHTML = esc(day(cur.announce_date)) + ' <span class="ov-faint">set</span>';
+        ovSoon.push({ date: cur.announce_date, name: c.name || c.sec_code, what: "Results announced for this day (JPX list)" });
+        renderOvLists();
+      } else $(".ov-next", tr).textContent = MISSING;
+    });
+  }
+  function loadOverview(rows) {
+    var mine = ++ovSeq;
+    ovFeed = []; ovSoon = []; ovClose = null;
+    $("#ov-wl-note").textContent = rows.length ? rows.length + (rows.length === 1 ? " company" : " companies") : "";
+    if (!rows.length) {
+      $("#ov-wl").innerHTML = '<tbody><tr><td class="my-empty">No companies yet. <a href="#companies">Add the companies you follow</a> to see their prices, filings and results here.</td></tr></tbody>';
+      renderOvLists();
+      return;
+    }
+    $("#ov-wl").innerHTML = '<thead><tr><th>Company</th><th class="num">Last close, $</th><th class="num">1 day</th><th class="num">Year to date</th>' +
+      '<th class="num">1 year</th><th class="num">Last 60 days</th><th>Next results</th></tr></thead><tbody>' +
+      rows.map(function (c, i) {
+        var us = isUS(c.sec_code);
+        return '<tr data-i="' + i + '"><td class="ov-co"><a href="' + (us ? "us-company.html?t=" + encodeURIComponent(c.sec_code.slice(4)) :
+          "company.html?code=" + encodeURIComponent(c.sec_code)) + '"><span class="ov-name">' + esc(c.name || c.name_ja || c.sec_code) + '</span>' +
+          '<span class="ov-meta">' + (us ? "" : esc(c.sec_code)) + "</span></a></td>" +
+          '<td class="num ov-px">…</td><td class="num ov-d1">…</td><td class="num ov-ytd">…</td><td class="num ov-y1">…</td>' +
+          '<td class="num ov-sp"></td><td class="ov-next">…</td></tr>';
+      }).join("") + "</tbody>";
+    if (window.usLogos) usLogos.ready.then(function () {
+      rows.forEach(function (c, i) {
+        var n = $('#ov-wl tr[data-i="' + i + '"] .ov-name');
+        if (isUS(c.sec_code) && n && !n.querySelector("img")) n.insertAdjacentHTML("afterbegin", usLogos.img(c.sec_code, 20));
+      });
+    });
+    rows.forEach(function (c, i) {
+      var tr = $('#ov-wl tr[data-i="' + i + '"]');
+      if (isUS(c.sec_code)) usOverview(c, tr, mine); else jpOverview(c, tr, mine);
+    });
+    renderOvLists();
   }
 
   function loadCompanies() {
@@ -646,6 +806,7 @@
       state.covered = {};
       rows.forEach(function (c) { state.covered[c.sec_code] = true; });
       $("#my-cos-n").textContent = rows.length ? String(rows.length) : "";
+      loadOverview(rows);
       if (!rows.length) {
         list.innerHTML = '<li class="my-empty">No companies yet. Add one above by name or ticker.</li>';
         return;
@@ -896,12 +1057,12 @@
   /* ----------------------------------------------------------------- tabs
      The address names the tab (and the chat), so a reload or a shared link
      lands on the same view: #chat, #chat/12, #companies, #reading, #key. */
-  var TABS = ["chat", "companies", "reading", "key"];
-  var OLD = { "ai-key": "key", answers: "chat", "": "chat" };
+  var TABS = ["overview", "chat", "companies", "reading", "key"];
+  var OLD = { "ai-key": "key", answers: "chat", "": "overview" };
   function route() {
     var h = location.hash.replace(/^#/, ""), parts = h.split("/");
     var tab = OLD[parts[0]] || parts[0];
-    if (TABS.indexOf(tab) < 0 || (tab === "reading" && !READING_ON)) tab = "chat";
+    if (TABS.indexOf(tab) < 0 || (tab === "reading" && !READING_ON)) tab = "overview";
     TABS.forEach(function (t) {
       var on = t === tab, a = $("#tab-" + t);
       a.classList.toggle("is-on", on);
@@ -973,6 +1134,17 @@
       window.addEventListener("hashchange", route);
       setupCompanySearch();
       setupBookmark();
+      // the Overview's box asks in a new chat
+      $("#ov-ask").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var q = $("#ov-q").value.trim();
+        if (!q) return;
+        $("#ov-q").value = "";
+        history.pushState(null, "", "#chat");
+        newChat();
+        route();
+        send(q);
+      });
       newChat();
       route();
       loadKey().then(function () {

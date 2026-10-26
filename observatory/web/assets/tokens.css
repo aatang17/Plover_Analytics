@@ -2,9 +2,22 @@
    Never hard-code a hex in app CSS, components, or chart configs:
    read these via var(--obs-*) or getComputedStyle. */
 
+/* The site font, here because every page loads this file (app.css, assistant.css and
+   desk pages do not all share one stylesheet). IBM Plex Sans, served from assets/fonts (SIL Open Font License, fonts/OFL.txt).
+   Chosen 2026-10-25 for the finance redesign in place of Inter, which read as
+   generic; numbers use its tabular figures, never a monospaced face. */
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("fonts/ibm-plex-sans-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("fonts/ibm-plex-sans-latin-500.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("fonts/ibm-plex-sans-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("fonts/ibm-plex-sans-latin-700.woff2") format("woff2"); }
+
 :root {
-  --obs-primary: #1a4d8f;
-  --obs-primary-dark: #123a6d;
+  --obs-primary: #1d5bd8;
+  --obs-primary-dark: #123f9c;
   --obs-ink: #0f172a;
   --obs-text: #334155;
   --obs-text-muted: #64748b;
@@ -16,16 +29,16 @@
   --obs-surface: #ffffff;
   --obs-surface-subtle: #f8fafc;
 
-  /* site header — a filled navy bar, so its foregrounds are "on-primary"
-     values that cannot be derived from the body text tokens. Same navy as the
-     section band: one platform blue, not two. */
-  --obs-header-bg: #1a4d8f;
-  --obs-header-ink: #ffffff;
-  --obs-header-text: #c5d7ec;
-  --obs-header-muted: #aec6e1;
-  --obs-header-accent: #8fbde8;
-  --obs-header-border: rgba(255, 255, 255, 0.28);
-  --obs-header-focus: rgba(255, 255, 255, 0.75);
+  /* site header — light since the finance redesign (2026-10-26): white with a
+     rule under it, dark text, the accent blue for the current market. Its own
+     tokens still, so the workspace bars (admin, desk, assistant) follow it. */
+  --obs-header-bg: #ffffff;
+  --obs-header-ink: #0f1724;
+  --obs-header-text: #5f6b7a;
+  --obs-header-muted: #64748b;
+  --obs-header-accent: #1d5bd8;
+  --obs-header-border: #e2e8f0;
+  --obs-header-focus: rgba(29, 91, 216, 0.35);
 
   /* section header band — same fill as the site header */
   --obs-band-bg: #1a4d8f;
@@ -67,13 +80,26 @@
      number we publish. */
   --obs-warn: #c2410c;
 
-  --obs-focus: rgba(26, 77, 143, 0.35);
-  --obs-focus-soft: rgba(26, 77, 143, 0.15);
+  --obs-focus: rgba(29, 91, 216, 0.35);
+  --obs-focus-soft: rgba(29, 91, 216, 0.15);
+
+  /* The finance redesign (front page and answers, 2026-10-25): a brighter
+     accent than the platform navy, a grey page ground under white panels, the
+     tinted band behind the front page's question, and the colours of a
+     company's share-price move (up green, down red-orange). Economic rates
+     never use these: they keep the diverging scale. */
+  --obs-accent: #1d5bd8;
+  --obs-accent-dark: #123f9c;
+  --obs-accent-soft: #eef3ff;
+  --obs-ground: #f4f6f9;
+  --obs-hero: #f7f9fc;
+  --obs-up: #0b8a5c;
+  --obs-down: #c2410c;
 }
 
 [data-theme="dark"] {
-  --obs-primary: #5b9bd8;
-  --obs-primary-dark: #7fb3e3;
+  --obs-primary: #6ea0f5;
+  --obs-primary-dark: #9bbcf8;
   --obs-ink: #e2e8f0;
   --obs-text: #cbd5e1;
   --obs-text-muted: #94a3b8;
@@ -83,13 +109,13 @@
   --obs-surface: #0f172a;
   --obs-surface-subtle: #1a2436;
 
-  --obs-header-bg: #16406f;
-  --obs-header-ink: #f1f5f9;
-  --obs-header-text: #aac3de;
-  --obs-header-muted: #a9c2dd;
-  --obs-header-accent: #7fb3e3;
-  --obs-header-border: rgba(255, 255, 255, 0.16);
-  --obs-header-focus: rgba(255, 255, 255, 0.7);
+  --obs-header-bg: #0f172a;
+  --obs-header-ink: #e2e8f0;
+  --obs-header-text: #94a3b8;
+  --obs-header-muted: #7c8ba3;
+  --obs-header-accent: #6ea0f5;
+  --obs-header-border: #2b3a52;
+  --obs-header-focus: rgba(110, 160, 245, 0.45);
 
   --obs-band-bg: #16406f;
   --obs-band-ink: #f1f5f9;
@@ -120,14 +146,22 @@
   --obs-trust-stale: #e26d6d;
   --obs-warn: #e0794a;
 
-  --obs-focus: rgba(91, 155, 216, 0.45);
-  --obs-focus-soft: rgba(91, 155, 216, 0.2);
+  --obs-focus: rgba(110, 160, 245, 0.45);
+  --obs-focus-soft: rgba(110, 160, 245, 0.2);
+
+  --obs-accent: #6ea0f5;
+  --obs-accent-dark: #9bbcf8;
+  --obs-accent-soft: #1b2a47;
+  --obs-ground: #0b1220;
+  --obs-hero: #111a2e;
+  --obs-up: #3fb67f;
+  --obs-down: #f08a5d;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --obs-primary: #5b9bd8;
-    --obs-primary-dark: #7fb3e3;
+    --obs-primary: #6ea0f5;
+    --obs-primary-dark: #9bbcf8;
     --obs-ink: #e2e8f0;
     --obs-text: #cbd5e1;
     --obs-text-muted: #94a3b8;
@@ -137,13 +171,13 @@
     --obs-surface: #0f172a;
     --obs-surface-subtle: #1a2436;
 
-    --obs-header-bg: #16406f;
-    --obs-header-ink: #f1f5f9;
-    --obs-header-text: #aac3de;
-    --obs-header-muted: #a9c2dd;
-    --obs-header-accent: #7fb3e3;
-    --obs-header-border: rgba(255, 255, 255, 0.16);
-    --obs-header-focus: rgba(255, 255, 255, 0.7);
+    --obs-header-bg: #0f172a;
+    --obs-header-ink: #e2e8f0;
+    --obs-header-text: #94a3b8;
+    --obs-header-muted: #7c8ba3;
+    --obs-header-accent: #6ea0f5;
+    --obs-header-border: #2b3a52;
+    --obs-header-focus: rgba(110, 160, 245, 0.45);
 
     --obs-band-bg: #16406f;
     --obs-band-ink: #f1f5f9;
@@ -174,7 +208,15 @@
     --obs-trust-stale: #e26d6d;
     --obs-warn: #e0794a;
 
-    --obs-focus: rgba(91, 155, 216, 0.45);
-    --obs-focus-soft: rgba(91, 155, 216, 0.2);
+    --obs-focus: rgba(110, 160, 245, 0.45);
+    --obs-focus-soft: rgba(110, 160, 245, 0.2);
+
+    --obs-accent: #6ea0f5;
+    --obs-accent-dark: #9bbcf8;
+    --obs-accent-soft: #1b2a47;
+    --obs-ground: #0b1220;
+    --obs-hero: #111a2e;
+    --obs-up: #3fb67f;
+    --obs-down: #f08a5d;
   }
 }

@@ -24,13 +24,43 @@
 
     <div id="my-app" hidden>
       <nav class="my-tabs" role="tablist" aria-label="Plover">
-        <a role="tab" href="#chat" data-tab="chat" id="tab-chat">Chat</a>
-        <a role="tab" href="#companies" data-tab="companies" id="tab-companies">Companies <span class="my-count" id="my-cos-n"></span></a>
+        <a role="tab" href="#overview" data-tab="overview" id="tab-overview">Overview</a>
+        <a role="tab" href="#chat" data-tab="chat" id="tab-chat">Ask</a>
+        <a role="tab" href="#companies" data-tab="companies" id="tab-companies">Watchlist <span class="my-count" id="my-cos-n"></span></a>
         <!-- Reading is off until the browser extension is published (READING_ON in my.js) -->
         <a role="tab" href="#reading" data-tab="reading" id="tab-reading" hidden>Reading <span class="my-count" id="my-read-n"></span></a>
         <a role="tab" href="#key" data-tab="key" id="tab-key">AI Key <span class="my-count" id="my-key-n"></span></a>
       </nav>
 
+      <!-- Overview: the question box, the watchlist with its prices, what changed at
+           those companies and the results coming up (my.js loadOverview) -->
+      <section class="my-panel my-over" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+        <section class="my-card">
+          <form id="ov-ask" class="ov-ask" autocomplete="off">
+            <label for="ov-q" class="my-sr">Ask Plover</label>
+            <input type="text" id="ov-q" maxlength="600" placeholder="Ask, e.g. when do my companies report?">
+            <button type="submit" class="btn btn-primary">Ask</button>
+          </form>
+          <p class="ov-cont" id="ov-cont" hidden></p>
+        </section>
+        <section class="my-card">
+          <div class="my-card-head"><h2>Watchlist</h2><span class="note" id="ov-wl-note"></span>
+            <a class="ov-right" href="#companies">Add or remove companies</a></div>
+          <div class="my-tbl ov-tbl"><table data-no-enhance id="ov-wl"></table></div>
+          <p class="my-card-foot" id="ov-wl-foot">Change = last close ÷ the earlier close − 1, on closes adjusted for splits. US results dates are
+            estimated from the same filing a year earlier; Japanese dates are the ones the company announced. Source: SEC EDGAR, Databento, JPX.</p>
+        </section>
+        <div class="ov-two">
+          <section class="my-card">
+            <div class="my-card-head"><h2>What Changed at Your Companies</h2><span class="note">last 90 days</span></div>
+            <ul class="ov-feed" id="ov-feed"><li class="my-empty">Loading…</li></ul>
+          </section>
+          <section class="my-card">
+            <div class="my-card-head"><h2>Coming Up</h2><span class="note">next 6 weeks</span></div>
+            <ul class="ov-feed" id="ov-soon"><li class="my-empty">Loading…</li></ul>
+          </section>
+        </div>
+      </section>
       <!-- Chat: past chats down the side, the conversation, the box at the bottom -->
       <section class="my-panel my-chat" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
         <aside class="my-side" id="my-side" aria-label="Chats">

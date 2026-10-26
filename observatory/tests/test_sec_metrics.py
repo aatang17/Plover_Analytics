@@ -270,6 +270,19 @@ class ApiTest(unittest.TestCase):
         self.assertTrue(all(row["unit"] == "USD" for row in d["rows"]))
         self.assertEqual(d["rows"][0]["rank"], 1)
 
+    def test_screener_finds_by_name_or_ticker_and_names_rows(self):
+        # the company list's filter box: part of a name, or a ticker, across every filer
+        by_name = self.c.get("/api/v1/us/financials/screener?sort=revenue&q=nvidia&limit=5").json()
+        self.assertTrue(any(row["cik"] == 1045810 for row in by_name["rows"]))
+        by_ticker = self.c.get("/api/v1/us/financials/screener?sort=revenue&q=nvda&limit=5").json()
+        self.assertEqual([row["cik"] for row in by_ticker["rows"]], [1045810])
+        row = by_ticker["rows"][0]
+        self.assertEqual(row["display_name"], "NVIDIA Corporation")   # the name every US page shows
+        self.assertIn("logo", row)
+        self.assertEqual(by_ticker["filters"]["q"], "nvda")
+        by_cik = self.c.get("/api/v1/us/financials/screener?sort=revenue&q=1045810&limit=5").json()
+        self.assertEqual([row["cik"] for row in by_cik["rows"]], [1045810])
+
     def test_screener_rejects_bad_sort_and_number(self):
         self.assertEqual(self.c.get("/api/v1/us/financials/screener?sort=nonsense").status_code, 400)
         self.assertEqual(self.c.get("/api/v1/us/financials/screener?roe_min=abc").status_code, 400)

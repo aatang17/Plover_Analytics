@@ -344,25 +344,36 @@ function viewHealth(target) {
       kpi(rejected ? String(rejected) : "None", "Rejected Ingests", rejected ? "danger" : "ok") +
       kpi(String(vintages), "Releases Stored", "");
 
-    // The refresh comes first: a pipeline that has stopped is the reason every
-    // dataset under it is ageing, so it must not be buried among the symptoms.
+    // Needs Attention: one row per problem, as a table to scan (the finance
+    // redesign's admin board, 2026-10-26). The refresh comes first: a pipeline
+    // that has stopped is the reason every dataset under it is ageing, so it
+    // must not be buried among the symptoms.
     var faults = [];
     if (report.refresh_overdue) {
-      faults.push("<strong>Daily refresh</strong> — the ingest last ran " +
+      faults.push("<tr><td><strong>Daily refresh</strong></td><td>The ingest last ran " +
         escapeHtml(fmtAgo(report.hours_since_ingest)) + ", past the " +
-        escapeHtml(String(report.refresh_max_age_hours)) + "-hour limit");
+        escapeHtml(String(report.refresh_max_age_hours)) + "-hour limit</td>" +
+        '<td class="num">' + MISSING + '</td><td class="num">' + MISSING + "</td></tr>");
     }
     ds.filter(function (d) { return d.status === "attention"; }).forEach(function (d) {
       var why = [];
-      if (!d.published) why.push("no published release");
-      if (d.stale) why.push(HEALTH_BADGES_NOTE.stale);
-      if (d.unpublished_artifact) why.push(HEALTH_BADGES_NOTE.orphan);
-      faults.push("<strong>" + escapeHtml(d.dataset) + "</strong> — " +
-        escapeHtml(why.join("; ")));
+      if (!d.published) why.push("No published release");
+      if (d.stale) why.push("Newest data older than its limit");
+      if (d.unpublished_artifact) why.push("A fetched file produced no release");
+      var text = why.join("; ");
+      faults.push('<tr class="clickable" data-ds="' + escapeHtml(d.dataset) + '">' +
+        "<td><strong>" + escapeHtml(d.dataset) + "</strong></td>" +
+        '<td class="attn">' + escapeHtml(text.charAt(0).toUpperCase() + text.slice(1)) + "</td>" +
+        '<td class="num">' + (d.latest_period ? escapeHtml(d.latest_period) : MISSING) + "</td>" +
+        '<td class="num">' + (d.published ? d.days_since_latest_period.toLocaleString("en-US") +
+          ' <span class="muted">/ ' + d.stale_after_days + "</span>" : MISSING) + "</td></tr>");
     });
     var banner = faults.length
-      ? '<div class="admin-alert"><span class="head">Needs attention:</span> ' +
-        faults.join(" · ") + "</div>"
+      ? '<div class="admin-section">Needs Attention <span class="note">' + faults.length +
+        (faults.length === 1 ? " problem" : " problems") + " · click a dataset for its releases</span></div>" +
+        '<div class="table-wrap"><table class="data" data-no-enhance><thead><tr><th>Dataset</th><th>Problem</th>' +
+        '<th class="num">Data Through</th><th class="num">Age, Days</th></tr></thead><tbody>' +
+        faults.join("") + "</tbody></table></div>"
       : "";
 
     var rows = ds.map(function (d) {
@@ -396,7 +407,7 @@ function viewHealth(target) {
       "Checked " + escapeHtml(fmtStamp(report.checked_at)) + " · last ingest " +
       escapeHtml(fmtStamp(report.last_ingest_at)) + ".</p></div>" +
       '<div class="kpi-row">' + kpis + "</div>" + banner +
-      '<div class="admin-section">Datasets <span class="note">age is days since the newest ' +
+      '<div class="admin-section">All Datasets <span class="note">age is days since the newest ' +
       "period / the limit before it counts as stale · click a row for its releases</span></div>" +
       '<div class="table-wrap"><table class="data" data-no-enhance>' +
       "<thead><tr><th>Dataset</th><th>Status</th>" +

@@ -6,6 +6,7 @@
 <title>US Executive Pay · Plover Analytics</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/co-page.css">
 <style>
 /* page-local layout only — tokens and components come from app.css.
    Same shapes as us-companies.html, so the two US company pages read alike. */
@@ -107,17 +108,21 @@ span.co-logo { background: none; }
 
   <!-- company view -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="us-pay.html">← All S&amp;P 500 companies</a></p>
-    <div class="co-head">
-      <img class="co-logo" id="co-logo" alt="" width="32" height="32" hidden>
-      <h1 id="co-name"></h1>
-      <span class="co-code" id="co-code"></span>
-    </div>
-    <p class="filing-meta" id="co-meta"></p>
+    <!-- the company's header card and tabs (co-head.js), Executive pay marked -->
+    <div id="co-card"><section class="cp-card"><div class="cp-id"><div class="cp-who"><h1 id="co-name"></h1></div></div></section></div>
+    <p class="cp-msg" id="co-meta"></p>
+
+    <section class="cp-panel cp-sec">
+    <div class="cp-head"><h2>CEO Pay</h2><span class="note" id="co-facts-note"></span></div>
+    <div class="cp-body">
     <dl class="fact-row" id="co-facts"></dl>
     <p class="facts-foot" id="co-facts-foot"></p>
+    </div>
+    </section>
 
-    <h2>Pay Versus Performance <span class="h2-note" id="pv-note"></span></h2>
+    <section class="cp-panel cp-sec">
+    <div class="cp-head"><h2>Pay Versus Performance</h2><span class="note" id="pv-note"></span></div>
+    <div class="cp-body">
     <div class="controls">
       <div class="seg" role="group" aria-label="Which filed value" id="pv-basis">
         <button type="button" data-basis="latest" aria-pressed="true">Latest filed</button>
@@ -142,9 +147,13 @@ span.co-logo { background: none; }
     <details class="calc"><summary>Show calculation</summary>
       <div class="calc-body" id="pv-calc"></div>
     </details>
+    </div>
+    </section>
 
-    <h2>Proxy Statements Read <span class="h2-note" id="px-note"></span></h2>
+    <section class="cp-panel cp-sec">
+    <div class="cp-head"><h2>Proxy Statements Read</h2><span class="note" id="px-note"></span></div>
     <div class="table-wrap"><table class="tbl-fin" id="px-table" data-no-enhance></table></div>
+    </section>
   </section>
 </main>
 
@@ -162,6 +171,7 @@ span.co-logo { background: none; }
 <script src="assets/format.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
+<script src="assets/co-head.js"></script>
 <script src="assets/us-pay.js"></script>
 </body>
 </html>

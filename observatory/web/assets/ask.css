@@ -69,25 +69,5 @@ pre.sql { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; line
   .fact-row { gap: 10px 24px; }
 }
 
-/* front page: only the ask bar and a few sample questions, centred on the
-   screen. It applies while nothing has been asked; once an answer shows, the
-   bar sits at the top, full width, above the answer. */
-.home-only { display: none; }
-main:has(#home-note:not([hidden])):not(:has(#answer:not([hidden]))):not(:has(#stock:not([hidden]))) { display: flex; flex-direction: column; min-height: calc(100vh - 200px); }
-main:has(#home-note:not([hidden])):not(:has(#answer:not([hidden]))):not(:has(#stock:not([hidden]))) .home-only { display: block; }
-main:has(#home-note:not([hidden])):not(:has(#answer:not([hidden]))):not(:has(#stock:not([hidden]))) .home-wrap { margin-top: auto; }
-main:has(#home-note:not([hidden])):not(:has(#answer:not([hidden]))):not(:has(#stock:not([hidden]))) .ask-box { width: 100%; max-width: 680px; margin: 0 auto; }
-main:has(#home-note:not([hidden])):not(:has(#answer:not([hidden]))):not(:has(#stock:not([hidden]))) #home-note { margin: 0 0 auto; padding-bottom: 6vh; }
-.home-title { text-align: center; font-size: 30px; font-weight: 700; letter-spacing: -0.015em; color: var(--obs-ink); margin: 0 0 16px; }
-.examples { gap: 8px; margin: 16px 0 0; }
-main:has(#home-note:not([hidden])):not(:has(#answer:not([hidden]))):not(:has(#stock:not([hidden]))) .examples { justify-content: center; max-width: 680px; margin: 16px auto 0; }
-.examples a { display: inline-block; padding: 6px 12px; border: 1px solid var(--obs-border); border-radius: 3px; color: var(--obs-ink); }
-.examples a:hover { border-color: var(--obs-primary); color: var(--obs-primary); text-decoration: none; }
-
-/* The home page: the box sits in a narrow column; an answer or a company page
-   needs the width of a data page for its chart and table. */
-.ask-main:has(#answer:not([hidden])), .ask-main:has(#stock:not([hidden])) { padding-top: 20px; }
-.ask-main:has(#answer:not([hidden]) .chart-block), .ask-main:has(#answer:not([hidden]) table),
-.ask-main:has(#stock:not([hidden])) { max-width: 1240px; }
-.ask-main .fp-box { margin: 0; }
+/* the wait line under the box (home.css lays out the rest of the page) */
 .ask-main #status { margin: 14px 0 0; }

@@ -7,16 +7,10 @@
 <meta name="description" content="One record per US company, keyed by its SEC number: who it is, and every item this site holds for it — executive pay, financial statements, annual report text, insider trades, holders, results days, press releases, prices and shares.">
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/co-page.css">
 <style>
 /* page-local layout only — tokens and components come from app.css.
-   Same head as us-pay.html and us-companies.html, so the US company pages read alike. */
-.co-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 18px 0 4px; }
-.co-head h1 { margin: 0; }
-.co-code { font-family: var(--obs-mono, monospace); color: var(--obs-text-muted); font-size: 15px; }
-.co-logo { width: 32px; height: 32px; border-radius: 3px; border: 1px solid var(--obs-border);
-  background: var(--obs-logo-bg); object-fit: contain; }
-.filing-meta { font-size: 12.5px; color: var(--obs-text-muted); margin: 6px 0 0; line-height: 1.6; }
-.filing-meta a { color: var(--obs-primary); text-decoration: none; }
+   The record view's layout is assets/co-page.css, shared with us-companies.html. */
 .mono { font-family: var(--obs-mono, monospace); }
 .sec-note { font-size: 12.5px; color: var(--obs-text-muted); margin: 0; line-height: 1.55; }
 
@@ -46,44 +40,97 @@
 }
 </style>
 </head>
-<body class="page-wide">
+<body class="page-wide co-ground">
 
 <header class="site-header" data-section="us-companies" data-page="us-company"></header>
 <script src="assets/nav.js"></script>
 
 <main class="container">
-  <!-- search view -->
+  <!-- the company list (the design canvas's company list board): every SEC filer with
+       a ticker, the S&P 500 first, filtered and ranked on /api/v1/us/financials/screener -->
   <section id="search-view">
     <div class="page-head">
-      <h1>US Company Records</h1>
-      <p class="page-sub">One record per US company, kept under its SEC number: who it is, and
-      every item this site holds for it, with how much and how recent, and where to read it.</p>
+      <h1>US Companies</h1>
+      <p class="page-sub" id="cl-sub">Every US company filing with the SEC, with its market value, valuation and one-year change.</p>
     </div>
-    <div class="search-row">
-      <input type="search" id="uc-q" placeholder="Search a company, e.g. Apple, NVDA, Berkshire"
-             aria-label="Company name or ticker" autocomplete="off">
+    <div class="cp-card cl-tools">
+      <label for="uc-q">Filter</label>
+      <input type="search" id="uc-q" placeholder="Name, ticker or SEC number, e.g. Apple, NVDA, Berkshire"
+             aria-label="Company name, ticker or SEC number" autocomplete="off">
+      <div class="seg" role="group" aria-label="Which companies" id="cl-set">
+        <button type="button" data-set="sp" aria-pressed="true">S&amp;P 500</button>
+        <button type="button" data-set="all" aria-pressed="false">All filers</button>
+      </div>
+      <label for="cl-sort">Sort</label>
+      <select id="cl-sort" aria-label="Sort the companies">
+        <option value="market_cap:desc">Market value, largest first</option>
+        <option value="revenue:desc">Revenue, largest first</option>
+        <option value="pe_x:asc">P/E, lowest first</option>
+        <option value="price_change_1y_pct:desc">1-year change, best first</option>
+        <option value="price_change_1y_pct:asc">1-year change, worst first</option>
+      </select>
+      <span class="cl-count" id="uc-state" aria-live="polite">Loading…</span>
     </div>
-    <p class="search-state" id="uc-state">Type a name or a ticker.</p>
-    <div class="table-wrap"><table class="tbl-fin" id="uc-results" data-no-enhance></table></div>
+    <section class="cp-panel cp-sec">
+      <div class="table-wrap"><table class="cp-table cl-table" id="uc-results" data-no-enhance></table></div>
+      <div class="cp-foot cl-foot">
+        <span>Market value = latest close × shares outstanding on the newest 10-K or 10-Q cover, each share class at its own price.
+          P/E and 1-year change are calculated; revenue is the latest annual report as filed. Weight: share of the S&amp;P 500 fund (SPY).</span>
+        <span class="cl-pages"><button type="button" class="btn" id="cl-prev" disabled>Previous</button>
+          <button type="button" class="btn" id="cl-next" disabled>Next 50</button></span>
+      </div>
+    </section>
   </section>
 
-  <!-- record view -->
+  <!-- record view: the company page's Overview (co-page.css, co-head.js) -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="us-company.html">← Search companies</a></p>
-    <div class="co-head">
-      <img class="co-logo" id="co-logo" alt="" width="32" height="32" hidden>
-      <h1 id="co-name"></h1>
-      <span class="co-code" id="co-code"></span>
+    <div id="co-card"><section class="cp-card"><div class="cp-id"><div class="cp-who"><h1 id="co-name"></h1>
+      <div class="cp-meta" id="co-meta"></div></div></div></section></div>
+    <div class="cp-grid" id="co-grid" hidden>
+      <div class="cp-col">
+        <section class="cp-panel" id="px" hidden>
+          <div class="cp-head"><h2>Share Price</h2><span class="note">daily closes, $, split-adjusted</span>
+            <span class="right"><a id="px-more" href="#">Price tab</a></span></div>
+          <div class="cp-body" id="px-range"></div>
+          <div class="cp-foot" id="px-src"></div>
+        </section>
+        <section class="cp-panel" id="kf" hidden>
+          <div class="cp-head"><h2>Key Figures</h2><span class="note" id="kf-note"></span><span class="right" id="kf-trust"></span></div>
+          <div class="cp-tiles" id="kf-tiles"></div>
+          <div class="cp-foot" id="kf-foot"></div>
+        </section>
+        <section class="cp-panel" id="rn" hidden>
+          <div class="cp-head"><h2>Revenue and Net Income</h2><span class="note" id="rn-note"></span>
+            <span class="right"><button type="button" class="cp-link" id="rn-png">Download PNG</button><button type="button" class="cp-link" id="rn-csv">Download CSV</button></span></div>
+          <div class="cp-chart"><div class="chart-el" id="rn-chart"></div></div>
+          <div class="cp-foot" id="rn-src"></div>
+        </section>
+        <section class="cp-panel" id="by" hidden>
+          <div class="cp-head"><h2>By Year</h2><span class="note" id="by-note"></span><span class="right" id="by-more"></span></div>
+          <div class="table-wrap"><table class="cp-table" id="by-table" data-no-enhance></table></div>
+        </section>
+      </div>
+      <aside class="cp-side" aria-label="Valuation, price and data on file">
+        <section class="cp-panel" id="val" hidden>
+          <div class="cp-head"><h2>Valuation</h2><span class="note" id="val-note"></span></div>
+          <dl class="cp-dl" id="val-dl"></dl>
+          <details id="val-calc"><summary>Show calculation</summary><ul id="val-formulas"></ul></details>
+        </section>
+        <section class="cp-panel" id="cal" hidden>
+          <div class="cp-head"><h2>Results Calendar</h2><span class="note">10-K and 10-Q filings</span></div>
+          <div class="cp-body cal-body" id="cal-body"></div>
+        </section>
+        <section class="cp-panel" id="files">
+          <div class="cp-head"><h2>Data on File</h2><span class="note" id="items-note"></span></div>
+          <ul class="cp-files" id="items-list"></ul>
+        </section>
+      </aside>
     </div>
-    <p class="filing-meta" id="co-meta"></p>
-
-    <h2>Data on File <span class="h2-note" id="items-note"></span></h2>
-    <div class="table-wrap"><table class="tbl-fin" id="items-table" data-no-enhance></table></div>
   </section>
 </main>
 
 <footer class="site-footer">
-  <div class="container" id="source-line">
+  <div class="inner" id="source-line">
     Source: U.S. Securities and Exchange Commission, EDGAR (filer records, financial statement
     data sets, company facts, proxy statements, annual reports, Forms 3/4/5, Form 13F, 8-K), each
     company's newsroom, and the daily price feed. Counts are what this site has read; each item
@@ -94,6 +141,10 @@
 
 <script src="assets/format.js"></script>
 <script src="assets/sortable.js"></script>
+<script src="assets/echarts.min.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/co-head.js"></script>
+<script src="assets/price-range.js"></script>
 <script src="assets/us-company.js"></script>
 </body>
 </html>

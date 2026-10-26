@@ -183,51 +183,35 @@
       (state.asof ? ", as known on " + state.asof : "");
   }
 
+  // The company's header card and tabs (co-head.js), drawn once: the same card
+  // as its Overview, with Financials marked. Until it arrives the name shows.
+  var carded = false;
   function renderHead() {
-    var c = head.company, regs = head.registrants;
+    var c = head.company;
     document.title = c.name + " (" + c.ticker + ") · US Company Financials · Plover Analytics";
+    document.body.classList.add("co-ground");
+    if (carded) return;
+    carded = true;
     $("co-name").textContent = c.name;
-    $("co-logo").hidden = !c.logo;
-    if (c.logo) $("co-logo").src = c.logo;
-    $("co-code").textContent = c.ticker;
-    $("co-sector").textContent = c.sector;
-    var facts = regs.reduce(function (a, r) { return a + r.facts; }, 0);
-    var filings = regs.reduce(function (a, r) { return a + r.filings; }, 0);
-    var from = regs.map(function (r) { return r.first_filed; }).sort()[0];
-    var preds = regs.filter(function (r) { return r.cik !== c.cik; });
-    $("co-meta").innerHTML = "SEC registrant <b>" + esc(c.entity_name) + "</b>, CIK <span class='mono'>" +
-      c.cik + "</span> · filings held " + esc(from) + " to " + esc(c.last_filed) + " · " +
-      count(filings) + " filings · " + count(facts) + " filed values" +
-      " · <a href='us-company.html?t=" + encodeURIComponent(c.ticker) + "'>Everything held for this company</a>" +
-      (preds.length ? "<br>Earlier years come from the predecessor registrant" +
-        (preds.length > 1 ? "s " : " ") + preds.map(function (p) {
-          return "<b>" + esc(p.entity_name) + "</b> (CIK <span class='mono'>" + p.cik + "</span>, " +
-            esc(p.first_filed.slice(0, 4)) + "–" + esc(p.last_filed.slice(0, 4)) + ")";
-        }).join(", ") + "; each value names the CIK that filed it." : "");
+    coHead.load(c.ticker).then(function (d) { $("co-card").innerHTML = coHead.html(d, "financials"); coHead.reveal($("co-card")); })
+      .catch(function () { /* the name stays; the figures below do not depend on the card */ });
   }
 
-  function renderFacts() {
-    var rows = annual ? annual.panel : [];
-    if (!rows.length) { $("co-facts").innerHTML = ""; $("co-facts-foot").textContent = ""; return; }
-    var cur = rows[0];
-    var v = cur.values, s = cur.sources;
-    var src = s.revenue || s.net_income;
-    var q = fmtFiscalYear(cur.period_end);
-    function fact(label, value) {
-      return "<div><dt>" + esc(label) + "</dt><dd>" + value + "<span class='qual'>" + esc(q) +
-        "</span></dd></div>";
-    }
-    $("co-facts").innerHTML =
-      fact("Revenue", usdBn(v.revenue)) +
-      fact("Net income", usdBn(v.net_income)) +
-      fact("Diluted EPS", v.eps_diluted == null ? MISSING : (v.eps_diluted < 0 ? MINUS : "") + "$" + fmtNum(Math.abs(v.eps_diluted), 2)) +
-      fact("Operating cash flow", usdBn(v.cf_operating)) +
-      fact("Total assets", usdBn(v.total_assets)) +
-      fact("Stockholders' equity", usdBn(v.equity));
-    $("co-facts-foot").innerHTML = trustBadge("official") + " Fiscal year ended " +
-      esc(cur.period_end) + ", " + esc(basisWords()) +
-      (src ? " · income statement from " + esc(src.form) + " filed " + esc(src.filed) + ", " +
-        secLink(src.cik, src.accn) : "") + ".";
+  /* A small line of values, oldest to newest; a missing year is a gap, never zero. */
+  function spark(vals, w, h) {
+    var nums = vals.filter(function (x) { return x != null && isFinite(x); });
+    if (nums.length < 2) return "";
+    var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums), span = hi - lo || 1;
+    var step = (w - 4) / Math.max(vals.length - 1, 1), d = "", pen = false, lx = 0, ly = 0;
+    vals.forEach(function (x, i) {
+      if (x == null || !isFinite(x)) { pen = false; return; }
+      lx = 2 + i * step; ly = 2 + (h - 4) * (1 - (x - lo) / span);
+      d += (pen ? "L" : "M") + lx.toFixed(1) + " " + ly.toFixed(1) + " ";
+      pen = true;
+    });
+    return "<svg class='spark' viewBox='0 0 " + w + " " + h + "' width='" + w + "' height='" + h +
+      "' aria-hidden='true'><path d='" + d + "' fill='none' stroke='currentColor' stroke-width='1.5' " +
+      "stroke-linejoin='round'/><circle cx='" + lx.toFixed(1) + "' cy='" + ly.toFixed(1) + "' r='2' fill='currentColor'/></svg>";
   }
 
   function orderedRows() {
@@ -236,9 +220,16 @@
   }
 
   function renderPanel() {
-    var rows = orderedRows();
+    var all = orderedRows();
     var q4 = state.freq === "quarterly";
-    $("ki-note").textContent = rows.length + (q4 ? " quarters" : " fiscal years") + " · " + basisWords();
+    // the latest ten years (twelve quarters) unless the reader asks for all
+    var keep = q4 ? 12 : 10;
+    var rows = state.allPeriods ? all : all.slice(-keep);
+    $("ki-note").textContent = all.length + (q4 ? " quarters" : " fiscal years") + " · " + basisWords();
+    $("ki-more").innerHTML = all.length > keep
+      ? "<button type='button' class='btn-text' id='ki-toggle'>" + (state.allPeriods
+          ? "Show the latest " + keep + (q4 ? " quarters" : " years")
+          : "Show all " + all.length + (q4 ? " quarters" : " years")) + "</button>" : "";
     $("asof-flag").hidden = !state.asof;
     if (state.asof) {
       $("asof-flag").innerHTML = "<b>Known on " + esc(state.asof) + ":</b> only filings filed on or " +
@@ -259,17 +250,18 @@
       $("ki-table").innerHTML = "";
       return;
     }
-    var headRow = "<thead><tr><th class='lbl'>" + (q4 ? "Quarter ended" : "Fiscal year") + "</th>" +
+    var headRow = "<thead><tr><th class='lbl'>" + (q4 ? "Quarter ended" : "Fiscal year") + "</th><th class='trend'>Trend</th>" +
       rows.map(function (r) { return "<th class=r>" + esc(periodLabel(r.period_end)) + "</th>"; }).join("") +
       "</tr></thead>";
     var body = ROWS.map(function (def) {
       if (def.length === 1) {
-        return "<tr class='heading'><td class='lbl'>" + esc(def[0]) + "</td>" +
+        return "<tr class='heading'><td class='lbl'>" + esc(def[0]) + "</td><td></td>" +
           rows.map(function () { return "<td></td>"; }).join("") + "</tr>";
       }
       var f = def[0], fmt = FMT[def[2]];
       if (!rows.some(function (r) { return r.values[f] != null; })) return "";
       return "<tr><td class='lbl'>" + esc(def[1]) + " <span class='unit'>(" + esc(def[2]) + ")</span></td>" +
+        "<td class='trend'>" + spark(rows.map(function (r) { return r.values[f]; }), 64, 18) + "</td>" +
         rows.map(function (r) {
           var s = r.sources[f];
           var tip = s ? s.tag + " · " + s.form + " filed " + s.filed + " · " + s.accn +
@@ -280,7 +272,7 @@
     // The filing row names where each column's income statement came from.
     // Balances can come from a later report (a 10-Q repeats the year-end
     // balance sheet), so hovering a cell names that cell's own filing.
-    var src = "<tr><td class='lbl'>Income statement from</td>" + rows.map(function (r) {
+    var src = "<tr><td class='lbl'>Income statement from</td><td></td>" + rows.map(function (r) {
       var best = r.sources.revenue || r.sources.net_income || r.sources.cf_operating;
       return "<td class='r src'" + (best ? " title='Filed " + esc(best.filed) + " · " +
         esc(best.accn) + "'>" + secLink(best.cik, best.accn, best.form) : ">" + MISSING) + "</td>";
@@ -384,7 +376,7 @@
     }
     return Promise.all(want).then(function (res) {
       annual = res[0]; panel = res[1] || res[0]; head = annual;
-      renderHead(); renderFacts(); renderPanel();
+      renderHead(); $("co-msg").textContent = ""; renderPanel();
     }).catch(function (e) {
       if (e.status === 404 && !head && !/deep-coverage universe/.test(e.message)) {
         // A covered company with nothing filed by the chosen date: name it
@@ -398,7 +390,7 @@
       if (e.status === 404 && head) return noPeriods();
       if (!head) {
         $("co-name").textContent = state.t;
-        $("co-meta").textContent = e.status === 404
+        $("co-msg").textContent = e.status === 404
           ? "This ticker is not among the covered US companies. Go back to the list to choose one."
           : "Data unavailable — " + e.message + ". The last good state is unaffected.";
         return;
@@ -410,7 +402,7 @@
   // A known company with nothing filed by the chosen date.
   function noPeriods() {
     annual = panel = null;
-    renderFacts();
+    $("co-msg").textContent = "Nothing was filed by the chosen date. Clear the date to see every year.";
     $("ki-table").innerHTML = "";
     $("ki-calc").innerHTML = "";
     if (kiChart) { kiChart.dispose(); kiChart = null; }
@@ -421,7 +413,7 @@
   }
 
   // ---- company: every filed concept ----------------------------------------
-  var CN_SHOW = 25;
+  var CN_SHOW = 8;           // the most-filed first; search or "Show all" for the rest
   var cnReq = 0;
   function loadConcepts() {
     var mine = ++cnReq;
@@ -616,6 +608,10 @@
       var q = this.value.trim();
       clearTimeout(timer);
       timer = setTimeout(function () { state.q = q; showAll = false; loadConcepts(); }, 200);
+    });
+    $("ki-more").addEventListener("click", function (e) {
+      if (!e.target.closest("#ki-toggle")) return;
+      state.allPeriods = !state.allPeriods; renderPanel();
     });
     $("cn-more").addEventListener("click", function (e) {
       if (e.target.id !== "cn-toggle") return;

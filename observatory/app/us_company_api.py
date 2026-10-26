@@ -69,8 +69,18 @@ def identity(cur, cik):
         "industry": (rec.get("industry") or "").capitalize() or None,
         "sp500_weight_pct": member[0] if member else None,
         "predecessor_cik": us_link.PREDECESSOR_CIKS.get(int(cik)),
+        # an earlier filer whose years the full filing history carries (Disney before 2019)
+        "predecessors": _predecessors(cur, cik),
         "edited": {k: edit.get(k) for k in ("name", "website", "logo", "updated_at") if edit.get(k)},
     }
+
+
+def _predecessors(cur, cik):
+    if not sec_api._has(cur, "sec_cf_companies"):
+        return []
+    return [{"cik": r[0], "sec_name": r[1], "first_filed": sec_api._d(r[2]), "last_filed": sec_api._d(r[3])}
+            for r in cur.execute("SELECT cik, entity_name, first_filed, last_filed FROM sec_cf_companies "
+                                 "WHERE successor_cik = ? ORDER BY first_filed", [cik]).fetchall()]
 
 
 def _one(cur, sql, params):

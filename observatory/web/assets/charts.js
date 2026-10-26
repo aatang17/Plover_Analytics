@@ -673,10 +673,24 @@ function colsOptions(cfg, pal, narrow, below) {
           escapeHtml(params[0].name) + "</div>" + rows.join("<br>") + note + trust;
       },
     },
-    series: cfg.series.map(s => ({
+    // A series with type "line" draws over the columns on the same axis (a
+    // company's net income over its revenue: one unit, one scale); a gap
+    // stays a gap.
+    series: cfg.series.map(s => (s.type === "line" ? {
+      name: s.name,
+      type: "line",
+      symbol: "circle",
+      symbolSize: 5,
+      connectNulls: false,
+      lineStyle: { width: 2, color: pal.series[(s.slot - 1) % 6] },
+      itemStyle: { color: pal.series[(s.slot - 1) % 6] },
+      emphasis: { focus: "none" },
+      z: 3,
+      data: s.points,
+    } : {
       name: s.name,
       type: "bar",
-      barMaxWidth: 22,
+      barMaxWidth: s.barMaxWidth || 22,
       itemStyle: { color: pal.series[(s.slot - 1) % 6] },
       emphasis: { focus: "none" },
       data: s.points,

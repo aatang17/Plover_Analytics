@@ -224,18 +224,21 @@
     return out;
   }
 
+  var carded = false;
   function renderCompany() {
     var c = co.company, ys = years();
     document.title = c.name + " (" + c.ticker + ") · US Executive Pay · Plover Analytics";
-    $("co-name").textContent = c.name;
-    $("co-logo").hidden = !c.logo;
-    if (c.logo) $("co-logo").src = c.logo;
-    $("co-code").textContent = c.ticker;
+    document.body.classList.add("co-ground");
+    // the company's header card and tabs, drawn once (co-head.js); until it arrives the name shows
+    if (!carded) {
+      carded = true;
+      $("co-name").textContent = c.name;
+      coHead.load(c.ticker).then(function (d) { $("co-card").innerHTML = coHead.html(d, "pay"); coHead.reveal($("co-card")); })
+        .catch(function () { /* the name stays; the pay figures do not depend on the card */ });
+    }
     var read = co.filings.filter(function (f) { return f.status === "ok"; }).length;
-    $("co-meta").innerHTML = "CIK <span class='mono'>" + c.cik + "</span> · " +
-      (c.weight_pct == null ? "" : fmtNum(c.weight_pct, 2) + "% of SPY on " + esc(co.index.as_of) + " · ") +
-      count(read) + (read === 1 ? " proxy statement" : " proxy statements") + " read since 2023 · " +
-      "<a href='us-company.html?t=" + encodeURIComponent(c.ticker) + "'>Everything held for this company</a>";
+    $("co-meta").textContent = "";
+    $("co-facts-note").textContent = count(read) + (read === 1 ? " proxy statement" : " proxy statements") + " read since 2023";
     var last = co.years[0];
     if (!last) {
       $("co-facts").innerHTML = "";

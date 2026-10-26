@@ -1,0 +1,241 @@
+/* index.html in the finance redesign (2026-10-25, the design canvas's home and
+   answer boards): a light header, the question on a tinted band, the inflation
+   and yields strip, then white panels on a grey ground. An answer is a main
+   column beside a rail of actions, method, cautions and sources. Tokens only,
+   so dark mode follows the theme; no shadows, corners at most 4px, and no
+   filled or outlined status labels: direction is coloured text with an arrow. */
+
+.hp { font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--obs-ground); color: var(--obs-ink); font-variant-numeric: tabular-nums lining-nums; }
+.hp a { color: var(--obs-accent); }
+.hp a:hover { color: var(--obs-accent-dark); }
+/* hidden means hidden, whatever display a block's own rule gives it */
+.hp [hidden] { display: none !important; }
+/* app.css spaces every section 32px from the one above; panels here set their own gaps */
+.hp section { margin-top: 0; }
+.hp .up { color: var(--obs-up); }
+.hp .down { color: var(--obs-down); }
+
+/* ---- header ---- */
+.hp-header { background: var(--obs-surface); border-bottom: 1px solid var(--obs-border); }
+.hp-bar { max-width: 1360px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; min-height: 56px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 28px; }
+.hp-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--obs-ink) !important; text-decoration: none; }
+.hp-brand svg { color: var(--obs-ink); }
+.hp-nav { display: flex; gap: 4px; font-size: 13.5px; }
+.hp-nav a { color: var(--obs-text-muted); padding: 18px 10px 16px; text-decoration: none; }
+.hp-nav a:hover { color: var(--obs-ink); }
+.hp-slot { flex: 1 1 320px; max-width: 560px; min-width: 0; }
+.hp-slot:empty { display: none; }
+.hp-account { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
+.hp-account a { text-decoration: none; }
+.hp-account .hp-signin { color: var(--obs-ink); }
+.hp-account .hp-join { color: var(--obs-accent); border: 1px solid var(--obs-accent); border-radius: 4px; padding: 7px 14px; font-weight: 600; }
+.hp-account .hp-join:hover { background: var(--obs-accent-soft); }
+.hp-account .hp-mine { color: var(--obs-ink); font-weight: 600; }
+
+/* ---- the question box: big on the front band, compact in the header ---- */
+.hp-box { display: flex; background: var(--obs-surface); border: 1px solid var(--obs-text-faint); border-radius: 4px; overflow: hidden; }
+.hp-box:focus-within { border-color: var(--obs-accent); }
+.hp-box input, .hp-box input:focus { flex: 1 1 auto; min-width: 0; border: 0; border-radius: 0; box-shadow: none; outline: none;
+  background: transparent; font: inherit; font-size: 17px; padding: 16px 18px; color: var(--obs-ink); width: auto; }
+.hp-box input::placeholder { color: var(--obs-text-muted); }
+.hp-box button { flex: 0 0 auto; border: 0; background: var(--obs-accent); color: var(--obs-surface); font: inherit; font-size: 15px; font-weight: 600;
+  padding: 0 26px; cursor: pointer; }
+.hp-box button:hover { background: var(--obs-accent-dark); }
+.hp-box button:disabled { opacity: 0.6; cursor: default; }
+#box-top .hp-box input { font-size: 14px; padding: 8px 12px; }
+#box-top .hp-box button { font-size: 13.5px; padding: 0 16px; }
+
+/* ---- front band ---- */
+.hp-hero { background: var(--obs-hero); border-bottom: 1px solid var(--obs-border); }
+.hp-hero-in { max-width: 980px; margin: 0 auto; padding: 56px 24px 44px; display: flex; flex-direction: column; gap: 18px; }
+.hp-hero h1 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; color: var(--obs-ink); }
+.hp-hero p { margin: 0; font-size: 15px; color: var(--obs-text); max-width: 680px; }
+.hp-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.hp-chips a, .an-chips a { display: inline-block; font-size: 13px; color: var(--obs-text); background: var(--obs-surface);
+  border: 1px solid var(--obs-border); border-radius: 4px; padding: 6px 10px; text-decoration: none; }
+.hp-chips a:hover, .an-chips a:hover { color: var(--obs-accent); border-color: var(--obs-accent); }
+body.asked .hp-hero { display: none; }
+
+/* ---- inflation and yields strip ---- */
+.hp-strip { background: var(--obs-surface); border-bottom: 1px solid var(--obs-border); }
+.hp-strip-in { max-width: 1360px; margin: 0 auto; padding: 8px 24px; box-sizing: border-box; display: flex; flex-wrap: wrap;
+  gap: 6px 26px; font-size: 12.5px; color: var(--obs-text); }
+.hp-strip-in a { color: var(--obs-text); text-decoration: none; }
+.hp-strip-in a:hover { color: var(--obs-accent); }
+.hp-strip-in b { color: var(--obs-ink); font-weight: 600; }
+.hp-strip-in .rise { color: var(--obs-diverge-pos); }
+.hp-strip-in .fall { color: var(--obs-diverge-neg); }
+.hp-strip-in .when { margin-left: auto; color: var(--obs-text-muted); }
+
+/* ---- page body ---- */
+.hp-main { flex: 1 0 auto; width: 100%; max-width: 1360px; box-sizing: border-box; margin: 0 auto; padding: 22px 24px 44px; }
+#home-note { display: flex; flex-direction: column; gap: 18px; }
+.hp-sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: -8px; }
+.hp h2, .hp-panel-head h2, .an-head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--obs-text); background: none; padding: 0; }
+.hp-panel { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; }
+.hp-panel-head { padding: 12px 16px; border-bottom: 1px solid var(--obs-border); }
+
+.hp-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.hp-card { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; display: flex; flex-direction: column; min-width: 0; }
+.hp-card-q { margin: 0; padding: 14px 16px 0; font-size: 12.5px; color: var(--obs-text-muted); }
+.hp-card h3 { margin: 6px 16px 12px; font-size: 16px; line-height: 1.35; font-weight: 600; color: var(--obs-ink); }
+.hp-card-body { padding: 0 16px 12px; flex: 1; }
+.hp-card-foot { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--obs-grid);
+  font-size: 12px; color: var(--obs-text-muted); }
+.hp-open { margin-left: auto; white-space: nowrap; font-size: 13px; font-weight: 600; text-decoration: none; }
+.hp-bars { display: flex; flex-direction: column; gap: 7px; }
+.hp-bars div { display: grid; grid-template-columns: 130px minmax(0, 1fr) 64px; align-items: center; gap: 8px; font-size: 12.5px; }
+.hp-bars span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hp-bars i { position: relative; height: 10px; border-left: 1px solid var(--obs-text-faint); }
+.hp-bars b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--obs-accent); }
+.hp-bars .n { text-align: right; font-weight: 600; }
+.hp-mini { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.hp-mini th { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--obs-text-muted);
+  text-align: left; padding: 0 0 6px; border-bottom: 1px solid var(--obs-border); }
+.hp-mini td { padding: 6px 0; border-bottom: 1px solid var(--obs-grid); }
+.hp-mini .r { text-align: right; padding-left: 10px; white-space: nowrap; }
+.hp-mini td.up, .hp-mini td.down { font-weight: 600; }
+.hp-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border: 1px solid var(--obs-grid); border-radius: 4px; }
+.hp-tiles div { padding: 10px 12px; }
+.hp-tiles div + div { border-left: 1px solid var(--obs-grid); }
+.hp-tiles dt { font-size: 11.5px; color: var(--obs-text-muted); }
+.hp-tiles dd { margin: 2px 0 0; font-size: 20px; font-weight: 600; color: var(--obs-ink); }
+.hp-tiles dd.down { color: var(--obs-down); }
+.hp-card-note { margin: 10px 0 0; font-size: 13px; color: var(--obs-text); }
+
+.hp-cover-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hp-cover-grid > div { padding: 14px 16px; }
+.hp-cover-grid > div + div { border-left: 1px solid var(--obs-grid); }
+.hp-cover-grid h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--obs-ink); }
+.hp-cover-grid ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.hp-cover-grid a { text-decoration: none; }
+.hp-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 16px 18px; }
+.hp-cta > div { flex: 1 1 420px; }
+.hp-cta h2 { font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--obs-ink); margin: 0 0 4px; }
+.hp-cta p { margin: 0; font-size: 13px; color: var(--obs-text); }
+.hp-btn { background: var(--obs-accent); color: var(--obs-surface) !important; font-weight: 600; font-size: 14px; border-radius: 4px; padding: 11px 18px;
+  text-decoration: none; white-space: nowrap; }
+.hp-btn:hover { background: var(--obs-accent-dark); }
+
+/* ---- an answer ---- */
+.an-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.an-col, .an-rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.an-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 12px 16px; border-bottom: 1px solid var(--obs-border); }
+.an-head .note { margin-left: auto; font-size: 12px; color: var(--obs-text-muted); }
+.an-q { padding: 20px 22px 18px; }
+.an-asked { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; color: var(--obs-text-muted); }
+.an-asked b { color: var(--obs-ink); font-weight: 600; }
+.an-asked .when { margin-left: auto; }
+.an-co { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--obs-border); border-radius: 3px; padding: 1px 8px 1px 3px;
+  color: var(--obs-ink) !important; text-decoration: none; }
+.an-co img { width: 16px; height: 16px; object-fit: contain; background: var(--obs-logo-bg); }
+.hp #answer .headline { margin: 14px 0 10px; font-size: 26px; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; max-width: 880px; }
+.hp #answer .answer-text { margin: 0; font-size: 15px; line-height: 1.55; color: var(--obs-text); max-width: 820px; }
+.hp #answer .read-as { margin: 10px 0 0; }
+.hp #answer .answer-quote { margin: 14px 0 0; }
+.an-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 0; }
+.an-figs > div { padding: 14px 16px; border-left: 1px solid var(--obs-grid); margin-left: -1px; }
+.an-figs dt { font-size: 12px; font-weight: 500; color: var(--obs-text-muted); }
+.an-figs dd { margin: 4px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; color: var(--obs-ink); line-height: 1.2; }
+.an-figs dd small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--obs-text-muted); }
+.an-chart { padding: 12px 16px 4px; }
+.an-chart .chart-el { height: 360px; }
+.an-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 16px; border-top: 1px solid var(--obs-grid);
+  font-size: 12px; color: var(--obs-text-muted); }
+.an-foot .acts { margin-left: auto; display: flex; gap: 14px; }
+.an-link { border: 0; background: none; padding: 0; font: inherit; color: var(--obs-accent); cursor: pointer; }
+.an-link:hover { color: var(--obs-accent-dark); text-decoration: underline; }
+.hp #answer .table-wrap { margin: 0; border: 0; }
+.hp #answer .tbl-fin td, .hp #answer .tbl-fin th { padding: 8px 12px; }
+.an-list { padding: 4px 16px 12px; }
+.an-ask { padding: 14px 16px; }
+.an-ask form { display: flex; gap: 8px; }
+.an-ask input, .an-ask input:focus { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--obs-ink); background: var(--obs-surface);
+  border: 1px solid var(--obs-text-faint); border-radius: 4px; padding: 10px 12px; outline: none; box-shadow: none; }
+.an-ask input:focus { border-color: var(--obs-accent); }
+.an-ask button { border: 0; background: var(--obs-accent); color: var(--obs-surface); font: inherit; font-size: 14px; font-weight: 600; border-radius: 4px; padding: 0 18px; cursor: pointer; }
+.an-ask button:hover { background: var(--obs-accent-dark); }
+.an-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.an-acts { padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.an-acts button { border: 1px solid var(--obs-border); background: var(--obs-surface); color: var(--obs-text); font: inherit; font-size: 13px;
+  border-radius: 4px; padding: 8px 10px; text-align: left; cursor: pointer; }
+.an-acts button:hover { border-color: var(--obs-accent); color: var(--obs-accent); }
+.an-body { padding: 12px 16px; font-size: 13px; line-height: 1.5; color: var(--obs-text); }
+.an-body ol, .an-body ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.an-body ul.plain { list-style: none; padding: 0; }
+.an-body details { margin-top: 10px; }
+.an-body summary { color: var(--obs-accent); cursor: pointer; font-size: 12.5px; }
+.an-body .calc, .an-body .worked-out { border: 0; margin: 0; padding: 0; }
+.an-body pre.sql { font-size: 11.5px; }
+.an-company { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; font-size: 13px; }
+.an-company .name { display: flex; align-items: center; gap: 10px; color: var(--obs-ink) !important; font-weight: 600; text-decoration: none; }
+.an-company .name img { width: 28px; height: 28px; border: 1px solid var(--obs-border); border-radius: 3px; object-fit: contain; background: var(--obs-logo-bg); }
+
+/* the signed-out start of an answer, and a miss, in the same panels */
+.hp #answer .fp-card { border-color: var(--obs-border); border-radius: 4px; padding: 20px 22px; max-width: 920px; }
+.hp #answer .fp-head { font-size: 24px; font-weight: 600; }
+.hp #answer .fp-cta, .hp #answer .fp-retry { background: var(--obs-accent); color: var(--obs-surface); border-radius: 4px; }
+.hp #answer .fp-cta:hover, .hp #answer .fp-retry:hover { background: var(--obs-accent-dark); color: var(--obs-surface); }
+.hp #answer .fp-examples a { font-size: 15px; }
+/* a company's view is panels (us-stocks.js panelize, co-page.css) */
+.hp #stock .cp-sec:first-of-type { margin-top: 16px; }
+
+.hp .fp-footer { background: var(--obs-surface); }
+
+@media (max-width: 1080px) {
+  .an-grid { grid-template-columns: minmax(0, 1fr); }
+  .hp-cards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .hp-bar { padding: 0 16px; gap: 0 14px; }
+  .hp-nav { order: 3; width: 100%; overflow-x: auto; margin: 0 -10px; }
+  .hp-nav a { padding: 10px 10px 12px; white-space: nowrap; }
+  .hp-slot { order: 4; flex-basis: 100%; max-width: none; padding-bottom: 10px; }
+  .hp-account .hp-join { padding: 6px 10px; }
+  .hp-hero-in { padding: 32px 16px 28px; }
+  .hp-hero h1 { font-size: 26px; }
+  .hp-box input { font-size: 16px; padding: 13px 14px; }
+  .hp-box button { padding: 0 18px; }
+  .hp-strip-in { padding: 8px 16px; gap: 4px 16px; }
+  .hp-strip-in .when { margin-left: 0; }
+  .hp-main { padding: 16px 16px 36px; }
+  .hp-cover-grid { grid-template-columns: minmax(0, 1fr); }
+  .hp-cover-grid > div + div { border-left: 0; border-top: 1px solid var(--obs-grid); }
+  .an-q { padding: 16px; }
+  .hp #answer .headline { font-size: 21px; }
+  .an-figs > div { padding: 10px 14px; }
+  .an-figs dd { font-size: 20px; }
+  .an-chart .chart-el { height: 300px; }
+  .hp-bars div { grid-template-columns: 110px minmax(0, 1fr) 60px; }
+}
+
+/* ---- asking: the hand-off from the front band to the answer ----
+   The question appears at once in a card where its answer will be, with the
+   server's steps; the box settles into the header; the answer fades in where
+   the card was. Nothing jumps; with reduced motion nothing moves at all. */
+@keyframes hp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes hp-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+#box-top .hp-box, .an-wait, #answer > .an-grid, #answer > .fp-card, #stock { animation: hp-in 0.22s ease-out; }
+.hp-main #status { margin: 0 0 16px; }
+.an-wait .an-skel { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 14px; }
+.an-wait .an-skel i { display: block; height: 14px; border-radius: 3px; background: var(--obs-grid); animation: hp-pulse 1.4s ease-in-out infinite; }
+.an-wait .an-skel i:nth-child(1) { height: 24px; width: 78%; }
+.an-wait .an-skel i:nth-child(2) { width: 92%; }
+.an-wait .an-skel i:nth-child(3) { width: 64%; }
+.an-wait .trail { border-top: 1px solid var(--obs-grid); padding-top: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  #box-top .hp-box, .an-wait, #answer > .an-grid, #answer > .fp-card, #stock, .an-wait .an-skel i { animation: none; }
+}
+/* the wait card is as wide as the answer's main column, so nothing resizes when the answer lands */
+@media (min-width: 1081px) { .an-wait { max-width: calc(100% - 340px); box-sizing: border-box; } }
+/* a previous answer while the next one is being worked out */
+.an-stale { opacity: 0.35; pointer-events: none; transition: opacity 0.2s; }
+/* the company card's tabs keep their own colours over the page's link blue */
+.hp .cp-tabs a { color: var(--obs-text); }
+.hp .cp-tabs a:hover, .hp .cp-tabs a[aria-current="page"] { color: var(--obs-ink); }
+.hp .cp-meta a { color: var(--obs-primary); }

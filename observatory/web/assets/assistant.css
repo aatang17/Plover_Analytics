@@ -5,7 +5,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { font-size: 14px; }
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Hiragino Sans", "Yu Gothic", sans-serif;
   background: var(--obs-surface);
   color: var(--obs-text);
@@ -117,15 +117,15 @@ time { font-variant-numeric: tabular-nums; }
 .pagehead .actions { display: flex; gap: 8px; flex-shrink: 0; }
 .pagehead.sp { align-items: center; }
 
-/* Section heading: the platform's navy band (ui-ux-design skill, Step 2). It
-   carries its own 32px top margin; nothing tightens it. */
+/* Section heading: the platform's quiet label over a rule (app.css h2, since
+   the finance redesign of 2026-10-26). It carries its own 32px top margin. */
 h2.band {
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap;
-  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--obs-band-ink); background: var(--obs-band-bg); border-radius: 3px;
-  padding: 10px 16px; margin: 32px 0 12px;
+  font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--obs-ink); background: none; border-bottom: 1px solid var(--obs-border); border-radius: 0;
+  padding: 0 0 8px; margin: 32px 0 12px;
 }
-h2.band .h2-note { font-weight: 500; font-size: 11.5px; letter-spacing: .02em; text-transform: none; color: var(--obs-band-muted); }
+h2.band .h2-note { font-weight: 500; font-size: 11.5px; letter-spacing: .02em; text-transform: none; color: var(--obs-text-muted); }
 
 /* ----------------------------------------------------------- primitives */
 .btn {
@@ -145,7 +145,7 @@ h2.band .h2-note { font-weight: 500; font-size: 11.5px; letter-spacing: .02em; t
 
 .badge {
   display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-  border: 1px solid currentColor; border-radius: 3px; padding: 0 5px; line-height: 17px; color: var(--obs-text-muted);
+  border: 0; border-radius: 0; padding: 0; line-height: 17px; color: var(--obs-text-muted);
 }
 .badge.official { color: var(--obs-trust-official); }
 
@@ -830,7 +830,7 @@ a.dname:hover { text-decoration: none; }
 .iachart .calc p { margin: 6px 0 0; }
 .iachart .calc code { white-space: normal; }
 .num { font-variant-numeric: tabular-nums; }
-.badge { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.4; padding: 0 6px; border: 1px solid; border-radius: 3px; white-space: nowrap; vertical-align: middle; }
+.badge { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.4; padding: 0; border: 0; white-space: nowrap; vertical-align: baseline; }
 .badge-official { color: var(--obs-trust-official); border-color: var(--obs-trust-official); }
 @media (max-width: 760px) {
   .iachart { padding: 12px 10px 10px; }

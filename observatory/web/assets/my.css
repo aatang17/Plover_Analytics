@@ -266,3 +266,77 @@ body.has-consent-bar .my-chat:not(.is-empty) .my-composer { bottom: 76px; }
 .my-tries li.my-tries-group:first-child { margin-top: 0; }
 .my-tries li.my-tries-group + li .my-try { border-top: 1px solid var(--obs-border); }
 .my-tbl th { white-space: normal; vertical-align: bottom; }
+
+/* ---- the finance redesign (2026-10-26, the canvas's Your Plover board) ----
+   A menu down the left, the panels beside it on a grey ground, each section a
+   white card. The Overview is the default: the question box, the watchlist,
+   what changed and what is coming up. */
+body.my-page { background: var(--obs-ground); }
+body.my-page .site-footer { background: var(--obs-surface); }
+body.my-page .container { max-width: 1360px; }
+.my { max-width: none; }
+#my-app:not([hidden]) { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
+.my-tabs { flex-direction: column; gap: 0; margin: 0; padding: 6px 0; border: 1px solid var(--obs-border); border-radius: 4px;
+  background: var(--obs-surface); overflow: visible; position: sticky; top: 76px; }
+.my-tabs a { padding: 9px 14px; margin: 0; font-size: 14px; font-weight: 500; color: var(--obs-text); border-bottom: 0;
+  border-left: 2px solid transparent; justify-content: space-between; }
+.my-tabs a.is-on { color: var(--obs-accent-dark); background: var(--obs-accent-soft); border-left-color: var(--obs-accent); font-weight: 600; }
+.my-panel { max-width: none; margin: 0; }
+.my-panel:not(.my-chat):not(.my-over) { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; padding: 18px 20px; }
+.my-chat { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; padding: 18px 20px; }
+
+.my-over { display: flex; flex-direction: column; gap: 16px; }
+.my-over[hidden] { display: none; }
+.my-card { background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; }
+.my-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 12px 16px; border-bottom: 1px solid var(--obs-border); }
+.my-card-head h2 { margin: 0; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--obs-text); }
+.my-card-head .note { font-size: 12px; color: var(--obs-text-muted); }
+.my-card-head .ov-right { margin-left: auto; font-size: 13px; }
+.my-card-foot { margin: 0; padding: 10px 16px; border-top: 1px solid var(--obs-grid); font-size: 12px; color: var(--obs-text-muted); }
+
+.ov-ask { display: flex; gap: 8px; padding: 16px 16px 0; }
+.ov-ask input { flex: 1; min-width: 0; height: 44px; padding: 0 12px; font: inherit; font-size: 15px; color: var(--obs-ink);
+  background: var(--obs-surface); border: 1px solid var(--obs-text-faint); border-radius: 4px; }
+.ov-ask input:focus { outline: none; border-color: var(--obs-accent); }
+.ov-ask .btn-primary { padding: 0 20px; font-size: 14px; }
+.ov-cont { margin: 0; padding: 10px 16px 0; font-size: 13px; color: var(--obs-text-muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.my-card > form:last-child, .my-card > .ov-cont { padding-bottom: 16px; }
+.ov-cont[hidden] { display: none; }
+
+.ov-tbl { margin: 0; border: 0; }
+.ov-tbl table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ov-tbl th { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--obs-text-muted);
+  text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--obs-border); white-space: nowrap; }
+.ov-tbl td { padding: 8px 12px; border-bottom: 1px solid var(--obs-grid); white-space: nowrap; color: var(--obs-ink); }
+.ov-tbl tr:last-child td { border-bottom: 0; }
+.ov-tbl .num { text-align: right; }
+.ov-co a { display: flex; flex-direction: column; color: var(--obs-ink); text-decoration: none; }
+.ov-co a:hover .ov-name { color: var(--obs-accent); }
+.ov-name { font-weight: 600; }
+.ov-name img { vertical-align: -5px; }
+.ov-meta { font-size: 11.5px; color: var(--obs-text-muted); }
+.ov-meta:empty { display: none; }
+.ov-up { color: var(--obs-up); font-weight: 600; }
+.ov-down { color: var(--obs-down); font-weight: 600; }
+.ov-faint { color: var(--obs-text-muted); }
+.ov-sp svg { display: inline-block; vertical-align: middle; }
+
+.ov-two { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.ov-feed { list-style: none; margin: 0; padding: 0 16px; }
+.ov-feed li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--obs-grid); font-size: 13.5px; }
+.ov-feed li:last-child { border-bottom: 0; }
+.ov-feed li.my-empty { display: block; color: var(--obs-text-muted); font-size: 13px; }
+.ov-tk { font-size: 12px; font-weight: 600; color: var(--obs-ink); }
+.ov-txt { display: block; color: var(--obs-ink); }
+.ov-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--obs-text-muted); }
+
+@media (max-width: 900px) {
+  #my-app:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .my-tabs { position: static; flex-direction: row; overflow-x: auto; padding: 0 6px; }
+  .my-tabs a { border-left: 0; border-bottom: 2px solid transparent; }
+  .my-tabs a.is-on { background: none; border-bottom-color: var(--obs-accent); }
+  .ov-two { grid-template-columns: minmax(0, 1fr); }
+  .ov-tbl { overflow-x: auto; }
+}
+.my-over section, .my-over .my-card { margin-top: 0; }

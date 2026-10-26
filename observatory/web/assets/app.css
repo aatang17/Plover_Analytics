@@ -1,12 +1,15 @@
 /* Observatory app styles. Colours come exclusively from tokens.css. */
 
+/* The IBM Plex Sans font files are declared in tokens.css, which every page loads. */
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { font-size: 16px; }
 
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Hiragino Sans", "Yu Gothic", sans-serif;
+  font-variant-numeric: tabular-nums lining-nums;
   background: var(--obs-surface);
   color: var(--obs-text);
   line-height: 1.5;
@@ -116,25 +119,26 @@ h1 { font-size: 22px; color: var(--obs-ink); font-weight: 700; }
 
 section { margin-top: 32px; }
 
-/* Section headers are a filled blue band, not underlined text — it is the one
-   place a filled colour block is house style. Panels opt out (.detail-head h2).
-   The band owns its own spacing on both sides: pages are not required to wrap
-   sections in <section> or .prose for a band to clear the content above it.
-   (Adjacent/parent margins collapse, so wrapped pages don't double up.) */
+/* Section headers are a quiet label over a rule (the finance redesign,
+   2026-10-26, replaced the filled navy band): small capitals in the body ink,
+   the qualifier muted on the right. The heading owns its own spacing on both
+   sides: pages are not required to wrap sections in <section> or .prose for it
+   to clear the content above. (Adjacent/parent margins collapse.) */
 h2 {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--obs-band-ink);
-  background: var(--obs-band-bg);
-  border-radius: 3px;
-  padding: 10px 16px;
+  color: var(--obs-ink);
+  background: none;
+  border-bottom: 1px solid var(--obs-border);
+  border-radius: 0;
+  padding: 0 0 8px;
   margin-top: 32px;
   margin-bottom: 14px;
 }
@@ -143,7 +147,7 @@ h2 {
   font-size: 11.5px;
   letter-spacing: 0.02em;
   text-transform: none;
-  color: var(--obs-band-muted);
+  color: var(--obs-text-muted);
 }
 .section-sub {
   font-size: 13px;
@@ -187,10 +191,11 @@ h3 { font-size: 13.5px; color: var(--obs-ink); font-weight: 600; margin: 16px 0 
 /* ---------- banners ---------- */
 
 .banner {
-  border: 1px solid var(--obs-trust-stale);
+  border: 0;
+  border-left: 3px solid var(--obs-trust-stale);
   color: var(--obs-trust-stale);
-  border-radius: 3px;
-  padding: 8px 12px;
+  border-radius: 0;
+  padding: 6px 12px;
   font-size: 13px;
   margin: 12px 0;
 }
@@ -203,23 +208,26 @@ h3 { font-size: 13.5px; color: var(--obs-ink); font-weight: 600; margin: 16px 0 
   color: var(--obs-text-muted);
 }
 
-/* ---------- badges (outline-only) ---------- */
+/* ---------- badges: coloured words, no box ----------
+   A label (Official Statistic, a status) is its colour and weight alone; the
+   user asked on 2026-10-26 for no rectangular green or red boxes. */
 
 .badge {
   display: inline-block;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.4;
-  padding: 0 6px;
-  border: 1px solid;
-  border-radius: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
   white-space: nowrap;
-  vertical-align: middle;
+  vertical-align: baseline;
 }
-.badge-official { color: var(--obs-trust-official); border-color: var(--obs-trust-official); }
-.badge-model    { color: var(--obs-trust-model);    border-color: var(--obs-trust-model); }
-.badge-stale    { color: var(--obs-trust-stale);    border-color: var(--obs-trust-stale); }
+.badge-official { color: var(--obs-trust-official); }
+.badge-model    { color: var(--obs-trust-model); }
+.badge-stale    { color: var(--obs-trust-stale); }
 
 /* ---------- headline metric card ---------- */
 
@@ -1179,8 +1187,9 @@ table.data.tbl-bands td.trend-decel { color: var(--obs-trust-official); }
 
 .prov-card { border: 1px solid var(--obs-border); border-radius: 3px; overflow: hidden; }
 .prov-card-head {
-  background: var(--obs-band-bg);
-  color: var(--obs-band-ink);
+  background: var(--obs-surface-subtle);
+  color: var(--obs-ink);
+  border-bottom: 1px solid var(--obs-border);
   /* 20px matches the body inset, so the head title and the labels below it
      start on the same vertical line. */
   padding: 10px 20px;
@@ -1199,7 +1208,7 @@ table.data.tbl-bands td.trend-decel { color: var(--obs-trust-official); }
 .prov-card-head .prov-card-id {
   font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
   font-size: 12px;
-  color: var(--obs-band-muted);
+  color: var(--obs-text-muted);
 }
 .prov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; padding: 4px 20px; }
 .prov-field { grid-column: span 1; padding: 14px 0; border-bottom: 1px solid var(--obs-grid); }
@@ -1257,7 +1266,8 @@ table.data.tbl-bands td.trend-decel { color: var(--obs-trust-official); }
   border-top: 1px solid var(--obs-border);
   margin-top: 48px;
 }
-.site-footer .inner {
+.site-footer .inner,
+.site-footer > .container {
   max-width: 1240px; margin: 0 auto; padding: 16px 20px;
   font-size: 12px; color: var(--obs-text-muted);
 }
@@ -1664,14 +1674,14 @@ body.has-consent-bar .site-footer { margin-bottom: 76px; }
 a.prod-name:hover { color: var(--obs-primary); text-decoration: underline; }
 
 /* Outline only — a filled chip is the house's tell for a template. */
+/* a status word: its colour and weight, no box (see badges) */
 .status {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  padding: 2px 7px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
+  padding: 0;
+  border: 0;
   white-space: nowrap;
 }
 .status-live { color: var(--obs-trust-official); }
@@ -1772,10 +1782,10 @@ a.prod-name:hover { color: var(--obs-primary); text-decoration: underline; }
 .dir-foot { margin: 8px 0 0; font-size: 12px; color: var(--obs-text-faint); }
 .dir-foot a { color: inherit; text-decoration: underline; }
 
-/* A band's qualifier may be the section's entry link; it inherits the band's
-   muted ink so it reads as part of the band, not a blue link on navy. */
+/* A heading's qualifier may be the section's entry link: muted like the
+   qualifier, underlined so it reads as a link. */
 .h2-note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-.h2-note a:hover { color: var(--obs-band-ink); }
+.h2-note a:hover { color: var(--obs-primary); }
 
 /* ---------- landing: access list ---------- */
 
@@ -1950,7 +1960,7 @@ body.page-home .home-numbers-grid { display: grid; grid-template-columns: repeat
 .asst-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--obs-text-muted); }
 .asst-head .muted { font-weight: 400; letter-spacing: 0; text-transform: none; }
 .asst-q-row { display: flex; justify-content: flex-end; }
-.asst-q { max-width: 92%; background: var(--obs-primary); color: var(--obs-header-ink); border-radius: 4px; padding: 11px 14px; font-size: 15px; line-height: 1.5; }
+.asst-q { max-width: 92%; background: var(--obs-primary); color: var(--obs-surface); border-radius: 4px; padding: 11px 14px; font-size: 15px; line-height: 1.5; }
 .asst-q .w { opacity: 0; transition: opacity .25s linear; transition-delay: calc(var(--i) * 110ms); }
 .s-type .asst-q .w { opacity: 1; }
 .asst-cur { display: inline-block; width: 2px; height: 1em; background: var(--obs-header-ink); vertical-align: text-bottom; margin-left: 2px; opacity: 0; }
@@ -1992,8 +2002,6 @@ body.page-home .home-numbers-grid { display: grid; grid-template-columns: repeat
 .asst-row { opacity: 0; transform: translateY(4px); transition: opacity .35s ease, transform .35s ease; transition-delay: calc(.4s + var(--i) * 140ms); }
 .s-answer .asst-row { opacity: 1; transform: none; }
 .s-out .asst-chat > *, .s-out .asst-result > * { opacity: 0; transition: opacity .6s ease; }
-.badge { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; border: 1px solid currentColor; border-radius: 3px; padding: 2px 7px; white-space: nowrap; }
-.badge-official { color: var(--obs-trust-official); }
 
 /* ---------- section bands ----------
    White alternates with a pale navy tint (the brand blue at ~5% over the
@@ -2638,4 +2646,32 @@ details.readable .source-line a { color: var(--obs-primary); }
     justify-content: center; margin-top: 10px; font-size: 15px;
     border: 1px solid var(--obs-border); border-radius: 4px;
   }
+}
+
+/* ---------- panels (the finance redesign, 2026-10-26) ----------
+   A data page whose sections each open with an h2 reads as white panels on a
+   grey ground, the heading as the panel's title over a rule. A block that
+   draws its own frame (chart, table, strip) loses it inside a panel: no box
+   inside a box. Pages built another way (docs, the front page, a company's
+   own panels in co-page.css) are untouched, since the rules key on the shape. */
+body:has(main.container > section > h2) { background: var(--obs-ground); }
+body:has(main.container > section > h2) .site-footer { background: var(--obs-surface); }
+main.container > section:has(> h2) {
+  background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px;
+  padding: 0 16px 16px; margin-top: 16px;
+}
+main.container > section:has(> h2) > h2 {
+  margin: 0 -16px 14px; padding: 12px 16px; font-size: 12px; color: var(--obs-text);
+  border-bottom: 1px solid var(--obs-border);
+}
+main.container > section:has(> h2) > h2:not(:first-child) { margin-top: 18px; border-top: 1px solid var(--obs-border); }
+main.container > section:has(> h2) .chart-block,
+main.container > section:has(> h2) .chart-panel,
+main.container > section:has(> h2) .strip {
+  border: 0; border-radius: 0; padding-left: 0; padding-right: 0; background: none;
+}
+main.container > section:has(> h2) .table-wrap { border: 0; border-radius: 0; }
+@media (max-width: 700px) {
+  main.container > section:has(> h2) { padding: 0 12px 12px; }
+  main.container > section:has(> h2) > h2 { margin-left: -12px; margin-right: -12px; padding: 10px 12px; }
 }
