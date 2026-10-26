@@ -12,9 +12,15 @@ that serve /api/v1.
 Every answer has the same parts, so one page can show any of them:
 
   headline   one line in large type with the number that answers the question
-  answer     two or three sentences of context, each figure from the data
+  answer     at most two short sentences the headline and figures do not
+             already say, each figure from the data; method and caveats
+             never go here, they go in notes
   figures    the few numbers used, with unit and as-of
-  table      rows to scan (optional)
+  table      rows to scan, one row per thing the reader asked about (a
+             person, a company), not one per filing line (optional); the
+             page shows the first ten and folds the rest
+  notes      what to read with care, shown beside the answer
+  more       {label, href}: where every underlying row lives (optional)
   chart      a line or bar spec drawn by code from the full result (optional)
   sources    where every number came from, with the credit line
   calc       the formula behind every computed figure
@@ -97,6 +103,15 @@ def _d(v):
 
 def num(v, dp=0):
     return "—" if v is None else ("{:,.%df}" % dp).format(v)
+
+
+def share_words(v):
+    """A signed share count as a reader says it: +228.8mn, −1.2bn, +45,300."""
+    if v is None:
+        return "—"
+    a = abs(v)
+    s = ("%.1fbn" % (a / 1e9)) if a >= 1e9 else ("%.1fmn" % (a / 1e6)) if a >= 1e6 else "{:,.0f}".format(a)
+    return ("+" if v > 0 else "−" if v < 0 else "") + s
 
 
 # ---- data access -----------------------------------------------------------
@@ -204,6 +219,102 @@ def _need(rec, what):
     if rec is None:
         raise HTTPException(404, "I could not tell which company you mean. Try a ticker, such as AAPL, or the full name.")
     return rec
+
+
+# ---- compared with what ----------------------------------------------------
+# A number alone does not say whether it is a lot. Each answer about one
+# company sets its figure beside one or two references a reader can judge it
+# by: larger companies in the same sector, the S&P 500's middle member, the
+# S&P 500 itself over the same days, or the company a year earlier. Words are
+# descriptive ("above", "about the same as"), never causal.
+PEER_FLOOR = 2e9          # peers are companies worth at least this, so micro-caps do not set the middle
+_SECTOR_WORD = {"Financials": "financial", "Industrials": "industrial", "Utilities": "utility",
+                "Health Care": "health care", "Real Estate": "real estate", "Consumer Discretionary": "consumer discretionary",
+                "Consumer Staples": "consumer staples", "Communication": "communication", "Technology": "technology",
+                "Materials": "materials", "Energy": "energy"}
+
+
+def _figure_of(r, key):
+    v = r["metrics"].get(key) if key in r["metrics"] else r["size"].get(key)
+    if key == "pe_x" and (v is None or v <= 0):
+        return None
+    return v
+
+
+def peer_median(cur, row, key):
+    """(median, count, label) of a figure across companies worth over $2bn in
+    the row's sector, the row's own company left out; None under 8 peers."""
+    from .us_steps import sector_for
+    sector = sector_for(row.get("sic"))
+    if not sector:
+        return None
+    vals = [v for r in metric_rows(cur) if r["cik"] != row["cik"] and (r["metrics"].get("market_cap") or 0) >= PEER_FLOOR
+            and sector_for(r.get("sic")) == sector for v in [_figure_of(r, key)] if v is not None]
+    if len(vals) < 8:
+        return None
+    import statistics
+    return statistics.median(vals), len(vals), "large %s companies" % _SECTOR_WORD.get(sector, sector.lower())
+
+
+def index_median(cur, key, ix="sp500"):
+    """(median, count) of a figure across the index's members, or None."""
+    ciks, _w, _as_of = us_benchmarks.members(cur, ix)
+    if not ciks:
+        return None
+    vals = [v for r in metric_rows(cur) if r["cik"] in ciks for v in [_figure_of(r, key)] if v is not None]
+    if len(vals) < 50:
+        return None
+    import statistics
+    return statistics.median(vals), len(vals)
+
+
+def index_change(cur, start, end=None, ix="sp500"):
+    """The S&P 500's price change in % from the first close on or after
+    `start` to the last on or before `end`, from the fund that tracks it;
+    None when its prices do not reach back to within 10 days of `start`."""
+    b = us_benchmarks.BENCHMARKS[ix]
+    s = us_prices_api.clean_closes(cur, b["etf"], start, end)[0]
+    if len(s) < 2 or (s[0][0] - (start if isinstance(start, datetime.date) else datetime.date.fromisoformat(str(start)[:10]))).days > 10:
+        return None
+    return (s[-1][2] / s[0][2] - 1) * 100
+
+
+def rel_word(v, ref):
+    """'well above', 'above', 'about the same as', 'below' or 'well below':
+    a positive figure against a positive reference."""
+    if v is None or ref is None or ref <= 0 or v <= 0:
+        return None
+    r = v / ref
+    return "well above" if r >= 1.5 else "above" if r > 1.1 else "about the same as" if r >= 0.9 else "below" if r > 0.67 else "well below"
+
+
+def pp_word(v, ref):
+    """Two rates side by side: 'faster than' / 'slower than' / 'in line with', with the gap in pp."""
+    if v is None or ref is None:
+        return None
+    gap = v - ref
+    return "in line with" if abs(gap) < 1 else "%s pp %s" % (fmt_pp(abs(gap)), "above" if gap > 0 else "below")
+
+
+INDEX_NOTE = "The S&P 500 is measured by the price of the SPY fund, which tracks it, before dividends and adjusted for splits."
+def vs_sentence(cur, row, key, label):
+    """'Revenue growth of 17.8% is 9.8 pp above large technology companies'
+    median (8.0%) and 12.6 pp above the S&P 500's (5.2%).', or None."""
+    v = _figure_of(row, key)
+    if v is None:
+        return None
+    peer, ixm = peer_median(cur, row, key), index_median(cur, key)
+    refs = []
+    if peer:
+        refs.append("%s %s' median (%s)" % (pp_word(v, peer[0]), peer[2], pct(peer[0])))
+    if ixm:
+        refs.append("%s the S&P 500's (%s)" % (pp_word(v, ixm[0]), pct(ixm[0])))
+    return ("%s of %s is %s." % (label, pct(v), " and ".join(refs))) if refs else None
+
+
+PEER_CALC = {"peer_median": "the middle value of the same figure across companies worth over $2bn in the same broad sector "
+                            "(from the SEC industry code), each on its latest annual report, this company left out",
+             "index_median": "the middle value across S&P 500 members (the SPY fund's holdings), each on its latest annual report"}
 
 
 # ---- recipes: one company --------------------------------------------------
@@ -323,7 +434,6 @@ def r_company_value(cur, q, e):
         headline = lead
         asked_fig = fig(label.capitalize() if label != "P/E" else "P/E", v, unit, p.get("date") or row["period_end"], formula)
     if p.get("close") is not None and m.get("market_cap") is not None:
-        bits.append("The shares closed at %s on %s." % (money(p["close"]), date_words(p["date"])))
         # a value shown on a count to read with care says so first, and when it will update
         if basis.get("caution"):
             bits.append(basis["caution"])
@@ -339,15 +449,29 @@ def r_company_value(cur, q, e):
         bits.append("The US listing is a depositary share, each standing for %s of the company's shares, as its %s states; "
                     "market value and P/E allow for that." % (("%d" % lst["ratio"]) if float(lst["ratio"]).is_integer() else "%g" % lst["ratio"],
                                                               lst.get("form") or "filing"))
+    # compared with what: the P/E against large peers and the S&P 500's middle member
+    calc_more = {}
     if m.get("pe_x") is not None:
-        bits.append("That is %s the diluted earnings of the latest annual report (year to %s)." % (mult(m["pe_x"]), date_words(row["period_end"])))
+        refs = []
+        peer, ixm = peer_median(cur, row, "pe_x"), index_median(cur, "pe_x")
+        if peer:
+            refs.append("%s %s (median %s)" % (rel_word(m["pe_x"], peer[0]), peer[2], mult(peer[0])))
+            calc_more["peer_median"] = PEER_CALC["peer_median"]
+        if ixm:
+            refs.append("%s the S&P 500's middle company (%s)" % (rel_word(m["pe_x"], ixm[0]), mult(ixm[0])))
+            calc_more["index_median"] = PEER_CALC["index_median"]
+        if refs:
+            bits.append("At %s its latest annual earnings, it is priced %s." % (mult(m["pe_x"]), " and ".join(refs)))
+        else:
+            bits.append("That is %s the diluted earnings of the latest annual report (year to %s)." % (mult(m["pe_x"]), date_words(row["period_end"])))
     elif row["per_share"].get("eps_diluted") is not None and row["per_share"]["eps_diluted"] <= 0:
         bits.append("There is no P/E: the latest annual report shows a loss per share.")
-    if m.get("dividend_yield_pct") is not None or m.get("buyback_yield_pct") is not None:
-        bits.append("Dividends paid last fiscal year were %s of today's value and buybacks %s."
-                    % (pct(m.get("dividend_yield_pct"), 2), pct(m.get("buyback_yield_pct"), 2)))
-    if m.get("price_change_1y_pct") is not None:
-        bits.append("The stock is %s over one year." % pct(m["price_change_1y_pct"], 1, sign=True))
+    # and the past year against the S&P 500 over the same days
+    if len(series) >= 2 and series[0][1]:
+        ch = (series[-1][1] / series[0][1] - 1) * 100
+        ix = index_change(cur, series[0][0], series[-1][0])
+        bits.append("The shares are %s %s over the past year%s." % ("up" if ch >= 0 else "down", pct(abs(ch), 1),
+                                                                     (", against %s for the S&P 500" % pct(ix, 1, sign=True)) if ix is not None else ""))
         bits += [w for w, status in _split_words(cur, rec, datetime.date.today() - datetime.timedelta(days=365))
                  if status != "confirmed"]
     chart = {"kind": "line", "title": "%s share price, one year" % rec["ticker"], "unit": "USD",
@@ -362,11 +486,13 @@ def r_company_value(cur, q, e):
                 else fig("Shares outstanding", row["per_share"].get("shares_outstanding"), "shares", row["period_end"])),
                fig("Diluted EPS", row["per_share"].get("eps_diluted"), "USD", row["period_end"])]
     calc = {k: sec_metrics.PRICE_FORMULAS[k] for k in ("market_cap", "pe_x", "dividend_yield_pct", "buyback_yield_pct")}
+    calc.update(calc_more)
     if asked:
         calc[asked[0]] = asked[2]
     return pkg("company_value", q, headline, " ".join(bits), figures, None, chart,
                [PRICE_SOURCE, SEC_SOURCE], calc,
-               {"company": rec}, {"company": company_link(rec), "filing": row["source_url"]})
+               {"company": rec}, {"company": company_link(rec), "filing": row["source_url"]},
+               [INDEX_NOTE] if any("S&P 500" in b for b in bits) else [])
 
 
 def _parts_of(lines):
@@ -765,34 +891,36 @@ def r_company_growth_margin(cur, q, e):
         headline = ("%s grew revenue %s in %s." % (rec["name"], pct(g, 1), fy) if g >= 0
                     else "%s's revenue fell %s in %s." % (rec["name"], pct(abs(g), 1), fy))
     ql = (q or "").lower()
+    focus = "revenue_growth_pct"
     if re.search(r"profitable|lose money|losing money|in the red|make money|making money|loss.making|in profit|make a profit|make a loss|turn a profit", ql) and z.get("net_income") is not None:
         ni = z["net_income"]
+        focus = "net_margin_pct"
         headline = "%s %s in %s: net income of %s%s." % (rec["name"], "made a profit" if ni > 0 else "made a loss" if ni < 0 else "broke even", fy,
                                                          money_(ni), (" (net margin %s)" % pct(m["net_margin_pct"])) if m.get("net_margin_pct") is not None else "")
     elif re.search(r"free cash flow margin|fcf margin|cash conversion", ql) and m.get("fcf_margin_pct") is not None:
+        focus = "fcf_margin_pct"
         headline = "%s's free cash flow margin was %s in %s (free cash flow %s)." % (rec["name"], pct(m["fcf_margin_pct"]), fy, money_(m.get("fcf")))
     elif re.search(r"net margin", ql) and m.get("net_margin_pct") is not None:
+        focus = "net_margin_pct"
         headline = "%s's net margin was %s in %s." % (rec["name"], pct(m["net_margin_pct"]), fy)
     elif re.search(r"margin|profitab", ql) and m.get("operating_margin_pct") is not None:
+        focus = "operating_margin_pct"
         headline = "%s's operating margin was %s in %s%s." % (rec["name"], pct(m["operating_margin_pct"]), fy,
                                                                (" (net margin %s)" % pct(m["net_margin_pct"])) if m.get("net_margin_pct") is not None else "")
     elif re.search(r"return on equity|\broe\b", ql) and m.get("roe_pct") is not None:
+        focus = "roe_pct"
         headline = "%s's return on equity was %s in %s." % (rec["name"], pct(m["roe_pct"]), fy)
-    bits = ["Revenue was %s against %s a year earlier, in the same filing." % (money_(z["revenue"]), money_(pr["revenue"]))]
-    if m.get("operating_margin_pct") is not None:
-        bits.append("Operating margin was %s and net margin %s." % (pct(m["operating_margin_pct"]), pct(m.get("net_margin_pct"))))
-    elif m.get("net_margin_pct") is not None:
-        bits.append("Net margin was %s; the filing tags no operating-income line." % pct(m["net_margin_pct"]))
-    if m.get("profit_growth_pct") is not None:
-        pg = m["profit_growth_pct"]
-        bits.append(("Net income grew %s to %s." % (pct(pg, 1), money_(z["net_income"]))) if pg >= 0
-                    else ("Net income fell %s to %s." % (pct(abs(pg), 1), money_(z["net_income"]))))
-    elif z.get("net_income") is not None:
-        bits.append("Net income was %s." % money_(z["net_income"]))
+    # compared with what: the figure asked about, then the other one a reader judges a business by
+    labels = {"revenue_growth_pct": "Revenue growth", "operating_margin_pct": "Its operating margin", "net_margin_pct": "Its net margin",
+              "roe_pct": "Its return on equity", "fcf_margin_pct": "Its free cash flow margin"}
+    second = "operating_margin_pct" if focus == "revenue_growth_pct" else "revenue_growth_pct"
+    if second == "operating_margin_pct" and m.get("operating_margin_pct") is None:
+        second = "net_margin_pct"
+    bits = [b for b in (vs_sentence(cur, row, focus, labels[focus]), vs_sentence(cur, row, second, labels[second])) if b]
+    if not bits:
+        bits.append("Revenue was %s against %s a year earlier, in the same filing." % (money_(z["revenue"]), money_(pr["revenue"])))
     if ccy != "USD":
         bits.append("Figures are in the company's reporting currency (%s), as filed." % ccy)
-    if m.get("roe_pct") is not None:
-        bits.append("Return on equity was %s." % pct(m["roe_pct"]))
     table = {"columns": ["Figure", fy.replace("the year to ", "Year to "), "Prior year"],
              "rows": [["Revenue", z["revenue"], pr["revenue"]], ["Operating income", z["operating_income"], None],
                       ["Net income", z["net_income"], pr["net_income"]], ["Total assets", z["total_assets"], pr["total_assets"]],
@@ -802,7 +930,7 @@ def r_company_growth_margin(cur, q, e):
                fig("Net margin", m.get("net_margin_pct"), "%", row["period_end"], sec_metrics.FORMULAS["net_margin_pct"]),
                fig("ROE", m.get("roe_pct"), "%", row["period_end"], sec_metrics.FORMULAS["roe_pct"])]
     return pkg("company_growth_margin", q, headline, " ".join(bits), figures, table, None, [SEC_SOURCE],
-               {k: sec_metrics.FORMULAS[k] for k in ("revenue_growth_pct", "operating_margin_pct", "net_margin_pct", "roe_pct", "profit_growth_pct")},
+               dict({k: sec_metrics.FORMULAS[k] for k in ("revenue_growth_pct", "operating_margin_pct", "net_margin_pct", "roe_pct", "profit_growth_pct")}, **PEER_CALC),
                {"company": rec}, {"company": company_link(rec), "filing": row["source_url"]},
                ["Tags used: " + ", ".join("%s=%s" % (k, v) for k, v in row["tags"].items() if v and k in ("revenue", "operating_income", "net_income"))])
 
@@ -913,8 +1041,15 @@ def r_company_price_performance(cur, q, e):
         headline = "%s closed at %s on %s, %s over the past year." % (rec["name"], money(last[1], 2), date_words(last[0]), moved)
     else:
         headline = "%s is %s since %s." % (rec["name"], moved, date_words(first[0]))
-    answer = ("It closed at %s on %s against %s on %s. The high in the window was %s on %s and the low %s on %s."
-              % (money(last[1]), date_words(last[0]), money(first[1]), date_words(first[0]), money(hi[1]), date_words(hi[0]), money(lo[1]), date_words(lo[0])))
+    ix = index_change(cur, first[0], last[0]) if change is not None else None
+    if ix is not None:
+        gap = change - ix
+        answer = "Over the same days the S&P 500 %s %s, so the shares did %s." % (
+            "rose" if ix >= 0 else "fell", pct(abs(ix), 1),
+            "about the same" if abs(gap) < 2 else "%s pp %s" % (fmt_pp(abs(gap)), "better" if gap > 0 else "worse") if abs(gap) < 100
+            else "far %s" % ("better" if gap > 0 else "worse"))
+    else:
+        answer = "It closed at %s on %s against %s on %s." % (money(last[1]), date_words(last[0]), money(first[1]), date_words(first[0]))
     if hl:
         low_asked = bool(re.search(r"\b(low|lowest)\b", hl.group(0)))
         pt = lo if low_asked else hi
@@ -962,9 +1097,10 @@ def r_company_price_performance(cur, q, e):
                fig("Latest close", last[1], "USD", last[0]), fig("High", hi[1], "USD", hi[0]), fig("Low", lo[1], "USD", lo[0])]
     if hl:
         figures = figures[2:] + figures[:2]
-    out = pkg("company_price_performance", q, headline, answer, figures, None, chart, [PRICE_SOURCE],
+    out = pkg("company_price_performance", q, headline, answer.strip(), figures, None, chart, [PRICE_SOURCE],
               {"change_pct": "(last close ÷ first close in the window − 1) × 100, split-adjusted", "adjusted_close": us_prices_api.SPLIT_RULE},
-              {"company": rec, "since": _d(since), "until": _d(until) if until else None, "splits": [[_d(d), r] for d, r in splits]}, {"company": company_link(rec)})
+              {"company": rec, "since": _d(since), "until": _d(until) if until else None, "splits": [[_d(d), r] for d, r in splits]}, {"company": company_link(rec)},
+              [INDEX_NOTE] if ix is not None else [])
     if until:
         out["period"] = period_span(first[0], last[0])
     return out
@@ -1029,102 +1165,248 @@ def r_company_holders(cur, q, e):
     top = rows[0]
     adds = sorted([r for r in rows if (r.get("shares_change") or 0) > 0], key=lambda r: -r["shares_change"])[:3]
     cuts = sorted([r for r in rows if (r.get("shares_change") or 0) < 0], key=lambda r: r["shares_change"])[:3]
-    headline = "%s's largest reported holder is %s, with %s of all 13F-reported value." % (rec["name"], top["manager_name"].title(), pct(top["share_of_reported_pct"]))
-    bits = ["%d managers reported %s positions worth %s in all for the quarter to %s." % (d["holders"], rec["ticker"], money(d["total_reported_value"]), date_words(top["report_period"]))]
+    co = short_name(rec["name"])
+    mgr = lambda r: short_name(r["manager_name"])
+    headline = "%s is %s's largest reported holder, with %s of the %s shares fund managers report owning." % (mgr(top), co, pct(top["share_of_reported_pct"]), co)
+    # compared with what: did the largest holders add or cut over the quarter
+    had = [r for r in rows if r.get("shares") is not None and (r.get("prior_shares") is not None or r.get("new_position"))]
+    up, down = sum(1 for r in had if (r.get("shares_change") or 0) > 0), sum(1 for r in had if (r.get("shares_change") or 0) < 0)
+    # a count, not a summed change: a manager that starts filing for its affiliates "adds" shares it already held
+    bits = ["Of the %d largest, %d added shares in the quarter to %s and %d cut." % (len(had), up, date_words(top["report_period"]), down)] if len(had) >= 5 else \
+        ["%s managers reported holding %s of %s shares at %s." % (num(d["holders"]), money(d["total_reported_value"]), co, date_words(top["report_period"]))]
     ql = (q or "").lower()
     if adds and re.search(r"\b(added|adding|increased|raised|bought|buying|built|new)\b", ql) and not re.search(r"\b(sold|cut|trimmed|reduced)\b", ql):
         bits.insert(0, headline)
         headline = "Among %s's largest holders, %s added the most %s shares in the quarter to %s: %s." % (
-            rec["name"], adds[0]["manager_name"].title(), rec["ticker"], date_words(top["report_period"]),
-            "; ".join("%s +%s" % (r["manager_name"].title(), num(r["shares_change"])) for r in adds))
+            co, mgr(adds[0]), rec["ticker"], date_words(top["report_period"]),
+            "; ".join("%s +%s" % (mgr(r), share_words(r["shares_change"])) for r in adds))
     elif cuts and re.search(r"\b(sold|selling|cut|trimmed|reduced|exited|dumped)\b", ql):
         bits.insert(0, headline)
         headline = "Among %s's largest holders, %s cut the most %s shares in the quarter to %s: %s." % (
-            rec["name"], cuts[0]["manager_name"].title(), rec["ticker"], date_words(top["report_period"]),
-            "; ".join("%s %s" % (r["manager_name"].title(), num(r["shares_change"])) for r in cuts))
+            co, mgr(cuts[0]), rec["ticker"], date_words(top["report_period"]),
+            "; ".join("%s %s" % (mgr(r), share_words(r["shares_change"])) for r in cuts))
     if adds:
-        bits.append("The biggest additions since the previous quarter: " + "; ".join("%s added %s shares" % (r["manager_name"].title(), num(r["shares_change"])) for r in adds) + ".")
-    if len(cusips) > 1:
-        bits.append("This counts the %s class only; %s has %d share classes in 13F data." % (cusips[0]["issuer_name"], rec["name"], len(cusips)))
+        bits.append("The biggest buyers that quarter: " + _people(["%s (%s shares)" % (mgr(r), share_words(r["shares_change"])) for r in adds]) + ".")
+    class_note = ["This counts the %s class only; %s has %d share classes in 13F data." % (us_link.display_name(cusips[0]["issuer_name"]), co, len(cusips))] if len(cusips) > 1 else []
     table = {"columns": ["Manager", "Shares", "Value", "Share of reported", "Change in shares"],
-             "rows": [[r["manager_name"], r["shares"], r["value"], r["share_of_reported_pct"], r["shares_change"]] for r in rows], "unit": d["window"]["value_unit"]}
+             "rows": [[us_link.display_name(r["manager_name"]), r["shares"], r["value"], r["share_of_reported_pct"], r["shares_change"]] for r in rows], "unit": d["window"]["value_unit"]}
     chart = {"kind": "bars", "title": "Largest 13F holders of %s, value" % rec["ticker"], "unit": "USD",
-             "series": [{"name": "Value", "points": [[r["manager_name"].title()[:28], r["value"]] for r in rows[:10]]}]}
+             "series": [{"name": "Value", "points": [[mgr(r)[:28], r["value"]] for r in rows[:10]]}]}
     return pkg("company_holders", q, headline, " ".join(bits),
                [fig("Holders reporting", d["holders"], "count", d["window"]["end"]), fig("Reported value", d["total_reported_value"], "USD", d["window"]["end"])],
                table, chart, [F13_SOURCE], {"share_of_reported_pct": sec_13f_api.PROVENANCE["note"]},
                {"company": rec, "cusip": cusips[0]["cusip"]}, {"company": company_link(rec)},
-               ["13F covers managers over $100m and long positions only, reported up to 45 days after quarter end; a share of reported value is not a share of the company."])
+               ["13F covers managers over $100m and long positions only, reported up to 45 days after quarter end; a share of reported value is not a share of the company."] + class_note)
+
+
+def insiders_held_from(cur):
+    """The first filing date of the Form 4s on file: before it no trade is
+    known, so a window starting earlier is cut back to it and says so."""
+    def build(_c):
+        v = call_api(sec_insiders_api.summary).get("earliest_filed")
+        return datetime.date.fromisoformat(v[:10]) if v else None
+    return _memo(cur, "insiders_held_from", build)
+
+
+def poss(name):
+    """'Meta Platforms' -> "Meta Platforms'", 'Intel' -> "Intel's"."""
+    return name + ("'" if name.endswith("s") else "'s")
+
+
+def _since_words(since):
+    """'this year' for 1 January of the current year, else 'since 1 March 2026'."""
+    return "this year" if since == datetime.date.today().replace(month=1, day=1) else "since %s" % date_words(since)
+
+
+def _month_cols(trades, since, series):
+    """A column chart spec of the value traded each month from `since` to
+    today, one series per (name, code); a month with no trade is a true 0."""
+    today = datetime.date.today()
+    months, m = [], since.replace(day=1)
+    while m <= today:
+        months.append(m.isoformat()[:7])
+        m = (m.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+    label = (lambda k: datetime.date.fromisoformat(k + "-01").strftime("%b")) if months[0][:4] == months[-1][:4] else \
+        (lambda k: datetime.date.fromisoformat(k + "-01").strftime("%b %Y"))
+    out = []
+    for name, code in series:
+        by = dict.fromkeys(months, 0.0)
+        for t in trades:
+            if t["trans_code"] == code and t["trans_date"][:7] in by:
+                by[t["trans_date"][:7]] += t["value"] or 0
+        out.append({"name": name, "points": [round(by[k], 2) for k in months]})
+    return {"categories": [label(k) for k in months], "series": out}
+
+
+def _people(names):
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def r_company_insiders(cur, q, e):
     rec = _need(e["companies"][0] if e["companies"] else None, "company")
     since = e.get("since") or datetime.date.today().replace(month=1, day=1)
+    held_from = insiders_held_from(cur)
+    cut = bool(held_from and since < held_from)
+    if cut:
+        since = held_from
+    cut_note = ["The insider filings on file begin %s, so earlier trades are not counted." % date_words(held_from)] if cut else []
     months = max(1, int((datetime.date.today() - since).days / 30) + 1)
     ql = q.lower()
-    code = "S" if re.search(r"\bsold|sell|sales\b", ql) and not re.search(r"\bbought|buy|purchas", ql) else ""
-    d = call_api(sec_insiders_api.company, sec_code="cik:%d" % rec["cik"], months=months, code=code, limit=500)
-    s = d["summary"]
-    buys, sells = s["open_market_buys"], s["open_market_sells"]
-    trades = [t for t in d["trades"] if t["trans_date"] and t["trans_date"] >= since.isoformat()]
+    # buying and selling are read from every open-market trade in the window,
+    # so the headline, the tiles and the table always count the same trades
+    d = call_api(sec_insiders_api.company, sec_code="cik:%d" % rec["cik"], months=months, code="", limit=2000)
+    trades = [t for t in d["trades"] if t["trans_date"] and t["trans_date"] >= since.isoformat() and t["trans_code"] in ("P", "S")]
+    co = short_name(rec["name"])
     # a person named in the question ("has Elon Musk sold Tesla shares"): only that filer's trades
     named = _person_words(q, rec)
     person = _person_in(q, rec, [t.get("owner_name") or "" for t in d["trades"]])
-    who = "%s insiders" % rec["name"]
     if named and not person:
-        d_all = call_api(sec_insiders_api.company, sec_code="cik:%d" % rec["cik"], months=36, code="", limit=500)
+        d_all = call_api(sec_insiders_api.company, sec_code="cik:%d" % rec["cik"], months=36, code="", limit=2000)
         person = _person_in(q, rec, [t.get("owner_name") or "" for t in d_all["trades"]])
         if person:
-            d, trades = d_all, [t for t in d_all["trades"] if t["trans_date"] and t["trans_date"] >= since.isoformat()]
-    if named and not person:
-        who = "%s insiders" % rec["name"]
+            trades = [t for t in d_all["trades"] if t["trans_date"] and t["trans_date"] >= since.isoformat() and t["trans_code"] in ("P", "S")]
+    who = "%s insiders" % co
     if person:
-        trades = [t for t in trades if person.lower() in (t.get("owner_name") or "").lower()]
-        who = "%s, at %s," % (person, rec["name"])
-        buys = {"trades": sum(1 for t in trades if t["trans_code"] == "P"), "value": sum((t["value"] or 0) for t in trades if t["trans_code"] == "P")}
-        sells = {"trades": sum(1 for t in trades if t["trans_code"] == "S"), "value": sum((t["value"] or 0) for t in trades if t["trans_code"] == "S")}
-    plan_share = None
-    sells_list = [t for t in trades if t["trans_code"] == "S"]
-    if sells_list:
-        plan_share = sum(1 for t in sells_list if t["plan_10b5_1"]) / len(sells_list) * 100
-    if buys["trades"] == 0 and sells["trades"] == 0:
-        headline = "No open-market buying or selling by %s since %s." % (who, date_words(since))
-    elif buys["trades"] == 0:
-        headline = "%s %s only sold since %s: %d sale%s worth %s, no open-market purchases." % (
-            who, "has" if person else "have", date_words(since), sells["trades"], "" if sells["trades"] == 1 else "s", money(sells["value"]))
-    else:
-        headline = "%s made %d open-market purchase%s worth %s and %d sale%s worth %s since %s." % (
-            who, buys["trades"], "" if buys["trades"] == 1 else "s", money(buys["value"]), sells["trades"], "" if sells["trades"] == 1 else "s", money(sells["value"]), date_words(since))
-    bits = []
-    if named and not person:
-        headline = "No Form 4 by %s at %s is on file in the past three years. %s" % (named, rec["name"], headline)
-    if plan_share is not None:
-        bits.append("%s of the sales were under pre-arranged 10b5-1 plans." % pct(plan_share, 0))
+        # the question writes "Mark Zuckerberg", the filing "Zuckerberg Mark": every word, in any order
+        trades = [t for t in trades if all(re.search(r"\b%s\b" % re.escape(w), t.get("owner_name") or "", re.I) for w in person.split())]
+        who = us_link.person_name(trades[0]["owner_name"]) if trades else person
+    buys = [t for t in trades if t["trans_code"] == "P"]
+    sells = [t for t in trades if t["trans_code"] == "S"]
+    bought, sold = sum(t["value"] or 0 for t in buys), sum(t["value"] or 0 for t in sells)
+    plan_share = (sum(t["value"] or 0 for t in sells if t["plan_10b5_1"]) / sold * 100) if sold else None
+    latest = max((t["trans_date"] for t in trades), default=None)
+    when = _since_words(since)
+    of_shares = "of %s shares" % co if person else "of shares"
+
+    # one row per person, largest amount first
     by_owner = {}
     for t in trades:
-        if t["trans_code"] in ("P", "S"):
-            k = t["owner_name"]
-            by_owner.setdefault(k, {"shares": 0, "value": 0, "code": t["trans_code"], "title": t.get("title")})
-            by_owner[k]["shares"] += t["shares"] or 0
-            by_owner[k]["value"] += t["value"] or 0
-    biggest = sorted(by_owner.items(), key=lambda kv: -kv[1]["value"])[:3]
-    if biggest:
-        bits.append("Largest: " + "; ".join("%s%s %s %s shares for %s" % (k.title(), (" (%s)" % v["title"]) if v.get("title") else "",
-                                                                        "bought" if v["code"] == "P" else "sold", num(v["shares"]), money(v["value"])) for k, v in biggest) + ".")
+        o = by_owner.setdefault(t["owner_name"], {"sold": 0.0, "bought": 0.0, "planned": 0.0, "trades": 0, "latest": "", "role": None})
+        o["sold" if t["trans_code"] == "S" else "bought"] += t["value"] or 0
+        o["planned"] += (t["value"] or 0) if t["trans_code"] == "S" and t["plan_10b5_1"] else 0
+        o["trades"] += 1
+        if t["trans_date"] >= o["latest"]:
+            o["latest"], o["role"] = t["trans_date"], t.get("title") or t.get("relationship")
+    ranked = sorted(by_owner.items(), key=lambda kv: -(kv[1]["sold"] + kv[1]["bought"]))
+    sellers = [(us_link.person_name(k), v) for k, v in ranked if v["sold"]]
+    buyers = [(us_link.person_name(k), v) for k, v in ranked if v["bought"]]
+    buyers.sort(key=lambda kv: -kv[1]["bought"])
+
+    if not trades:
+        headline = ("%s has not bought or sold %s shares on the open market %s." % (who, co, when) if person
+                    else "No %s insider has bought or sold shares on the open market %s." % (co, when))
+    elif not buys:
+        headline = "%s sold %s %s %s and bought none." % (who, money(sold), of_shares, when)
+    elif not sells:
+        headline = "%s bought %s %s %s and sold none." % (who, money(bought), of_shares, when)
+    else:
+        headline = "%s bought %s and sold %s %s %s." % (who, money(bought), money(sold), of_shares, when)
     # "which directors bought at Boeing": the buyers, named, when there are few
-    buyers = [(k, v) for k, v in by_owner.items() if v["code"] == "P"]
-    if buyers and not person and buys["trades"] and len(buyers) <= 3 and re.search(r"\b(who|which|bought|buying|purchas)", (q or "").lower()):
-        headline = "%s: %s since %s." % (rec["name"], "; ".join("%s%s bought %s shares for %s" % (
-            k.title(), (" (%s)" % v["title"]) if v.get("title") else "", num(v["shares"]), money(v["value"])) for k, v in buyers), date_words(since))
-    bits.append("Awards, option exercises and tax withholding are counted separately and never as buying or selling.")
-    table = {"columns": ["Date", "Insider", "Role", "Code", "Shares", "Price", "Value", "10b5-1 plan"],
-             "rows": [[t["trans_date"], t["owner_name"], t.get("title") or t.get("relationship"), t["trans_code"], t["shares"], t["price"], t["value"], t["plan_10b5_1"]] for t in trades[:60]]}
-    return pkg("company_insiders", q, headline, " ".join(bits),
-               [fig("Open-market purchases", buys["trades"], "count", None), fig("Purchase value", buys["value"], "USD", None, "shares × reported price"),
-                fig("Open-market sales", sells["trades"], "count", None), fig("Sale value", sells["value"], "USD", None, "shares × reported price"),
-                fig("Sales under 10b5-1 plans", round(plan_share, 1) if plan_share is not None else None, "%", None)],
-               table, None, [INSIDER_SOURCE], {"value": "shares × the price the filer reported"},
-               {"company": rec, "since": _d(since), "code": code or "all"}, {"company": company_link(rec)})
+    if buyers and not person and len(buyers) <= 3 and re.search(r"\b(who|which|bought|buying|buy|purchas)", ql):
+        headline = "%s %s %s shares %s." % ("; ".join("%s (%s) bought %s" % (n, v["role"], money(v["bought"])) if v["role"] else "%s bought %s" % (n, money(v["bought"]))
+                                                     for n, v in buyers), "of" if len(buyers) == 1 else "worth of", co, when)
+        headline = headline[0].upper() + headline[1:]
+    if named and not person:
+        headline = "No Form 4 by %s at %s is on file in the past three years. %s" % (named, co, headline)
+
+    bits = []
+    # compared with what: the same months a year earlier, and the company's market value
+    side, amount = ("sold", sold) if sold >= bought else ("bought", bought)
+    then = None
+    if trades and held_from and held_from <= since - datetime.timedelta(days=365):
+        a_year = datetime.timedelta(days=365)
+        d_then = call_api(sec_insiders_api.company, sec_code="cik:%d" % rec["cik"], months=min(120, months + 13), code="", limit=2000)
+        if len(d_then["trades"]) < 2000:          # a list cut at the limit would understate a year ago
+            lo, hi = (since - a_year).isoformat(), (datetime.date.today() - a_year).isoformat()
+            then = sum(t["value"] or 0 for t in d_then["trades"] if t["trans_code"] == ("S" if side == "sold" else "P")
+                       and t["trans_date"] and lo <= t["trans_date"] <= hi
+                       and (not person or all(re.search(r"\b%s\b" % re.escape(w), t.get("owner_name") or "", re.I) for w in person.split())))
+    mcap = (row_for(cur, rec["cik"]) or {}).get("metrics", {}).get("market_cap")
+    if trades and mcap and amount:
+        share = amount / mcap * 100
+        bits.append("That is %s of %s %s market value." % ("less than 0.01%" if share < 0.01 else pct(share, 2), poss(co), money(mcap)))
+    if then is not None:
+        year = (datetime.date.today() - datetime.timedelta(days=365)).year
+        r = amount / then if then else None
+        bits.append("Nothing was %s in the same months of %d." % (side, year) if not then else
+                    "It is %s the %s %s in the same months of %d." % (
+                        "%.1f times" % r if r >= 1.95 else "%s more than" % pct((r - 1) * 100, 0) if r > 1.1 else
+                        "about the same as" if r >= 0.9 else "%s less than" % pct((1 - r) * 100, 0), money(then), side, year))
+    if not bits and sellers and not person:
+        top = sellers[:3]
+        share = sum(v["sold"] for _, v in top) / sold * 100
+        if len(sellers) == 1:
+            bits.append("All of it was sold by %s." % top[0][0])
+        elif len(sellers) <= 3:
+            bits.append("The sellers: %s." % _people([n for n, _ in top]))
+        else:
+            bits.append("%s of the selling came from %s." % (pct(share, 0), _people([n for n, _ in top])))
+    if plan_share is not None:
+        if plan_share >= 99.5:
+            bits.append("All of it was sold under 10b5-1 plans: instructions set up in advance that then sell automatically.")
+        elif plan_share < 0.5:
+            bits.append("None of the sales were under a 10b5-1 plan (instructions set up in advance), so each sale was decided at the time.")
+        else:
+            bits.append("%s of the value sold was under 10b5-1 plans: instructions set up in advance that then sell automatically." % pct(plan_share, 1))
+
+    if not trades:
+        # nothing in the window: when the last open-market trade was, and the latest few before it
+        d_prev = call_api(sec_insiders_api.company, sec_code="cik:%d" % rec["cik"], months=36, code="", limit=2000)
+        prev = [t for t in d_prev["trades"] if t["trans_code"] in ("P", "S") and t["trans_date"] and t["trans_date"] < since.isoformat()
+                and (not person or all(re.search(r"\b%s\b" % re.escape(w), t.get("owner_name") or "", re.I) for w in person.split()))]
+        if prev:
+            t0 = prev[0]
+            bits.append("The last one was a %s of %s by %s on %s." % ("purchase" if t0["trans_code"] == "P" else "sale", money(t0["value"]),
+                                                                     us_link.person_name(t0["owner_name"]), date_words(t0["trans_date"])))
+            table = {"columns": ["Date", "Insider", "Role", "Trade", "Value (USD)"],
+                     "rows": [[t["trans_date"], us_link.person_name(t["owner_name"]), t.get("title") or t.get("relationship"),
+                               "Purchase" if t["trans_code"] == "P" else "Sale", t["value"]] for t in prev[:10]]}
+        else:
+            bits.append("None is on file in the past three years either.")
+            table = None
+        out = pkg("company_insiders", q, headline, " ".join(bits), [fig("Bought", 0, "USD", None), fig("Sold", 0, "USD", None)], table, None,
+                  [INSIDER_SOURCE], {"value": "shares × the price the filer reported"}, {"company": rec, "since": _d(since), "code": "all"},
+                  {"company": company_link(rec)}, ["Only open-market purchases (Form 4 code P) and sales (code S) count. Share awards, option exercises and shares withheld for tax are left out.",
+                                                   "A Form 4 is due within two business days of the trade, so the last few days may still be missing."] + cut_note,
+                  period={"text": "Since %s" % date_words(since)})
+        if rec.get("ticker"):
+            out["more"] = {"label": "Every trade, filing by filing", "href": "/?t=%s&view=owners" % rec["ticker"]}
+        return out
+
+    has_b, has_s = bool(buys), bool(sells)
+    cols = ["Insider"] + (["Bought (USD)"] if has_b else []) + (["Sold (USD)"] if has_s else []) + ["Role", "Trades", "Latest trade"] + \
+        (["Sold under 10b5-1 plan %"] if has_s else [])
+    rows = []
+    for k, v in ranked:
+        rows.append([us_link.person_name(k)] + ([v["bought"] or None] if has_b else []) + ([v["sold"] or None] if has_s else []) +
+                    [v["role"], v["trades"], v["latest"]] + ([round(v["planned"] / v["sold"] * 100, 1) if v["sold"] else None] if has_s else []))
+    table = {"columns": cols, "rows": rows} if rows else None
+
+    chart = None
+    if trades and months >= 3:
+        spec = _month_cols(trades, since, [s for s in (("Bought", "P") if has_b else None, ("Sold", "S") if has_s else None) if s])
+        chart = dict(spec, kind="cols", title="Open-market %s by %s, by month" % ("trades" if has_b and has_s else "sales" if has_s else "purchases", who), unit="USD")
+    elif len(ranked) > 1:
+        chart = {"kind": "bars", "title": "Open-market trades by %s, by insider" % co, "unit": "USD",
+                 "series": [{"name": "Value", "points": [[us_link.person_name(k)[:28], v["sold"] + v["bought"]] for k, v in ranked[:10]]}]}
+
+    figures = [fig("Bought", bought, "USD", None, "shares × reported price"), fig("Sold", sold, "USD", None, "shares × reported price")]
+    if not person and trades:
+        figures.append(fig("Insiders selling" if has_s or not has_b else "Insiders buying", len(sellers) if has_s or not has_b else len(buyers), "count", None))
+    if plan_share is not None:
+        figures.append(fig("Sold under 10b5-1 plans", round(plan_share, 1), "%", None, "value sold under a 10b5-1 plan ÷ value of all sales × 100"))
+    out = pkg("company_insiders", q, headline, " ".join(bits), figures, table, chart, [INSIDER_SOURCE],
+              {"value": "shares × the price the filer reported",
+               "sold_under_plan": "value of the sales the filer marked as under a Rule 10b5-1 plan ÷ value of all sales × 100",
+               "a_year_earlier": "the same trades counted over the same dates one year (365 days) earlier",
+               "share_of_market_value": "value traded ÷ the company's market value today × 100"},
+              {"company": rec, "since": _d(since), "code": "all"}, {"company": company_link(rec)},
+              ["Only open-market purchases (Form 4 code P) and sales (code S) count. Share awards, option exercises and shares withheld for tax are left out.",
+               "A Form 4 is due within two business days of the trade, so the last few days may still be missing."] + cut_note,
+              period={"text": "%s to %s" % (date_words(since), date_words(latest)) if latest else "Since %s" % date_words(since)})
+    if rec.get("ticker"):
+        out["more"] = {"label": "Every trade, filing by filing", "href": "/?t=%s&view=owners" % rec["ticker"]}
+    return out
 
 
 _PERSON_STOP = {"Insider", "Insiders", "Has", "Have", "Did", "Does", "Is", "Are", "Who", "Which", "What", "When", "Shares", "Stock",
@@ -1506,13 +1788,26 @@ def r_company_quarters(cur, q, e):
     if v is None:
         headline = "%s's %s for the quarter to %s is not tagged in its filings." % (rec["name"], label, date_words(last["quarter_end"]))
     elif every:
-        headline = "%s's %s was %s in the quarter to %s%s; the %d quarters on file are in the table." % (rec["name"], label, fmt(v), date_words(last["quarter_end"]), yoy, len(rows))
+        headline = "%s's %s was %s in the quarter to %s%s." % (rec["name"], label, fmt(v), date_words(last["quarter_end"]), yoy)
     else:
         headline = "%s's %s was %s in the quarter to %s (fiscal %s %d)%s." % (rec["name"], label, fmt(v), date_words(last["quarter_end"]), last["fiscal_quarter"], last["fiscal_year"], yoy)
     bits = []
+    # compared with what: growth against the quarters before it, or the figure against the same quarter a year earlier
+    i = rows.index(last)
+    g = last.get("revenue_growth_yoy_pct")
+    if col == "revenue_usd" and g is not None and i > 0 and rows[i - 1].get("revenue_growth_yoy_pct") is not None:
+        g0 = rows[i - 1]["revenue_growth_yoy_pct"]
+        held = [r["revenue_growth_yoy_pct"] for r in rows[:i + 1] if r.get("revenue_growth_yoy_pct") is not None]
+        rank = (", the fastest of the %d quarters on file" % len(held)) if len(held) >= 4 and g >= max(held) else \
+               (", the slowest of the %d quarters on file" % len(held)) if len(held) >= 4 and g <= min(held) else ""
+        bits.append("Growth %s from %s the quarter before%s." % ("picked up" if g > g0 + 0.5 else "slowed" if g < g0 - 0.5 else "held steady",
+                                                              pct(g0, 1, sign=True), rank))
+    elif col != "revenue_usd" and col != "net_income_usd" and v is not None:
+        ago = next((r for r in rows if r["fiscal_quarter"] == last["fiscal_quarter"] and r["fiscal_year"] == last["fiscal_year"] - 1), None)
+        if ago and ago.get(col) is not None:
+            bits.append("A year earlier, in fiscal %s %d, it was %s." % (ago["fiscal_quarter"], ago["fiscal_year"], fmt(ago[col])))
     if last.get("q4_derived"):
         bits.append("The fourth quarter is the full year less the first three quarters: no filing reports it on its own.")
-    bits.append("Quarters are as last filed in each 10-Q or 10-K; the table holds the last %d quarters." % len(rows))
     if re.search(r"since (?:19|20)\d{2}|every quarter since", ql):
         yr = re.search(r"since ((?:19|20)\d{2})", ql)
         if yr and rows[0]["fiscal_year"] > int(yr.group(1)):
@@ -1528,7 +1823,8 @@ def r_company_quarters(cur, q, e):
                                                                 fig("Revenue growth, year on year", last.get("revenue_growth_yoy_pct"), "%", _d(last["quarter_end"]))],
                table, chart, srcs, {"revenue_growth_yoy_pct": "(revenue this quarter \u00f7 revenue in the same quarter a year earlier \u2212 1) \u00d7 100",
                                     "q4": "a fourth quarter no filing reports alone is the full year less the first three quarters"},
-               {"company": rec, "quarter": "%s %d" % (last["fiscal_quarter"], last["fiscal_year"])}, {"company": company_link(rec)})
+               {"company": rec, "quarter": "%s %d" % (last["fiscal_quarter"], last["fiscal_year"])}, {"company": company_link(rec)},
+               ["Each quarter is as last filed in a 10-Q or 10-K; the table holds the last %d quarters." % len(rows)])
 
 
 def r_ceo_pay(cur, q, e):
@@ -1574,21 +1870,27 @@ def r_ceo_pay(cur, q, e):
                 ceo, money(total) if total is not None else "\u2014", date_words(fy), short_name(rec["name"]), num(row["tsr_value_of_100"], 0),
                 (" (peers: $%s)" % num(row["peer_tsr_value_of_100"], 0)) if row.get("peer_tsr_value_of_100") is not None else "")
         bits = []
+        # compared with what: where this pay ranks among the S&P 500's CEOs
+        key = "ceo_actually_paid_usd" if actual else "ceo_total_pay_usd"
+        if lead is not None:
+            import statistics
+            pool = sorted((r[key] for r in rows if r.get(key) is not None), reverse=True)
+            if len(pool) >= 50:
+                bits.append("That ranks %s of the %d S&P 500 CEOs with a figure, whose median is %s." % (
+                    _ordinal(1 + sum(1 for x in pool if x > lead)), len(pool), money(statistics.median(pool))))
         if not actual and paid is not None:
             bits.append("Compensation actually paid, with equity awards marked to market over the year, was %s." % money(paid))
-        if row.get("other_execs_avg_pay_usd") is not None:
-            bits.append("The other named executives averaged %s." % money(row["other_execs_avg_pay_usd"]))
         if row.get("tsr_value_of_100") is not None:
             bits.append("$100 in the shares at %s was worth %s at the year end%s." % (
                 date_words(row["tsr_since"]) if row.get("tsr_since") else "the start of the measurement period", "$%s" % num(row["tsr_value_of_100"], 0),
                 (", against $%s for its peer group" % num(row["peer_tsr_value_of_100"], 0)) if row.get("peer_tsr_value_of_100") is not None else ""))
-        bits.append("From the proxy statement filed %s; pay is for the company's own fiscal year." % date_words(row["proxy_filed"]) if row.get("proxy_filed") else "")
         table = {"columns": ["Figure", "Value"], "rows": [["Total pay as reported (USD)", total], ["Compensation actually paid (USD)", paid],
                                                           ["Other named executives, average (USD)", row.get("other_execs_avg_pay_usd")],
                                                           ["$100 in the shares became", row.get("tsr_value_of_100")], ["Peer group, $100 became", row.get("peer_tsr_value_of_100")]], "unit": "USD"}
         figures = [fig("Total pay as reported", total, "USD", fy, calc["ceo_total_pay_usd"]), fig("Compensation actually paid", paid, "USD", fy, calc["ceo_actually_paid_usd"])]
         return pkg("ceo_pay", q, headline, " ".join(b for b in bits if b), figures, table, None, [src], calc,
                    {"company": rec, "ceo": ceo}, {"company": company_link(rec)} if rec.get("cik") else {},
+                   (["From the proxy statement filed %s; pay is for the company's own fiscal year." % date_words(row["proxy_filed"])] if row.get("proxy_filed") else []) +
                    ["Pay covers S&P 500 members, each company's latest proxy statement only."])
     who = person_named(q)
     if who and not re.search(r"(highest|best|top|lowest|worst).paid|most paid|paid (the )?most|\bceos\b", ql):
@@ -2023,10 +2325,10 @@ def r_compare_companies(cur, q, e):
         headline = "%s grew fastest: revenue %s against %s." % (short_name(cos[lead]["name"]), pct(vals[lead], 1, sign=True),
                                                                  ", ".join("%s for %s" % (pct(vals[i], 1, sign=True), short_name(cos[i]["name"])) for i in ranked[1:]))
     foreign = [c["name"] for c, r in zip(cos, rows) if r.get("unit") != "USD"]
-    answer = "Each company's latest annual report (%s)%s. Ratios are calculated the same way for each; the formula is under each.%s" % (
+    answer = ("%s reports in another currency, so its dollar lines are left blank; only ratios and market value compare." % " and ".join(foreign)) if foreign else ""
+    compared = "Each company's latest annual report (%s)%s, with every ratio worked out the same way for each." % (
         "; ".join("%s to %s" % (c["ticker"] or c["name"], date_words(r["period_end"])) for c, r in zip(cos, rows)),
-        " and the latest closes" if any(l[0] in ("Market value", "P/E", "Dividend yield", "Buyback yield") for l in lines) else "",
-        (" %s reports in another currency, so its dollar lines are left blank; only ratios and market value compare." % " and ".join(foreign)) if foreign else "")
+        " and the latest closes" if any(l[0] in ("Market value", "P/E", "Dividend yield", "Buyback yield") for l in lines) else "")
     table = {"columns": ["Figure"] + [c["name"] for c in cos],
              "rows": [[l[0] + (" (%s)" % l[1] if l[1] not in ("USD",) else "")] + list(l[2]) for l in lines], "unit": "USD"}
     chart = None
@@ -2041,7 +2343,7 @@ def r_compare_companies(cur, q, e):
         links["company_%d" % i] = company_link(c)
     return pkg("compare_companies", q, headline, answer, [], table, chart, [SEC_SOURCE, PRICE_SOURCE],
                {k: v for k, v in calc.items() if k in ("revenue_growth_pct", "operating_margin_pct", "net_margin_pct", "roe_pct", "market_cap", "pe_x", "dividend_yield_pct", "buyback_yield_pct", "fcf")},
-               {"companies": cos}, links)
+               {"companies": cos}, links, [compared])
 
 
 def _fmt_unit(v, unit):
@@ -2356,7 +2658,7 @@ def r_company_history(cur, q, e):
     if asked and len(hist) < asked:
         bits.append("You asked for %d years; %d %s on file." % (asked, len(hist), "is" if len(hist) == 1 else "are"))
     restated = [h for h in hist if h[1].get("first_value") is not None and h[1]["first_value"] != h[1]["value"]]
-    bits.append("Each year shows the latest figure the %s filed for it%s." % ("company" if len(per_co) == 1 else "companies", 
+    restate_note = ("Each year shows the latest figure the %s filed for it%s." % ("company" if len(per_co) == 1 else "companies", 
         "; %d %s later restated, and the first-reported figure is in the table" % (len(restated), "year was" if len(restated) == 1 else "years were")
         if restated else ", and none was later restated"))
     if hf["id"] in _HIST_PARTS:
@@ -2424,7 +2726,7 @@ def r_company_history(cur, q, e):
                 {"label": "Years shown", "value": len(hist), "unit": "count", "as_of": None}],
                table, chart, [SEC_SOURCE], calc, {"company": rec, "figure": hf["id"], "years": years},
                {"company": company_link(rec)},
-               ["Figures come from each annual report's own statements: SEC company facts for the companies held at full "
+               [restate_note, "Figures come from each annual report's own statements: SEC company facts for the companies held at full "
                 "depth, and the SEC's quarterly data sets (each 10-K carries three years) for the rest."])
 
 
@@ -2524,7 +2826,7 @@ _SUFFIX = re.compile(r"(?:,?\s+(?:Inc\.?|Corp\.?|Corporation|Co\.?|Company|Ltd\.
 def short_name(name):
     """'Nvidia Corp' -> 'Nvidia', 'Meta Platforms, Inc.' -> 'Meta Platforms': the name a reader would write."""
     n = us_link.display_name(name)
-    return _SUFFIX.sub("", n).strip() or n
+    return _SUFFIX.sub("", n).strip().rstrip(" &,") or n
 
 
 def _bench_name(b):
@@ -3093,10 +3395,10 @@ def r_index_stat(cur, q, e):
     headline = "The %s %s of %s members is %s (%s %s), across %d of %d members with the figure." % (
         lead_w, label, b["name"], fmt(lead_v), other_w, fmt(other_v), len(vals), len(rows))
     bits = ["The median is the middle company; the mean is pulled by the extremes, so the two differ."] if abs(mean - med) > 0.1 * abs(med or 1) else []
-    bits.append("%s membership is taken from the holdings of the %s fund on %s." % (b["name"], b["etf"], date_words(as_of)))
     return pkg("index_stat", q, headline, " ".join(bits), [fig("Median", med, unit, None), fig("Mean", mean, unit, None), fig("Members with the figure", len(vals), "count", None)],
                None, None, [SEC_SOURCE, PRICE_SOURCE], {key: dict(sec_metrics.FORMULAS, **sec_metrics.PRICE_FORMULAS).get(key, "as filed")},
-               {"index": ix, "metric": key, "stat": stat}, {})
+               {"index": ix, "metric": key, "stat": stat}, {},
+               ["%s membership is taken from the holdings of the %s fund on %s." % (b["name"], b["etf"], date_words(as_of))])
 
 
 def r_index_member(cur, q, e):
@@ -3172,31 +3474,39 @@ def r_insider_buying_market(cur, q, e):
     since = e.get("since") or datetime.date.today().replace(day=1)
     days = max(1, (datetime.date.today() - since).days + 1)
     floor = e.get("money") or 0
-    d = call_api(sec_insiders_api.recent, code="P", min_value=floor, days=days, limit=200)
-    trades = d["trades"]
-    by_issuer = {}
-    for t in trades:
-        k = (t["issuer_symbol"] or t["issuer_name"], t["issuer_name"])
-        by_issuer.setdefault(k, {"value": 0, "trades": 0, "insiders": set()})
-        by_issuer[k]["value"] += t["value"] or 0
-        by_issuer[k]["trades"] += 1
-        by_issuer[k]["insiders"].add(t["owner_name"])
-    ranked = sorted(by_issuer.items(), key=lambda kv: -kv[1]["value"])
+    # summed per company over the whole window, a jointly filed trade once
+    d = call_api(sec_insiders_api.recent_companies, code="P", min_value=floor, days=days, limit=200)
+    ranked, tot = d["companies"], d["totals"]
+    above = (" above %s" % money(floor)) if floor else ""
+    api = "/api/v1/us/insiders/recent/companies?code=P&min_value=%d&days=%d" % (floor, days)
     if not ranked:
-        headline = "No open-market insider purchases%s since %s in the loaded filings." % ((" above %s" % money(floor)) if floor else "", date_words(since))
-        return pkg("insider_buying_market", q, headline, "Form 4 filings arrive within two business days of a trade; the loaded quarters are listed under /api/v1/us/insiders/summary.", [], None, None, [INSIDER_SOURCE], {}, {"since": _d(since), "floor": floor}, {})
+        headline = "No open-market insider purchases%s %s in the loaded filings." % (above, _since_words(since))
+        return pkg("insider_buying_market", q, headline, "", [], None, None, [INSIDER_SOURCE], {}, {"since": _d(since), "floor": floor}, {},
+                   ["A Form 4 is due within two business days of the trade; the loaded quarters are listed under /api/v1/us/insiders/summary."])
+    name = lambda r: us_link.display_name(r["issuer_name"])
+    for r in ranked:   # some filings write "N/A" or "NONE" for an unlisted issuer's ticker
+        if (r["issuer_symbol"] or "").strip().upper() in ("", "N/A", "NA", "NONE"):
+            r["issuer_symbol"] = None
     top = ranked[0]
-    headline = "Insiders bought most at %s since %s: %s across %d purchase%s." % (top[0][1].title(), date_words(since), money(top[1]["value"]), top[1]["trades"], "" if top[1]["trades"] == 1 else "s")
-    answer = "%d open-market purchases%s by %d insiders at %d companies. Next: %s. Purchases are transaction code P only; awards and option exercises are not counted." % (
-        len(trades), (" above %s" % money(floor)) if floor else "", len({t["owner_name"] for t in trades}), len(ranked),
-        "; ".join("%s %s" % (k[1].title(), money(v["value"])) for k, v in ranked[1:5]))
-    table = {"columns": ["Date", "Company", "Ticker", "Insider", "Role", "Shares", "Price", "Value", "10b5-1 plan"],
-             "rows": [[t["trans_date"], t["issuer_name"], t["issuer_symbol"], t["owner_name"], t.get("title") or t.get("relationship"), t["shares"], t["price"], t["value"], t["plan_10b5_1"]] for t in trades[:100]]}
-    chart = {"kind": "bars", "title": "Open-market insider purchases since %s, by company" % date_words(since), "unit": "USD",
-             "series": [{"name": "Value bought", "points": [[k[0], v["value"]] for k, v in ranked[:12]]}]}
-    return pkg("insider_buying_market", q, headline, answer, [fig("Purchases", len(trades), "count", None), fig("Companies", len(ranked), "count", None)],
-               table, chart, [INSIDER_SOURCE], {"value": "shares × the price the filer reported"}, {"since": _d(since), "floor": floor},
-               {"api": "/api/v1/us/insiders/recent?code=P&min_value=%d&days=%d" % (floor, days)})
+    headline = "Insiders bought the most at %s %s: %s of shares." % (name(top), _since_words(since), money(top["value"]))
+    answer = ("In all, %s insiders bought %s%s at %s companies. Next after %s: %s." % (
+        num(tot["insiders"]), money(tot["value"]), above, num(tot["companies"]), short_name(top["issuer_name"]),
+        _people(["%s %s" % (short_name(r["issuer_name"]), money(r["value"])) for r in ranked[1:4]]))) if len(ranked) > 1 else \
+        "No other company had an open-market insider purchase%s." % above
+    table = {"columns": ["Company", "Ticker", "Bought (USD)", "Insiders", "Trades", "Latest trade"],
+             "rows": [[name(r), r["issuer_symbol"] or None, r["value"], r["insiders"], r["trades"], r["latest_trade"]] for r in ranked]}
+    chart = {"kind": "bars", "title": "Open-market insider purchases %s, by company" % _since_words(since), "unit": "USD",
+             "series": [{"name": "Value bought", "points": [[r["issuer_symbol"] or short_name(r["issuer_name"])[:16], r["value"]] for r in ranked[:12]]}]}
+    out = pkg("insider_buying_market", q, headline, answer,
+              [fig("Bought", tot["value"], "USD", None, "shares × reported price"), fig("Companies", tot["companies"], "count", None),
+               fig("Insiders", tot["insiders"], "count", None)],
+              table, chart, [INSIDER_SOURCE], {"value": "shares × the price the filer reported"}, {"since": _d(since), "floor": floor},
+              {"api": api},
+              ["Only open-market purchases (Form 4 code P) count. Share awards and option exercises are left out.",
+               "A trade filed jointly by several owners (a fund and its managers) counts once. A line priced above $1mn a share or worth over $20bn is left out as a typing error."] +
+              (["The table lists the 200 companies with the most bought; the totals count all %s." % num(tot["companies"])] if tot["companies"] > len(ranked) else []),
+              period={"text": "%s to today" % date_words(since)})
+    return out
 
 
 def r_calendar_window(cur, q, e):

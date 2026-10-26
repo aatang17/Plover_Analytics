@@ -136,6 +136,38 @@ def display_name(name):
     return " ".join(out)
 
 
+# A Form 4 names a person surname first ("Zuckerberg Mark", "COX CHRISTOPHER K")
+# and a fund or company as itself; these words mark the second kind.
+_ENTITY_WORD = re.compile(r"(?i)\b(?:inc|llc|l\.l\.c|lp|l\.p|llp|ltd|limited|corp|corporation|co|company|fund|funds|capital|"
+                          r"partners|partnership|plan|trust|trustee|holdings?|group|management|advisors?|advisers?|associates|"
+                          r"association|authority|foundation|bank|investments?|ventures|gp|sicav|a\.s|se|plc|n\.v|s\.a|ag|"
+                          r"equity|securities|insurance|retirement|pension|estate)\b\.?|\d|&")
+_SURNAME_PARTICLE = {"de", "di", "da", "del", "della", "van", "von", "le", "la", "du", "st", "st.", "mac", "dos", "das"}
+_NAME_SUFFIX = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
+
+
+def person_name(name):
+    """A Form 4 filer's name as people write it: 'Zuckerberg Mark' -> 'Mark
+    Zuckerberg', 'COX CHRISTOPHER K' -> 'Christopher K Cox', 'Culp Robert
+    George IV' -> 'Robert George Culp IV'. A fund or company is cased like a
+    company name and never reordered."""
+    n = " ".join((name or "").split())
+    if not n:
+        return n
+    if _ENTITY_WORD.search(n):
+        return display_name(n)
+    words = n.split()
+    if n == n.upper():
+        words = [w if w.lower() in _NAME_SUFFIX and w.lower().startswith(("i", "v")) else
+                 "'".join(p.capitalize() for p in w.split("'")) if "'" in w else
+                 "-".join(p.capitalize() for p in w.split("-")) for w in words]
+    if len(words) < 2:
+        return " ".join(words)
+    suffix = [words.pop()] if words[-1].lower() in _NAME_SUFFIX and len(words) > 2 else []
+    cut = 2 if words[0].lower() in _SURNAME_PARTICLE and len(words) > 2 else 1
+    return " ".join(words[cut:] + words[:cut] + suffix)
+
+
 _LOGOS = pathlib.Path(__file__).resolve().parent.parent / "web" / "assets" / "logos" / "us"
 _LOGO_SET = (None, frozenset())
 

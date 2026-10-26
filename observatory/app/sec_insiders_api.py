@@ -215,6 +215,64 @@ def recent(code: str = Query("P", description="transaction code; P = open-market
             "relationship": rel or None, "trades": rows, "count": len(rows), "provenance": PROVENANCE}
 
 
+@router.get("/recent/companies", openapi_extra={"x-example": "/api/v1/us/insiders/recent/companies?code=P&days=90"})
+def recent_companies(code: str = Query("P", description="transaction code; P = open-market purchase"),
+                     min_value: float = Query(0, ge=0, description="count only trades of shares × price at least this, in dollars"),
+                     days: int = Query(30, ge=1, le=400),
+                     relationship: str = Query("", description="director | officer | ten_percent"),
+                     limit: int = Query(100, ge=1, le=1000)):
+    """Every trade of one code across every issuer in the window, summed per
+    issuer, largest value first. Unlike /recent this is never cut to the
+    newest N trades, and a trade filed jointly by several owners counts once.
+    Amendments are left out, and so is a line whose price is above $1mn a
+    share or whose value is above $20bn: those are typing errors in the filing."""
+    cur = _require()
+    c = (code or "P").strip().upper()
+    if c not in CODES:
+        raise HTTPException(400, "code must be one of %s" % ", ".join(sorted(CODES)))
+    since = datetime.date.today() - datetime.timedelta(days=days)
+    where = ("t.trans_code = ? AND NOT t.derivative AND NOT f.amendment AND t.trans_date >= ? "
+             "AND t.shares IS NOT NULL AND t.price IS NOT NULL AND t.price > 0 AND t.price <= 1e6 "
+             "AND t.shares * t.price >= ? AND t.shares * t.price <= 2e10")
+    params = [c, since, min_value]
+    rel = (relationship or "").strip().lower()
+    if rel:
+        col = {"director": "o.is_director", "officer": "o.is_officer", "ten_percent": "o.is_ten_percent"}.get(rel)
+        if not col:
+            raise HTTPException(400, "relationship must be director, officer or ten_percent")
+        where += " AND EXISTS (SELECT 1 FROM sec_ins_owners o WHERE o.accession = t.accession AND %s)" % col
+    sql = """
+        WITH tx AS (
+            SELECT t.accession, f.issuer_cik, f.issuer_name, f.issuer_symbol, f.filed, t.trans_date,
+                   t.shares * t.price AS value
+            FROM sec_ins_transactions t JOIN sec_ins_filings f ON f.accession = t.accession
+            WHERE %s%s),
+        people AS (
+            SELECT tx.issuer_cik, count(DISTINCT o.owner_cik) AS insiders
+            FROM (SELECT DISTINCT issuer_cik, accession FROM tx) tx JOIN sec_ins_owners o ON o.accession = tx.accession
+            GROUP BY tx.issuer_cik)
+        SELECT tx.issuer_cik, arg_max(tx.issuer_name, tx.filed) AS issuer_name, arg_max(tx.issuer_symbol, tx.filed) AS issuer_symbol,
+               sum(tx.value) AS value, count(*) AS trades, coalesce(any_value(p.insiders), 0) AS insiders,
+               max(tx.trans_date) AS latest_trade
+        FROM tx LEFT JOIN people p ON p.issuer_cik = tx.issuer_cik
+        GROUP BY tx.issuer_cik ORDER BY value DESC LIMIT ?""" % (where, asof.clause("filed", "f"))
+    rows = _rows(cur, sql, params + [limit])
+    totals = _rows(cur, """
+        SELECT count(*) AS trades, sum(t.shares * t.price) AS value, count(DISTINCT f.issuer_cik) AS companies
+        FROM sec_ins_transactions t JOIN sec_ins_filings f ON f.accession = t.accession WHERE %s%s""" % (where, asof.clause("filed", "f")), params)[0]
+    people = _rows(cur, """
+        SELECT count(DISTINCT o.owner_cik) AS insiders FROM sec_ins_owners o WHERE o.accession IN (
+            SELECT t.accession FROM sec_ins_transactions t JOIN sec_ins_filings f ON f.accession = t.accession WHERE %s%s)"""
+                   % (where, asof.clause("filed", "f")), params)[0]
+    for r in rows:
+        r["latest_trade"] = _d(r["latest_trade"])
+        r["value"] = round(r["value"], 2) if r["value"] is not None else None
+    return {"code": c, "meaning": CODES[c], "days": days, "since": since.isoformat(), "min_value": min_value,
+            "relationship": rel or None, "companies": rows,
+            "totals": {"trades": totals["trades"], "value": totals["value"], "companies": totals["companies"], "insiders": people["insiders"]},
+            "provenance": PROVENANCE}
+
+
 @router.get("/owner/{owner_cik}", openapi_extra={"x-example": "/api/v1/us/insiders/owner/1214128"})
 def owner(owner_cik: str, months: int = Query(24, ge=1, le=240), limit: int = Query(300, ge=1, le=2000)):
     """One reporting person's trades across every issuer, newest first."""

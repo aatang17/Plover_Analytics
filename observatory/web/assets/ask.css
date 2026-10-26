@@ -82,3 +82,10 @@ details.worked-out .checks li { margin: 2px 0; }
 
 /* the wait line under the box (home.css lays out the rest of the page) */
 .ask-main #status { margin: 14px 0 0; }
+
+/* a long answer table shows its first ten rows until "Show all" (us-stocks.js FOLD_ROWS);
+   Copy and CSV still take every row, since the fold is display only */
+.an-fold tbody tr:nth-child(n+11) { display: none; }
+.an-tbl-foot .an-more { margin-left: auto; color: var(--obs-accent); text-decoration: none; }
+.an-tbl-foot .an-more:hover { color: var(--obs-accent-dark); text-decoration: underline; }
+.an-foot.an-tbl-foot { font-size: 13.5px; }

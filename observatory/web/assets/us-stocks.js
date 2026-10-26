@@ -126,7 +126,7 @@
       if (/\(pp\)/.test(c)) return "<td class='r'>" + (v > 0 ? "+" : v < 0 ? "\u2212" : "") + fmtNum(Math.abs(v), 2) + " pp</td>";
       if (/share of|%|change %|pct|margin|yield|roe|growth|ratio/.test(c) && !/shares|rank/.test(c)) return "<td class='r'>" + pct(v, 1, /change/.test(c)) + "</td>";
       if (/p\/e/.test(c)) return "<td class='r'>" + mult(v) + "</td>";
-      if (/rank|holders|count|trades|positions|days/.test(c)) return "<td class='r'>" + count(v) + "</td>";
+      if (/rank|holders|insiders|count|trades|positions|days/.test(c)) return "<td class='r'>" + count(v) + "</td>";
       if (/shares|volume/.test(c)) return "<td class='r'>" + count(v) + "</td>";
       if (/price|close/.test(c) && !/change/.test(c)) return "<td class='r'>" + money(v, 2) + "</td>";
       if (/value|revenue|income|assets|equity|cap|buyback|dividend|net|cash|fcf|both|total|prior/.test(c) || unit === "USD") return "<td class='r'>" + money(v) + "</td>";
@@ -150,7 +150,9 @@
     var cells = (figs || []).filter(function (f) { return f && (f.value !== undefined); }).map(function (f) {
       var qual = f.as_of && f.unit !== "date" ? "<small>as of " + dateWords(f.as_of) + "</small>" : "";
       var title = f.formula ? " title='" + esc(f.formula) + "'" : "";
-      return "<div class='hit'" + title + "><dt>" + esc(f.label) + "</dt><dd>" + fmtBy(f.unit, f.value) + qual + "</dd></div>";
+      // a true zero amount reads "$0", not "$0.00"
+      var shown = f.unit === "USD" && f.value === 0 ? "$0" : fmtBy(f.unit, f.value);
+      return "<div class='hit'" + title + "><dt>" + esc(f.label) + "</dt><dd>" + shown + qual + "</dd></div>";
     });
     return cells.length ? "<section class='hp-panel'><dl class='an-figs'>" + cells.join("") + "</dl></section>" : "";
   }
@@ -193,10 +195,22 @@
 
   function drawChart(el, chart, sourceLine) {
     if (!chart || !chart.series || !chart.series.length) return null;
-    var hasPts = chart.series.some(function (s) { return s.points && s.points.some(function (p) { return p[1] != null; }); });
+    // a column chart's points are plain values, one per category; other charts' are [x, value]
+    var hasPts = chart.series.some(function (s) {
+      return s.points && s.points.some(function (p) { return chart.kind === "cols" ? p != null : p[1] != null; });
+    });
     if (!hasPts) return null;
     var unit = chart.unit || "";
     var isUsd = /USD/.test(unit);
+    // columns per period ("Sold" by month): a dollar axis in $mn or $bn
+    if (chart.kind === "cols") {
+      var top = 0;
+      chart.series.forEach(function (s) { s.points.forEach(function (v) { top = Math.max(top, Math.abs(v || 0)); }); });
+      var sc = isUsd ? (top >= 1e9 ? 1e9 : top >= 1e6 ? 1e6 : 1) : 1;
+      var sfx = isUsd ? (sc === 1e9 ? "$bn" : sc === 1e6 ? "$mn" : "$") : unit;
+      return obsChart(el, "cols", { categories: chart.categories, dp: 1, unitSuffix: sfx, yAxisName: sfx, trust: "derived", sourceLine: sourceLine,
+        series: chart.series.map(function (s, i) { return { name: s.name, slot: i + 1, points: s.points.map(function (v) { return v == null ? null : v / sc; }) }; }) });
+    }
     if (chart.kind === "bars") {
       var pts = chart.series[0].points;
       var scale = 1, suffix = unit;
@@ -357,6 +371,7 @@
     navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Copy blocked"); });
   }
 
+  var FOLD_ROWS = 10;
   function renderAnswer(a, trail) {
     disposeCharts();
     var el = $("answer");
@@ -396,7 +411,15 @@
         "<button type='button' class='an-link' id='an-csv'>Download CSV</button></span></div>", "an-chart-panel");
     }
     if (a.lists) main += "<section class='hp-panel an-list'>" + listsHtml(a.lists) + "</section>";
-    if (hasTable) main += panel("Detail", count(a.table.rows.length) + " rows" + (a.table.unit ? " · " + a.table.unit : ""), tableHtml(a.table, "an-table"));
+    // a long table shows its first rows; the rest are one click away and always in Copy and CSV
+    var nRows = hasTable ? a.table.rows.length : 0, fold = nRows > FOLD_ROWS + 2;
+    if (hasTable) {
+      main += panel("Detail", count(nRows) + " rows" + (a.table.unit ? " · " + a.table.unit : ""),
+        "<div class='an-tbl" + (fold ? " an-fold" : "") + "'>" + tableHtml(a.table, "an-table") + "</div>" +
+        (fold || a.more ? "<div class='an-foot an-tbl-foot'>" +
+          (fold ? "<button type='button' class='an-link' id='an-all' aria-expanded='false'>Show all " + count(nRows) + " rows</button>" : "") +
+          (a.more ? "<a class='an-more' href='" + esc(a.more.href) + "'>" + esc(a.more.label) + "</a>" : "") + "</div>" : ""), "an-detail");
+    }
     var fu = followupsFor(a);
     main += panel("", "", "<form id='an-ask' autocomplete='off'><label for='an-q' class='fp-sr'>Ask a follow-up</label>" +
       "<input type='search' id='an-q' maxlength='300' placeholder='Ask a follow-up, e.g. and Microsoft?'><button type='submit'>Ask</button></form>" +
@@ -441,6 +464,17 @@
       } else {
         $("an-chart").closest(".hp-panel").remove();
       }
+    }
+    if (fold) {
+      var box = el.querySelector(".an-tbl"), allBtn = $("an-all");
+      var setFold = function (on) {
+        box.classList.toggle("an-fold", on);
+        allBtn.setAttribute("aria-expanded", on ? "false" : "true");
+        allBtn.textContent = on ? "Show all " + count(nRows) + " rows" : "Show the first " + FOLD_ROWS;
+      };
+      allBtn.onclick = function () { setFold(!box.classList.contains("an-fold")); };
+      // typing in the table's filter searches every row, so the fold opens
+      el.querySelector(".an-detail").addEventListener("input", function () { setFold(false); });
     }
     $("an-copy").onclick = function () { copyText(this, location.origin + "/?q=" + encodeURIComponent(a.question || lastAsked)); };
     $("an-cite").onclick = function () { copyText(this, a.headline + " " + stamp + " (answered " + dateWords(new Date().toISOString()) + ")."); };
