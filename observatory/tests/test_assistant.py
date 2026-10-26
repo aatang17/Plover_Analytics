@@ -376,6 +376,30 @@ class AssistantTests(unittest.TestCase):
         self.assertFalse(me.json()["invite_only"])
         self.assertEqual(self.client().get("/api/v1/account/me").json()["email"], "pm@example.com")
 
+    def test_me_names_the_desks_the_header_offers(self):
+        from app import staff, writers
+        old_path, old_roles = staff.DB_PATH, writers.roles
+        staff.DB_PATH = staff.pathlib.Path(self.tmp.name) / "staff-me.db"
+        try:
+            # a reader with no staff record: Your Plover only
+            me = self.client().get("/api/v1/account/me").json()
+            self.assertEqual((me["writer"], me["admin"]), (False, False))
+            # "writing" alone is a writer, not an admin
+            person, _ = staff.create("pm@example.com", "PM", ["writing"], "test")
+            writers.roles = lambda p: {1: "writer"}
+            me = self.client().get("/api/v1/account/me").json()
+            self.assertEqual((me["writer"], me["admin"]), (True, False))
+            staff.update(person["id"], 0, permissions=["operations"])
+            writers.roles = lambda p: {}
+            me = self.client().get("/api/v1/account/me").json()
+            self.assertEqual((me["writer"], me["admin"]), (False, True))
+            # a disabled record offers neither
+            staff.update(person["id"], 0, status="disabled")
+            me = self.client().get("/api/v1/account/me").json()
+            self.assertEqual((me["writer"], me["admin"]), (False, False))
+        finally:
+            staff.DB_PATH, writers.roles = old_path, old_roles
+
     # ---- charts
 
     def test_chart_is_read_from_the_result_not_typed(self):

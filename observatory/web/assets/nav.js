@@ -316,7 +316,10 @@ var NAV_SECTIONS = [
   try {
     if (market) localStorage.setItem("obs-market", market);
     else market = localStorage.getItem("obs-market");
-  } catch (e) { /* storage blocked: fall back to Japan below */ }
+  } catch (e) { /* storage blocked: fall back below */ }
+  // a page with no market of its own may name one for first-time visitors
+  // (the home page: its question box is about US companies)
+  if (!market) market = header.getAttribute("data-market");
   var marketObj = NAV_MARKETS[0];
   for (var mi = 0; mi < NAV_MARKETS.length; mi++) {
     if (NAV_MARKETS[mi].id === market) marketObj = NAV_MARKETS[mi];
@@ -438,58 +441,61 @@ var NAV_SECTIONS = [
     });
   })();
 
-  // The account control asks the server who is signed in, and renders nothing
-  // at all where accounts are not switched on — a "Sign in" link to a feature
-  // that does not exist is worse than no link. The slot reserves its width, so
-  // the bar cannot jump when the answer arrives.
+  // The account control, the same on every page. It asks the server who is
+  // signed in, and renders nothing at all where accounts are not switched
+  // on: a "Sign in" link to a feature that does not exist is worse than none.
+  //   signed out:  Sign in · Create free account (both open signin.html and
+  //                come back to this page; no Create while sign-in is
+  //                invite-only, since a stranger could not)
+  //   signed in:   Your Plover · Account ▾ (the address, Writer Desk for a
+  //                writer, Admin for the Plover team, Sign out)
   (function accountSlot() {
     var slot = document.getElementById("header-account");
     if (!slot || !window.fetch) return;
     fetch("/api/v1/account/me", { headers: { Accept: "application/json" } })
       .then(function (r) {
         if (r.status === 404) return null;               // feature off
-        // on, nobody signed in; while sign-in is invite-only, "Sign in"
-        // opens the Writer Desk, which emails invited people a link and
-        // tells anyone else they need an invitation
         if (r.status === 401) return r.json().catch(function () { return {}; })
-          .then(function (b) {
-            if (!(b && b.invite_only)) return { email: null };
-            return { email: null, writers: true };
-          });
+          .then(function (b) { return { email: null, inviteOnly: !!(b && b.invite_only) }; });
         if (!r.ok) return null;
         return r.json();
       })
       .then(function (me) {
         if (!me) return;
         var here = location.pathname.replace(/^\//, "") + location.search;
-        var signIn = me.writers
-          ? '<a href="write.html">Sign in</a>'
-          : '<a href="signin.html?returnTo=' + encodeURIComponent(here) + '">Sign in</a>';
-        var desk = '<a href="my.html">Your Plover</a><a href="write.html">Writer Desk</a>';
-        var mslot = document.getElementById("mnav-account");
-        if (mslot) {
-          mslot.innerHTML = me.email ? desk + '<a href="#" data-do="signout">Sign out</a>' : signIn;
-          mslot.addEventListener("click", function (e) {
+        var back = "signin.html?returnTo=" + encodeURIComponent(here || "index.html");
+        var mine = '<a class="acct-mine" href="my.html">Your Plover</a>';
+        var desks = (me.writer ? '<a href="write.html">Writer Desk</a>' : "") +
+          (me.admin ? '<a href="admin.html">Admin</a>' : "");
+        var signOut = '<a href="#" data-do="signout">Sign out</a>';
+        function bindSignOut(el) {
+          el.addEventListener("click", function (e) {
             if (!e.target.closest("[data-do='signout']")) return;
             e.preventDefault();
+            // A reload rather than a redirect: whichever page the reader is on
+            // is still readable signed out, so they stay where they were.
             fetch("/api/v1/account/signout", { method: "POST" })
               .then(function () { location.reload(); })
               .catch(function () { location.reload(); });
           });
         }
+        var mslot = document.getElementById("mnav-account");
         if (!me.email) {
+          var signIn = '<a href="' + esc(back) + '">Sign in</a>' +
+            (me.inviteOnly ? "" : '<a class="acct-join" href="' + esc(back) + '">Create free account</a>');
           slot.innerHTML = signIn;
+          if (mslot) mslot.innerHTML = signIn;
           return;
         }
-        // A fixed-width "Account" control, not the address: an email is as
-        // long as its owner made it, and the bar has no room to give. The
-        // address is the first line of the menu, and the button's title.
-        slot.innerHTML = '<span class="acct-menu">' +
+        if (mslot) { mslot.innerHTML = mine + desks + signOut; bindSignOut(mslot); }
+        // A fixed "Account" label, not the address: an email is as long as
+        // its owner made it, and the bar has no room to give. The address is
+        // the first line of the menu, and the button's title.
+        slot.innerHTML = mine + '<span class="acct-menu">' +
           '<button type="button" aria-expanded="false" title="Signed in as ' +
           esc(me.email) + '">Account' + NAV_CHEVRON + "</button>" +
           '<span class="acct-pop" hidden>' +
-          '<span class="acct-who">' + esc(me.email) + "</span>" + desk +
-          '<a href="#" data-do="signout">Sign out</a></span></span>';
+          '<span class="acct-who">' + esc(me.email) + "</span>" + desks + signOut + "</span></span>";
         var btn = slot.querySelector("button");
         var pop = slot.querySelector(".acct-pop");
         btn.addEventListener("click", function (e) {
@@ -504,16 +510,10 @@ var NAV_SECTIONS = [
             btn.setAttribute("aria-expanded", "false");
           }
         });
-        pop.addEventListener("click", function (e) {
-          var item = e.target.closest("[data-do='signout']");
-          if (!item) return;
-          e.preventDefault();
-          // A reload rather than a redirect: whichever page the reader is on
-          // is still readable signed out, so they stay where they were.
-          fetch("/api/v1/account/signout", { method: "POST" })
-            .then(function () { location.reload(); })
-            .catch(function () { location.reload(); });
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape" && !pop.hidden) { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); btn.focus(); }
         });
+        bindSignOut(pop);
       })
       .catch(function () { /* the header is not the place to report this */ });
   })();

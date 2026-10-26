@@ -7,8 +7,9 @@
 
 .hp { font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--obs-ground); color: var(--obs-ink); font-variant-numeric: tabular-nums lining-nums; }
-.hp a { color: var(--obs-accent); }
-.hp a:hover { color: var(--obs-accent-dark); }
+/* links are the accent everywhere but the site bar, which keeps its own colours */
+.hp > :where(:not(.site-header)) a { color: var(--obs-accent); }
+.hp > :where(:not(.site-header)) a:hover { color: var(--obs-accent-dark); }
 /* hidden means hidden, whatever display a block's own rule gives it */
 .hp [hidden] { display: none !important; }
 /* app.css spaces every section 32px from the one above; panels here set their own gaps */
@@ -16,24 +17,10 @@
 .hp .up { color: var(--obs-up); }
 .hp .down { color: var(--obs-down); }
 
-/* ---- header ---- */
-.hp-header { background: var(--obs-surface); border-bottom: 1px solid var(--obs-border); }
-.hp-bar { max-width: 1360px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; min-height: 56px;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 28px; }
-.hp-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
-  color: var(--obs-ink) !important; text-decoration: none; }
-.hp-brand svg { color: var(--obs-ink); }
-.hp-nav { display: flex; gap: 4px; font-size: 13.5px; }
-.hp-nav a { color: var(--obs-text-muted); padding: 18px 10px 16px; text-decoration: none; }
-.hp-nav a:hover { color: var(--obs-ink); }
+/* ---- header: the site bar (nav.js), as wide as the page, with the box and account slots ---- */
+.hp .site-header .inner { max-width: 1360px; padding: 0 24px; box-sizing: border-box; }
 .hp-slot { flex: 1 1 320px; max-width: 560px; min-width: 0; }
 .hp-slot:empty { display: none; }
-.hp-account { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
-.hp-account a { text-decoration: none; }
-.hp-account .hp-signin { color: var(--obs-ink); }
-.hp-account .hp-join { color: var(--obs-accent); border: 1px solid var(--obs-accent); border-radius: 4px; padding: 7px 14px; font-weight: 600; }
-.hp-account .hp-join:hover { background: var(--obs-accent-soft); }
-.hp-account .hp-mine { color: var(--obs-ink); font-weight: 600; }
 
 /* ---- the question box: big on the front band, compact in the header ---- */
 .hp-box { display: flex; background: var(--obs-surface); border: 1px solid var(--obs-text-faint); border-radius: 4px; overflow: hidden; }
@@ -187,16 +174,22 @@ body.asked .hp-hero { display: none; }
 
 .hp .fp-footer { background: var(--obs-surface); }
 
+/* narrower screens: once something is asked the box takes a row of its own
+   under the bar, rather than squeezing between the links */
+@media (max-width: 1279px) {
+  .hp.asked .site-header .inner { height: auto; flex-wrap: wrap; row-gap: 0; }
+  .hp.asked .site-header .brand { display: inline-flex; align-items: center; height: 72px; }
+  .hp.asked .hp-slot { order: 4; flex-basis: 100%; max-width: none; padding-bottom: 12px; }
+}
+@media (max-width: 768px) {
+  .hp .site-header .inner { padding: 0 16px; }
+  .hp.asked .site-header .brand { height: 60px; }
+}
 @media (max-width: 1080px) {
   .an-grid { grid-template-columns: minmax(0, 1fr); }
   .hp-cards { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 700px) {
-  .hp-bar { padding: 0 16px; gap: 0 14px; }
-  .hp-nav { order: 3; width: 100%; overflow-x: auto; margin: 0 -10px; }
-  .hp-nav a { padding: 10px 10px 12px; white-space: nowrap; }
-  .hp-slot { order: 4; flex-basis: 100%; max-width: none; padding-bottom: 10px; }
-  .hp-account .hp-join { padding: 6px 10px; }
   .hp-hero-in { padding: 32px 16px 28px; }
   .hp-hero h1 { font-size: 26px; }
   .hp-box input { font-size: 16px; padding: 13px 14px; }

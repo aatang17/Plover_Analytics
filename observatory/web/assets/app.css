@@ -2346,7 +2346,13 @@ table.data tr.row-total td { font-weight: 600; color: var(--obs-ink); background
    width: the slot starts empty either way, so a reservation never stopped the
    bar moving; it only left a blank before a short "Sign in", which then sat
    visibly further from Docs than from Dark Mode. Empty, it takes no room. */
-.header-account { display: inline-flex; align-items: center; }
+.header-account { display: inline-flex; align-items: center; gap: 18px; }
+/* signed out, the one outlined button in the bar: Create free account */
+.header-account a.acct-join {
+  color: var(--obs-primary); border: 1px solid var(--obs-primary); border-radius: 4px;
+  padding: 6px 12px; font-weight: 600;
+}
+.header-account a.acct-join:hover { color: var(--obs-primary-dark); border-color: var(--obs-primary-dark); background: var(--obs-surface-subtle); }
 .header-account:empty { display: none; }
 .header-account a, .header-account button {
   background: none; border: 0; padding: 0; font: inherit; font-size: 12px;

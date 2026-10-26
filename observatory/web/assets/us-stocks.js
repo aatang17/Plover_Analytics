@@ -637,13 +637,9 @@
 
   function gated() { return me.on && !me.email && !previewOff; }
 
+  // the sign-up panel under the examples; the bar's own account control is nav.js's
   function account() {
-    var slot = $("fp-account");
     var back = "signin.html?returnTo=" + encodeURIComponent("/" + location.search);
-    if (slot) {
-      slot.innerHTML = !me.on ? "" : me.email ? "<a class='hp-mine' href='my.html'>Your Plover</a>"
-        : "<a class='hp-signin' href='" + back + "'>Sign in</a><a class='hp-join' href='" + back + "'>Create free account</a>";
-    }
     if ($("gate-cta")) {
       $("gate-cta").hidden = !gated();
       $("gate-cta-link").href = back;

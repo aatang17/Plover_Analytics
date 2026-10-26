@@ -27,7 +27,7 @@
 })();
 </script>
 </head>
-<body class="fp-body hp">
+<body class="fp-body hp no-toc">
 
 <!-- The home page is the question box (2026-10-19), and answers appear here,
      under it: a follow-up ("and Microsoft?") reads the question before it.
@@ -35,19 +35,16 @@
      one sign-up away. us-stocks.js runs the page and moves the box from the
      front of the page into the header once something has been asked.
      Layout: the finance redesign of 2026-10-25 (home.css). -->
-<header class="hp-header">
-  <div class="hp-bar">
-    <a class="hp-brand" href="/"><svg viewBox="0 0 128 128" width="22" height="22" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"><circle cx="64" cy="64" r="54"/><path d="M22 86 L46 56 L62 70 L86 44 L106 58"/></g><g fill="currentColor"><circle cx="46" cy="56" r="8"/><circle cx="86" cy="44" r="8"/></g><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" opacity=".55"><path d="M30 100 H62"/><path d="M74 100 H98"/></g></svg>Plover Analytics</a>
-    <nav class="hp-nav" aria-label="Markets">
-      <a href="us-treasury.html">United States</a>
-      <a href="macro.html">Japan</a>
-      <a href="hk-economy.html">Hong Kong</a>
-      <a href="/research/">Research</a>
-    </nav>
-    <div class="hp-slot" id="box-top"></div>
-    <span class="hp-account" id="fp-account"></span>
-  </div>
-</header>
+<header class="site-header" data-section="" data-page="home" data-market="us"></header>
+<script src="assets/nav.js"></script>
+<script>
+/* The same bar as every page (nav.js: Data, Research, Docs, the account),
+   plus a slot for the question box once something is asked (us-stocks.js). */
+(function homeSlot() {
+  var right = document.querySelector(".site-header .header-right");
+  if (right) right.insertAdjacentHTML("beforebegin", '<div class="hp-slot" id="box-top"></div>');
+})();
+</script>
 
 <section class="hp-hero" id="hero">
   <div class="hp-hero-in">

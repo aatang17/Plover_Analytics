@@ -430,7 +430,28 @@ def me(request: Request):
         # invite_only tells the header not to offer "Sign in" to the public
         return JSONResponse({"detail": "Not signed in.",
                              "invite_only": allowed_emails() is not None}, status_code=401)
-    return {"email": account["email"]}
+    return dict({"email": account["email"]}, **_desks(account["email"]))
+
+
+# Admin Console permissions; "writing" alone makes a writer, not an admin.
+ADMIN_PERMISSIONS = ("team", "operations", "classification")
+
+
+def _desks(email):
+    """Which desks the header offers this reader beside Your Plover: the
+    Writer Desk to someone who writes for a publication, the Admin Console to
+    someone on the Plover team. Only links: each desk still checks for itself."""
+    out = {"writer": False, "admin": False}
+    try:
+        from . import staff, writers
+        person = staff.get_by_email(email)
+        if person is None or person["status"] != "active":
+            return out
+        out["admin"] = any(p in ADMIN_PERMISSIONS for p in person["permissions"])
+        out["writer"] = bool(writers.roles(person))
+    except Exception:  # noqa: BLE001 — a missing link is never worth failing /me
+        pass
+    return out
 
 
 @router.post("/signout")
