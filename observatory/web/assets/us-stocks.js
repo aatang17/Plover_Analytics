@@ -16,7 +16,7 @@
 
   var API = "/api/v1/us";
   var charts = [];
-  var typing = null, lastAsked = "";
+  var lastAsked = "";
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return escapeHtml(String(s == null ? "" : s)); }
@@ -926,25 +926,14 @@
     ev.preventDefault();
     var q = $("q").value.trim();
     if (!q) return;
-    clearTimeout(typing);
     if (/^[A-Z]{1,5}([.-][A-Z])?$/.test(q)) return openStock(q, true);
     ask(q, true);
   });
-  // A bare ticker opens its page after a pause in typing, since that is
-  // instant and costs nothing. A question waits for Enter or Ask: answering
-  // mid-sentence answered half a question (2026-10-19: "How much did Nvidia,
-  // Meta, Microsoft contribute" was answered at "Nvidia") and spent a model
-  // call on every pause for thought.
-  $("q").addEventListener("input", function () {
-    clearTimeout(typing);
-    var q = $("q").value.trim();
-    if (q === lastAsked || !/^[A-Z]{1,5}([.-][A-Z])?$/.test(q)) return;
-    typing = setTimeout(function () {
-      if ($("q").value.trim() !== q) return;
-      lastAsked = q;
-      openStock(q, true);
-    }, 700);
-  });
+  // Nothing is sent while the reader types, a ticker included: only Enter or
+  // Ask sends, as in any chat box. A ticker sent on a pause in typing sent
+  // the first letter of a question (2026-10-25: a phone capitalises the
+  // first letter, and "A", "B", "T", "D" went from four readers mid-word,
+  // each answered with an error).
   // The theme toggle: charts are drawn in the theme's palette, so a switch
   // redraws the page as the other data pages do.
   initThemeToggle(function () { if (charts.length) location.reload(); });

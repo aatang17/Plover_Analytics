@@ -30,7 +30,7 @@ KEEPALIVE_SECONDS = 15
 
 @router.get("", openapi_extra={"x-example": "/api/v1/us/ask?q=who+owns+apple"})
 @router.get("/", include_in_schema=False)
-def ask(q: str = Query(..., min_length=2, max_length=300, description="a question in plain words"),
+def ask(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
         prev: str = Query("", max_length=300, description="the reader's previous question, so a follow-up "
                                                             "(\"and Microsoft?\") is read whole")):
     """Answer a stock question from the data, by code. A question it cannot
@@ -63,7 +63,7 @@ def _noted(path, q, work):
 
 
 @router.get("/stream")
-async def ask_stream(q: str = Query(..., min_length=2, max_length=300, description="a question in plain words"),
+async def ask_stream(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
                      prev: str = Query("", max_length=300, description="the reader's previous question")):
     """The answer as server-sent events, so the page can say what is being
     done while it waits: `{"say": "..."}` at each step (app/ask_progress.py),

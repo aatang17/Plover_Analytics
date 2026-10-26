@@ -70,6 +70,15 @@ class Preview(unittest.TestCase):
         self.assertTrue(any("2 rows" in m for m in p["more"]))
         self.assertNotIn("table", p)
 
+    def test_a_one_letter_ticker_is_read_not_refused(self):
+        # "T" is AT&T: a lone letter reaches the reader, never a 422 the page words as our fault
+        seen = []
+        preview._stock = lambda q, prev=None: (seen.append(q), (None, None))[1]
+        got = TestClient(self._app()).get("/api/v1/assistant/preview", params={"q": "T"})
+        self.assertEqual(got.status_code, 200)
+        self.assertEqual(seen, ["T"])
+        self.assertEqual(got.json()["kind"], "none")
+
     def test_not_held_says_so(self):
         self.no_stock()
         p = preview.preview("US unemployment rate")

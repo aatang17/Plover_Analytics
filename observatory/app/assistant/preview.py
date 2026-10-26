@@ -595,7 +595,7 @@ def _cur():
 
 
 @router.get("")
-def preview(q: str = Query(..., min_length=2, max_length=300),
+def preview(q: str = Query(..., min_length=1, max_length=300),
             prev: str = Query("", max_length=300, description="the reader's previous question, for a follow-up")):
     """The start of an answer for the front page: headline, up to two figures,
     the source, and what the full answer adds."""
