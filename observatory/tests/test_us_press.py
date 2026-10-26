@@ -74,6 +74,26 @@ class Reading(unittest.TestCase):
                                     "on October 1.")
         self.assertEqual([(f["kind"], f["value"]) for f in facts], [("dividend_per_share", 0.25)])
 
+    def test_preferred_dividends_are_not_the_common_dividend(self):
+        # Alphabet, Q2 2026: preferred and common declared in one sentence
+        facts = us_press.read_facts(
+            "In July 2026, the company's Board of Directors declared a quarterly cash dividend of $12.15 per "
+            "share on each of our Series A and Series B mandatory convertible preferred stock (equivalent to "
+            "approximately $0.60 per each of our Series A and Series B Depositary Shares) and a quarterly cash "
+            "dividend of $0.22 per share on our Class A, Class B, and Class C stock.")
+        self.assertEqual([(f["kind"], f["value"]) for f in facts],
+                         [("preferred_dividend_per_share", 12.15), ("dividend_per_share", 0.22)])
+        for text, value in (
+                ("Preferred dividends declared: The company is announcing a preferred cash dividend of $14.75 "
+                 "per share representing the period from June 1, 2026 through August 31, 2026.", 14.75),
+                ("The Board also declared a regular quarterly cash dividend of $1.75 per share on the 7% "
+                 "Cumulative Redeemable Preferred Stock, Series B.", 1.75)):
+            self.assertEqual([(f["kind"], f["value"]) for f in us_press.read_facts(text)],
+                             [("preferred_dividend_per_share", value)])
+        common = us_press.read_facts("Common dividends declared: The company is announcing a second quarter "
+                                     "cash dividend of $0.215 per share to holders of common shares.")
+        self.assertEqual([(f["kind"], f["value"]) for f in common], [("dividend_per_share", 0.215)])
+
     def test_capital_return_titles(self):
         self.assertTrue(us_press.CAPITAL_RETURN.search("Announces $10 Billion Share Repurchase Program"))
         self.assertTrue(us_press.CAPITAL_RETURN.search("Declares Quarterly Dividend"))

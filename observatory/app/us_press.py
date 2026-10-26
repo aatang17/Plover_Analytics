@@ -200,6 +200,23 @@ FACT_RULES = (
      "Dividend per share"),
 )
 
+# A dividend on preferred stock is a different instrument, not the common
+# dividend: "a preferred cash dividend of $14.75", or "$12.15 per share on each
+# of our Series A ... preferred stock". Read from the words just before the
+# figure and the clause after it, up to the next dividend in the sentence.
+_PREFERRED_BEFORE = re.compile(r"preferred\s+(?:stock\s+)?$", re.I)
+_SHARE_CLASS_AFTER = re.compile(r"\b(preferred|common|ordinary|class [a-c])\b", re.I)
+
+
+def _dividend_kind(sentence, m, next_start):
+    if _PREFERRED_BEFORE.search(sentence[max(0, m.start() - 20):m.start()]):
+        return "preferred_dividend_per_share", "Preferred dividend per share"
+    after = sentence[m.end():min(next_start, m.end() + 120)]
+    first = _SHARE_CLASS_AFTER.search(after)
+    if first and first.group(1).lower() == "preferred":
+        return "preferred_dividend_per_share", "Preferred dividend per share"
+    return "dividend_per_share", "Dividend per share"
+
 
 def _sentences(text):
     # split on full stops that end a sentence, not decimal points or "Inc."
@@ -213,29 +230,34 @@ def read_facts(text):
     for sentence in _sentences(text)[:400]:
         if len(sentence) > 900:
             continue
-        for kind, rx, label in FACT_RULES:
-            m = rx.search(sentence)
-            if not m:
-                continue
-            raw = m.group(1).replace(",", "")
-            try:
-                value = float(raw)
-            except ValueError:
-                continue
-            if kind == "dividend_per_share":
-                unit = "USD per share"
-            else:
-                scale = (m.group(2) or "").lower() if m.lastindex and m.lastindex >= 2 else ""
-                value = value * _SCALE.get(scale, 1.0)
-                unit = "USD"
-                if value < 1e6:          # "$150" with no scale is not a buyback programme
+        for rule_kind, rx, rule_label in FACT_RULES:
+            # a sentence can declare two dividends (preferred and common); read each
+            matches = list(rx.finditer(sentence)) if rule_kind == "dividend_per_share" else [rx.search(sentence)]
+            for i, m in enumerate(matches):
+                if not m:
                     continue
-            key = (kind, round(value, 2))
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append({"kind": kind, "label": label, "value": value, "unit": unit,
-                        "sentence": sentence[:600]})
+                kind, label = rule_kind, rule_label
+                raw = m.group(1).replace(",", "")
+                try:
+                    value = float(raw)
+                except ValueError:
+                    continue
+                if rule_kind == "dividend_per_share":
+                    next_start = matches[i + 1].start() if i + 1 < len(matches) else len(sentence)
+                    kind, label = _dividend_kind(sentence, m, next_start)
+                    unit = "USD per share"
+                else:
+                    scale = (m.group(2) or "").lower() if m.lastindex and m.lastindex >= 2 else ""
+                    value = value * _SCALE.get(scale, 1.0)
+                    unit = "USD"
+                    if value < 1e6:          # "$150" with no scale is not a buyback programme
+                        continue
+                key = (kind, round(value, 2))
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append({"kind": kind, "label": label, "value": value, "unit": unit,
+                            "sentence": sentence[:600]})
     return out
 
 
