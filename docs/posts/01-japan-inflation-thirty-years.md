@@ -180,10 +180,9 @@ against a 2.06% CPI. Somebody is wrong.
 
 ---
 
-*The Plover Analytics publishes Japanese price statistics, Bank of Japan
+*Plover Analytics publishes Japanese price statistics, Bank of Japan
 balance-sheet data, JGB yields and inbound tourism — free, cited, and versioned.
-Source for all price data in this post: Statistics Bureau of Japan, via the Japan Data
-Observatory. Index levels are official; rates of change are calculated and carry their
-formulas.*
+Source for all price data in this post: Statistics Bureau of Japan, via Plover Analytics.
+Index levels are official; rates of change are calculated and carry their formulas.*
 
 **[Open the inflation dashboard →](https://web-production-c9178.up.railway.app/cpi.html)**

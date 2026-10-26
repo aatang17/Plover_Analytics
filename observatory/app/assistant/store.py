@@ -346,7 +346,9 @@ def conn():
                         "ALTER TABLE ia_desks ADD COLUMN study_model TEXT",
                         # a study that re-runs itself: 'daily' or 'weekly', and when it last did
                         "ALTER TABLE ia_studies ADD COLUMN refresh TEXT",
-                        "ALTER TABLE ia_studies ADD COLUMN refreshed_at INTEGER"):
+                        "ALTER TABLE ia_studies ADD COLUMN refreshed_at INTEGER",
+                        # the most tokens one question on this study may spend; NULL = the server's cap
+                        "ALTER TABLE ia_studies ADD COLUMN token_budget INTEGER"):
                 try:
                     _conn.execute(ddl)
                 except sqlite3.OperationalError:
@@ -1176,18 +1178,22 @@ def study(account_id, study_id):
 REFRESH_CHOICES = ("daily", "weekly")
 
 
-def update_study(account_id, study_id, title=None, question=None, spec=None, refresh=False):
-    """``refresh`` False leaves the setting alone; None or a choice sets it."""
+def update_study(account_id, study_id, title=None, question=None, spec=None, refresh=False,
+                 token_budget=False):
+    """``refresh`` and ``token_budget`` False leave the setting alone; None
+    clears it; a choice (or a positive number of tokens) sets it."""
     cur = study(account_id, study_id)
     if cur is None:
         return None
     keep = cur.get("refresh") if refresh is False else (refresh if refresh in REFRESH_CHOICES else None)
-    _write("UPDATE ia_studies SET title = ?, question = ?, spec_json = ?, refresh = ?, updated_at = ? "
-           "WHERE id = ? AND account_id = ?",
+    budget = cur.get("token_budget") if token_budget is False else \
+        (int(token_budget) if token_budget and int(token_budget) > 0 else None)
+    _write("UPDATE ia_studies SET title = ?, question = ?, spec_json = ?, refresh = ?, token_budget = ?, "
+           "updated_at = ? WHERE id = ? AND account_id = ?",
            ((title if title is not None else cur["title"])[:160] or "Untitled study",
             (question if question is not None else cur["question"])[:2000],
             json.dumps(spec if spec is not None else cur["spec"], ensure_ascii=False),
-            keep, now(), study_id, account_id))
+            keep, budget, now(), study_id, account_id))
     return study(account_id, study_id)
 
 
@@ -1260,6 +1266,86 @@ def study_run(account_id, study_id, run_row_id=None):
     r["result"] = _loads(r.pop("result_json", None), {})
     r["tokens"] = _loads(r.pop("tokens_json", None), {})
     return r
+
+
+def studies_with_charts(account_id):
+    """The person's open studies with a run that holds rows, newest run first:
+    what the editor's Studies tab offers to put in an article. Each carries its
+    newest such run (a later failed refresh or a stock answer has no rows and is
+    passed over). Archived studies are left out, as they are on the Studies page."""
+    return _rows(conn().execute(
+        "SELECT s.id, s.title, r.id AS run_id, r.rows, r.created_at AS ran_at "
+        "FROM ia_studies s JOIN ia_study_runs r ON r.id = ("
+        "  SELECT max(x.id) FROM ia_study_runs x WHERE x.study_id = s.id AND x.rows > 0 "
+        "  AND x.spec_json != '{}') "
+        "WHERE s.account_id = ? AND s.archived_at IS NULL "
+        "ORDER BY r.created_at DESC, s.id DESC", (account_id,)))
+
+
+def past_runs(account_id, limit=400):
+    """The person's kept runs that answered a question with an analysis, newest
+    first: question, spec, which study — what a repeat question is checked
+    against before any AI is called. Stock answers (no spec) are left out;
+    archived studies are the person's too, so they count."""
+    rows = _rows(conn().execute(
+        "SELECT r.id, r.study_id, r.question, r.spec_json, r.by, r.rows, r.created_at, s.title "
+        "FROM ia_study_runs r JOIN ia_studies s ON s.id = r.study_id "
+        "WHERE r.account_id = ? AND r.question != '' AND r.spec_json != '{}' AND r.rows > 0 "
+        "ORDER BY r.id DESC LIMIT ?", (account_id, int(limit))))
+    for r in rows:
+        r["spec"] = _loads(r.pop("spec_json", None), {})
+    return rows
+
+
+def monthly_usage(account_id, months=6):
+    """AI use by calendar month (UTC), newest first, every month in the window
+    even when empty: questions put to a model, tokens in and out, and the
+    average per question — the Audit page's line. Counted: every run in
+    ia_runs (chat, specialists, the Study Analyst's loop) and the study runs the
+    one-call matcher answered, which make no ia_runs row. Not counted, because
+    no model ran: hand-run queries, ready-made analyses, scheduled refreshes
+    and answers reused from a past study."""
+    import datetime as _dt
+    at = _dt.datetime.utcfromtimestamp(now())
+    keys = []
+    y, m = at.year, at.month
+    for _ in range(months):
+        keys.append("%04d-%02d" % (y, m))
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    since_y, since_m = int(keys[-1][:4]), int(keys[-1][5:])
+    since = int((_dt.datetime(since_y, since_m, 1) - _dt.datetime(1970, 1, 1)).total_seconds())
+    out = dict((k, {"month": k, "questions": 0, "tokens_in": 0, "tokens_out": 0, "cached": 0}) for k in keys)
+
+    def month_of(ts):
+        return _dt.datetime.utcfromtimestamp(ts).strftime("%Y-%m")
+    for r in _rows(conn().execute(
+            "SELECT started_at, tokens_in, tokens_out FROM ia_runs WHERE account_id = ? AND started_at >= ?",
+            (account_id, since))):
+        k = month_of(r["started_at"])
+        if k in out:
+            out[k]["questions"] += 1
+            out[k]["tokens_in"] += r["tokens_in"] or 0
+            out[k]["tokens_out"] += r["tokens_out"] or 0
+    for r in _rows(conn().execute(
+            "SELECT created_at, tokens_json FROM ia_study_runs WHERE account_id = ? AND created_at >= ? "
+            "AND run_id IS NULL AND tokens_json != '{}'", (account_id, since))):
+        tk = _loads(r["tokens_json"], {})
+        if not isinstance(tk, dict) or not (tk.get("in") or tk.get("out")):
+            continue
+        k = month_of(r["created_at"])
+        if k in out:
+            out[k]["questions"] += 1
+            out[k]["tokens_in"] += int(tk.get("in") or 0)
+            out[k]["tokens_out"] += int(tk.get("out") or 0)
+            out[k]["cached"] += int(tk.get("cached") or 0)
+    rows = [out[k] for k in keys]
+    for r in rows:
+        total = r["tokens_in"] + r["tokens_out"]
+        r["tokens"] = total
+        r["per_question"] = int(round(total / float(r["questions"]))) if r["questions"] else None
+    return rows
 
 
 def add_analysis(account_id, run_id, result):

@@ -125,6 +125,26 @@ class DoorsTest(unittest.TestCase):
             code, d = self.full("zzkq vbnx")                      # names nothing: the refusal stands
             self.assertEqual((code, d["miss"]), (422, "unclear"))
 
+    def test_no_fit_from_the_reader_lets_a_matching_pattern_answer(self):
+        """'Nvidia share price': the reader found no shape; the price pattern does."""
+        from app import us_ask_model
+        with mock.patch.object(us_ask_model, "read", return_value={"shape": None, "refuse": "no_fit", "read_as": "Nvidia's share price"}):
+            code, d = self.full("Nvidia share price")
+        self.assertEqual(code, 200, d)
+        self.assertEqual(d["recipe"], "company_price_performance")
+        self.assertIn("Nvidia", d["headline"])
+        self.assertIn(d["match"]["via"], ("patterns", "quick"))          # the fixed routes, never the step route
+
+    def test_steps_calling_a_company_question_unclear_falls_to_patterns(self):
+        from app import us_ask_model, us_steps
+        us_steps._PLANS.clear()
+        with mock.patch.object(us_ask_model, "read", return_value={"shape": "steps"}), \
+                mock.patch.object(us_steps, "_ask_model", return_value=({"cannot": "unclear", "sql": ""}, "{}")), \
+                mock.patch.object(us_steps, "enabled", return_value=True):
+            code, d = self.full("TSLA price")
+        self.assertEqual(code, 200, d)
+        self.assertEqual(d["recipe"], "company_price_performance")
+
     def test_a_failure_of_ours_is_worded(self):
         with mock.patch.object(stock_recipes, "answer", side_effect=RuntimeError("boom")):
             code, d = self.full("who owns apple, a question that fails")

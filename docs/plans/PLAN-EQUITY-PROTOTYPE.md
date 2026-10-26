@@ -535,8 +535,8 @@ capture jobs.
    exactly as old as our capture and cannot be bought back later, same as buybacks.
 3. **Naming for the fund audience.** The nav will read Company · Cross-Shareholdings ·
    Register · 5% Filings · Boards & Pay · Buybacks · Facilities · AGM Votes · Deals ·
-   Tape · Screens · Coverage · Dictionary — thirteen equity pages under "Japan Data
-   Observatory". Fine for a prototype; the vision plan's open question about a separate
+   Tape · Screens · Coverage · Dictionary — thirteen equity pages under "Plover
+   Analytics". Fine for a prototype; the vision plan's open question about a separate
    equity brand gets sharper once investors see it.
 4. **TDnet in public.** The tape shows classified titles and filed numbers, not the PDFs.
    Confirm you are comfortable serving a public, near-real-time feed derived from TDnet

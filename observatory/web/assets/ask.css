@@ -60,6 +60,17 @@ pre.sql { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; line
 .sources li { font-size: 12.5px; color: var(--obs-text-muted); margin: 0 0 4px; }
 .state-empty, .state-error { font-size: 14px; color: var(--obs-text); margin: 18px 0; padding-left: 12px; border-left: 2px solid var(--obs-warn); }
 .state-wait { font-size: 14px; color: var(--obs-text-muted); margin: 18px 0; }
+/* the steps the server took, each with the second it was reached */
+.trail { list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--obs-text-muted); }
+.trail li { display: flex; gap: 12px; align-items: baseline; margin: 4px 0; line-height: 1.45; }
+.trail li.now { color: var(--obs-ink); }
+.trail-t { flex: 0 0 48px; text-align: right; font-variant-numeric: tabular-nums; color: var(--obs-text-muted); }
+details.worked-out .calc-body h3 { font-size: 12.5px; font-weight: 600; color: var(--obs-ink); margin: 12px 0 4px; text-transform: none; letter-spacing: 0; }
+details.worked-out .calc-body h3:first-child { margin-top: 2px; }
+details.worked-out .calc-body p { margin: 4px 0; }
+details.worked-out .steps { margin: 4px 0 0 18px; padding: 0; }
+details.worked-out .checks { margin: 4px 0 0 18px; padding: 0; }
+details.worked-out .checks li { margin: 2px 0; }
 .quiet { font-size: 12.5px; color: var(--obs-text-muted); }
 @media (max-width: 700px) {
   .headline { font-size: 23px; }

@@ -8,7 +8,7 @@ to look at it: a point-and-click app, or the command line.
 Installed, with a bookmark already set up.
 
 1. Open **Cyberduck** (in Applications).
-2. Double-click the **Japan Data Archive** bookmark.
+2. Double-click the **Plover Analytics Archive** bookmark.
 3. It asks for a password once. That is the S3 secret key. Get it with:
    ```bash
    railway variables --service edinet-capture-job --kv | grep EDINET_S3_SECRET

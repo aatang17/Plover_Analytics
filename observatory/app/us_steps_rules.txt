@@ -45,6 +45,7 @@ Result columns and the headline
 - The headline answers the question in one plain sentence, first the answer, numbers only as {column} from the first result row, and the period as {period}. Do not write a number of your own: the server refuses a headline that does.
 - Signed changes print with their + or minus sign, so write "changed {x_pct}", not "rose {x_pct}".
 - For a list, the headline names the first row: "{name} did best {period}, {change_period_pct}." The table shows the rest.
+- A headline is one sentence and never a roll-call: at most three names, with the count ("31 S&P 500 companies have negative equity; the most negative are {name} ..."). A reviewer asking "which companies" is answered by the table, not by listing them all in the headline.
 
 CEO pay (table pay)
 - "Highest-paid CEOs", "CEO pay": ceo_total_pay_usd (total pay as reported) unless the question says "actually paid" or "realised"; then ceo_actually_paid_usd. Pay covers S&P 500 members only: say "S&P 500 CEOs".

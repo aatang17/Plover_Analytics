@@ -599,3 +599,159 @@ class StockRouteTests(_Base):
         self.assertEqual(r.status_code, 400)
         self.assertIn("AI Key", r.json()["detail"])
         self.assertEqual(self.asked, [("Japan's core inflation?", None)])
+
+
+class BudgetAndReuseTests(_Base):
+    """A study's own token budget, a repeat question answered from a past
+    study with no model, the Audit page's monthly line, and the chat
+    Analyst's brief that stops the lookups once the figures are in hand."""
+
+    def setUp(self):
+        self.Q = "Something no recipe does, for " + self._testMethodName.replace("_", " ")
+        self._suggest = analysis.suggest_series
+        analysis.suggest_series = lambda q, cap=10, per_dataset=3: list(HINTS)
+
+    def tearDown(self):
+        analysis.suggest_series = self._suggest
+        super(BudgetAndReuseTests, self).tearDown()
+
+    def keyed(self):
+        c = self.client()
+        c.post("/api/v1/assistant/settings", json={"model_provider": "anthropic", "model_key": "sk-ant-abcd-9876"})
+        return c
+
+    def test_budget_is_saved_and_checked(self):
+        c = self.client()
+        st = self.new(c, title="Budgeted")
+        self.assertIsNone(st.get("token_budget"))
+        self.assertEqual(c.put("/api/v1/assistant/studies/%d" % st["id"], json={"token_budget": 5000}).json()["study"]["token_budget"], 5000)
+        self.assertEqual(c.get("/api/v1/assistant/studies/%d" % st["id"]).json()["study"]["token_budget"], 5000)
+        r = c.put("/api/v1/assistant/studies/%d" % st["id"], json={"token_budget": 10})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("1,000", r.json()["detail"])
+        self.assertEqual(c.put("/api/v1/assistant/studies/%d" % st["id"], json={"token_budget": 10 ** 9}).status_code, 400)
+        self.assertIsNone(c.put("/api/v1/assistant/studies/%d" % st["id"], json={"token_budget": 0}).json()["study"]["token_budget"])
+        # a title change leaves the budget alone
+        c.put("/api/v1/assistant/studies/%d" % st["id"], json={"token_budget": 2000})
+        self.assertEqual(c.put("/api/v1/assistant/studies/%d" % st["id"], json={"title": "Renamed"}).json()["study"]["token_budget"], 2000)
+
+    def test_budget_stops_the_loop_and_keeps_the_last_analysis(self):
+        c = self.keyed()
+        st = self.new(c, question=self.Q)
+        store.update_study(self.ids["tok"], st["id"], token_budget=25)     # below the API's floor, to keep the script short
+        # the match call spends 15 of the 25; the first loop turn spends 15 more, so a second turn is refused
+        script = Script(['{"recipe": null}', [("run_analysis", dict(SPEC))], "never reached"])
+        runner.gateway.complete = script
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": self.Q})
+        self.assertEqual(r.status_code, 200, r.text)
+        run = r.json()["run"]
+        self.assertEqual(run["by"], "analyst")
+        self.assertEqual(run["tokens"]["tier"], 2)
+        self.assertEqual(run["tokens"]["matcher"], 15)
+        self.assertEqual(run["rows_total"], 30)                           # the analysis that ran is kept
+        self.assertIn("token budget", run["note"])
+        self.assertEqual(len(script.seen), 2)
+
+    def test_budget_hit_before_any_analysis_is_explained(self):
+        c = self.keyed()
+        st = self.new(c, question=self.Q)
+        store.update_study(self.ids["tok"], st["id"], token_budget=25)
+        runner.gateway.complete = Script(['{"recipe": null}', [("search", {"query": "yields"})], "never reached"])
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": self.Q})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("token budget (25 tokens", r.json()["detail"])
+        self.assertIn("Raise the budget", r.json()["detail"])
+        self.assertIsNone(c.get("/api/v1/assistant/studies/%d" % st["id"]).json()["run"])
+        # a budget the match call alone used up stops before the loop starts
+        store.update_study(self.ids["tok"], st["id"], token_budget=12)
+        script = Script(['{"recipe": null}', "never reached"])
+        runner.gateway.complete = script
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": self.Q})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(len(script.seen), 1)
+
+    def test_no_budget_means_the_servers_cap(self):
+        c = self.keyed()
+        st = self.new(c, question=self.Q)
+        script = Script(['{"recipe": null}', [("run_analysis", dict(SPEC))], "Done."])
+        runner.gateway.complete = script
+        r = c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": self.Q})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertNotIn("token budget", r.json()["run"]["note"])
+        self.assertEqual(len(script.seen), 3)
+
+    def test_same_question_is_answered_from_a_past_study_with_no_model(self):
+        c = self.keyed()
+        q = "How far apart are US and Japanese 10-year yields since 2020?"
+        first = self.new(c, question=q)
+        runner.gateway.complete = Script(['{"recipe": "gap", "series": {"a": "ust-yields:10Y", "b": "jgb-yields:10Y"}, "start": "2020-01-01", "title": "Yields"}'])
+        self.assertEqual(c.post("/api/v1/assistant/studies/%d/ask" % first["id"], json={"question": q}).json()["run"]["tokens"]["tier"], 1)
+        # the same question, other casing and punctuation, in a new study
+        again = "how far apart are the US and japanese 10-year yields, since 2020"
+        second = self.new(c, question=again)
+        script = Script([])
+        runner.gateway.complete = script
+        aapi.gateway.complete = script
+        try:
+            r = c.post("/api/v1/assistant/studies/%d/ask" % second["id"], json={"question": again})
+        finally:
+            aapi.gateway.complete = self._complete
+        self.assertEqual(r.status_code, 200, r.text)
+        run = r.json()["run"]
+        self.assertEqual(run["by"], "library")
+        self.assertEqual(run["tokens"]["tier"], 0)
+        self.assertEqual(run["tokens"]["in"] + run["tokens"]["out"], 0)
+        self.assertEqual(run["tokens"]["from_study"], first["id"])
+        self.assertEqual(run["columns"], ["date", "a", "b", "gap"])
+        self.assertIn("You asked this in “%s”" % first["title"], run["note"])
+        self.assertIn("minus", run["note"])                                # the recipe's own reading comes first
+        self.assertEqual(script.seen, [])                                  # no model was called
+        # a different question is not a repeat
+        self.assertIsNone(aapi._past_answer(self.ids["tok"], "How far apart are US and Japanese 10-year yields since 2018?"))
+        self.assertIsNone(aapi._past_answer(self.ids["tok"], "How far apart are US and German 10-year yields since 2020?"))
+        # another account's studies are never used
+        self.assertIsNone(aapi._past_answer(self.ids["tok2"], q))
+        # a follow-up inside a study with an analysis is never swapped for a past one
+        self.assertTrue(c.get("/api/v1/assistant/studies/%d" % second["id"]).json()["study"]["spec"])
+
+    def test_question_key(self):
+        self.assertEqual(aapi.question_key("Show me the gap, please!"), "gap")
+        self.assertEqual(aapi.question_key("US vs Japan 10-year"), aapi.question_key("10-year: Japan vs US"))
+        self.assertNotEqual(aapi.question_key("core CPI since 2020"), aapi.question_key("core CPI since 2021"))
+
+    def test_audit_counts_ai_use_by_month(self):
+        c = self.keyed()
+        st = self.new(c, question="How far apart are US and Japanese 10-year yields since 2019?")
+        runner.gateway.complete = Script(['{"recipe": "gap", "series": {"a": "ust-yields:10Y", "b": "jgb-yields:10Y"}}'])
+        self.assertEqual(c.post("/api/v1/assistant/studies/%d/ask" % st["id"], json={"question": st["question"]}).status_code, 200)
+        before = c.get("/api/v1/assistant/audit").json()["months"]
+        self.assertEqual(len(before), 6)
+        self.assertEqual(before[0]["month"], datetime.datetime.utcnow().strftime("%Y-%m"))
+        self.assertGreaterEqual(before[0]["questions"], 1)
+        self.assertGreaterEqual(before[0]["tokens"], 15)                   # the one-call match counts, though it made no run row
+        self.assertEqual(before[0]["per_question"], int(round(before[0]["tokens"] / float(before[0]["questions"]))))
+        # a hand-run query costs nothing and is not a question to a model
+        c.post("/api/v1/assistant/studies/%d/run" % st["id"], json={"spec": SPEC})
+        after = c.get("/api/v1/assistant/audit").json()["months"]
+        self.assertEqual(after[0]["questions"], before[0]["questions"])
+        self.assertEqual(after[0]["tokens"], before[0]["tokens"])
+        # the other account has its own, empty, line
+        other = self.client("tok2").get("/api/v1/assistant/audit").json()["months"]
+        self.assertEqual(other[0]["questions"], 0)
+        self.assertIsNone(other[0]["per_question"])
+
+    def test_chat_analyst_stops_once_the_figures_are_in_hand(self):
+        brief = specialists.ANALYST["brief"]
+        self.assertIn("stop looking and answer", brief)
+        self.assertIn("get_series is for published statistics, never for a company", brief)
+        self.assertEqual(specialists.ANALYST["budget"]["tool_calls"], 10)
+        # the cap is enforced by the runner, not the prompt: an eleventh call is refused
+        c = self.keyed()
+        hire = aapi._analyst(self.ids["tok"])
+        turns = [[("get_company", {"code": "7203", "dataset": "financials"})] for _ in range(11)] + ["Toyota's revenue is in the panel."]
+        script = Script(turns)
+        runner.gateway.complete = script
+        out = runner.run(self.ids["tok"], hire, "message", "Toyota revenue", [], "thread", False)
+        self.assertEqual(out["tool_calls"], 10)
+        refused = [m for m in script.seen[-1]["messages"] if m["role"] == "tool"][-1]["content"]
+        self.assertIn("budget exhausted", refused)

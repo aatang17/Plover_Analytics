@@ -511,6 +511,55 @@ function insertAfterCaretBlock(b) {
   return el;
 }
 
+/* ---------------------------------------------------------------- studies tab */
+
+/* The writer's own studies from the Investment Assistant. Insert Chart puts a
+   study's latest run into the draft at the cursor as a chart whose numbers
+   live in the article, with the study's sources and, for anything
+   calculated, its formula. The list is read again each time the tab opens. */
+function renderStudiesPane() {
+  var box = $("#dk-pane-studies");
+  if (!box) return;
+  box.innerHTML = '<p class="muted">Loading your studies…</p>';
+  api("/research/studies").then(function (d) { drawStudies(box, d); }).catch(function (err) {
+    box.innerHTML = '<p class="bad">' + escapeHtml(err.message || "Your studies could not be loaded.") + '</p>' +
+      '<button type="button" class="dk-mini" data-st-retry>Try Again</button>';
+    $("[data-st-retry]", box).addEventListener("click", renderStudiesPane);
+  });
+}
+
+function drawStudies(box, d) {
+  var open = d.enabled ? '<a class="dk-mini" href="' + escapeHtml(d.link) + '" target="_blank" rel="noopener">Open Studies</a>' : "";
+  var list = d.studies.map(function (s, i) {
+    return '<li data-study="' + i + '"><span class="dk-rs-name">' + escapeHtml(s.title) + '</span>' +
+      '<span class="hint">Run ' + escapeHtml(s.ran_on) + ' · ' + Number(s.rows).toLocaleString("en") + (s.rows === 1 ? " row" : " rows") + '</span>' +
+      '<span class="dk-rs-acts"><button type="button" class="dk-mini" data-st-insert>Insert Chart</button>' +
+      (d.enabled ? '<a class="dk-mini" href="' + escapeHtml(d.link + "/" + s.id) + '" target="_blank" rel="noopener">Open Study</a>' : "") + '</span></li>';
+  }).join("");
+  box.innerHTML = '<p class="hint">Charts from your own studies. Insert Chart puts the study\'s latest run in the draft at the cursor, with its sources. The numbers stay as they were on that run.</p>' +
+    (d.studies.length ? '<p class="dk-rs-h">Your Studies</p><ul class="dk-rs-list">' + list + '</ul>'
+      : '<p class="dk-rs-h">Your Studies</p><p class="muted">No studies with a chart yet. ' +
+        (d.enabled ? 'Ask a question in Studies; its chart can then go into any article.' : 'Studies are not switched on on this server.') + '</p>') +
+    '<div class="dk-rs-acts dk-st-foot">' + open + '<button type="button" class="dk-mini" data-st-reload>Refresh List</button></div>';
+  $("[data-st-reload]", box).addEventListener("click", renderStudiesPane);
+  $all("[data-study]", box).forEach(function (row) {
+    var s = d.studies[Number(row.getAttribute("data-study"))];
+    var b = $("[data-st-insert]", row);
+    b.addEventListener("click", function () {
+      if (b.disabled) return;
+      var article = ID;
+      b.disabled = true;
+      b.textContent = "Loading…";
+      api("/research/studies/" + s.id + "/chart").then(function (r) {
+        if (ID !== article) { toast("The article changed while loading. Insert the chart again in the intended draft."); return; }
+        insertAfterCaretBlock(r.block);
+        toast("Chart inserted from your study.");
+      }).catch(function (err) { toast(err.message || "The chart could not be loaded. Try again."); })
+        .then(function () { b.disabled = false; b.textContent = "Insert Chart"; });
+    });
+  });
+}
+
 /* ---------------------------------------------------------------- research panel: tabs */
 
 /* The Research tab works like a browser. Plan and Notes stay pinned on the

@@ -472,6 +472,7 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
 .dk-rs-name { color: var(--obs-ink); font-weight: 600; overflow-wrap: anywhere; }
 .dk-rs-name .mono { font-weight: 400; font-size: 11.5px; margin-left: 4px; }
 .dk-rs-acts { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.dk-st-foot { margin-top: 12px; }
 .dk-rs-acts select { font: inherit; font-size: 12px; padding: 3px 4px; color: var(--obs-ink); background: var(--obs-surface);
   border: 1px solid var(--obs-border); border-radius: 3px; }
 .dk-rs-list.web .dk-rs-title { font-weight: 600; color: var(--obs-primary); text-decoration: none; overflow-wrap: anywhere; }

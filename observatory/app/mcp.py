@@ -56,8 +56,8 @@ SERVER_INFO = {
 # Shown to the connected assistant at initialize time: the trust contract in
 # the form an LLM can follow.
 INSTRUCTIONS = """\
-This server publishes Japanese consumer price statistics from the Japan Data \
-Observatory: cpi-jp (~80 category aggregates: headline CPI, cores, major \
+This server publishes Japanese consumer price statistics from Plover Analytics: \
+cpi-jp (~80 category aggregates: headline CPI, cores, major \
 expenditure groups) and cpi-jp-items (~740 individually priced items), \
 monthly from 1970.
 
@@ -70,7 +70,7 @@ by this platform from those indices and each response carries the formula \
 used in its `calc` field — keep official and calculated figures distinct \
 when quoting them. Every response includes a `cite` URL, a permanent page \
 showing the same view; link it when you present the numbers. Source credit: \
-Statistics Bureau of Japan, via the Plover Analytics.
+Statistics Bureau of Japan, via Plover Analytics.
 
 It also publishes three other Japanese macro datasets, each in its own \
 measure and never to be ranked or combined with the price indices or with \

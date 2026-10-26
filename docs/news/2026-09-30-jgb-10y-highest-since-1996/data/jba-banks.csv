@@ -1,0 +1,19 @@
+# Plover Analytics — Bank financial statements — every member bank (jba-banks)
+# Source: Japanese Bankers Association — Analysis of Financial Statements of All Banks (全国銀行財務諸表分析).
+# Source document: JBA — Analysis of Financial Statements of All Banks (全国銀行財務諸表分析) — https://www.zenginkyo.or.jp/stats/year2-02/
+# Source file: https://www.zenginkyo.or.jp/stats/year2-02/ (sogo + kobetsu of every edition), retrieved 2026-09-14T04:49:39.966113Z, sha256 b4e39587168f8cdf97a770ac69ca838596abf255ae8defa97d2e89483306f42b
+# Release: Data through March 2026; latest period 2026-03-01; ingested 2026-09-14T04:49:39.966113Z
+# Vintage: live release. Add &as_of=YYYY-MM-DD to freeze this view for citation.
+# Measure: index; unit: ¥mn; trust: Official statistic — published values, exactly as released
+# Calculation: Published value as released, in ¥mn. Not recomputed.
+# Column s.all.a015: All banks (aggregate) — Deposits / 全国銀行 預金
+# Column s.all.d395: All banks (aggregate) — Loans and bills discounted / 全国銀行 貸出金
+# Column s.all.f850.fy: All banks (aggregate) — Profit (fiscal year) / 全国銀行 当期純利益（通期）
+# Blank = not published or not available; never zero.
+# Retrieved from http://ploveranalytics.com/api/v1/jba-banks/observations?series=s.all.a015,s.all.d395,s.all.f850.fy&start=2024-03&format=csv on 2026-09-30
+period,s.all.a015,s.all.d395,s.all.f850.fy
+2024-03,1031111331.0,695232916.0,3155761.0
+2024-09,1020625495.0,698357715.0,
+2025-03,1044571481.0,714906097.0,4556617.0
+2025-09,1045981413.0,726048094.0,
+2026-03,1084681239.0,758282558.0,6029540.0

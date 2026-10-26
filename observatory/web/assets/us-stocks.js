@@ -184,7 +184,7 @@
       if (entities.since_read) read.push("since: " + dateWords(entities.since_read));
       if (entities.amount_read) read.push("amount: " + money(entities.amount_read));
     }
-    return "<details class='calc'><summary>How this was worked out</summary><div class='calc-body'>" +
+    return "<details class='calc'><summary>Sources and formulas</summary><div class='calc-body'>" +
       (match ? "<p class='quiet'>Question shape: " + esc(match.label) + ". " + (read.length ? "Read as — " + esc(read.join("; ")) + "." : "") + "</p>" : "") +
       (calcItems.length ? "<ul class='sources'>" + calcItems.join("") + "</ul>" : "") +
       (calc && calc.query ? "<p class='quiet'>The query run on the data:</p><pre class='sql'>" + esc(calc.query) + "</pre>" : "") +
@@ -290,6 +290,51 @@
     return html + citeHtml(l.note, l.url);
   }
 
+  /* ---- how it was worked out: the steps the server took, with their timing ---- */
+  function secs(t) { return (Math.round(t * 10) / 10).toFixed(1) + " s"; }
+  function trailHtml(trail, cls) {
+    if (!trail || !trail.length) return "";
+    return "<ol class='trail" + (cls ? " " + cls : "") + "'>" + trail.map(function (s, i) {
+      return "<li" + (i === trail.length - 1 && !s.done ? " class='now'" : "") + "><span class='trail-t'>" + esc(secs(s.t)) + "</span><span>" + esc(s.text) + "</span></li>";
+    }).join("") + "</ol>";
+  }
+  // The full account for an answer the server worked out step by step (or read
+  // with the model): what it did and when, how it read the question, the steps
+  // in words, anything it looked at first, the checks that sent it back, the
+  // reviewer's verdict, and the query it ran. Open by default when the answer
+  // came by steps, since those are the ones worth reading; collapsed otherwise.
+  function workedOutHtml(a, trail) {
+    var m = a.match || {};
+    var bySteps = m.via === "steps";
+    var hasTrail = trail && trail.length > 1;
+    if (!bySteps && !hasTrail && !(a.looks && a.looks.length) && !(a.checks && a.checks.length)) return "";
+    var body = "";
+    if (hasTrail) body += "<h3>What happened, and when</h3>" + trailHtml(trail.map(function (s) { return { t: s.t, text: s.text, done: true }; }));
+    if (m.read_as) body += "<h3>How the question was read</h3><p>" + esc(String(m.read_as).replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return dateWords(d); })) + "</p>";
+    if (a.steps && a.steps.length) body += "<h3>The steps</h3><ol class='steps'>" + a.steps.map(function (st) { return "<li>" + esc(st) + "</li>"; }).join("") + "</ol>";
+    if (a.looks && a.looks.length) {
+      body += "<h3>Looked at first</h3>" + a.looks.map(function (l) {
+        return "<p class='quiet'>" + (l.error ? "Did not run: " + esc(l.error) : esc(String(l.rows == null ? 0 : l.rows)) + " row" + (l.rows === 1 ? "" : "s") + " seen" + (l.more ? " (first of more)" : "")) + "</p>" +
+          "<pre class='sql'>" + esc(l.query || "") + "</pre>";
+      }).join("");
+    }
+    if (a.checks && a.checks.length) {
+      body += "<h3>Checks</h3><ul class='checks'>" + a.checks.map(function (c) {
+        var word = c.severity === "revise" ? "Sent back" : c.severity === "refuse" ? "Refused" : "Noted";
+        return "<li><b>" + esc(word) + ":</b> " + esc(c.note || c.check) + "</li>";
+      }).join("") + "</ul>";
+    }
+    if (a.review && a.review.verdict) {
+      var v = a.review.verdict;
+      body += "<h3>Review</h3><p>" + esc(v === "ok" ? "The answer was read against the question and passed." :
+        v === "note" ? "Passed, with a note: " + (a.review.reason || "") : v === "revise" ? "Sent back once: " + (a.review.reason || "") : String(v)) + "</p>";
+    }
+    if (a.query || (a.calc && a.calc.query)) body += "<h3>The query run on the data</h3><pre class='sql'>" + esc(a.query || a.calc.query) + "</pre>";
+    if (!body) return "";
+    return "<details class='calc worked-out'" + (bySteps ? " open" : "") + "><summary>How it was worked out" +
+      (hasTrail ? " <span class='h2-note'>" + esc(secs(trail[trail.length - 1].t)) + "</span>" : "") + "</summary><div class='calc-body'>" + body + "</div></details>";
+  }
+
   /* ---- the answer ------------------------------------------------------ */
   // A formula's key as a reader's words: "share_of_reported_pct" → "Share of reported".
   function calcLabel(k) {
@@ -316,7 +361,10 @@
     disposeCharts();
     var el = $("answer");
     el.classList.remove("an-stale");
-    var worked = "";
+    // the full account sits inside the rail's own "How This Was Worked Out" panel, so its summary names what it opens
+    // and stays folded: the rail shows the steps, the full log is one click away
+    var worked = workedOutHtml(a, trail).replace("<summary>How it was worked out", "<summary>The full log, checks and query")
+      .replace("<details class='calc worked-out' open>", "<details class='calc worked-out'>");
     var calc = a.calc || {};
     var co = (a.entities && a.entities.company) || ((a.entities && a.entities.mentioned_companies) || [])[0] || null;
     var link = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/?t=" + encodeURIComponent(co.ticker) : null);
@@ -449,10 +497,15 @@
     // The wait card lives outside #answer, so the answer area changes only
     // when an answer arrives — a reader (or the example checker) never counts
     // "working…" as a result. It follows the server's steps (askStream).
-    var trail = [];
+    var started = Date.now(), trail = [];
     $("status").innerHTML = "<section class='hp-panel an-q an-wait'><div class='an-asked'><span>You asked</span><b>" + esc(q) + "</b></div>" +
       "<div class='an-skel' aria-hidden='true'><i></i><i></i><i></i></div><div id='wait-trail'></div></section>";
-    function heard(text) { if ($("wait-trail")) $("wait-trail").textContent = text; }
+    function heard(text) {
+      if (trail.length && trail[trail.length - 1].text === text) return;   // the server's first line repeats ours
+      if (trail.length) trail[trail.length - 1].done = true;
+      trail.push({ t: (Date.now() - started) / 1000, text: text, done: false });
+      if ($("wait-trail")) $("wait-trail").innerHTML = trailHtml(trail, "wait");
+    }
     heard("Reading your question…");
     $("status").hidden = false;
     if ($("q").value.trim() !== q) $("q").value = q;

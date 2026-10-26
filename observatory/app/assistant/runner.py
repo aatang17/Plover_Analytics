@@ -290,7 +290,7 @@ class Run(object):
     """State for one run; `execute` drives it."""
 
     def __init__(self, account_id, hire, trigger, task, history=None, mode="desk", remember=False,
-                 house=None):
+                 house=None, budget=None):
         self.account_id = account_id
         # a free try (free.py): this one run uses the server's key, not the desk's
         self.house = house
@@ -326,11 +326,13 @@ class Run(object):
         self.usage = {"in": 0, "out": 0, "cached": 0}
         self.n_calls = 0
         self.run_id = None
-        # a role may cap its own run below the shared budget, never above it
+        # a role may cap its own run below the shared budget, never above it;
+        # the caller (a study's own token budget) may cap it lower still
         self.budget = dict(BUDGET)
-        for k, v in (self.spec.get("budget") or {}).items():
-            if k in BUDGET and isinstance(v, (int, float)) and v < BUDGET[k]:
-                self.budget[k] = v
+        for caps in (self.spec.get("budget") or {}, budget or {}):
+            for k, v in caps.items():
+                if k in BUDGET and isinstance(v, (int, float)) and 0 < v < self.budget[k]:
+                    self.budget[k] = int(v)
 
     # ---- action tools
 
@@ -669,9 +671,12 @@ class Run(object):
                 "calls": store.calls(self.run_id) if self.run_id else []}
 
 
-def run(account_id, hire, trigger, task, history=None, mode="desk", remember=False, house=None):
+def run(account_id, hire, trigger, task, history=None, mode="desk", remember=False, house=None,
+        budget=None):
+    """``budget`` caps this one run below the role's own caps (keys as in
+    BUDGET); it can never raise them."""
     return Run(account_id, hire, trigger, task, history=history, mode=mode, remember=remember,
-               house=house).execute()
+               house=house, budget=budget).execute()
 
 
 # --------------------------------------------------------------------- CLI

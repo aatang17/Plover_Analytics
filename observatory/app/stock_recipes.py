@@ -4251,6 +4251,21 @@ def answer(cur, question, prev=None):
             out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "reader",
                             "read_as": form.get("read_as")}
             return _finish(out, e)
+        # the reader found no shape at all ("no_fit"): a word pattern that names a
+        # specific shape for this question answers it before the step route is
+        # tried ("Nvidia share price" is the price shape, which the reader missed)
+        if not form.get("shape") and form.get("refuse") in (None, "no_fit"):
+            try:
+                recipe, e2, score, alts = match(cur, question)
+            except HTTPException:
+                recipe = None
+            if recipe is not None and score > 0:
+                us_steps.log(question, "no_fit: answered by patterns", recipe["id"])
+                ask_progress.say(_doing(recipe, e2))
+                out = recipe["run"](cur, question, e2)
+                out["match"] = {"recipe": recipe["id"], "label": recipe["label"], "score": score, "alternatives": alts,
+                                "via": "patterns", "read_as": form.get("read_as")}
+                return _finish(out, e2)
         # no ready-made shape answers it: work it out step by step
         ask_progress.say("No ready-made answer fits, so working it out step by step…")
         try:

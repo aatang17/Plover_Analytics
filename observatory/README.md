@@ -474,6 +474,12 @@ file.
   analyses, scheduled refreshes and reused answers cost nothing and are not counted.
   The chat Analyst's brief (`specialists.ANALYST`, 1.1.0) tells it to stop looking once
   a tool has returned the figures asked for, and the runner holds it to ten tool calls.
+  The article editor has a **Studies** tab (`desk-research.js` `renderStudiesPane`;
+  `/admin/api/research/studies` and `…/studies/{id}/chart`): the writer's own open
+  studies, found by email as their data sources are, and Insert Chart, which puts the
+  newest run with rows into the draft as a `datachart` (origin `database`): numbers
+  frozen, published columns under their publishers' names, anything calculated with its
+  inputs and query in the note (`analysis.datachart_block`).
 - **Coverage lists.** A desk keeps named lists (`ia_lists`, `ia_list_items`): the main
   "Coverage" list, which cannot be deleted, and any the PM creates. The first desks' single
   list (`ia_coverage`) moves into the main list the first time lists are read. A specialist

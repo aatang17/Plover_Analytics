@@ -30,7 +30,10 @@
 **The platform is dataset-agnostic; datasets are adapters.** A new dataset is exactly:
 a new module in `observatory/app/adapters/` (exposing `DATASET`, `SOURCE`, `DOWNLOAD_URL`,
 `fetch()`, `parse()`, `validate()`, `PRESENTATION`, `ValidationError`) plus registration in
-the `ADAPTERS` dicts in `app/ingest.py` and `app/api.py`. **The core schema (`app/db.py`)
+the `ADAPTERS` dicts in `app/ingest.py` and `app/api.py`. It also needs a `MANIFEST`
+(draft one with `python -m app.registry --scaffold <slug>`) whose `page` is a real file
+under `web/`, and a non-empty `PRESENTATION["kinds"]`; run `python -m app.registry --check`
+and `tests/test_manifests.py` before calling it done. **The core schema (`app/db.py`)
 and the API contract (`/api/v1/{dataset}/...`) never change for a dataset.** If a new
 dataset seems to need a core migration, stop and revisit the design before writing code.
 This rule has been exercised (cpi-jp-items, dataset #2, ~740 series: adapter + registry
@@ -113,6 +116,27 @@ Every number on every surface says where it came from:
   or e-Stat table, verify it exists.
 - **Commit or push only when I ask.** No branches, commits, or pushes on your own
   initiative.
+- **Other sessions work in this checkout at the same time.** Commit only your own files,
+  with `git commit -m "…" -- <paths>`, after checking `git diff --cached --name-only`. Never
+  `git add -A`, `commit -a`, `stash`, `checkout --` or `clean` files you didn't change.
+  (September 2026: two commits carried another session's half-written files.)
+- **Build for every user, not just me.** The tools people work in, the Research app first,
+  will let each user set their own preferences. Don't hard-code my workflow, my outlets or
+  my defaults into shared code. A choice another person might make differently becomes a
+  per-user setting with a sensible default. When I ask for something that suits my way of
+  working, build it as my setting and say so. (2026-10-08: the Research app's publish flow
+  assumes every writer posts to Substack.)
+- **Every feature assumes Substack-style accounts: each person has their own.** A person is
+  one account, found by their email. Whatever they connect, store or choose belongs to that
+  account: API keys, data sources, AI provider, Google, preferences. It follows them to
+  every place they sign in (Writer Desk, editor, Investment Assistant). Only their own runs
+  use it, and nobody else on the team or publication can see it. A publication is its own
+  workspace, like a portfolio: its members, skills, house style, article defaults, look,
+  coverage list, AI key and data keys belong to it, its owner runs them, and its articles
+  use them before a writer's own. Never build a connection as admin-only, team-wide or for
+  one page only; the shared admin password is nobody and gets nothing personal.
+  (2026-10-11: data sources were built for the Investment Assistant desk only, so writers
+  on a publication could not use them.)
 - Before concluding there is a bug: check the server is running the current code (uvicorn
   has no auto-reload here — restart it from `observatory/`), the right port (8007), and
   that you're not looking at a cached response.
@@ -164,6 +188,14 @@ cd observatory
 - DuckDB is **pinned `>=1.4,<1.6`** — `INSERT OR REPLACE` semantics around foreign keys
   changed after 1.5 and an unpinned install made production diverge from local. Don't
   loosen the pin.
+- **Don't stop another session's server or take its database lock.** DuckDB lets one
+  program hold a file at a time. If a database is locked, copy it to your scratchpad, work
+  on the copy, then swap it in (check the original's modified time hasn't changed). Run
+  your own server on a spare port, not 8007. Responses are cached by the macro database's
+  version, so after swapping `equity.duckdb` add `?_=fresh` to a URL before deciding the
+  swap failed.
+- **Never open `observatory/seed/equity.duckdb` directly**, even read-only: DuckDB
+  rewrites the file and git shows the tracked seed as modified. Copy it first.
 - `.env` (gitignored, from `.env.example`) holds the ask-provider key only. Everything
   except the ask box works without it.
 - Frontend is vanilla JS + vendored ECharts (`web/assets/echarts.min.js`). No new runtime
@@ -190,10 +222,18 @@ Mechanical, not memory. Added 2026-10-03 after the desk search found nothing for
 - The gate's one exit for a failure that is not yours (another session's file): say so to
   me in the reply, on a line starting `GATE: not mine`, naming the file.
 
-## Deploy (Railway)
+## Deploy
 
-- Built from `observatory/Dockerfile`; config pinned in `observatory/railway.json`
-  (healthcheck `/api/v1/catalog/datasets`).
+- **Production runs on a DigitalOcean server behind Cloudflare (since 2026-10-10).** A push
+  to `main` deploys itself once the GitHub checks pass (`.github/workflows/deploy.yml` →
+  `observatory/deploy/deploy.sh`): the new copy is smoke-checked before readers reach it,
+  and a failure rolls back with no outage. About 5 minutes from push to live (measured
+  4 min 43 s: checks 1 min 17 s, deploy 3 min 24 s). Railway is only a quiet fallback
+  until about 2026-10-24. Manual deploy or rollback:
+  `ssh root@206.189.209.173 /opt/plover/repo/observatory/deploy/deploy.sh main` (or
+  `image:sha-<old>`).
+- The image is built from `observatory/Dockerfile`; `observatory/railway.json` pins the
+  Railway fallback (healthcheck `/api/v1/catalog/datasets`).
 - `start.sh` runs the seven macro ingests, then the equity refresh
   (`observatory/equity/refresh_equity.py` — all seven EDINET-derived datasets, incremental
   from the S3 archive), then uvicorn. Both are fail-safe by design: an unreachable source,
@@ -228,8 +268,9 @@ All UI rules live in the **`ui-ux-design` skill**. P0 rules repeated for visibil
   (metadata header block); URL encodes the full view state so any view is citable.
 - **Mandatory look-at-it gate:** never call UI done without screenshots at 1440 (light +
   dark) and true-390. Headless Chrome floors layout at ~500px even in `--headless=new` —
-  true-390 checks need the iframe harness; `--virtual-time-budget` does not wait for
-  fetches inside iframes.
+  true-390 checks need a CDP script (`Emulation.setDeviceMetricsOverride`, browser cache
+  disabled) or the iframe harness; `--virtual-time-budget` does not wait for fetches
+  inside iframes.
 - **Never kill a browser by application name (P0).** `pkill -f "Google Chrome"` (or
   `killall`, or any pattern matching the app bundle path) terminates my real browser
   window and every other agent's browser on this machine — unsaved tabs and all. Kill
@@ -274,4 +315,5 @@ All UI rules live in the **`ui-ux-design` skill**. P0 rules repeated for visibil
 
 Treat this file as living rules. If you spot a repeat mistake, missing guardrail, or
 better convention, propose an update — exact text, why, where — and wait for approval.
-Do not update rules automatically.
+Do not update rules automatically. `AGENTS.md` is the Codex copy of these rules: any
+approved change here goes into `AGENTS.md` in the same edit.

@@ -685,6 +685,7 @@ def answer(cur, question):
     plan, rows, cols, start, end, headline = None, None, None, None, None, None
     findings, verdict, reviewed = [], None, False
     looks, seen = [], []
+    kept = None            # a result that ran and passed the code checks, held while the reviewer's redo is tried
     cached = _PLANS.get(_plan_key(question))
     # Plan, run, check, revise: a result that comes back is checked the way
     # an analyst reads a printout before quoting it (app/us_checks.py), and
@@ -707,10 +708,20 @@ def answer(cur, question):
                     told += " That was your last look: reply with the final sql now."
                 messages += [{"role": "assistant", "content": raw}, {"role": "user", "content": told}]
                 plan, raw = _ask_model(messages)
+        if plan.get("cannot") and not plan.get("sql") and kept:
+            # the redo gave up where the first attempt had answered: the first answer stands, with the reviewer's point noted
+            plan, rows, cols, headline, findings, start, end = kept["plan"], kept["rows"], kept["cols"], kept["headline"], kept["findings"], kept["start"], kept["end"]
+            verdict = dict(kept["verdict"] or {}, verdict="note")
+            log(question, "kept first answer", plan.get("cannot") or verdict.get("reason"))
+            break
         if plan.get("cannot") and not plan.get("sql"):
             from . import ask_miss
             log(question, "cannot", plan["cannot"])
             if str(plan["cannot"]).strip().lower().strip(".") == "unclear":
+                # a question that names a company is not gibberish: the word patterns get it
+                from . import stock_recipes
+                if us_link.find_companies(cur, stock_recipes._without_benchmarks(question)):
+                    raise StepsError("read as unclear, but the question names a company")
                 raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
             if str(plan["cannot"]).startswith(OTHER_MARKET_PREFIX) and not other_market(question):
                 # the model copied the other-market wording for a US question it could not answer
@@ -730,6 +741,11 @@ def answer(cur, question):
                                  "instead." % ", ".join(copied[:3]))
             rows, cols = run(cur, plan.get("sql"), start, end)
         except StepsError as exc:
+            if kept:
+                plan, rows, cols, headline, findings, start, end = kept["plan"], kept["rows"], kept["cols"], kept["headline"], kept["findings"], kept["start"], kept["end"]
+                verdict = dict(kept["verdict"] or {}, verdict="note")
+                log(question, "kept first answer", str(exc))
+                break
             if attempt == 3:
                 log(question, "query failed", "%s | %s" % (exc, plan.get("sql")))
                 raise
@@ -766,6 +782,8 @@ def answer(cur, question):
             ask_progress.say("Checking the answer matches the question…")
             verdict = us_checks.review(question, plan, headline, rows, cols)
             if verdict["verdict"] == "revise" and verdict.get("reason") and attempt < 3:
+                kept = {"plan": plan, "rows": rows, "cols": cols, "headline": headline, "findings": findings,
+                        "start": start, "end": end, "verdict": verdict}
                 log(question, "revised by review", verdict["reason"])
                 ask_progress.say("The check asked for a change: %s. Redoing it…" % str(verdict["reason"]).rstrip(".")[:200])
                 messages += [{"role": "assistant", "content": raw},

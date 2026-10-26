@@ -143,6 +143,7 @@ Rules:
 - "performers", "best", "winners", "gainers", "returns", "performed" in a ranking mean rank_by price_change; "worst", "losers", "laggards" mean price_change with order asc.
 - "S&P", "S&P 500", "SPX", "SPY" are sp500; "Dow", "Dow Jones", "DJIA" are dow; "Nasdaq" or "Nasdaq 100" is nasdaq100; "the market" as a comparison is sp500.
 - Did named stocks beat, lag, outperform or underperform an index: shape vs_benchmark, the stocks in companies, the index in benchmark.
+- A company with "share price", "stock price", "price", "stock" or "chart" and little else ("Nvidia share price", "TSLA price", "price of Amazon stock") asks for its share price now and how it has moved: shape company_price_performance.
 - How much of an index's move came from a stock, or what drove an index: shape index_contribution, the index in universe, the stock (if any) in companies.
 - Rank or list stocks within an index: shape market_rank with universe set; within an industry: industry_rank.
 - Use a shape only when it answers the whole question. Counts ("how many"), shares ("what percentage"), averages and

@@ -1018,6 +1018,8 @@
      writes the query and reads a preview; the rows, chart and CSV come from
      the server. A query run by hand uses no AI at all. Every run is kept. */
   const STUDY_EXAMPLE = 'How far apart are the US and Japanese 10-year yields since 2020, and when was the gap widest?';
+  // the most tokens one question on a study may spend; empty = the server's cap
+  const BUDGETS = [2000, 5000, 10000, 25000, 50000, 100000];
   // One precision per column: the most decimals any value carries, at most four.
   function colDp(rows, i) { let dp = 0; rows.forEach(r => { const v = r[i]; if (typeof v === 'number' && isFinite(v)) { const t = String(v).split('.')[1]; if (t) dp = Math.max(dp, Math.min(4, t.length)); } }); return dp; }
   const cell = (v, dp) => v == null ? '—' : (typeof v === 'number' ? fmtNum(v, dp) : esc(v));
@@ -1144,11 +1146,13 @@
       catch (e) { $('#rc-err').innerHTML = `<p class="err">${esc(e.detail || 'The analysis could not run.')}</p>`; }
     };
   }
+  const BY_LABEL = { analyst: 'The Analyst', you: 'You', schedule: 'Scheduled refresh', library: 'Your past study' };
+  const byLabel = by => BY_LABEL[by] || esc(String(by).replace(/^ext:/, ''));
   function resultHtml(st, run) {
     if (!run) return '<p class="muted">No run yet. Ask a question above, or fill in the analysis below and press Run Query.</p>';
     const tk = run.tokens || {};
-    const by = run.by === 'analyst' ? 'The Analyst' : run.by === 'you' ? 'You' : run.by === 'schedule' ? 'Scheduled refresh' : 'Your AI (' + esc(String(run.by).replace(/^ext:/, '')) + ')';
-    const cost = run.by === 'analyst' && tk.in != null ? ` · ${fmtNum(tk.in + (tk.out || 0), 0)} tokens${tk.cached ? ' (' + fmtNum(tk.cached, 0) + ' from cache)' : ''}` : (run.by === 'you' || run.by === 'schedule' ? ' · no AI used' : '');
+    const by = run.by === 'analyst' || BY_LABEL[run.by] ? byLabel(run.by) : 'Your AI (' + byLabel(run.by) + ')';
+    const cost = run.by === 'analyst' && tk.in != null ? ` · ${fmtNum(tk.in + (tk.out || 0), 0)} tokens${tk.cached ? ' (' + fmtNum(tk.cached, 0) + ' from cache)' : ''}` : (run.by === 'you' || run.by === 'schedule' || run.by === 'library' ? ' · no AI used' : '');
     const shown = run.rows.slice(0, 200);
     const dps = run.columns.map((c, i) => colDp(run.rows, i));
     const isNum = run.columns.map((c, i) => run.rows.some(r => typeof r[i] === 'number'));
@@ -1198,7 +1202,8 @@
     const spec = (run && run.spec) || st.spec || {};
     $('#main').innerHTML = topbar([['Studies', 'studies'], [st.title]]) + `<div class="content"><div class="page wide">
       <div class="pagehead"><div><input class="study-title" id="st-title" value="${esc(st.title)}" aria-label="Study title"></div>
-        <div class="actions"><label class="study-refresh">Refresh <select id="st-refresh" aria-label="Refresh on a schedule"><option value="">Never</option><option value="daily"${st.refresh === 'daily' ? ' selected' : ''}>Daily</option><option value="weekly"${st.refresh === 'weekly' ? ' selected' : ''}>Weekly</option></select></label></div></div>
+        <div class="actions"><label class="study-refresh">Refresh <select id="st-refresh" aria-label="Refresh on a schedule"><option value="">Never</option><option value="daily"${st.refresh === 'daily' ? ' selected' : ''}>Daily</option><option value="weekly"${st.refresh === 'weekly' ? ' selected' : ''}>Weekly</option></select></label>
+          <label class="study-refresh">Budget <select id="st-budget" aria-label="Most tokens one question may spend"><option value="">Default</option>${BUDGETS.map(b => `<option value="${b}"${st.token_budget === b ? ' selected' : ''}>${fmtNum(b, 0)} tokens</option>`).join('')}${st.token_budget && !BUDGETS.includes(st.token_budget) ? `<option value="${st.token_budget}" selected>${fmtNum(st.token_budget, 0)} tokens</option>` : ''}</select></label></div></div>
       ${setupNotice()}
       <div class="ask study-ask"><input id="st-ask" placeholder="${esc(st.question ? 'Ask a follow-up, e.g. now monthly averages since 2010' : 'e.g. ' + STUDY_EXAMPLE)}" aria-label="Question for the Analyst"><button class="btn primary" id="st-askb">Ask the Analyst</button></div>
       <div id="st-wait"></div>
@@ -1210,8 +1215,9 @@
       ${studySpecForm(spec)}
       <div id="st-runerr"></div>
       <h2 class="band">Runs <span class="h2-note">${st.runs.length}</span></h2>
-      ${st.runs.length ? `<ul class="rows">${st.runs.map((x, i) => `<li data-go="studies/${st.id}${i ? '/run/' + x.id : ''}"${run && run.id === x.id ? ' class="on"' : ''}><div><b>${x.by === 'analyst' ? 'The Analyst' : x.by === 'you' ? 'You' : x.by === 'schedule' ? 'Scheduled refresh' : esc(String(x.by).replace(/^ext:/, ''))}${x.question ? ': ' + esc(x.question) : ''}</b></div><time class="muted small">${fmtNum(x.rows, 0)} rows · ${when(x.created_at)}</time></li>`).join('')}</ul>` : '<p class="muted">No runs yet.</p>'}
+      ${st.runs.length ? `<ul class="rows">${st.runs.map((x, i) => `<li data-go="studies/${st.id}${i ? '/run/' + x.id : ''}"${run && run.id === x.id ? ' class="on"' : ''}><div><b>${byLabel(x.by)}${x.question ? ': ' + esc(x.question) : ''}</b></div><time class="muted small">${fmtNum(x.rows, 0)} rows · ${when(x.created_at)}</time></li>`).join('')}</ul>` : '<p class="muted">No runs yet.</p>'}
     </div></div>`;
+    $('#st-budget').onchange = async e => { try { await api('/studies/' + st.id, { method: 'PUT', body: { token_budget: Number(e.target.value) || 0 } }); toast(e.target.value ? 'One question on this study may spend up to ' + fmtNum(Number(e.target.value), 0) + ' tokens' : 'Budget: the server\'s default cap'); } catch (err) { toast(err.detail || 'Could not save'); } };
     $('#st-refresh').onchange = async e => { try { await api('/studies/' + st.id, { method: 'PUT', body: { refresh: e.target.value } }); toast(e.target.value ? 'Refreshes ' + e.target.value + ' on Plover\'s server, no AI' : 'Refresh off'); } catch (err) { toast(err.detail || 'Could not save'); } };
     $('#st-title').onchange = async e => { const t = e.target.value.trim(); if (!t) { e.target.value = st.title; toast('A study needs a title'); return; } try { await api('/studies/' + st.id, { method: 'PUT', body: { title: t } }); toast('Title saved'); } catch (err) { toast(err.detail || 'Could not save the title'); } };
     const ask = async () => {
@@ -1395,12 +1401,14 @@
   }
 
   /* ---- Audit */
+  const monthName = ym => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }); };
   async function vAudit() {
     const d = await api('/audit');
     $('#main').innerHTML = topbar([['Audit']]) + `<div class="content"><div class="page">${pageHead('Audit', 'Every tool call your specialists made. They have no other way to reach a number.')}
       <div class="stats">${stat('Tool calls', n(d.counts.tool_calls), 'all runs')}${stat('Runs', n(d.counts.runs), 'scheduled and on request')}${stat('Waiting', n(d.counts.pending), 'for your approval')}${stat('Sent outward', n(d.counts.sent), 'all approved by you')}</div>
-      <h2 class="band">Tools</h2><div class="panel">${d.tools.length ? `<table class="t"><thead><tr><th>Tool</th><th>Used by</th><th class="right">Calls</th></tr></thead><tbody>${d.tools.map(t => `<tr><td><span class="code">${esc(t.name)}</span></td><td>${t.used_by.map(s => esc(s === 'connection' ? 'Outside agents' : (specOf(hireBySlug(s)).name || s))).join(', ')}</td><td class="right">${n(t.calls)}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No tool calls yet.</p>'}</div>
-      <h2 class="band">Recent runs</h2><div class="panel">${d.runs.length ? `<table class="t"><thead><tr><th>When</th><th>Specialist</th><th>Trigger</th><th class="right">Calls</th><th class="right">Tokens</th><th>Result</th></tr></thead><tbody>${d.runs.map(x => `<tr><td class="nowrap">${when(x.started_at)}</td><td>${esc(x.slug === 'connection' ? x.trigger + ' (connection)' : (specOf(hireById(x.hire_id)).name || x.slug))}</td><td>${esc(x.slug === 'connection' ? 'outside agent' : x.trigger)}</td><td class="right">${n(x.tool_calls)}</td><td class="right">${n(x.tokens_in + x.tokens_out)}</td><td>${esc(outcomeLabel(x.outcome))}${x.error ? `<small>${esc(x.error)}</small>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No runs yet.</p>'}</div></div></div>`;
+      <h2 class="band">AI use by month <span class="h2-note">your account</span></h2><div class="panel">${(d.months || []).some(m => m.questions) ? `<div class="tw"><table class="t"><thead><tr><th>Month</th><th class="right">Questions</th><th class="right">Tokens in</th><th class="right">Tokens out</th><th class="right">Per question</th></tr></thead><tbody>${d.months.map(m => `<tr><td class="nowrap">${esc(monthName(m.month))}</td><td class="right">${n(m.questions)}</td><td class="right">${n(m.tokens_in)}</td><td class="right">${n(m.tokens_out)}</td><td class="right">${m.per_question == null ? '—' : n(m.per_question)}</td></tr>`).join('')}</tbody></table></div><p class="muted small" style="margin:8px 12px 12px">Counts every question a model answered: chat, specialists and the Study Analyst. Ready-made analyses, hand-run queries, scheduled refreshes and answers reused from a past study use no model and are not counted.</p>` : '<p class="empty">No model has answered a question yet.</p>'}</div>
+      <h2 class="band">Tools</h2><div class="panel">${d.tools.length ? `<div class="tw"><table class="t"><thead><tr><th>Tool</th><th>Used by</th><th class="right">Calls</th></tr></thead><tbody>${d.tools.map(t => `<tr><td><span class="code">${esc(t.name)}</span></td><td>${t.used_by.map(s => esc(s === 'connection' ? 'Outside agents' : (specOf(hireBySlug(s)).name || s))).join(', ')}</td><td class="right">${n(t.calls)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No tool calls yet.</p>'}</div>
+      <h2 class="band">Recent runs</h2><div class="panel">${d.runs.length ? `<div class="tw"><table class="t"><thead><tr><th>When</th><th>Specialist</th><th>Trigger</th><th class="right">Calls</th><th class="right">Tokens</th><th>Result</th></tr></thead><tbody>${d.runs.map(x => `<tr><td class="nowrap">${when(x.started_at)}</td><td>${esc(x.slug === 'connection' ? x.trigger + ' (connection)' : (specOf(hireById(x.hire_id)).name || x.slug))}</td><td>${esc(x.slug === 'connection' ? 'outside agent' : x.trigger)}</td><td class="right">${n(x.tool_calls)}</td><td class="right">${n(x.tokens_in + x.tokens_out)}</td><td>${esc(outcomeLabel(x.outcome))}${x.error ? `<small>${esc(x.error)}</small>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No runs yet.</p>'}</div></div></div>`;
   }
 
   /* ---- System: MCP tools */

@@ -11,6 +11,7 @@ Scheduled runs belong to `python -m app.assistant.runner --all`, outside the
 serving process.
 """
 import json
+import datetime
 import re
 from typing import Optional
 
@@ -587,11 +588,26 @@ async def ask_in_thread(thread_id: int, payload: MessageRequest, request: Reques
     return await _ask(aid, h, thread_id, text)
 
 
+# A series search matches a company's name to places and funds of the same
+# name (Toyota: Toyota City's guest nights), so the model is told when to
+# ignore the list.
+CHAT_HINTS_NOTE = ("If the question is about a company, ignore the list below and use get_company. ")
+
+
 async def _ask(aid, h, thread_id, text):
     before = store.thread(aid, thread_id)
     history = [{"role": m["role"], "text": m["text"]} for m in before["messages"]]
     store.add_message(thread_id, "user", text)
-    result = await run_in_threadpool(runner.run, aid, h, "message", text, history, "thread", True)
+    task = text
+    if h["slug"] == specialists.ANALYST["slug"]:
+        # The series the question seems to name, found by code before the
+        # model starts, as Studies do: the lookups a model spends finding a
+        # code (2026-10-23: three of six calls on "core inflation") re-send the
+        # whole conversation each time.
+        hints = await run_in_threadpool(analysis.suggest_series, text, 6, 2)
+        if hints:
+            task = text + "\n\n" + CHAT_HINTS_NOTE + analysis.hints_text(hints)
+    result = await run_in_threadpool(runner.run, aid, h, "message", task, history, "thread", True)
     reply = result["text"] or ("I could not finish: %s" % (result["error"] or result["outcome"]))
     store.add_message(thread_id, "assistant", reply, run_id=result["run_id"])
     out = store.thread(aid, thread_id)
@@ -620,6 +636,7 @@ def audit(request: Request):
     rs = store.runs(aid, limit=200)
     return {"tools": store.tool_usage(aid),
             "runs": rs[:50],
+            "months": store.monthly_usage(aid),
             "counts": {"runs": len(rs),
                        "tool_calls": sum(r["tool_calls"] for r in rs),
                        "pending": len(store.approvals(aid, "pending")),
@@ -1197,6 +1214,11 @@ class StudyEdit(BaseModel):
     title: Optional[str] = None
     question: Optional[str] = None
     refresh: Optional[str] = None       # "daily", "weekly" or "" for never
+    # the most tokens one question on this study may spend; 0 for the server's cap
+    token_budget: Optional[int] = None
+
+
+BUDGET_MIN = 1000
 
 
 class StudyRun(BaseModel):
@@ -1327,8 +1349,14 @@ def edit_study(study_id: int, payload: StudyEdit, request: Request):
         refresh = payload.refresh.strip().lower() or None
         if refresh is not None and refresh not in store.REFRESH_CHOICES:
             raise HTTPException(400, "refresh is daily, weekly, or empty for never.")
+    budget = False
+    if payload.token_budget is not None:
+        budget = int(payload.token_budget) or None
+        if budget is not None and not BUDGET_MIN <= budget <= runner.BUDGET["tokens"]:
+            raise HTTPException(400, "A token budget is between %s and %s, or 0 for the server's cap."
+                                % ("{:,}".format(BUDGET_MIN), "{:,}".format(runner.BUDGET["tokens"])))
     return {"study": store.update_study(aid, study_id, title=title, question=payload.question,
-                                        refresh=refresh)}
+                                        refresh=refresh, token_budget=budget)}
 
 
 @router.delete("/studies/{study_id}")
@@ -1405,12 +1433,14 @@ _NOT_A_RECIPE = re.compile(r"volatil|standard deviation|std ?dev|variance|correl
 NO_MATCH = "no"
 
 
-def _match_recipe(aid, desk, question, hints, house=None):
+def _match_recipe(aid, desk, question, hints, house=None, spent=None):
     """One short AI call, no tools: the question matched to a recipe and its
     blanks. Returns (spec, tokens, matched_id); NO_MATCH when the model said
     nothing fits; None when the match was not tried (no usable model, no
     hints, or a question no recipe computes). `house` is a free try's key
-    (free.take), used instead of the desk's."""
+    (free.take), used instead of the desk's. `spent`, a list, is given the
+    tokens the call used whatever it answered, so a study's budget counts
+    a miss too."""
     if _NOT_A_RECIPE.search(question or "") or not hints:
         return None
     if house:
@@ -1436,6 +1466,8 @@ def _match_recipe(aid, desk, question, hints, house=None):
         return None
     tokens = dict({"in": 0, "out": 0, "cached": 0}, **(out.get("usage") or {}))
     tokens.update(calls=0, tier=1)
+    if spent is not None:
+        spent.append(tokens["in"] + tokens["out"])
     m = re.search(r"\{.*\}", out.get("text") or "", re.S)
     if not m:
         return None
@@ -1516,14 +1548,80 @@ def _stock_answer(q, prev):
     return a if a and a.get("headline") else None
 
 
+# Words that do not change what a question asks: two questions that differ
+# only in these, in order, case or punctuation are the same question.
+_Q_FILLER = frozenset(("the", "a", "an", "of", "and", "is", "are", "was", "were", "please", "me",
+                       "show", "chart", "plot", "can", "you", "tell", "give", "what", "whats"))
+
+
+def question_key(q):
+    """A question reduced to its content words, sorted, so the same question
+    asked again in other casing, order or punctuation is found."""
+    words = re.findall(r"[a-z0-9][a-z0-9.\-]*", (q or "").lower().replace("'", ""))
+    return " ".join(sorted(set(w.strip(".-") for w in words) - _Q_FILLER))
+
+
+def _past_answer(aid, q):
+    """A kept run of the person's that answered this same question, newest
+    first, or None. 'Nothing is asked twice': the run's analysis is run again
+    by code on today's data instead of asking a model."""
+    key = question_key(q)
+    if len(key.split()) < 2:
+        return None
+    for r in store.past_runs(aid):
+        if r["spec"].get("series") and question_key(r["question"]) == key:
+            return r
+    return None
+
+
+def _budget_left(st, spent):
+    """What a study's own token budget leaves for the loop after ``spent``
+    tokens, as runner caps; None when the study has none. Zero means the
+    budget is already gone."""
+    cap = st.get("token_budget")
+    if not cap:
+        return None
+    return {"tokens": max(0, int(cap) - int(spent))}
+
+
+def _budget_message(st):
+    return ("This study's token budget (%s tokens for one question) was reached before the Analyst "
+            "finished. Raise the budget beside Refresh, or ask a narrower question."
+            % "{:,}".format(st["token_budget"]))
+
+
 async def _answer_study(aid, study_id, st, q, desk, house):
+    if not st["spec"]:
+        # Asked before: the same analysis runs again on today's data, by code
+        past = await run_in_threadpool(_past_answer, aid, q)
+        if past is not None:
+            try:
+                result = await run_in_threadpool(analysis.execute, past["spec"])
+            except analysis.AnalysisError:
+                result = None
+            if result is not None:
+                rc = past["spec"].get("recipe") or {}
+                when = datetime.datetime.utcfromtimestamp(past["created_at"]).strftime("%d %B %Y").lstrip("0")
+                note = (_recipe_note(rc["id"], result, rc.get("options")) + " " if rc.get("id") else "") + \
+                    "You asked this in \u201c%s\u201d on %s; the same analysis, run again on today's data." \
+                    % (past["title"], when)
+                if not st["question"] or st["title"] == "Untitled study":
+                    store.update_study(aid, study_id, question=q,
+                                       title=st["title"] if st["title"] != "Untitled study" else _title_from(q))
+                rid = store.add_study_run(aid, study_id, "library", result, question=q, note=note,
+                                          tokens={"in": 0, "out": 0, "cached": 0, "calls": 0, "tier": 0,
+                                                  "from_study": past["study_id"]})
+                if house:
+                    free.give_back(aid)         # no model ran
+                return _study_view(aid, study_id, rid)
+    used = []                               # tokens the match call(s) spent, hit or miss
     hints = await run_in_threadpool(analysis.suggest_series, q)
     if not st["spec"]:                      # a follow-up changes a query; a fresh question may match a recipe
-        matched = await run_in_threadpool(_match_recipe, aid, desk, q, hints, house)
+        matched = await run_in_threadpool(_match_recipe, aid, desk, q, hints, house, used)
         if matched == NO_MATCH:
             # a miss is usually a missing series: once more, with a wider search
             wider = await run_in_threadpool(analysis.suggest_series, q, 16, 5)
-            matched = await run_in_threadpool(_match_recipe, aid, desk, q, wider, house) if len(wider) > len(hints) else None
+            matched = await run_in_threadpool(_match_recipe, aid, desk, q, wider, house, used) if len(wider) > len(hints) else None
             if matched == NO_MATCH:
                 matched = None
             elif matched:
@@ -1548,18 +1646,30 @@ async def _answer_study(aid, study_id, st, q, desk, house):
     if st["spec"]:
         task += ("\n\nThe study's current analysis, to change or build on if the question is a "
                  "follow-up:\n" + json.dumps(st["spec"], ensure_ascii=False))
+    spent = sum(used)
+    left = _budget_left(st, spent)
+    if left is not None and left["tokens"] <= 0:
+        raise HTTPException(400, _budget_message(st))
     h = _study_hire(aid)
-    out = await run_in_threadpool(runner.run, aid, h, "study", task, None, "thread", False, house)
+    out = await run_in_threadpool(runner.run, aid, h, "study", task, None, "thread", False, house, left)
     made = store.analyses_for_run(aid, out["run_id"]) if out.get("run_id") else []
+    at_budget = out.get("outcome") == "budget" and "token budget" in (out.get("error") or "") and left is not None
     if not made:
+        if at_budget:
+            raise HTTPException(400, _budget_message(st))
         why = out.get("error") or out.get("text") or out.get("outcome") or "it stopped early"
         raise HTTPException(400, "The Analyst did not produce an analysis: %s" % str(why)[:400])
     if not st["question"] or st["title"] == "Untitled study":
         store.update_study(aid, study_id, question=q,
                            title=st["title"] if st["title"] != "Untitled study" else _title_from(q))
+    note = out.get("text") or ""
+    if at_budget:
+        note = (note + "\n\n" if note else "") + \
+            "The Analyst stopped at this study's token budget; the last analysis that ran is kept."
     rid = store.add_study_run(aid, study_id, "analyst", made[-1]["result"], question=q,
-                              note=out.get("text") or "", run_id=out.get("run_id"),
-                              tokens=dict(out.get("usage") or {}, calls=out.get("tool_calls"), tier=2))
+                              note=note, run_id=out.get("run_id"),
+                              tokens=dict(out.get("usage") or {}, calls=out.get("tool_calls"), tier=2,
+                                          matcher=spent))
     return _study_view(aid, study_id, rid)
 
 

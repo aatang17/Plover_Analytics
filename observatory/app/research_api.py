@@ -633,6 +633,58 @@ def market_rows(slug: str, request: Request, start: str = "", end: str = "",
     return JSONResponse(out, headers={"Cache-Control": "private, no-store"})
 
 
+# ------------------------------------------------------------ studies
+# The writer's own studies (Investment Assistant › Studies) offered in the
+# editor's Studies tab. They belong to the person's account, found by email
+# like their data sources, so the shared admin password sees none. A study's
+# chart goes into the article as a datachart: its numbers frozen that day,
+# its sources and any formula with it.
+
+def _study_account(person):
+    from .assistant import market_data
+    if person.get("shared") or not person.get("email"):
+        return None
+    return market_data.account_for(person["email"])
+
+
+def _ran_on(ts):
+    return datetime.datetime.utcfromtimestamp(ts).strftime("%d %B %Y").lstrip("0")
+
+
+@router.get("/studies")
+def writer_studies(request: Request):
+    from . import assistant
+    from .assistant import store as ia_store
+    person = _writer(request)
+    aid = _study_account(person)
+    rows = ia_store.studies_with_charts(aid) if aid else []
+    return JSONResponse({"enabled": assistant.enabled(), "link": "/assistant.html#/studies",
+                         "studies": [dict(r, ran_on=_ran_on(r["ran_at"])) for r in rows]},
+                        headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/studies/{study_id}/chart")
+def writer_study_chart(study_id: int, request: Request):
+    from . import analysis
+    from .assistant import store as ia_store
+    person = _writer(request)
+    aid = _study_account(person)
+    st = ia_store.study(aid, study_id) if aid else None
+    pick = None
+    if st is not None and st.get("archived_at") is None:
+        pick = next((r for r in ia_store.studies_with_charts(aid) if r["id"] == study_id), None)
+    if pick is None:
+        raise HTTPException(404, "That study is not among your studies with a chart. Reopen the "
+                                 "Studies tab to see the current list.")
+    run = ia_store.study_run(aid, study_id, pick["run_id"])
+    result = dict(run["result"], spec=run["spec"])
+    try:
+        block = analysis.datachart_block(result, st["title"], _ran_on(run["created_at"]))
+    except analysis.AnalysisError as exc:
+        raise HTTPException(400, str(exc))
+    return JSONResponse({"block": block}, headers={"Cache-Control": "private, no-store"})
+
+
 @router.get("/market/{slug}/chart")
 def market_chart(slug: str, request: Request, start: str = "", end: str = "",
                  publisher: Optional[int] = None, field: str = "close", revision: str = ""):

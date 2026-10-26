@@ -427,6 +427,64 @@ def chart_markdown(rows, cols, chart, sources, sql):
     return "\n".join(lines), len(body)
 
 
+def _cellnum(v):
+    """A number as the article stores it: up to twelve significant digits, so
+    a float's noise (0.30000000000000004) is not frozen into the page."""
+    if v is None:
+        return ""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return str(v)
+    return "%.12g" % v
+
+
+def datachart_block(result, study_title="", ran_on=""):
+    """A kept study run as an article's ``datachart`` block (research_doc):
+    the columns the study charts, every row that has a value, frozen into the
+    article. Published columns keep their publisher's names; anything
+    calculated carries its inputs and query in the note, as the trust
+    contract asks. Raises AnalysisError when the run cannot be a chart."""
+    from . import research_doc
+    ch = chart_spec(result)
+    names = [s["name"] for s in ch["series"]]
+    labels = [p[0] for p in ch["series"][0]["points"]] if ch["series"] else []
+    body = []
+    for i, label in enumerate(labels):
+        vals = [s["points"][i][1] for s in ch["series"]]
+        if all(v is None for v in vals):
+            continue
+        body.append([_cellnum(label)] + [_cellnum(v) for v in vals])
+    if not body:
+        raise AnalysisError("This study's latest run has no numbers to chart. Run it again in "
+                            "Studies, then insert it.")
+    if len(body) > research_doc.DATA_ROWS_MAX:
+        raise AnalysisError("This study has %s rows; a chart in an article holds up to %s. In "
+                            "Studies, make it monthly or shorten the period, then insert it again."
+                            % ("{:,}".format(len(body)), "{:,}".format(research_doc.DATA_ROWS_MAX)))
+    first = (result["columns"][0] if result["columns"] else "") or ""
+    head = ["Date" if ch["axis"] == "time" else first[:1].upper() + first[1:]] + names
+    derived = any(s["trust"] == "derived" for s in ch["series"])
+    credit = (ch["sources"][0]["credit"] if ch["sources"] else "") or "Plover"
+    source = credit + ("; calculated by Plover" if derived else "")
+    origin = "From the study \u201c%s\u201d%s." % (study_title or ch["title"], ", run " + ran_on if ran_on else "")
+    if derived:
+        # the note holds 400 characters; the formula comes first, so the
+        # study's name goes, then the release dates, before the formula is cut
+        sql = re.sub(r"\s+", " ", result["spec"].get("query") or "SELECT * FROM data")
+        short = "From a study%s." % (" run " + ran_on if ran_on else "")
+        bare = "Inputs: %s. Calculation: %s" % ("; ".join(
+            "%s = %s" % (x["name"], x.get("title") or x["series"]) for x in result["sources"]), sql)
+        tries = [origin + " " + _formula(result["sources"], sql), short + " " + _formula(result["sources"], sql),
+                 short + " " + bare]
+        note = next((t for t in tries if len(t) <= research_doc.TEXT_MAX), None)
+        if note is None:
+            note = tries[-1][:research_doc.TEXT_MAX - 1] + "\u2026"
+    else:
+        note = origin + " Values as published: " + ch["sources"][0]["document"] if ch["sources"] else origin
+    return {"type": "datachart", "rows": [head] + body, "kind": ch["kind"], "unit": ch["unit"],
+            "title": ch["title"] or study_title, "source": source[:research_doc.TEXT_MAX],
+            "note": note[:research_doc.TEXT_MAX], "origin": "database"}
+
+
 def _quote(s):
     from urllib.parse import quote
     return quote(s, safe="")

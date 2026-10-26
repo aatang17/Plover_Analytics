@@ -113,9 +113,12 @@ Every number on screen carries its trust label and its as-of. This is the platfo
   "Maturity Detail". Never a rhetorical question ("What Is Driving Inflation", "Who Holds It"),
   never an editorial flourish ("The Tape", "The Unwind", "One Prefecture, Fifty Years"), and never
   a bare "All X" where "X Detail" is the convention. The specifics that vary — the company, the
-  date range, the row count — belong in the `h2-note` qualifier, not in the heading. Documentation
-  pages (methodology, manual) are the exception: sentence-case prose headings are the right
-  register for a written guide.
+  date range, the row count — belong in the `h2-note` qualifier, not in the heading. **This applies
+  to documentation pages too (manual, methodology, API).** Plain names only: "Overview",
+  "Limitations", "Troubleshooting", "Lookup Reference" — never chatty or first-person phrasing
+  ("Limits, honestly stated", "When something looks wrong", "The lookups, one by one", "Ten
+  questions to try"). The user asked for this on 2026-10-02 after the Manual's headings read as
+  informal. Applies to every new heading going forward.
 - **Never render a raw enum/slug/db value** (`published_yoy`, `concept_changed`) — map to a Title-Case label via one `Record<value, label>` per surface. Sentences = sentence case; badges/headings/buttons = Title Case.
 - **Descriptive, never causal.** "Coincides with", "contributed mechanically", "is associated with" — never "because", "driven by", or "caused by" unless a documented research design backs it.
 - **Never name the technology.** Describe what a feature does for the user, not that it uses AI/ML/a model. "Estimated from Tokyo series", not "AI-powered nowcast".
@@ -194,6 +197,28 @@ If not, fix hierarchy before any polish. Use the `run` skill or a screenshot —
 - **Formatting:** every value human-formatted — grouped thousands, consistent precision and units, true minus signs, Title-Case labels not raw enums, and no placeholder junk (`1970-01-01`, `NaN`, `null`, or `0.0` standing in for missing).
 - **Charts:** axis labels not clipped at 390px, legend not overlapping the plot, gaps rendered as gaps, tooltip readable at the right edge of the viewport.
 - **No ragged edges:** no orphaned separator, no stray marker, nothing that visibly jumps as content varies between rows.
+- **Even spacing:** measure the gaps between neighbouring items in a bar, toolbar or row (header links, buttons, tabs). Gaps must match. An empty item, or width reserved for content that isn't there, must take no space. Check every state the bar can be in: signed out, signed in, with and without its as-of. (2026-10-11: Docs and Sign in sat 67px apart while Sign in and Dark Mode sat 18px apart.)
+
+## Exception — PloverResearch pages (`/research`, the research desk)
+
+Editorial pages, not data dashboards. Agreed with the user on 2026-10-03; applies to
+`research.css`, `research_pages.py` and the desk's article canvas only — every data page keeps
+the rules above.
+
+- **The front page is a grid of boxed cards** (overrides anti-AI-tell #7 here). Every area is a
+  box: the lead story, Chart of the Week, each card, the subscribe panel. Each box carries a 3px
+  `--obs-band-bg` rule along its top. Cards stay sparse: chart, category label, headline, date.
+- **Chart-first lead story:** the lead box opens with the note's chart, the words beside it in a
+  white box. No solid filled story panel.
+- **Section headings are the platform's navy band**; inside an article, sub-headings are bold
+  type under a short navy rule instead.
+- **One typeface: IBM Plex Sans** (Inter until 2026-10-26), headlines heavy (700–800) and tight. No serif — the user tried one and
+  dropped it to keep the look distinct from news publishers.
+- **No trust badge on research charts.** The "Official Statistic" pill read as AI-made; the
+  source line says it in words instead ("Values as published"), and derived rates keep their
+  "Show calculation". Provenance is still on every chart — only the badge is gone.
+- **Don't imitate a named publisher.** Borrow patterns (cards, labels, a share row), never a
+  publisher's recognisable combination of colours, type and layout.
 
 ## P0 — never regress
 

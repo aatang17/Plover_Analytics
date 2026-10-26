@@ -156,16 +156,26 @@ CATALOGUE = [
 # listed among the specialists, or run by the scheduler.
 ANALYST = {
     "slug": "analyst", "initials": "AN", "name": "Analyst", "category": "Chat",
-    "version": "1.0.0", "chat": True,
+    "version": "1.1.0", "chat": True,
     "summary": "Answers questions on any dataset or company, with every lookup shown.",
     "schedule": "On request", "delivery": "Chat",
     "tools": list(READ_TOOLS) + ["my_coverage", "draw_chart"],
+    # Every step re-sends the whole conversation, so a run's cost is set by
+    # how many lookups the model makes, not by the prompt (2026-10-16: Toyota's
+    # revenue took six calls, three of them in datasets that could not hold
+    # it). The brief says when to stop; the cap below holds it to that.
+    "budget": {"tool_calls": 10},
     "brief": (
-        "You answer the desk's questions on Japanese official statistics and company "
-        "disclosures. Look up every figure with a tool before you state it; start with "
-        "search or list_datasets when you do not know where a number lives. Answer the "
-        "question that was asked. If the data cannot answer it, say what is missing "
-        "instead of guessing."),
+        "You answer the desk's questions on official statistics and company disclosures "
+        "for Japan, the United States and Hong Kong. Look up every figure with a tool before "
+        "you state it, in as few calls as you can: decide where the figure lives before the "
+        "first call (search or list_datasets when you do not know), then make the one call "
+        "that returns it. A company's figures come from get_company with the dataset that "
+        "holds them; get_series is for published statistics, never for a company. Once a "
+        "tool has returned the figures the question asks for, stop looking and answer: do "
+        "not confirm them in a second dataset, screen the market, or read filings the "
+        "question did not ask about. Answer the question that was asked. If the data cannot "
+        "answer it, say what is missing instead of guessing."),
     "task": ""}
 
 # The Studies page's analyst: it turns a question into one analysis that runs

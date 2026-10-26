@@ -1,0 +1,28 @@
+{
+  "description": "Plover Analytics: reuse Claude browser protection, syntax checks and completion gate.",
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "sh \"$(git rev-parse --show-toplevel)/.claude/hooks/block-browser-kill.sh\"",
+        "timeout": 10
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Bash|apply_patch|Edit|Write",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/claude-checks.py\" post",
+        "timeout": 30
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/claude-checks.py\" stop",
+        "timeout": 900
+      }]
+    }]
+  }
+}

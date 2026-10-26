@@ -2403,6 +2403,7 @@ function showPane(name) {
   $all(".dk-pane").forEach(function (p) { p.hidden = p.id !== "dk-pane-" + name; });
   if (name === "history") renderHistory();
   if (name === "research") renderResearchPane();
+  if (name === "studies") renderStudiesPane();
   if (name === "ai") renderAIPane();
   if (name === "check") renderChecklist();
   if (name === "versions") renderVersions();
@@ -2719,6 +2720,7 @@ function shell() {
     '<div class="dk-tabs" role="tablist">' +
     '<button type="button" class="dk-tab" role="tab" data-pane="details" aria-selected="true">Details</button>' +
     '<button type="button" class="dk-tab" role="tab" data-pane="research">Research</button>' +
+    '<button type="button" class="dk-tab" role="tab" data-pane="studies">Studies</button>' +
     '<button type="button" class="dk-tab" role="tab" data-pane="ai">AI</button>' +
     '<button type="button" class="dk-tab" role="tab" data-pane="check">Check</button>' +
     '<button type="button" class="dk-tab" role="tab" data-pane="history">History</button>' +
@@ -2726,6 +2728,7 @@ function shell() {
     "</div>" +
     '<div class="dk-pane" id="dk-pane-details" role="tabpanel"></div>' +
     '<div class="dk-pane" id="dk-pane-research" role="tabpanel" hidden></div>' +
+    '<div class="dk-pane" id="dk-pane-studies" role="tabpanel" hidden></div>' +
     '<div class="dk-pane" id="dk-pane-ai" role="tabpanel" hidden></div>' +
     '<div class="dk-pane" id="dk-pane-check" role="tabpanel" hidden></div>' +
     '<div class="dk-pane" id="dk-pane-history" role="tabpanel" hidden></div>' +
