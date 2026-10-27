@@ -238,7 +238,7 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(c.post("/api/v1/assistant/coverage", json={"code": "12"}).status_code, 400)
         self.assertEqual(c.post("/api/v1/assistant/coverage", json={"code": "9999"}).status_code, 404)
         cov = c.post("/api/v1/assistant/coverage", json={"code": "7203"}).json()["coverage"]
-        self.assertEqual(cov[0]["name"], "TOYOTA MOTOR CORPORATION")
+        self.assertEqual(cov[0]["name"], "Toyota Motor Corporation")   # app/jp_names.py
         d = c.get("/api/v1/assistant/desk").json()
         self.assertEqual(d["email"], "pm@example.com")
         self.assertTrue(any(x["slug"] == "buyback-monitor" for x in d["hires"]))

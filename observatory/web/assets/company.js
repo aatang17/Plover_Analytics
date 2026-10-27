@@ -276,7 +276,7 @@ function renderIdentity() {
   // The card's h1 is the page's one name, and the prerenderer has already
   // written it for a crawler — this sets the same name, never a second one.
   $("co-name").innerHTML = '<span class="co-tick">' + escapeHtml(c.sec_code) + "</span>" +
-    escapeHtml(c.name_en || c.name || c.sec_code);
+    escapeHtml(c.display_name || c.name_en || c.name || c.sec_code);
   $("page-asof").textContent = "FY to " + day(f.period) + " · filed " + day(f.filed);
   $("page-sub").textContent = [c.name, c.industry, edinet ? "EDINET " + edinet : "",
     fin.accounting_standard ? fin.accounting_standard +

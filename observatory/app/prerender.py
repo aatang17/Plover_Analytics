@@ -46,6 +46,8 @@ import re
 import threading
 from urllib.parse import parse_qsl, urlsplit, urlunsplit, urlencode
 
+from . import jp_names
+
 WEB_DIR = None  # set by main, so this module imports without touching the disk
 
 # Nav entries are `{ id: "…", label: "…", href: "…" }` with label immediately
@@ -547,7 +549,7 @@ def _company_meta(code):
     (filer_name, filer_name_en, period_end, filed_date, doc_id,
      name_en, name_ja, industry, holdings, board, shareholders) = row
 
-    english = _clean(name_en or filer_name_en)
+    english = jp_names.display_name(_clean(name_en or filer_name_en))
     japanese = _clean(name_ja or filer_name)
     name = english or japanese or code
     if not name:
@@ -912,7 +914,7 @@ def _ident_for(code, name_ja, name_en):
     base = company_meta(code)
     if base:
         return base["name"], base["ident"], base.get("name_ja")
-    japanese, english = _clean(name_ja), _clean(name_en)
+    japanese, english = _clean(name_ja), jp_names.display_name(_clean(name_en))
     name = english or japanese
     if not name:
         return None
