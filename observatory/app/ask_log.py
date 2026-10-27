@@ -36,6 +36,7 @@ import ipaddress
 import json
 import os
 import threading
+import time
 import urllib.parse
 from collections import OrderedDict
 
@@ -55,6 +56,15 @@ _OURS_CACHE = {}
 
 _LOCK = threading.Lock()
 _NOTES = OrderedDict()
+
+# A question from anyone but us is also sent to the Telegram chat the site's
+# alarms use (app/refresh.py), with nothing about who asked. The same question
+# again within a minute is not sent twice (a signed-in reader's full answer can
+# fall back to the preview), and a flood stops at ALERTS_PER_HOUR.
+ALERT_REPEAT_SECONDS = 60
+ALERTS_PER_HOUR = 30
+_ALERTED = OrderedDict()            # lower-cased question -> when it was sent
+_ALERT_HOUR = [None, 0]             # the hour being counted, messages sent in it
 NOTES_MAX = 5000
 MAX_LINES = 200000
 
@@ -157,6 +167,46 @@ def record(scope, status, seconds=None, now=None, ours=False):
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except OSError as exc:
         print("ASK LOG WRITE FAILED (%s)" % exc)
+    if line["from"] != "us":
+        _alert(line, now)
+
+
+def _alert_text(line):
+    who = "Example click" if line["from"] == "example" else "Typed by a reader"
+    result = {True: "answered", False: "not answered"}.get(line["answered"], "result not known")
+    where = "signed-out preview" if line["where"] == "preview" else "full answer"
+    return "Ask box: %s\n%s · %s · %s" % (line["q"], who, result, where)
+
+
+def _alert(line, now):
+    """Send the question to Telegram on a thread of its own, so a slow
+    Telegram never holds up the reader's response. Never raises."""
+    key = line["q"].lower()
+    stamp = time.time()
+    hour = now.strftime("%Y-%m-%dT%H")
+    with _LOCK:
+        last = _ALERTED.get(key)
+        if last is not None and stamp - last < ALERT_REPEAT_SECONDS:
+            return
+        if _ALERT_HOUR[0] != hour:
+            _ALERT_HOUR[0], _ALERT_HOUR[1] = hour, 0
+        _ALERT_HOUR[1] += 1
+        count = _ALERT_HOUR[1]
+        if count > ALERTS_PER_HOUR:
+            return
+        _ALERTED[key] = stamp
+        _ALERTED.move_to_end(key)
+        while len(_ALERTED) > 500:
+            _ALERTED.popitem(last=False)
+    text = _alert_text(line)
+    if count == ALERTS_PER_HOUR:
+        text += "\n(No more this hour. The rest are on the admin Traffic page, Ask Box tab.)"
+    _deliver(text)
+
+
+def _deliver(text):
+    from . import refresh
+    threading.Thread(target=refresh._send_telegram, args=(text,), daemon=True).start()
 
 
 def _median(values):

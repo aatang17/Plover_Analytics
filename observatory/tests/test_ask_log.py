@@ -25,9 +25,15 @@ class LogTest(unittest.TestCase):
         self.patch = mock.patch.object(ask_log, "ANALYTICS_DIR", self.dir)
         self.patch.start()
         ask_log._NOTES.clear()
+        self.sent = []
+        self.telegram = mock.patch.object(ask_log, "_deliver", self.sent.append)
+        self.telegram.start()
+        ask_log._ALERTED.clear()
+        ask_log._ALERT_HOUR[:] = [None, 0]
 
     def tearDown(self):
         self.patch.stop()
+        self.telegram.stop()
         ask_log._NOTES.clear()
 
     def lines(self):
@@ -111,6 +117,23 @@ class LogTest(unittest.TestCase):
         for line in self.lines():
             for k in ("visitor", "country", "network", "ip", "client", "via"):
                 self.assertNotIn(k, line)
+
+    def test_a_question_from_anyone_but_us_goes_to_telegram_once(self):
+        ask_log.note("/api/v1/us/ask", "who owns apple", True, "stock")
+        ask_log.record(_scope("/api/v1/us/ask", "Who owns Apple"), 200, 1.0)
+        ask_log.record(_scope("/api/v1/assistant/preview", "who owns apple"), 200, 1.0)   # the same, a moment later
+        ask_log.record(_scope("/api/v1/assistant/preview", "Apple buybacks", via="example"), 200, 1.0)
+        ask_log.record(_scope("/api/v1/us/ask", "our check"), 200, 1.0, ours=True)
+        self.assertEqual(self.sent, [
+            "Ask box: Who owns Apple\nTyped by a reader · answered · full answer",
+            "Ask box: Apple buybacks\nExample click · result not known · signed-out preview"])
+        self.assertEqual(len(self.lines()), 4, "the log still keeps every line")
+
+    def test_a_flood_stops_at_the_hourly_cap(self):
+        for i in range(ask_log.ALERTS_PER_HOUR + 5):
+            ask_log.record(_scope("/api/v1/us/ask", "question %d" % i), 200, 1.0)
+        self.assertEqual(len(self.sent), ask_log.ALERTS_PER_HOUR)
+        self.assertIn("No more this hour", self.sent[-1])
 
     def test_is_ours_without_the_setting(self):
         with mock.patch.dict("os.environ", {"OUR_ADDRESSES": ""}):
