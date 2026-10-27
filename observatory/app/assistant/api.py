@@ -20,7 +20,7 @@ from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from .. import accounts, analysis, jp_names, recipes, tools_v2
+from .. import accounts, analysis, jp_companies, recipes, tools_v2
 from . import (codex, delivery, drive, free, gateway, keychain, market_data, mcp_client, memory, runner,
                specialists, store, study_export)
 
@@ -128,8 +128,8 @@ def find_companies(q, limit=8):
         code = r.get("sec_code")
         if not code or len(str(code)) != 4:
             continue
-        out.append({"code": code, "name_en": jp_names.display_name((r.get("name_en") or "").strip()) or None,
-                    "name_ja": _clean_ja(r.get("name")) or None})
+        out.append({"code": code, "name_en": jp_companies.shown_name(code, (r.get("name_en") or "").strip()) or None,
+                    "name_ja": _clean_ja(r.get("name")) or None, "logo": jp_companies.logo(code)})
         if len(out) >= limit:
             break
     return out
@@ -344,7 +344,9 @@ def coverage(request: Request, list_id: int = 0):
     # Entries saved before Japanese names were kept get theirs once, here.
     for r in rows:
         if not str(r["sec_code"]).startswith("cik:"):
-            r["name"] = jp_names.display_name(r.get("name"))   # saved as filed, often in capitals
+            # saved as filed, often in capitals; an admin edit wins (app/jp_companies.py)
+            r["name"] = jp_companies.shown_name(r["sec_code"], r.get("name"))
+            r["logo"] = jp_companies.logo(r["sec_code"])
         if not r.get("name_ja") and not str(r["sec_code"]).startswith("cik:"):
             _en, ja = _company(r["sec_code"])
             if ja:

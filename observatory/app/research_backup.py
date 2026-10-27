@@ -7,7 +7,7 @@ volume holds the only copy of what the writers wrote. So once a day, and a
 minute after every publication, this makes a consistent copy of the SQLite
 files (SQLite's own backup API, safe while the server is writing) and:
 
-* also copies the admin console's hand curation (data/admin/us_companies.json,
+* also copies the admin console's hand curation (data/admin/us_companies.json, jp_companies.json,
   logos included, and data/admin/parties.json);
 * keeps the last 14 daily copies on the volume, under data/research/backups/,
   which covers a damaged database file;
@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 PREFIX = "plover-backups/"
 ADMIN_DIR = db.DATA_DIR / "admin"
-ADMIN_FILES = ("us_companies.json", "parties.json")
+ADMIN_FILES = ("us_companies.json", "jp_companies.json", "parties.json")
 KEEP_LOCAL = 14
 INTERVAL_SECONDS = 24 * 3600
 _run_lock = threading.Lock()

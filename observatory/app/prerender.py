@@ -46,7 +46,7 @@ import re
 import threading
 from urllib.parse import parse_qsl, urlsplit, urlunsplit, urlencode
 
-from . import jp_names
+from . import jp_companies
 
 WEB_DIR = None  # set by main, so this module imports without touching the disk
 
@@ -522,7 +522,7 @@ def company_meta(code):
         version = equity_api.file_version()
     except Exception:  # noqa: BLE001 — never worth an error page
         version = None
-    key = (code, version)
+    key = (code, version, jp_companies.version())   # a name edited in the admin console shows at once
     with _lock:
         if key in _company_cache:
             return _company_cache[key]
@@ -549,7 +549,7 @@ def _company_meta(code):
     (filer_name, filer_name_en, period_end, filed_date, doc_id,
      name_en, name_ja, industry, holdings, board, shareholders) = row
 
-    english = jp_names.display_name(_clean(name_en or filer_name_en))
+    english = jp_companies.shown_name(code, _clean(name_en or filer_name_en))
     japanese = _clean(name_ja or filer_name)
     name = english or japanese or code
     if not name:
@@ -914,7 +914,7 @@ def _ident_for(code, name_ja, name_en):
     base = company_meta(code)
     if base:
         return base["name"], base["ident"], base.get("name_ja")
-    japanese, english = _clean(name_ja), jp_names.display_name(_clean(name_en))
+    japanese, english = _clean(name_ja), jp_companies.shown_name(code, _clean(name_en))
     name = english or japanese
     if not name:
         return None

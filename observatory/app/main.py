@@ -52,6 +52,7 @@ from .segments_api import router as segments_router  # noqa: E402
 from .risk_api import router as risk_router  # noqa: E402
 from . import sec_api  # noqa: E402
 from . import us_companies  # noqa: E402
+from . import jp_companies  # noqa: E402
 from .sec_api import router as sec_router  # noqa: E402
 from .sec_deep_api import router as sec_deep_router  # noqa: E402
 from .sec_insiders_api import router as sec_insiders_router  # noqa: E402
@@ -65,6 +66,7 @@ from .us_press_api import router as us_press_router  # noqa: E402
 from .us_pay_api import router as us_pay_router  # noqa: E402
 from .us_company_api import router as us_company_router, logo_router as us_logo_router  # noqa: E402
 from .us_company_admin_api import router as us_company_admin_router  # noqa: E402
+from .jp_company_admin_api import router as jp_company_admin_router, logo_router as jp_logo_router  # noqa: E402
 from .sec_text_api import router as sec_text_router  # noqa: E402
 from .catalog_api import router as catalog_router  # noqa: E402
 from .nav_preview import router as nav_preview_router  # noqa: E402
@@ -281,11 +283,12 @@ def api_docs():
 # own pre-compressed hits pass through it untouched.
 # Stamped with EVERY database file: any of them can be swapped in by app/backfill.py
 # while the server runs, and an entry must not outlive the file it came from.
-# The admin console's company edits (app/us_companies.py) too: a new logo or
+# The admin console's company edits (app/us_companies.py, app/jp_companies.py) too: a new logo or
 # name is served at once, not after the next data swap.
 app.add_middleware(cache.ResponseCache,
                    version=lambda: (db.file_version(), equity_api.file_version(),
-                                    sec_api.file_version(), us_companies.version()))
+                                    sec_api.file_version(), us_companies.version(),
+                                    jp_companies.version()))
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 # Outermost, so a reader served from the response cache is still counted: a
 # cache hit never reaches the routers. See app/visits.py.
@@ -330,6 +333,7 @@ app.include_router(us_press_router)
 app.include_router(us_pay_router)
 app.include_router(us_company_router)
 app.include_router(us_logo_router)
+app.include_router(jp_logo_router)
 app.include_router(sec_text_router)
 # The catalog of manifests ahead of the core router, so its literal
 # /api/v1/catalog/… paths can never be shadowed by /{dataset}/… catch-alls.
@@ -353,6 +357,7 @@ app.include_router(mcp_router)
 # served from (or into) the shared response cache.
 app.include_router(admin_router)
 app.include_router(us_company_admin_router)
+app.include_router(jp_company_admin_router)
 # The research desk (a writer's role in each publication: app/writers.py) and
 # the publications' public pages (/research, /p/<publication>). The public routes are server-rendered HTML outside /api/v1, so a
 # newly published article is never held back by the dataset response cache;

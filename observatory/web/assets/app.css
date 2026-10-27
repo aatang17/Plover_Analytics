@@ -2216,6 +2216,11 @@ pre.code {
   color: var(--obs-primary); border: 1px solid var(--obs-border); border-radius: 3px;
   padding: 2px 7px; margin-right: 10px; vertical-align: 3px;
 }
+/* a logo uploaded in the admin console (app/jp_companies.py) */
+.co-logo {
+  width: 32px; height: 32px; object-fit: contain; border-radius: 3px; background: var(--obs-logo-bg);
+  margin-right: 12px; vertical-align: -7px;
+}
 .co-id-sub { margin: 7px 0 0; font-size: 12.5px; color: var(--obs-text-muted); }
 .co-id-filing {
   margin-left: auto; text-align: right; font-size: 11.5px; color: var(--obs-text-muted);

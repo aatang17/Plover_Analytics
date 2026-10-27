@@ -137,10 +137,12 @@ def _identity(code, blocks):
                     break
             if field in out:
                 break
-    if out.get("name_en"):
-        # name_en stays as filed; pages show it written as people write it
-        from .jp_names import display_name
-        out["display_name"] = display_name(out["name_en"])
+    # name_en stays as filed; pages show an admin edit, else it written as
+    # people write it, and the logo uploaded in the admin console (if any)
+    from . import jp_companies
+    if out.get("name_en") or jp_companies.name(code):
+        out["display_name"] = jp_companies.shown_name(code, out.get("name_en"))
+    out["logo"] = jp_companies.logo(code)
     return out
 
 

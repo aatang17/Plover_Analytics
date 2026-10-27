@@ -27,7 +27,7 @@ var ADMIN_NAV = [
   { group: "Classification", pages: [
     { id: "queue", label: "Classification Queue", hash: "#queue", perm: "classification" },
     { id: "parties", label: "Party Profiles", hash: "#parties", perm: "classification" },
-    { id: "companies", label: "US Companies", hash: "#companies", perm: "classification" },
+    { id: "companies", label: "Companies", hash: "#companies", perm: "classification" },
   ]},
   { group: "System", pages: [
     { id: "team", label: "Team", hash: "#team", perm: "team" },
@@ -64,6 +64,10 @@ var AUDIT_ACTIONS = {
   us_company_logo_uploaded: { label: "Company Logo Uploaded", cls: "badge-info" },
   us_company_logo_reset: { label: "Company Logo Reset", cls: "badge-neutral" },
   us_company_logo_hidden: { label: "Company Logo Hidden", cls: "badge-warn" },
+  jp_company_changed: { label: "Japanese Company Name Changed", cls: "badge-info" },
+  jp_company_logo_uploaded: { label: "Japanese Company Logo Uploaded", cls: "badge-info" },
+  jp_company_logo_reset: { label: "Japanese Company Logo Removed", cls: "badge-neutral" },
+  jp_company_logo_hidden: { label: "Japanese Company Logo Hidden", cls: "badge-warn" },
   login: { label: "Signed In", cls: "badge-ok" },
   password_set: { label: "Password Set", cls: "badge-ok" },
   password_changed: { label: "Password Changed", cls: "badge-info" },
@@ -306,7 +310,7 @@ function route() {
   else if (view === "traffic") viewTraffic(target, arg, arg2);
   else if (view === "audit") viewAudit(target);
   else if (view === "queue") viewQueue(target);
-  else if (view === "companies") viewUsCompanies(target, arg);
+  else if (view === "companies") viewUsCompanies(target, arg, arg2);
   else if (view === "parties") {
     if (arg) viewPartyDetail(target, arg, arg2);
     else viewParties(target);

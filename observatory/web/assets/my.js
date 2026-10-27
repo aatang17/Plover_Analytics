@@ -788,7 +788,7 @@
     if (window.usLogos) usLogos.ready.then(function () {
       rows.forEach(function (c, i) {
         var n = $('#ov-wl tr[data-i="' + i + '"] .ov-name');
-        if (isUS(c.sec_code) && n && !n.querySelector("img")) n.insertAdjacentHTML("afterbegin", usLogos.img(c.sec_code, 20));
+        if (n && !n.querySelector("img")) n.insertAdjacentHTML("afterbegin", isUS(c.sec_code) ? usLogos.img(c.sec_code, 20) : usLogos.at(c.logo, 20));
       });
     });
     rows.forEach(function (c, i) {
@@ -826,7 +826,8 @@
       if (window.usLogos) usLogos.ready.then(function () {
         Array.prototype.forEach.call(list.querySelectorAll(".my-row"), function (row) {
           var code = row.getAttribute("data-code"), name = $(".my-name", row);
-          if (isUS(code) && name && !name.querySelector("img")) name.insertAdjacentHTML("afterbegin", usLogos.img(code, 18));
+          var jp = rows.filter(function (c) { return c.sec_code === code; })[0] || {};
+          if (name && !name.querySelector("img")) name.insertAdjacentHTML("afterbegin", isUS(code) ? usLogos.img(code, 18) : usLogos.at(jp.logo, 18));
         });
       });
       Array.prototype.forEach.call(list.querySelectorAll(".my-row"), function (row) {

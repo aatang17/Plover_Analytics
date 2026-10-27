@@ -2,7 +2,8 @@
    /api/v1/us/company/logos (ticker and "cik:N" -> the logo's address), fetched
    once per page. usLogos.img(key, size) gives the <img> for a ticker or
    "cik:N", an empty slot of the same size where the company has none (so
-   names stay aligned), and "" until the map has arrived. */
+   names stay aligned), and "" until the map has arrived; usLogos.at(url,
+   size) the same for a logo address already in hand. */
 window.usLogos = (function () {
   "use strict";
   var map = null;
@@ -19,7 +20,13 @@ window.usLogos = (function () {
 
   function img(key, size) {
     if (!map) return "";
-    var s = size || 20, u = url(key);
+    return at(url(key), size);
+  }
+
+  // the same <img> (or empty slot) for a logo address already in hand: a
+  // Japanese company's, which comes with the company's own record
+  function at(u, size) {
+    var s = size || 20;
     var box = "display:inline-block;width:" + s + "px;height:" + s + "px;margin-right:" + Math.round(s * 0.4) +
       "px;vertical-align:" + (-Math.round(s * 0.25)) + "px;border-radius:3px;";
     if (!u) return "<span aria-hidden='true' style='" + box + "'></span>";
@@ -27,5 +34,5 @@ window.usLogos = (function () {
       "background:var(--obs-logo-bg);object-fit:contain'>";
   }
 
-  return { ready: ready, url: url, img: img };
+  return { ready: ready, url: url, img: img, at: at };
 })();
