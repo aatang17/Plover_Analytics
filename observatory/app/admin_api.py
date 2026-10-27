@@ -31,7 +31,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import db, filer_labels, mailer, parties, registry, seo, staff, vintages, visits
+from . import accounts, db, filer_labels, mailer, parties, registry, seo, staff, vintages, visits
 from .api import ADAPTERS, health
 from .equity_api import DB_PATH as EQUITY_DB_PATH
 
@@ -189,6 +189,15 @@ def _set_staff_cookie(request, response, token):
     response.set_cookie(
         STAFF_COOKIE, token, max_age=staff.SESSION_MAX_SECONDS, path="/admin",
         httponly=True, samesite="strict", secure=seo.is_https(request))
+    _mark_team(request, response)
+
+
+def _mark_team(request, response):
+    """Marks this browser as the team's on every page, so the visit counter
+    leaves it out (visits.TEAM_COOKIE). Kept after signing out."""
+    response.set_cookie(
+        visits.TEAM_COOKIE, "1", max_age=visits.TEAM_MAX_AGE, path="/",
+        httponly=True, samesite="lax", secure=seo.is_https(request))
 
 
 @router.post("/login")
@@ -226,6 +235,7 @@ def login(body: LoginBody, request: Request, response: Response):
         COOKIE, _sign(expiry), max_age=SESSION_HOURS * 3600, path="/admin",
         httponly=True, samesite="strict",
         secure=seo.is_https(request))
+    _mark_team(request, response)
     audit("login", "signed in with the shared password", ip, by="shared password")
     expires = datetime.datetime.fromtimestamp(expiry, datetime.timezone.utc)
     return {"ok": True, "user": _person_payload(staff.shared_person()),
@@ -244,12 +254,14 @@ def logout(request: Request, response: Response):
 
 
 @router.get("/session")
-def session(request: Request):
+def session(request: Request, response: Response):
     """Lets the page decide between the login screen and the dashboard
     without a failed request in the console."""
     if not _enabled():
         return {"enabled": False, "authenticated": False}
     person = current_person(request)
+    if person is not None and request.cookies.get(visits.TEAM_COOKIE) != "1":
+        _mark_team(request, response)
     return {"enabled": True,
             "authenticated": person is not None,
             "user": _person_payload(person) if person else None,
@@ -699,7 +711,27 @@ def visit_summary(request: Request, days: int = 30):
     """Readership counted by the server itself, from the append-only visit log
     on the volume. See app/visits.py for what a "visitor" means here."""
     _require_admin(request, "operations")
-    return visits.summary(days)
+    out = visits.summary(days)
+    # Sign-ups per tagged link, from the accounts store. Absent where accounts
+    # are switched off, which the page says rather than showing zeros.
+    out["signups"] = None
+    if accounts.enabled():
+        start = datetime.datetime.strptime(out["from"], "%Y-%m-%d").replace(
+            tzinfo=datetime.timezone.utc).timestamp()
+        by = accounts.signups_by_source(start)
+        out["signups"] = {"total": sum(by.values()), "tagged": sum(n for k, n in by.items() if k)}
+        rows = dict((r["key"], r) for r in out["sources"])
+        for tag, n in by.items():
+            if not tag:
+                continue
+            row = rows.get(tag)
+            if row is None:
+                row = {"key": tag, "views": 0, "visitors": 0, "people": 0, "asked": 0}
+                out["sources"].append(row)
+            row["signups"] = n
+        for row in out["sources"]:
+            row.setdefault("signups", 0)
+    return out
 
 
 # --- equity reads for the classification queue --------------------------------

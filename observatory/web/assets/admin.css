@@ -727,3 +727,8 @@ tr.clickable { cursor: pointer; }
 /* Ask Box tables (admin.js trafficAsk): a date or time stays on one line on a phone; the table scrolls instead */
 .ask-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .data td.attn { color: var(--obs-trust-stale); white-space: normal; }
+
+/* Traffic (admin.js): one tab at a time; Show all and the overview's links to a full tab */
+#traffic-tabs { margin: 18px 0 4px; overflow-x: auto; flex-wrap: nowrap; }
+#traffic-tabs button { white-space: nowrap; }
+.traffic-more { margin-top: 12px; }

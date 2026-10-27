@@ -466,6 +466,132 @@ class DailyTotalsTest(unittest.TestCase):
         self.same(last, self.fresh())
 
 
+class TaggedLinkTest(unittest.TestCase):
+    """A link shared as ploveranalytics.com/?ref=yt: its visitors are counted
+    under the tag, and a new account made through it is credited to it."""
+
+    def test_the_tag_is_read_from_ref_or_utm_source(self):
+        self.assertEqual(visits.source_tag(b"ref=YT"), "yt")
+        self.assertEqual(visits.source_tag("q=apple&utm_source=tiktok"), "tiktok")
+        self.assertEqual(visits.source_tag(b"ref=ig-reel_2"), "ig-reel_2")
+        for junk in (b"", b"ref=", b"ref=%3Cscript%3E", b"ref=" + b"x" * 40, b"q=yt"):
+            self.assertIsNone(visits.source_tag(junk), junk)
+
+    def test_a_tagged_page_read_is_logged_and_remembered(self):
+        client = TestClient(app)
+        client.get("/?ref=yt", headers={"user-agent": UA})
+        client.get("/methodology.html", headers={"user-agent": UA})     # no tag: not recounted
+        visits.flush()
+        tagged = [e for e in _events() if e.get("src") == "yt"]
+        self.assertEqual(len(tagged), 1)
+        scope = {"type": "http", "client": ("testclient", 50000),
+                 "headers": [(b"user-agent", UA.encode())]}
+        self.assertEqual(visits.source_of(scope), "yt")
+        scope["headers"] = [(b"user-agent", b"Some other browser")]
+        self.assertIsNone(visits.source_of(scope))
+
+    def test_the_summary_counts_visits_and_questions_per_tag(self):
+        now = datetime.datetime.utcnow().replace(microsecond=0)
+        at = now.isoformat() + "Z"
+        for visitor, src in (("tg-a", "tg-yt"), ("tg-b", "tg-yt"), ("tg-c", "tg-tiktok")):
+            visits._record({"at": at, "visitor": visitor, "path": "/", "kind": "page", "status": 200,
+                            "ref": None, "internal": False, "src": src, "bot": False})
+        visits._record({"at": at, "visitor": "tg-a", "path": "/api/v1/us/ask", "kind": "api",
+                        "status": 200, "internal": True, "bot": False})
+        visits.flush()
+        rows = dict((r["key"], r) for r in visits.summary(1)["sources"])
+        self.assertEqual((rows["tg-yt"]["visitors"], rows["tg-yt"]["asked"]), (2, 1))
+        self.assertEqual((rows["tg-tiktok"]["visitors"], rows["tg-tiktok"]["asked"]), (1, 0))
+
+
+class TaggedSignupTest(unittest.TestCase):
+    """The sign-in link request reads the tag; only the account it creates
+    carries it."""
+
+    def setUp(self):
+        import os
+        import pathlib
+        from fastapi import FastAPI
+        from app import accounts
+        self.accounts = accounts
+        self.tmp = tempfile.mkdtemp(prefix="accounts-test-")
+        self.saved = (accounts.DB_PATH, accounts._conn, os.environ.get("ACCOUNTS_DEV_LINKS"),
+                      os.environ.get("RESEND_API_KEY"))
+        accounts.DB_PATH = pathlib.Path(self.tmp) / "workspace.db"
+        accounts._conn = None
+        os.environ["ACCOUNTS_DEV_LINKS"] = "1"
+        os.environ.pop("RESEND_API_KEY", None)
+        api = FastAPI()
+        api.include_router(accounts.router)
+        self.client = TestClient(api)
+
+    def tearDown(self):
+        import os
+        a = self.accounts
+        a.DB_PATH, a._conn = self.saved[0], self.saved[1]
+        for name, value in (("ACCOUNTS_DEV_LINKS", self.saved[2]), ("RESEND_API_KEY", self.saved[3])):
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def sign_up(self, email):
+        link = self.client.post("/api/v1/account/signin-link", json={"email": email}).json()["link"]
+        token = link.split("token=")[1].split("&")[0]
+        self.assertEqual(self.client.post("/api/v1/account/session", json={"token": token}).status_code, 200)
+
+    def test_a_new_account_carries_the_tag_and_a_returning_one_keeps_its_own(self):
+        day = visits.today()
+        visitor = visits.identify("testclient", "testclient", [(b"user-agent", b"testclient")], day)[0]
+        visits._note_source(visitor, "yt", day)
+        self.sign_up("tagged@example.com")
+        visits._note_source(visitor, "tiktok", day)
+        self.sign_up("tagged@example.com")                  # signing in again is not a sign-up
+        with visits._LOCK:
+            visits._SOURCES.pop(visitor, None)
+        self.sign_up("plain@example.com")
+        by = self.accounts.signups_by_source(0)
+        self.assertEqual(by, {"yt": 1, None: 1})
+
+
+class OursTest(unittest.TestCase):
+    """Our own machines and the team's signed-in browsers count for nothing."""
+
+    def scope(self, path, client=("203.0.113.7", 1), cookie=None, ua=UA):
+        headers = [(b"user-agent", ua.encode())]
+        if cookie:
+            headers.append((b"cookie", cookie.encode()))
+        return {"type": "http", "method": "GET", "path": path, "client": client,
+                "headers": headers, "query_string": b""}
+
+    def counted(self, path):
+        visits.flush()
+        return [e for e in _events() if e.get("path") == path]
+
+    def test_our_address_and_a_team_browser_are_not_counted(self):
+        with mock.patch.dict("os.environ", {"OUR_ADDRESSES": "198.51.100.0/24"}):
+            visits.observe(self.scope("/ours-1.html", client=("198.51.100.7", 1)), 200)
+            visits.observe(self.scope("/ours-2.html", cookie="%s=1" % visits.TEAM_COOKIE), 200)
+            visits.record_dwell(self.scope("/ours-2.html", cookie="%s=1" % visits.TEAM_COOKIE), "/ours-2.html", 30)
+            visits.heartbeat(self.scope("/x", cookie="%s=1" % visits.TEAM_COOKIE), "/ours-3.html")
+            visits.observe(self.scope("/ours-4.html"), 200)
+        self.assertEqual(self.counted("/ours-1.html"), [])
+        self.assertEqual(self.counted("/ours-2.html"), [])
+        self.assertNotIn("/ours-3.html", [r["key"] for r in visits.live()["pages"]])
+        self.assertEqual(len(self.counted("/ours-4.html")), 1, "a reader still counts")
+
+    def test_signing_in_to_the_console_marks_the_browser(self):
+        from app import admin_api
+        audit = __import__("pathlib").Path(_REAL_DIR[1]) / "audit.jsonl"
+        with mock.patch.dict("os.environ", {"ADMIN_PASSWORD": "pw-for-test"}), \
+                mock.patch.object(admin_api, "AUDIT_PATH", audit):
+            client = TestClient(app)
+            self.assertNotIn(visits.TEAM_COOKIE, client.get("/admin/api/session").cookies)
+            client.post("/admin/api/login", json={"password": "pw-for-test"})
+            self.assertEqual(client.cookies.get(visits.TEAM_COOKIE), "1")
+
+
 def _events():
     """Every event in the current month's log."""
     path = visits._month_path(datetime.datetime.utcnow())

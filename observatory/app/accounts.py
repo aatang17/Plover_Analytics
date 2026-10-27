@@ -167,6 +167,24 @@ def _open(path):
     return c
 
 
+def _add_source_columns(c):
+    """The tagged link (?ref=yt) that brought a new reader, carried from the
+    link request to the account it creates. Added in place: the store predates
+    it, and older rows simply have none."""
+    for table in ("accounts", "signin_tokens"):
+        have = [r[1] for r in c.execute("PRAGMA table_info(%s)" % table)]
+        if "source" not in have:
+            c.execute("ALTER TABLE %s ADD COLUMN source TEXT" % table)
+
+
+def signups_by_source(since):
+    """New accounts created at or after `since` (epoch seconds), by the tag of
+    the link that brought them; None is no tag."""
+    rows = conn().execute("SELECT source, count(*) FROM accounts WHERE created_at >= ? "
+                          "GROUP BY source", (int(since),)).fetchall()
+    return dict((r[0], r[1]) for r in rows)
+
+
 def conn():
     """This thread's connection. One connection shared by every request thread
     crashed the server inside libsqlite3 (segfault / abort) when two requests
@@ -179,6 +197,7 @@ def conn():
             _conn = _open(DB_PATH)
             _conn.execute("PRAGMA journal_mode=WAL")
             _conn.executescript(SCHEMA)
+            _add_source_columns(_conn)
             _conn.commit()
         base = _conn
     if getattr(_local, "base", None) is not base:
@@ -368,14 +387,19 @@ def signin_link(payload: LinkRequest, request: Request):
 
     token = secrets.token_urlsafe(32)
     return_to = _safe_return_to(payload.returnTo)
+    try:
+        from . import visits
+        source = visits.source_of(request.scope)
+    except Exception:  # noqa: BLE001 — crediting a sign-up is never worth failing one
+        source = None
     with _lock:
         # Asking for a new link cancels the ones before it, as the page says.
         db.execute("UPDATE signin_tokens SET used_at = ? "
                    "WHERE email = ? AND used_at IS NULL", (now, email))
         db.execute("INSERT INTO signin_tokens "
-                   "(token_hash, email, return_to, ip, created_at, expires_at) "
-                   "VALUES (?, ?, ?, ?, ?, ?)",
-                   (_hash(token), email, return_to, ip, now, now + LINK_TTL_SECONDS))
+                   "(token_hash, email, return_to, ip, created_at, expires_at, source) "
+                   "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   (_hash(token), email, return_to, ip, now, now + LINK_TTL_SECONDS, source))
         db.commit()
 
     link = (_base_url(request) + "signin.html?token=" + urllib.parse.quote(token) +
@@ -396,7 +420,7 @@ def create_session(payload: SessionRequest, request: Request, response: Response
         raise HTTPException(400, "That sign-in link is missing its token.")
     now = _now()
     db = conn()
-    row = db.execute("SELECT email, return_to, expires_at, used_at FROM signin_tokens "
+    row = db.execute("SELECT email, return_to, expires_at, used_at, source FROM signin_tokens "
                      "WHERE token_hash = ?", (_hash(token),)).fetchone()
     if row is None or row["used_at"] is not None or row["expires_at"] <= now:
         raise HTTPException(401, "That sign-in link has been used already or has expired.")
@@ -406,8 +430,10 @@ def create_session(payload: SessionRequest, request: Request, response: Response
     with _lock:
         db.execute("UPDATE signin_tokens SET used_at = ? WHERE token_hash = ?",
                    (now, _hash(token)))
-        db.execute("INSERT OR IGNORE INTO accounts (email, created_at) VALUES (?, ?)",
-                   (email, now))
+        # The tag counts only for an account this link creates: a returning
+        # reader signing in again is not a sign-up.
+        db.execute("INSERT OR IGNORE INTO accounts (email, created_at, source) VALUES (?, ?, ?)",
+                   (email, now, row["source"]))
         account_id = db.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()["id"]
         db.execute("INSERT INTO sessions (token_hash, account_id, created_at, expires_at, last_seen_at) "
                    "VALUES (?, ?, ?, ?, ?)",

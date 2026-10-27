@@ -303,7 +303,7 @@ function route() {
   else if (view === "team") viewTeam(target);
   else if (view === "account") viewAccount(target);
   else if (view === "vintages") viewVintages(target, arg);
-  else if (view === "traffic") viewTraffic(target, arg);
+  else if (view === "traffic") viewTraffic(target, arg, arg2);
   else if (view === "audit") viewAudit(target);
   else if (view === "queue") viewQueue(target);
   else if (view === "companies") viewUsCompanies(target, arg);
@@ -907,6 +907,32 @@ function renderChanges(c) {
 
 var TRAFFIC_WINDOWS = [7, 30, 90];
 
+/* One tab at a time, so the page is never longer than its longest tab. The
+   tab sits in the address (#traffic/30/ask) and switching never refetches. */
+var TRAFFIC_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "readers", label: "Readers" },
+  { id: "pages", label: "Pages" },
+  { id: "ask", label: "Ask Box" },
+  { id: "arrivals", label: "Arrivals" },
+  { id: "places", label: "Places" },
+];
+var TRAFFIC_ROWS = 10;     // a long table shows this many until Show all
+var TRAFFIC_TOP = 5;       // the overview's short lists
+var trafficState = { d: null, days: 30, tab: "overview", all: {} };
+
+/* The first TRAFFIC_ROWS of a long table, unless Show all was pressed. */
+function trafficFold(rows, key) {
+  rows = rows || [];
+  return trafficState.all[key] ? rows : rows.slice(0, TRAFFIC_ROWS);
+}
+
+function trafficMore(total, key) {
+  if (trafficState.all[key] || total <= TRAFFIC_ROWS) return "";
+  return '<button type="button" class="btn traffic-more" data-more="' + key + '">Show all ' +
+    fmtCount(total) + " rows</button>";
+}
+
 /* The console's only chart. Held at module scope so a theme switch can redraw
    it and a move to another page can dispose it. */
 var trafficChart = null;
@@ -954,10 +980,12 @@ function disposeTrafficChart() {
    broken counter look identical until the age of the last request is stated. */
 var TRAFFIC_SILENT_HOURS = 36;
 
-function viewTraffic(target, arg) {
+function viewTraffic(target, arg, tab) {
   var days = TRAFFIC_WINDOWS.indexOf(Number(arg)) === -1 ? 30 : Number(arg);
+  if (!TRAFFIC_TABS.some(function (t) { return t.id === tab; })) tab = "overview";
   target.innerHTML = '<div class="admin-loading">Loading traffic…</div>';
   api("/visits?days=" + days).then(function (d) {
+    trafficState = { d: d, days: days, tab: tab, all: {} };
     target.innerHTML = trafficMarkup(d, days);
     wireTraffic(target, d, days);
   }).catch(function (err) {
@@ -1038,6 +1066,36 @@ function trafficMarkup(d, days) {
       "written — the server log reports the write failure if that is the cause.</div>";
   }
 
+  var tabs = '<div class="co-tabs" id="traffic-tabs" role="tablist">' +
+    TRAFFIC_TABS.map(function (t) {
+      return '<button type="button" role="tab" data-tab="' + t.id + '">' +
+        escapeHtml(t.label) + "</button>";
+    }).join("") + "</div>";
+
+  return '<div id="traffic-root">' + head + banner + tabs + '<div id="traffic-tab"></div></div>';
+}
+
+/* What one tab shows. */
+function trafficTab(d, tab) {
+  if (tab === "readers") return trafficTime(d) + trafficPeople(d);
+  if (tab === "pages") {
+    return '<div class="admin-section">Most-Read Pages <span class="note">page views in this ' +
+      "window</span></div>" +
+      trafficTable(trafficFold(d.top_pages, "pages"), "Page",
+        { link: true, dwell: true, empty: "No page views recorded in this window." }) +
+      trafficMore((d.top_pages || []).length, "pages") + trafficDirectPages(d);
+  }
+  if (tab === "ask") return trafficAsk(d.ask);
+  if (tab === "arrivals") {
+    return '<div class="admin-section">How Readers Arrived <span class="note">only the sending ' +
+      "site is recorded, never the page a reader came from</span></div>" +
+      trafficArrivals(d) + trafficSources(d) + trafficDirect(d) + trafficAI(d);
+  }
+  if (tab === "places") return trafficPlaces(d);
+  return trafficOverview(d);
+}
+
+function trafficOverview(d) {
   // "Visits", never "unique visitors": the identifier rotates daily, so this
   // is the sum of each day's visitors, not a headcount of people.
   // People is the strict figure — a script ran, the network is placed and is
@@ -1064,24 +1122,55 @@ function trafficMarkup(d, days) {
     : '<p class="table-empty">No requests recorded yet. Counting begins the moment this ' +
       "build is deployed, and the window fills in from that day forward.</p>" + trafficCalc(d);
 
-  return head +
-    '<div class="admin-section">Right Now <span class="note">from the server\u2019s ' +
+  return '<div class="admin-section">Right Now <span class="note">from the server\u2019s ' +
     "memory, refreshed every 20 seconds</span></div>" +
     '<div id="traffic-live"><p class="admin-loading">Loading live readership…</p></div>' +
     '<div class="admin-section">This Window <span class="note">' +
     escapeHtml(fmtDay(d.from)) + " to " + escapeHtml(fmtDay(d.to)) + "</span></div>" +
-    '<div class="kpi-row">' + kpis + "</div>" + peopleNote(d) + banner +
+    '<div class="kpi-row">' + kpis + "</div>" + peopleNote(d) +
     '<div class="admin-section">Daily Readership <span class="note">unique visitors and ' +
     "page views per day</span></div>" + chart +
-    trafficTime(d) + trafficPeople(d) +
-    '<div class="admin-section">Most-Read Pages <span class="note">page views in this ' +
-    "window</span></div>" +
-    trafficTable(d.top_pages, "Page",
+    '<div class="admin-section">Most-Read Pages</div>' +
+    trafficTable((d.top_pages || []).slice(0, TRAFFIC_TOP), "Page",
       { link: true, dwell: true, empty: "No page views recorded in this window." }) +
-    trafficAsk(d.ask) +
-    '<div class="admin-section">How Readers Arrived <span class="note">only the sending ' +
-    "site is recorded, never the page a reader came from</span></div>" +
-    trafficArrivals(d) + trafficDirect(d) + trafficAI(d) + trafficPlaces(d);
+    trafficGo("pages", "All Pages") +
+    '<div class="admin-section">How Readers Arrived</div>' +
+    trafficArrivals(d, TRAFFIC_TOP) + trafficGo("arrivals", "All Arrivals");
+}
+
+function trafficGo(tab, label) {
+  return '<button type="button" class="btn traffic-more" data-go="' + tab + '">' +
+    escapeHtml(label) + "</button>";
+}
+
+/* Links we shared with a tag on the end (ploveranalytics.com/?ref=yt): who
+   came through each, who went on to ask the box something, and who signed up.
+   The YouTube and TikTok apps send no referrer, so the tag is the only way to
+   tell those readers apart from somebody typing the address. */
+function trafficSources(d) {
+  var rows = d.sources || [];
+  var head = '<div class="admin-section">Tagged Links <span class="note">links shared as ' +
+    "ploveranalytics.com/?ref=yt; a sign-up is a new account that arrived through the tag " +
+    "the same day or the day before</span></div>";
+  if (!rows.length) {
+    return head + '<p class="table-empty">Nobody has arrived through a tagged link in this ' +
+      "window. Add ?ref= and a short name to a link you share (for example ?ref=yt or " +
+      "?ref=tiktok) and its visitors appear here.</p>";
+  }
+  var signups = d.signups;
+  var body = rows.map(function (r) {
+    return '<tr><td class="mono">' + escapeHtml(r.key) + "</td>" +
+      '<td class="num">' + fmtCount(r.visitors) + "</td>" +
+      '<td class="num">' + fmtCount(r.people) + "</td>" +
+      '<td class="num">' + fmtCount(r.asked) + "</td>" +
+      '<td class="num">' + (signups ? fmtCount(r.signups || 0) : MISSING) + "</td></tr>";
+  }).join("");
+  return head + '<div class="table-wrap"><table class="data">' +
+    '<thead><tr><th>Tag</th><th class="num">Visits</th><th class="num">People</th>' +
+    '<th class="num">Asked a Question</th><th class="num">Signed Up</th></tr></thead><tbody>' +
+    body + "</tbody></table></div>" +
+    (signups ? "" : '<p class="source-line">Sign-ups are not shown: accounts are switched ' +
+      "off on this server.</p>");
 }
 
 /* The front page's question box: how often it was asked, by how many
@@ -1167,13 +1256,13 @@ function trafficAsk(a) {
   var daily = '<div class="table-wrap"><table class="data"><thead><tr><th>Day</th>' +
     '<th class="num">Searches</th><th class="num">People</th><th class="num">Answered</th>' +
     '<th class="num">Not Answered</th></tr></thead><tbody>' +
-    days.map(function (r) {
+    trafficFold(days, "ask_daily").map(function (r) {
       return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.day) + '">' + escapeHtml(fmtDay(r.day)) + "</td>" +
         '<td class="num">' + fmtCount(r.searches) + "</td>" +
         '<td class="num">' + fmtCount(r.people) + "</td>" +
         '<td class="num">' + fmtCount(r.answered) + "</td>" +
         '<td class="num">' + fmtCount(r.not_answered) + "</td></tr>";
-    }).join("") + "</tbody></table></div>";
+    }).join("") + "</tbody></table></div>" + trafficMore(days.length, "ask_daily");
 
   var most = (a.most_asked || []).length
     ? '<div class="admin-section">Most-Asked Questions <span class="note">asked more than ' +
@@ -1181,19 +1270,19 @@ function trafficAsk(a) {
       '<div class="table-wrap"><table class="data"><thead><tr><th>Question</th>' +
       '<th class="num">Times Asked</th><th class="num">Answered</th><th class="num">Last Asked</th>' +
       "</tr></thead><tbody>" +
-      a.most_asked.map(function (r) {
+      trafficFold(a.most_asked, "ask_most").map(function (r) {
         return "<tr><td>" + escapeHtml(r.q) + "</td>" +
           '<td class="num">' + fmtCount(r.times) + "</td>" +
           '<td class="num">' + fmtCount(r.answered) + "</td>" +
           '<td class="num ask-when" data-sort="' + escapeHtml(r.last) + '">' + escapeHtml(fmtStamp(r.last)) + "</td></tr>";
-      }).join("") + "</tbody></table></div>"
+      }).join("") + "</tbody></table></div>" + trafficMore(a.most_asked.length, "ask_most")
     : "";
 
   var recent = '<div class="admin-section">Latest Questions <span class="note">newest first, ' +
     "the last " + fmtCount((a.recent || []).length) + "</span></div>" +
     '<div class="table-wrap"><table class="data"><thead><tr><th>Asked</th><th>Question</th>' +
     "<th>From</th><th>Result</th><th>Answered By</th><th>Seen As</th><th class=\"num\">Time</th></tr></thead><tbody>" +
-    (a.recent || []).map(function (r) {
+    trafficFold(a.recent, "ask_recent").map(function (r) {
       return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.at) + '">' + escapeHtml(fmtStamp(r.at)) + "</td>" +
         "<td>" + escapeHtml(r.q) + "</td>" +
         "<td>" + (r.from ? askLabel(ASK_FROM, r.from) : "Not Marked") + "</td>" +
@@ -1201,7 +1290,7 @@ function trafficAsk(a) {
         "<td>" + askLabel(ASK_ROUTE, r.route) + "</td>" +
         "<td>" + askLabel(ASK_WHERE, r.where) + "</td>" +
         '<td class="num" data-sort="' + (r.seconds == null ? "" : r.seconds) + '">' + fmtDuration(r.seconds) + "</td></tr>";
-    }).join("") + "</tbody></table></div>";
+    }).join("") + "</tbody></table></div>" + trafficMore((a.recent || []).length, "ask_recent");
 
   return head + '<div class="kpi-row">' + kpis + "</div>" + weekly +
     '<div class="admin-section">Searches by Day <span class="note">days with at least one ' +
@@ -1211,7 +1300,7 @@ function trafficAsk(a) {
     "A repeated question answered from the server\u2019s cache is still counted. Answered " +
     "means the box gave an answer, not that the answer was what the reader wanted. Typed by " +
     "readers leaves out clicks on the page\u2019s own example questions and our own checks " +
-    "(our addresses, set on the server); questions asked before 21 October 2026 were not " +
+    "(our addresses and browsers signed in to this console); questions asked before 21 October 2026 were not " +
     "marked.</p>";
 }
 
@@ -1394,7 +1483,7 @@ function trafficTable(rows, label, opts) {
 /* Referring sites and direct arrivals in one table, so the sources account for
    every page read. Without the direct row an empty table reads as broken
    detection rather than "nobody followed a link". */
-function trafficArrivals(d) {
+function trafficArrivals(d, max) {
   var rows = (d.top_referrers || []).map(function (r) {
     return { key: r.key, views: r.views, visitors: r.visitors, people: r.people,
              ai: r.ai, direct: false };
@@ -1409,6 +1498,8 @@ function trafficArrivals(d) {
   }
   rows.sort(function (a, b) { return b.views - a.views; });
   var total = rows.reduce(function (n, r) { return n + r.views; }, 0);
+  var count = rows.length;
+  rows = max ? rows.slice(0, max) : trafficFold(rows, "arrivals");
   var body = rows.map(function (r) {
     var share = total ? Math.round((r.views / total) * 100) : 0;
     var name = r.direct
@@ -1426,7 +1517,7 @@ function trafficArrivals(d) {
     '<thead><tr><th>Source</th><th class="num">Page Views</th>' +
     '<th class="num">Share</th><th class="num">Visits</th>' +
     '<th class="num">People</th></tr></thead><tbody>' +
-    body + "</tbody></table></div>";
+    body + "</tbody></table></div>" + (max ? "" : trafficMore(count, "arrivals"));
 }
 
 /* A direct arrival carries no referrer by definition, so the network it came
@@ -1436,14 +1527,20 @@ function trafficDirect(d) {
   return '<div class="admin-section">Direct Arrivals by Network ' +
     '<span class="note">the closest thing to a source a direct arrival has' +
     "</span></div>" +
-    trafficTable(d.direct_networks, "Network",
+    trafficTable(trafficFold(d.direct_networks, "direct_networks"), "Network",
       { plain: true, people: true,
         empty: "No direct arrival could be attributed to a network." }) +
-    '<div class="admin-section">Pages Opened Directly ' +
+    trafficMore((d.direct_networks || []).length, "direct_networks");
+}
+
+function trafficDirectPages(d) {
+  if (!d.direct || !d.direct.views) return "";
+  return '<div class="admin-section">Pages Opened Directly ' +
     '<span class="note">opened with no referring link, so typed, bookmarked or ' +
     "followed from a mail or messaging app</span></div>" +
-    trafficTable(d.direct_pages, "Page",
-      { link: true, empty: "No page recorded for direct arrivals." });
+    trafficTable(trafficFold(d.direct_pages, "direct_pages"), "Page",
+      { link: true, empty: "No page recorded for direct arrivals." }) +
+    trafficMore((d.direct_pages || []).length, "direct_pages");
 }
 
 /* Country and network operator. Both are derived from the address while the
@@ -1467,15 +1564,17 @@ function trafficPlaces(d) {
 
   return '<div class="admin-section">Requests by Country ' +
     '<span class="note">' + escapeHtml(coverage) + "</span></div>" +
-    trafficTable(d.top_countries, "Country",
+    trafficTable(trafficFold(d.top_countries, "countries"), "Country",
       { plain: true, label: countryName, viewsLabel: "Requests", browser: true,
         people: true, empty: "No request in this window could be placed." }) +
+    trafficMore((d.top_countries || []).length, "countries") +
     '<div class="admin-section">Requests by Network Operator ' +
     '<span class="note">the network a request came from, which is not the same ' +
     "as who the reader works for</span></div>" +
-    trafficTable(d.top_networks, "Network",
+    trafficTable(trafficFold(d.top_networks, "networks"), "Network",
       { plain: true, viewsLabel: "Requests", browser: true, people: true,
         empty: "No request in this window could be attributed to a network." }) +
+    trafficMore((d.top_networks || []).length, "networks") +
     '<p class="source-line">Location and network from ' +
     '<a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by ' +
     "DB-IP</a>, " + escapeHtml(geo.edition || "") + " edition, " +
@@ -1556,6 +1655,7 @@ function trafficCalc(d) {
     "one that sends no name is counted as an ordinary crawler. The figure beside the " +
     "table is a different thing and is a person: page reads whose referrer was an " +
     "assistant, meaning a reader followed a citation here out of an answer.</p>" +
+    "<p>Our own machines and browsers signed in to this console are not counted.</p>" +
     "<p><strong>Automated hits</strong> — crawlers, uptime monitors, the platform " +
     "healthcheck and anything sending no browser identification — are counted separately " +
     "and excluded from every other figure here.</p>" +
@@ -1605,23 +1705,62 @@ function trafficChartCfg(d) {
 
 function wireTraffic(target, d, days) {
   document.getElementById("traffic-refresh").addEventListener("click", function () {
-    viewTraffic(target, days);
+    viewTraffic(target, days, trafficState.tab);
   });
+  var seg = document.getElementById("traffic-seg");
+  var btns = seg ? seg.querySelectorAll("button") : [];
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function () {
+      location.hash = trafficHash(Number(this.getAttribute("data-days")), trafficState.tab);
+    });
+  }
+  document.getElementById("traffic-root").addEventListener("click", function (e) {
+    var tab = e.target.closest("[data-tab], [data-go]");
+    if (tab) {
+      showTrafficTab(target, tab.getAttribute("data-tab") || tab.getAttribute("data-go"));
+      if (tab.hasAttribute("data-go")) window.scrollTo(0, 0);
+      return;
+    }
+    var more = e.target.closest("[data-more]");
+    if (more) {
+      trafficState.all[more.getAttribute("data-more")] = true;
+      showTrafficTab(target, trafficState.tab);
+    }
+  });
+  showTrafficTab(target, trafficState.tab);
+}
+
+function trafficHash(days, tab) {
+  return "#traffic/" + days + (tab && tab !== "overview" ? "/" + tab : "");
+}
+
+/* Draws one tab from the data already loaded. The address is replaced, not
+   pushed, so switching tabs does not refetch and Back leaves the page. */
+function showTrafficTab(target, tab) {
+  var d = trafficState.d;
+  disposeTrafficChart();
+  trafficState.tab = tab;
+  var tabs = target.querySelectorAll("#traffic-tabs [data-tab]");
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].setAttribute("aria-selected", tabs[i].getAttribute("data-tab") === tab ? "true" : "false");
+  }
+  var box = document.getElementById("traffic-tab");
+  if (!box) return;
+  box.innerHTML = trafficTab(d, tab);
+  if (window.history && history.replaceState) {
+    history.replaceState(null, "", trafficHash(trafficState.days, tab));
+  }
+  if (tab !== "overview") return;
   refreshLive(target);
-  if (liveTimer) window.clearInterval(liveTimer);
   liveTimer = window.setInterval(function () {
     // The console can be left open for a day; polling a page nobody is looking
     // at would add the watcher to the count it is watching.
     if (document.visibilityState !== "hidden") refreshLive(target);
   }, LIVE_REFRESH_MS);
-  var seg = document.getElementById("traffic-seg");
-  var btns = seg ? seg.querySelectorAll("button") : [];
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].addEventListener("click", function () {
-      location.hash = "#traffic/" + this.getAttribute("data-days");
-    });
-  }
+  trafficDrawChart(d);
+}
 
+function trafficDrawChart(d) {
   var box = document.getElementById("traffic-chart");
   if (!box) return;
   if (trafficChart) {
@@ -1645,6 +1784,7 @@ function wireTraffic(target, d, days) {
       "undercount: readers behind iCloud Private Relay leave through a CDN and are excluded",
       "Page views = successful page requests; assets and the admin console excluded",
       "Automated hits (crawlers, monitors, healthchecks) excluded from both series",
+      "Our own machines and browsers signed in to the admin console are not counted",
       "An empty cell is a day before counting began, which is not the same as zero",
       "Time on page is reported by the page when hidden or closed; visit length is the",
       "span of one visitor's requests, ended by 30 minutes of silence",
@@ -1654,6 +1794,7 @@ function wireTraffic(target, d, days) {
     ]);
   });
 }
+
 
 /* ---------- audit log ---------- */
 

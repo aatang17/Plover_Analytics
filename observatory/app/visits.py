@@ -41,7 +41,9 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
+import urllib.parse
 from threading import Lock
 
 from . import ask_log, db, geoip
@@ -63,11 +65,29 @@ VISITOR_COOKIE = "pa_vid"
 CONSENT_MAX_AGE = 60 * 60 * 24 * 365  # a year, then the choice is asked again
 VID_CHARS = 32
 
+# Set on a browser that signs in to the admin console (app/admin_api.py), so
+# the team's own reading is left out on any network, a phone included. It
+# holds "1" and nothing else. Our addresses (OUR_ADDRESSES) are left out too.
+TEAM_COOKIE = "pa_team"
+TEAM_MAX_AGE = 60 * 60 * 24 * 365
+
 # How recently a request must have arrived for its visitor to count as here
 # now. Open pages send a keep-alive inside this window, so a reader sitting
 # still on one page stays counted; anything without scripts drops off it.
 LIVE_SECONDS = 300
 LIVE_MAX = 5000
+
+# A link we hand out with a tag on it (ploveranalytics.com/?ref=yt) says which
+# post or ad a reader came from: the referrer cannot, because the YouTube and
+# TikTok apps send none. The tag is read off the address of a page read and
+# kept on that event; nothing is stored on the reader's machine. `utm_source`
+# is read too, since ad platforms write their own links that way.
+SOURCE_PARAMS = ("ref", "utm_source")
+_SOURCE_TAG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
+# Held in memory so a sign-up later the same day can say which tag brought the
+# reader (app/accounts.py). Visitor -> (tag, day). Gone on a restart, which
+# loses only the tag of a reader who signs up after one.
+SOURCES_MAX = 20000
 
 # Gap that ends a session. Thirty minutes is the industry's convention and is
 # kept so the number can be compared with anyone else's.
@@ -211,6 +231,7 @@ MAX_BROWSER_SEEN = 100000
 # Memory only, never written to the log — "right now" has no history, and a
 # restart that empties it costs five minutes of a number nobody stores.
 _LIVE = {}
+_SOURCES = {}
 
 
 def _salt():
@@ -270,6 +291,11 @@ def _cookies(headers):
         if sep:
             jar[name.strip()] = value.strip()
     return jar
+
+
+def _is_ours(ip, headers):
+    """Our own machines and the team's signed-in browsers: never counted."""
+    return ask_log.is_ours(ip) or _cookies(headers).get(TEAM_COOKIE) == "1"
 
 
 def consent_value(vid, since):
@@ -369,6 +395,8 @@ def record_dwell(scope, path, seconds, view=None):
         return
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ip = _client_ip(scope, _header(headers, b"x-forwarded-for"))
+    if _is_ours(ip, headers):
+        return
     visitor = identify(ip, user_agent, headers, now.strftime("%Y-%m-%d"))[0]
     event = {
         "at": now.isoformat(timespec="seconds") + "Z",
@@ -396,6 +424,8 @@ def heartbeat(scope, path):
         return
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ip = _client_ip(scope, _header(headers, b"x-forwarded-for"))
+    if _is_ours(ip, headers):
+        return
     geoip.prepare()
     country, network = geoip.lookup(ip)
     visitor = identify(ip, user_agent, headers, now.strftime("%Y-%m-%d"))[0]
@@ -432,6 +462,54 @@ def _client_ip(scope, forwarded):
         return forwarded.split(",")[0].strip()
     client = scope.get("client")
     return client[0] if client else "unknown"
+
+
+def source_tag(query_string):
+    """The tag on a shared link (?ref=yt), lower-cased, or None. Anything that
+    does not look like a short tag is ignored rather than stored: the address
+    bar is text anyone can type."""
+    if isinstance(query_string, bytes):
+        query_string = query_string.decode("latin-1")
+    try:
+        params = urllib.parse.parse_qs(query_string or "", keep_blank_values=False)
+    except ValueError:
+        return None
+    for name in SOURCE_PARAMS:
+        for value in params.get(name) or ():
+            tag = value.strip().lower()
+            if _SOURCE_TAG.match(tag):
+                return tag
+    return None
+
+
+def _note_source(visitor, tag, day):
+    with _LOCK:
+        _SOURCES.pop(visitor, None)       # re-inserted last, so the oldest go first
+        _SOURCES[visitor] = (tag, day)
+        while len(_SOURCES) > SOURCES_MAX:
+            _SOURCES.pop(next(iter(_SOURCES)))
+
+
+def source_of(scope):
+    """The tag that brought the reader making this request, if they arrived
+    through a tagged link today or yesterday. Asked by the sign-in link request,
+    so a new account can be credited to the post or ad that brought it."""
+    headers = [(k.lower(), v) for k, v in scope.get("headers") or ()]
+    day = today()
+    ip = _client_ip(scope, _header(headers, b"x-forwarded-for"))
+    visitor, _, _ = identify(ip, _header(headers, b"user-agent"), headers, day)
+    yesterday = (datetime.date.fromisoformat(day) - datetime.timedelta(days=1)).isoformat()
+    with _LOCK:
+        held = _SOURCES.get(visitor)
+    if held and held[1] in (day, yesterday):
+        return held[0]
+    # The daily identity changes at midnight UTC: look under yesterday's too.
+    if visitor == _visitor(ip, _header(headers, b"user-agent"), day):
+        with _LOCK:
+            held = _SOURCES.get(_visitor(ip, _header(headers, b"user-agent"), yesterday))
+        if held and held[1] == yesterday:
+            return held[0]
+    return None
 
 
 def _referrer_host(referer, host):
@@ -609,6 +687,11 @@ def observe(scope, status, seconds=None):
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     day = now.strftime("%Y-%m-%d")
     ip = _client_ip(scope, _header(headers, b"x-forwarded-for"))
+    if _is_ours(ip, headers):
+        # Left out of every count; the ask log alone notes our questions, as "us".
+        if path in ask_log.PATHS and not _is_bot(user_agent):
+            ask_log.record(scope, status, seconds, now, ours=True)
+        return
     # Derived here, while the address is still in hand, and stored in place of
     # it — the address itself goes no further than this function.
     geoip.prepare()
@@ -650,6 +733,11 @@ def observe(scope, status, seconds=None):
     if label:
         event["agent"] = label
         event["agent_purpose"] = purpose
+    if kind == "page" and not bot:
+        tag = source_tag(scope.get("query_string"))
+        if tag:
+            event["src"] = tag
+            _note_source(visitor, tag, day)
     # Only recorded when the reader has answered the banner: the absence of
     # these two is what "has not chosen yet" looks like in the log.
     if choice:
@@ -660,8 +748,7 @@ def observe(scope, status, seconds=None):
     if not bot:
         _touch_live(visitor, path if kind == "page" else None, country, network)
         if path in ask_log.PATHS:
-            # whether it came from us is decided here, while the address is in hand
-            ask_log.record(scope, status, seconds, now, ours=ask_log.is_ours(ip))
+            ask_log.record(scope, status, seconds, now)
 
 
 class VisitCounter(object):
@@ -810,7 +897,7 @@ _DAYS = {}                 # "YYYY-MM-DD" -> that day's totals (_new_day)
 def _new_day():
     return {
         "visitors": set(), "pageviews": 0, "api": 0, "bots": 0,
-        "pages": {}, "refs": {}, "countries": {}, "networks": {},
+        "pages": {}, "refs": {}, "sources": {}, "countries": {}, "networks": {},
         "direct": {"views": 0, "visitors": set()}, "direct_networks": {}, "direct_pages": {},
         "located": 0, "unlocated": 0, "api_calls": 0, "mcp_calls": 0,
         "ask_hits": [], "ai_agents": {}, "ai_referred": {"views": 0, "visitors": set()},
@@ -916,6 +1003,8 @@ def _fold(d, event, at):
     # someone get here", and in-page chart fetches would otherwise drown it.
     sender = event.get("ref")
     is_read = kind == "page" and (event.get("status") or 0) < 400
+    if is_read and event.get("src"):
+        _count(d["sources"], event["src"], visitor)
     if is_read and sender:
         _count(d["refs"], sender, visitor)
         if is_ai_referrer(sender):
@@ -1039,7 +1128,7 @@ def _window_totals(start, today, wanted):
                 w[k] += d[k]
             for k in ("visitors", "browsers", "scripted"):
                 w[k] |= d[k]
-            for k in ("pages", "refs", "countries", "networks", "direct_networks", "direct_pages"):
+            for k in ("pages", "refs", "sources", "countries", "networks", "direct_networks", "direct_pages"):
                 for key, row in d[k].items():
                     _join(w[k].setdefault(key, {"views": 0, "visitors": set()}), row)
             _join(w["direct"], d["direct"])
@@ -1174,6 +1263,17 @@ def summary(days=30, top=15):
     for row in network_rows:
         row["hosting"] = is_hosting(row["key"])
 
+    # Tagged links: how many arrived through each, and how many of those went
+    # on to ask the box something. Sign-ups are added by the admin route, from
+    # the accounts store this module does not read.
+    askers = set(v for _, v in ask_hits)
+    source_rows = []
+    for key, v in w["sources"].items():
+        source_rows.append({"key": key, "views": v["views"], "visitors": len(v["visitors"]),
+                            "people": len(v["visitors"] & people),
+                            "asked": len(v["visitors"] & askers)})
+    source_rows.sort(key=lambda r: (-r["visitors"], r["key"]))
+
     referrer_rows = ranked(refs)
     for row in referrer_rows:
         row["ai"] = is_ai_referrer(row["key"])
@@ -1208,6 +1308,7 @@ def summary(days=30, top=15):
         "daily": series,
         "top_pages": ranked(pages, page_dwell),
         "top_referrers": referrer_rows,
+        "sources": source_rows[:100],
         # Arrivals carrying no referring link, and the only things known about
         # them. Without this the referrer table silently omits most arrivals
         # and an empty table reads as broken detection.
