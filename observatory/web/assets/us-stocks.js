@@ -154,12 +154,127 @@
     return obsChart(el, "line", cfg);
   }
 
+  // Follow-ups stay on the question asked: the same question turned round, the same question
+  // for the other index or period, or a company the answer leads with. Each rewording was
+  // checked to read back as the question it names ("dragged down most" still answers "added
+  // most", "CEOs in the Dow" ignores the Dow, so neither is offered). With nothing relevant
+  // to offer, no chips show rather than unrelated ones.
+  var MARKET_RECIPES = ["market_rank", "industry_rank", "index_contribution", "index_stat", "ceo_pay", "insider_buying_market",
+                        "calendar_window", "holders_increase_industry", "manager_portfolio", "banks_vs_yield"];
+  var SCOPES = [{ name: "the S&P 500", re: /\b(the )?(s&p( ?500)?|sp ?500|s and p( 500)?)(?![\w&])/i, other: "the Dow" },
+                { name: "the Dow", re: /\b(the )?(dow( jones)?( industrial average)?|djia)\b/i, other: "the S&P 500" }];
+  var PERIODS = [{ re: /\b(so far )?this year\b|\bytd\b|\byear to date\b/i, other: "this month" },
+                 { re: /\bthis month\b/i, other: "this year" }];
+  // best/worst only turn round a price ranking; highest/lowest and cheapest any other
+  var FLIPS_PRICE = [[/\btop\b/i, "worst"], [/\bbest\b/i, "worst"], [/\bworst\b/i, "best"], [/\bbottom\b/i, "top"]];
+  var FLIPS = [[/\bhighest\b/i, "lowest"], [/\blowest\b/i, "highest"], [/\bmost expensive\b/i, "cheapest"], [/\bcheapest\b/i, "most expensive"]];
+
+  function sentence(q) {
+    q = String(q || "").replace(/[?.!\s]+$/, "");
+    return q.charAt(0).toUpperCase() + q.slice(1);
+  }
+  function swapFirst(q, pairs) {
+    for (var i = 0; i < pairs.length; i++) if (pairs[i][0].test(q)) return q.replace(pairs[i][0], pairs[i][1]);
+    return null;
+  }
+  // the first n non-empty values of a table column, by its heading
+  function colVals(a, heading, n) {
+    var t = a.table, i = t && t.columns ? t.columns.indexOf(heading) : -1;
+    if (i < 0) return [];
+    return t.rows.map(function (r) { return r[i]; }).filter(function (v) { return v; }).slice(0, n);
+  }
+  function titled(s) {
+    return /[a-z]/.test(s) ? s : s.toLowerCase().replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function marketFollowups(a, mk) {
+    var q = sentence(a.question), e = a.entities || {};
+    var scope = SCOPES.filter(function (s) { return s.re.test(q); })[0];
+    var period = PERIODS.filter(function (p) { return p.re.test(q); })[0];
+    var metric = e.metric || "", priced = /^price_change/.test(metric);
+    var tickers = colVals(a, "Ticker", 2), t0 = tickers[0];
+    var addScope = function () {
+      if (scope) mk(sentence(q.replace(scope.re, scope.other)), q.replace(scope.re, scope.other));
+    };
+    var addPeriod = function () {
+      if (period) mk(sentence(q.replace(period.re, period.other)), q.replace(period.re, period.other));
+    };
+    switch (a.recipe) {
+      case "market_rank":
+      case "industry_rank":
+        // the smallest by market value is a list of shells at $0, never worth a click
+        var flipped = metric === "market_cap" ? null : swapFirst(q, priced ? FLIPS_PRICE : FLIPS);
+        if (flipped) mk(sentence(flipped), sentence(flipped));
+        if (priced) addPeriod();
+        if (a.recipe === "market_rank") {
+          if (scope) addScope();
+          else mk("Only S&P 500 members", q + " in the S&P 500");
+        }
+        var bench = scope ? scope.name : "the S&P 500";
+        tickers.forEach(function (t) {
+          if (priced) mk(t + " against " + bench, "Did " + t + " beat " + bench + " this year?");
+          else mk("What is " + t + " worth?", "What is " + t + " worth?");
+        });
+        break;
+      case "index_contribution":
+        var ix = (scope || SCOPES[0]).name, oix = (scope || SCOPES[0]).other, when = period ? " " + q.match(period.re)[0] : "";
+        mk("What drove " + oix + when, "Which stocks contributed most to " + oix + when + "?");
+        if (period) mk("What drove " + ix + " " + period.other, "Which stocks contributed most to " + ix + " " + period.other + "?");
+        mk("Best performers in " + ix + when, "Top 10 performers of " + ix + when);
+        if (t0) mk(t0 + " against " + ix, "Did " + t0 + " beat " + ix + " this year?");
+        break;
+      case "index_stat":
+        addScope();
+        var rank = q.replace(/\b(average|median|mean|typical)\b/i, /^(pe|ps|pb)_x$/.test(metric) ? "lowest" : "highest");
+        if (rank !== q) mk(sentence(rank), sentence(rank));
+        break;
+      case "ceo_pay":
+        var other = swapFirst(q, FLIPS.concat([[/\bbest\b/i, "lowest"], [/\btop\b/i, "lowest"]]));
+        if (other) mk(sentence(other), sentence(other));
+        if (t0) {
+          mk(t0 + " against the S&P 500", "Did " + t0 + " beat the S&P 500 this year?");
+          mk("Insiders at " + t0, "Have insiders at " + t0 + " bought or sold this year?");
+        }
+        break;
+      case "insider_buying_market":
+        tickers.forEach(function (t) { mk("Insiders at " + t, "Have insiders at " + t + " bought or sold this year?"); });
+        if (t0) mk(t0 + " this year", "How has " + t0 + " stock done this year?");
+        break;
+      case "calendar_window":
+        if (e.days && e.days > 7) mk("Who reports this week", "Which companies report this week?");
+        else mk("Who reports in the next two weeks", "Which companies report in the next two weeks?");
+        tickers.forEach(function (t) { mk(t + " last quarter", t + " quarterly results"); });
+        break;
+      case "holders_increase_industry":
+        var ind = e.industry && e.industry.label ? e.industry.label.replace(/\s*\(.*\)$/, "") : null;
+        if (ind) mk("Largest " + ind + " by market value", "Largest " + ind + " by market value");
+        tickers.forEach(function (t) { mk("Who owns " + t, "Who are the biggest holders of " + t + "?"); });
+        break;
+      case "manager_portfolio":
+        colVals(a, "Issuer", 2).forEach(function (n) {
+          mk("Who else owns " + titled(n), "Who are the biggest holders of " + titled(n) + "?");
+        });
+        break;
+      case "banks_vs_yield":
+        var banks = e.banks || [];
+        if (banks.length >= 2) mk("Compare " + banks[0] + " and " + banks[1], "Compare " + banks[0] + " and " + banks[1]);
+        mk("Cheapest large banks by P/E", "Which large banks trade on the lowest P/E?");
+        break;
+    }
+  }
+
   function followupsFor(a) {
     var out = [];
     var co = a.entities && a.entities.company;
     var cos = (a.entities && a.entities.mentioned_companies) || [];
-    var name = co ? (co.ticker || co.name) : (cos[0] ? (cos[0].ticker || cos[0].name) : null);
-    var mk = function (label, q) { out.push({ label: label, q: q }); };
+    var market = !co && MARKET_RECIPES.indexOf(a.recipe) >= 0;
+    var name = market ? null : co ? (co.ticker || co.name) : (cos[0] ? (cos[0].ticker || cos[0].name) : null);
+    var mk = function (label, q) {
+      if (!out.some(function (f) { return f.q.toLowerCase() === q.toLowerCase(); }) &&
+          q.toLowerCase().replace(/[?.!\s]+$/, "") !== String(a.question || "").toLowerCase().replace(/[?.!\s]+$/, "")) {
+        out.push({ label: label, q: q });
+      }
+    };
     if (name) {
       if (a.recipe !== "company_value") mk("What is " + name + " worth?", "What is " + name + " worth?");
       if (a.recipe !== "company_holders") mk("Who owns " + name, "Who are the biggest holders of " + name + "?");
@@ -170,13 +285,11 @@
       if (a.recipe !== "company_calendar") mk("When " + name + " reports", "When does " + name + " report next?");
       if (a.recipe !== "company_growth_margin") mk(name + " growth and margins", "How fast is " + name + " growing and at what margin?");
       if (a.recipe !== "company_history") mk(name + " revenue, 5 years", "Chart " + name + " revenue over the last five years");
+    } else if (market) {
+      marketFollowups(a, mk);
     } else {
-      mk("Top 10 in the S&P 500 this year", "Top 10 performers of the S&P 500 this year");
-      mk("What drove the S&P 500", "Which stocks contributed most to the S&P 500 this year?");
-      mk("Best in the Dow this year", "Best performers in the Dow this year");
-      mk("Ten largest by market value", "The ten largest US companies by market value");
-      mk("Who reports next week", "Which companies report in the next two weeks?");
-      mk("Cheapest large banks by P/E", "Which large banks trade on the lowest P/E?");
+      // an answer worked out step by step: the companies it leads with
+      colVals(a, "Ticker", 3).forEach(function (t) { mk("What is " + t + " worth?", "What is " + t + " worth?"); });
     }
     return out.slice(0, 5);
   }
