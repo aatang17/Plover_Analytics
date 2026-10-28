@@ -12,7 +12,9 @@
 <header class="site-header" data-section="connect" data-page="api"></header>
 <script src="assets/nav.js"></script>
 
-<main class="container">
+<main class="container docs-layout">
+  <aside class="docs-side" aria-label="Docs"></aside>
+  <div class="docs-body">
   <div class="page-head">
     <h1>API Reference</h1>
     <p class="page-sub">Every number on this site over plain HTTPS: JSON or CSV, no key, no account.
@@ -22,10 +24,11 @@
 
   <div class="prose">
 
+  <section class="doc-panel">
   <h2 id="start">Quick Start</h2>
   <p>The base URL is:</p>
   <div class="connect-url">
-    <code id="base-url">https://web-production-c9178.up.railway.app</code>
+    <code id="base-url">https://ploveranalytics.com</code>
     <button type="button" class="btn" id="copy-base">Copy</button>
   </div>
   <p>Three requests that show the shape of the whole API. Each opens in the browser.</p>
@@ -42,7 +45,9 @@
   that date. <a href="#code">Code samples</a> are below; the machine-readable schema is at
   <a href="/api/openapi.json">/api/openapi.json</a> and a try-it-out console at
   <a href="/api/swagger">/api/swagger</a>.</p>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="conventions">Conventions</h2>
 
   <h3 id="base">Base URL and versioning</h3>
@@ -64,26 +69,29 @@
   "trust": "derived",
   "calc": "(index[t] / index[t−12 months] − 1) × 100, from published index values.",
   "release": {
-    "release_id": 12,
-    "label": "Data through July 2026",
-    "latest_period": "2026-07-01",
-    "ingested_at": "2026-09-01T12:30:43Z",
-    "sha256": "0688909146ea9ae0…",
-    "download_url": "https://www.e-stat.go.jp/stat-search/file-download?statInfId=000032103842&amp;fileKind=1",
-    "source_name": "CPI Japan, national, Table 1: middle-class indices (Jan 1970 – latest month)",
-    "source_id": "e-stat:000032103842",
-    "base": "2020=100",
-    "frequency": "monthly"
+    "release_id": 342,
+    "label": "Data through September 2026",
+    "latest_period": "2026-09-01",
+    "ingested_at": "2026-10-23T13:00:15Z",
+    "sha256": "29b63b7aa5cba598…",
+    "download_url": "https://www.e-stat.go.jp/stat-search/file-download?statInfId=000040482943&amp;fileKind=1",
+    "source_name": "CPI Japan, national, Table 1: middle-class indices (Jan 1970 – latest month), 2025 base",
+    "source_id": "e-stat:000040482943",
+    "base": "2025=100",
+    "frequency": "monthly",
+    "known_at": "2026-10-23T13:00:15Z",
+    "known_at_basis": "our fetch"
   },
   "series": [
     { "code": "0001", "name_en": "All items", "name_ja": "総合",
-      "points": [["2026-06-01", 1.700985], ["2026-07-01", 2.055407]] }
+      "points": [["2026-08-01", 1.894317], ["2026-09-01", 2.097902]] }
   ]
 }</code></pre>
   <p>Points are <code>[period, value]</code> pairs. Values are unrounded: round at display time to the
-  precision the dataset's page uses. Company-disclosure endpoints under <code>/api/v1/equity</code>
-  carry the filing each row came from (<code>doc_id</code>, fiscal year, filed date) instead of a
-  release block.</p>
+  precision the dataset's page uses. Company-disclosure endpoints, <code>/api/v1/equity</code> for
+  Japan and <code>/api/v1/us</code> for the United States, carry the filing each row came from
+  (the EDINET <code>doc_id</code> or the SEC accession number, the fiscal year and the filed date)
+  instead of a release block.</p>
 
   <h3 id="codes">Datasets, series and measures</h3>
   <p>A <b>dataset</b> is one official table: <code>cpi-jp</code>, <code>boj-assets</code>,
@@ -146,24 +154,30 @@
   reuse terms; the credit line is also in every CSV header. Bank of Japan data must display the
   Bank's credit line wherever it appears. The platform adds nothing proprietary to an official value
   and asks for a link back when a calculated figure is republished.</p>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="endpoints">Endpoints <span class="h2-note" id="endpoints-note"></span></h2>
   <p>Grouped by product area. Each entry shows what the endpoint returns, its parameters and one
   working example. For the shared dataset endpoints, the datasets that offer them are listed.</p>
   <div id="endpoints-body"><p class="muted">Loading the schema…</p></div>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="datasets">Datasets <span class="h2-note" id="datasets-note"></span></h2>
   <p>One card per dataset: its source and coverage, every measure with its formula, the endpoints it
   offers, and the caveats that apply. Open a card for detail.</p>
   <div id="datasets-body"><p class="muted">Loading dataset cards…</p></div>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="code">Code Samples</h2>
 
   <h3>Python</h3>
 <pre class="code"><code>import pandas as pd
 import requests
 
-BASE = "https://web-production-c9178.up.railway.app"
+BASE = "https://ploveranalytics.com"
 
 # CSV: one column per series, metadata in the '#' header block
 url = f"{BASE}/api/v1/cpi-jp/observations?series=0001,0161&amp;measure=yoy&amp;start=2015-01&amp;format=csv"
@@ -177,20 +191,26 @@ body = r.json()
 points = pd.DataFrame(body["series"][0]["points"], columns=["period", "value"])
 print(body["trust"], body["calc"])           # derived, and the formula it was derived by
 
-# Company disclosures: calculated ratios for one filer
-fin = requests.get(f"{BASE}/api/v1/equity/financials/metrics/7203").json()</code></pre>
+# Company disclosures: calculated ratios for one filer, in Japan and in the US
+fin = requests.get(f"{BASE}/api/v1/equity/financials/metrics/7203").json()
+us_fin = requests.get(f"{BASE}/api/v1/us/financials/metrics/AAPL").json()
+
+# US CPI, all items, year over year
+us_cpi = pd.read_csv(f"{BASE}/api/v1/cpi-us/observations?series=CUUR0000SA0&amp;measure=yoy&amp;start=2015-01&amp;format=csv",
+                     comment="#", index_col="period", parse_dates=True)</code></pre>
 
   <h3>R</h3>
-<pre class="code"><code>base &lt;- "https://web-production-c9178.up.railway.app"
+<pre class="code"><code>base &lt;- "https://ploveranalytics.com"
 
 cpi &lt;- read.csv(paste0(base, "/api/v1/cpi-jp/observations?series=0001,0161&amp;measure=yoy&amp;start=2015-01&amp;format=csv"),
                 comment.char = "#")
 
 library(jsonlite)
-curve &lt;- fromJSON(paste0(base, "/api/v1/jgb-yields/curve"))</code></pre>
+curve &lt;- fromJSON(paste0(base, "/api/v1/jgb-yields/curve"))
+us_curve &lt;- fromJSON(paste0(base, "/api/v1/ust-yields/curve"))</code></pre>
 
   <h3>Shell</h3>
-<pre class="code"><code>BASE=https://web-production-c9178.up.railway.app
+<pre class="code"><code>BASE=https://ploveranalytics.com
 
 # the last three readings of headline inflation
 curl -s "$BASE/api/v1/cpi-jp/observations?series=0001&amp;measure=yoy" | jq '.series[0].points[-3:]'
@@ -206,7 +226,9 @@ curl -s -H 'If-None-Match: "fe631f52bc1f28710ebef0e51d047799"' -o /dev/null -w '
   <b>Data → From Web</b> with the URL. Skip the leading <code>#</code> lines or keep them as the
   file's provenance. AI assistants use the same numbers over the
   <a href="connect.html">MCP connector</a>.</p>
+  </section>
 
+  </div>
   </div>
 </main>
 

@@ -928,20 +928,47 @@ var NAV_SECTIONS = [
           '<span class="t">' + esc(label(h)) + "</span></a>";
       }).join("");
       links = Array.prototype.slice.call(menu.querySelectorAll("a"));
+      renderSide();
       curIdx = -2;  // force the bar to repaint
     }
     mark();
+  }
+
+  // Docs pages carry a left column on wide screens: the four Docs pages, the
+  // current one opened to its sections. It is the same list as the bar (which
+  // the stylesheet hides beside it), so both follow the section in view.
+  var side = null, sideLinks = [];
+  function renderSide() {
+    side = document.querySelector(".docs-side");
+    if (!side) return;
+    var docs = NAV_SECTIONS.filter(function (s) { return s.id === "connect"; })[0];
+    var header = document.querySelector(".site-header");
+    var pageId = header ? header.getAttribute("data-page") : "";
+    if (!docs) return;
+    side.innerHTML = '<div class="docs-side-label">Docs</div>' + docs.pages.map(function (p) {
+      var cur = p.id === pageId;
+      return '<a class="docs-side-page" href="' + esc(p.href) + '"' +
+        (cur ? ' aria-current="page"' : "") + ">" + esc(p.label) + "</a>" +
+        (cur ? '<div class="docs-side-sections">' + heads.map(function (h) {
+          return '<a href="#' + esc(h.id) + '">' + esc(label(h)) + "</a>";
+        }).join("") + "</div>" : "");
+    }).join("");
+    sideLinks = Array.prototype.slice.call(side.querySelectorAll(".docs-side-sections a"));
   }
 
   // The section in view is the last heading that has reached the bar's
   // bottom edge. Above the first heading, the bar invites a jump instead.
   function mark() {
     if (!toc) return;
-    var line = toc.getBoundingClientRect().bottom + 12, idx = -1;
+    // Beside the docs column the bar is hidden; the header's edge is the line.
+    var edge = toc.offsetParent ? toc.getBoundingClientRect().bottom
+      : parseInt(getComputedStyle(document.documentElement).getPropertyValue("--obs-stack"), 10) || 52;
+    var line = edge + 12, idx = -1;
     heads.forEach(function (h, i) { if (h.getBoundingClientRect().top <= line) idx = i; });
     if (idx === curIdx) return;
     curIdx = idx;
-    links.forEach(function (a, i) {
+    links.concat(sideLinks).forEach(function (a) {
+      var i = links.indexOf(a) >= 0 ? links.indexOf(a) : sideLinks.indexOf(a);
       if (i === idx) a.setAttribute("aria-current", "true");
       else a.removeAttribute("aria-current");
     });

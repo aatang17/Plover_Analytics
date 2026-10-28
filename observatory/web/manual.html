@@ -12,7 +12,9 @@
 <header class="site-header" data-section="connect" data-page="manual"></header>
 <script src="assets/nav.js"></script>
 
-<main class="container">
+<main class="container docs-layout">
+  <aside class="docs-side" aria-label="Docs"></aside>
+  <div class="docs-body">
   <div class="page-head">
     <h1>Using the Data From Your AI Assistant</h1>
     <p class="page-sub">The complete manual for Plover Analytics' MCP server: setup, what it
@@ -22,17 +24,46 @@
 
   <div class="prose">
 
+  <section class="doc-panel">
   <h2 id="what">Overview</h2>
   <p>This site publishes its data over the Model Context Protocol (MCP) — an open standard
   that lets an AI assistant such as Claude look data up from an external source while you
-  chat with it. You add one URL to your assistant; after that, questions about Japanese
-  statistics and Japanese company filings are answered from this site's numbers rather than
-  from the assistant's memory.</p>
+  chat with it. You add one URL to your assistant; after that, questions about the economies
+  and listed companies of Japan, the United States and Hong Kong are answered from this site's
+  numbers rather than from the assistant's memory.</p>
+  <div class="flow" role="list" aria-label="How a question is answered">
+    <div class="flow-step" role="listitem">
+      <div class="flow-n">1 · You ask</div>
+      <b>A question in plain English</b>
+      <p>In Claude, Cursor, VS Code, Codex or any assistant that takes an MCP connector.</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 24 12"><path d="M0 6h20M15 1l6 5-6 5"/></svg></div>
+    <div class="flow-step" role="listitem">
+      <div class="flow-n">2 · It looks up</div>
+      <b>Your assistant picks a lookup</b>
+      <p>One of twelve read-only lookups, such as the headline reading for national CPI.</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 24 12"><path d="M0 6h20M15 1l6 5-6 5"/></svg></div>
+    <div class="flow-step is-here" role="listitem">
+      <div class="flow-n">3 · Plover answers</div>
+      <b>Published figures, with their source</b>
+      <p>From the accepted release, with publisher, formula and the period the data runs to.</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 24 12"><path d="M0 6h20M15 1l6 5-6 5"/></svg></div>
+    <div class="flow-step" role="listitem">
+      <div class="flow-n">4 · You check</div>
+      <b>An answer with a citation link</b>
+      <p>The link opens the page on this site that shows the same numbers.</p>
+    </div>
+  </div>
+
   <p>The assistant does the reading and writing. The server only answers data lookups, and
   it can only see what this site already publishes: the same figures, from the same accepted
   release, computed by the same code as the <a href="api.html">public API</a>. Nothing you
   ask is used to change anything here — every lookup is read-only.</p>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="setup">Connecting your assistant</h2>
   <p>The connect URL is:</p>
   <div class="connect-url">
@@ -71,97 +102,182 @@
   <p>Any client that supports remote MCP servers (Streamable HTTP transport) takes the same
   URL. The server is stateless, needs no key, and identifies itself as
   <code>Plover Analytics</code>.</p>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="coverage">Data coverage</h2>
-  <p>Twenty-five datasets in twelve sections — Japanese official statistics on one side,
-  company disclosures filed on EDINET on the other. The <a href="datasets.html">datasets
-  directory</a> lists them in full with sources and update schedules.</p>
+  <p>Eighty-two datasets in nineteen sections, across three markets: official statistics,
+  company filings and market data. The <a href="datasets.html">datasets directory</a> lists
+  them in full with sources and update schedules. Below, each section with its dataset ids.</p>
+  <h3>Japan</h3>
   <ul>
     <li><b>Prices</b> — <code>cpi-jp</code> (categories: headline, the cores, the ten major
-    expenditure groups) and <code>cpi-jp-items</code> (full item depth, including the 582
-    individually priced items), monthly from January 1970 on the 2020 base.</li>
+    expenditure groups), <code>cpi-jp-items</code> (full item depth, including the 589
+    individually priced items), <code>cpi-jp-goods-services</code> and
+    <code>cpi-jp-sa</code> (seasonally adjusted, from 2010), monthly from January 1970 on the
+    2025 base; <code>cpi-jp-long</code> (all items less imputed rent from August 1946); and
+    <code>cpi-tokyo</code> and <code>cpi-tokyo-items</code>, the Tokyo ward-area index, whose
+    newest month is the mid-month advance.</li>
+    <li><b>Labour</b> — <code>unemployment-jp</code> (from 1953),
+    <code>job-openings-jp</code> (openings per applicant, from 1963) and
+    <code>wages-jp</code> (the Monthly Labour Survey).</li>
+    <li><b>National accounts</b> — <code>gdp-jp</code>: quarterly GDP and every demand
+    component, real and nominal.</li>
+    <li><b>Public finance</b> — <code>fiscal-jp</code> (the general account since 1875),
+    <code>fiscal-jp-revenue</code>, <code>fiscal-jp-expenditure</code>,
+    <code>fiscal-jp-ministry</code>, <code>tax-receipts-jp</code>,
+    <code>govt-debt-jp</code>, <code>govt-accounts-jp</code> (the whole government) and
+    <code>local-finance-jp</code> (all 47 prefectures).</li>
     <li><b>Monetary</b> — <code>boj-assets</code>: the Bank of Japan's principal
     balance-sheet items as end-of-month stocks and during-month flows, in ¥100 million,
     from July 1996. Flows go negative; a negative JGB net flow is balance-sheet run-off.</li>
+    <li><b>Banking</b> — <code>boj-loan-rates</code>, <code>boj-deposit-rates</code>,
+    <code>fsa-npl</code> (bad loans by type of lender), <code>fsa-bank-results</code>,
+    <code>fsa-regional-fi</code> (every regional bank, shinkin bank and credit co-operative),
+    <code>jba-banks</code> (every member bank's statements) and <code>bank-balance</code>
+    (securities and loans by remaining term, unrealised gains and losses, from annual
+    reports).</li>
     <li><b>Rates</b> — <code>jgb-yields</code>: constant-maturity JGB yields for 15
     maturities, every business day since September 1974. Yields can be negative.</li>
+    <li><b>Corporate</b> — <code>corporate-finance-jp</code>: the Ministry of Finance's
+    balance sheets and income statements of Japanese companies by industry, from 1954.</li>
     <li><b>Tourism</b> — <code>jnto-visitors</code> (arrivals by market from 2003; the two
     latest months are estimates) and <code>accommodation-jp</code> (guest nights and
     occupancy by prefecture from 2011, with a definition change in January 2026).</li>
     <li><b>Demography</b> — <code>population-jp</code> and
     <code>population-jp-municipal</code> (Basic Resident Register counts by prefecture and
     by municipality) and <code>population-jp-history</code> (the long run from 1975).</li>
-    <li><b>Trade</b> — <code>trade-semis</code> and <code>trade-inputs</code>: monthly
-    customs exports and imports of semiconductors, equipment and silicon wafers by partner
-    country, from 2001.</li>
+    <li><b>Trade</b> — monthly customs exports and imports by partner country, from 2001:
+    <code>trade-semis</code>, <code>trade-inputs</code> (silicon wafers),
+    <code>trade-autos</code>, <code>trade-energy</code>, <code>trade-machinery</code>,
+    <code>trade-pharma</code> and <code>trade-food</code>.</li>
     <li><b>Agriculture</b> — <code>agri-prices</code>, <code>rice-prices-jp</code>,
     <code>rice-inventory-jp</code>, <code>rice-production-cost</code> and
     <code>ja-statistics</code>.</li>
+    <li><b>Market activity</b> — <code>margin-jp</code> (weekly margin balances since
+    2002) and <code>investor-flows-jp</code> (weekly buying and selling by investor
+    type).</li>
     <li><b>Ownership</b> — <code>cross-shareholdings</code> (policy holdings both
     directions, from FY2021), <code>shareholder-register</code> (top-ten holders and the
-    investor-category split) and <code>large-shareholdings</code> (the 5% tape).</li>
+    investor-category split), <code>large-shareholdings</code> (the 5% tape) and
+    <code>short-positions</code> (every disclosed short position).</li>
     <li><b>Governance</b> — <code>boards-and-pay</code> (every director as filed, officer
-    remuneration, individually disclosed pay) and <code>agm-votes</code> (each proposal's
-    result and each director's own approval percentage).</li>
+    remuneration, individually disclosed pay), <code>agm-votes</code> (each proposal's
+    result and each director's own approval percentage) and <code>business-risks</code>
+    (each company's stated risks, verbatim).</li>
     <li><b>Capital returns</b> — <code>buybacks</code>: authorisation, monthly execution,
     unspent balance and cancellation.</li>
     <li><b>Assets</b> — <code>facilities</code>: disclosed sites with book value by asset
     class, land area, and the rental-property note.</li>
     <li><b>Financials</b> — <code>financials</code> (statements as filed plus calculated
-    ratios) and <code>segments</code> (revenue by region, named customers, reportable
-    segments).</li>
+    ratios), <code>segments</code> (revenue by region, named customers, reportable
+    segments) and <code>earnings-releases</code> (quarterly and full-year results from the
+    exchange's disclosure wire).</li>
   </ul>
-  <p>Bank-level financial statements (<code>jba-banks</code>) and the FSA bad-loan and bank
-  earnings series are built but not yet published on this server; the assistant is not shown
-  tools it cannot answer with.</p>
+  <h3>United States</h3>
+  <ul>
+    <li><b>Prices and wages</b> — <code>cpi-us</code> (all items from 1913, the cores, the
+    major groups and every published item), <code>cpi-us-sa</code>,
+    <code>cpi-us-areas</code> (regions and 23 metro areas), <code>cpi-us-weights</code>,
+    <code>us-avg-prices</code> (dollars per unit), <code>us-wages</code> and
+    <code>us-wage-tracker</code> (the Atlanta Fed's).</li>
+    <li><b>Labour</b> — <code>us-labour</code>: unemployment, participation, payrolls, and
+    job openings, hires and quits.</li>
+    <li><b>Rates</b> — <code>ust-yields</code> (par yields, 1 month to 30 years, daily from
+    1990) and <code>ust-real-yields</code> (TIPS, daily from 2003).</li>
+    <li><b>US reference</b> — <code>sec-financials</code> (every number in 10-K, 10-Q, 20-F
+    and 40-F reports), <code>sec-insiders</code> (Forms 3, 4 and 5), <code>sec-13f</code>
+    (institutional holdings), <code>sec-13dg</code> (5% stakes, from December 2024),
+    <code>us-prices</code> (one daily bar per listed symbol, from May 2018, not adjusted for
+    splits or dividends) and <code>us-events</code> (Fed meetings, CPI releases, company
+    results days).</li>
+  </ul>
+  <h3>Hong Kong</h3>
+  <ul>
+    <li><code>cpi-hk</code> and <code>cpi-hk-rates</code> (consumer prices from 1974 and the
+    official inflation rates), <code>gdp-hk</code>, <code>labour-hk</code>,
+    <code>retail-hk</code> and <code>trade-hk</code>, all from the Census and Statistics
+    Department.</li>
+  </ul>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="lookups">Lookup reference</h2>
   <p>You never call these yourself — the assistant chooses them from your plain-English
-  question. Knowing what exists tells you what you can ask. Eight generic lookups cover
-  every dataset.</p>
-  <ul>
-    <li><b>List datasets</b> — every dataset with its section, shape (series, company or
+  question. Knowing what exists tells you what you can ask. Twelve lookups cover every
+  dataset.</p>
+  <dl class="lookup-list">
+    <dt>List datasets<code>list_datasets</code></dt>
+    <dd>Every dataset with its section, shape (series, company or
     events), what it covers and which lookups apply. The assistant uses it to orient itself.
-    <br><i>Ask:</i> “What data do you have on Japan?”</li>
-    <li><b>Describe a dataset</b> — one dataset's full card: source and credit line, every
+    <span class="lookup-ask">Ask: “What data do you have on Japan?”</span></dd>
+    <dt>Describe a dataset<code>describe_dataset</code></dt>
+    <dd>One dataset's full card: source and credit line, every
     measure with its trust label and, for calculated ones, its formula, the screens it
     offers, and what this server actually holds of it.
-    <br><i>Ask:</i> “Where does the rice price data come from, and how far back does it go?”</li>
-    <li><b>Search</b> — a company by Japanese or English name or securities code, or a data
-    series by name or code, across every dataset. Company hits list the datasets that know
-    the company; series hits return the code the history lookup needs.
-    <br><i>Ask:</i> “Is there a series for mobile phone charges?”</li>
-    <li><b>Get a company</b> — one company by securities code. With a dataset named, the
-    full view from it (holdings, register, board and pay, buybacks, facilities, financials,
-    AGM votes). Without one, a compact profile across every dataset that knows the company,
-    plus a list of those that do not.
-    <br><i>Ask:</i> “What do you have on 7203?”</li>
-    <li><b>Get series history</b> — up to six series of a series-shaped dataset, as the
+    <span class="lookup-ask">Ask: “Where does the rice price data come from, and how far back does it go?”</span></dd>
+    <dt>Search<code>search</code></dt>
+    <dd>A company by Japanese or English name, securities code or ticker, or
+    a data series by name or code, across every dataset. Company hits list the datasets that
+    know the company; series hits return the code the history lookup needs.
+    <span class="lookup-ask">Ask: “Is there a series for mobile phone charges?”</span></dd>
+    <dt>Get a company<code>get_company</code></dt>
+    <dd>One company: a Japanese company by securities code
+    (<code>7203</code>), a US company by the SEC number Search returns
+    (<code>cik:320193</code> is Apple). With a dataset named, the full view from it
+    (holdings, register, board and pay, buybacks, facilities, financials, AGM votes, insider
+    trades). Without one, a compact profile across every dataset that knows the company, plus
+    a list of those that do not.
+    <span class="lookup-ask">Ask: “What do you have on 7203?”</span></dd>
+    <dt>Headline reading<code>get_overview</code></dt>
+    <dd>Where a dataset stands now: the figures its own page leads
+    with, each with its latest value, the change and the trust label.
+    <span class="lookup-ask">Ask: “Where is US unemployment now?”</span></dd>
+    <dt>Get series history<code>get_series</code></dt>
+    <dd>Up to six series of a series-shaped dataset, as the
     published value or as a year-over-year, month-over-month or 3-month annualized rate,
     over any window.
-    <br><i>Ask:</i> “Rice prices year-over-year since 2022.”</li>
-    <li><b>Ranked screen</b> — a ranked cross-section from a dataset's own screens: oldest
+    <span class="lookup-ask">Ask: “Rice prices year-over-year since 2022.”</span></dd>
+    <dt>A dataset's own cut<code>get_breakdown</code></dt>
+    <dd>The view a dataset exists to serve beyond its raw
+    series: contributions to headline inflation, the breadth of price rises, the whole yield
+    curve, arrivals by market, one product's trade with every partner, every prefecture's
+    counts.
+    <span class="lookup-ask">Ask: “Which groups are driving Japanese inflation this month?”</span></dd>
+    <dt>Ranked screen<code>screen</code></dt>
+    <dd>A ranked cross-section from a dataset's own screens: oldest
     boards, largest unspent buybacks, cheapest land per m², lowest director approval,
     highest ROE, widest gender pay gap.
-    <br><i>Ask:</i> “Which companies have the oldest boards?”</li>
-    <li><b>List peer groups</b> — the groups a company can be compared within: the TOPIX
+    <span class="lookup-ask">Ask: “Which companies have the oldest boards?”</span></dd>
+    <dt>List peer groups<code>list_cohorts</code></dt>
+    <dd>The groups a company can be compared within: the TOPIX
     scale bands (Core30, Large70, Mid400, Small), the JPX segments (Prime, Standard,
-    Growth) and the 33- and 17-industry classifications.</li>
-    <li><b>Compare within a peer group</b> — one metric across one peer group, ranked, with
+    Growth) and the 33- and 17-industry classifications.</dd>
+    <dt>Compare within a peer group<code>compare_cohort</code></dt>
+    <dd>One metric across one peer group, ranked, with
     the group's median and quartiles, and optionally one company's rank and percentile
     inside it. Companies that do not report the metric are excluded and listed with the
     reason — never counted as zero.
-    <br><i>Ask:</i> “Is Toyota's ROE normal for a Core30 company?”</li>
-  </ul>
-  <p>Two more sit alongside them. <b>Check a published figure</b> reconciles a number you
-  have seen in the press against what the filings say, on the stated basis. And the dataset
-  cards are readable as MCP resources, so a client can load them without spending a lookup.</p>
-  <p>The original per-dataset lookups — inflation overview, contributions to headline,
-  inflation breadth, cross-shareholding coverage, unwind ranking, the boards-and-pay and
-  financials tools, arrivals, the yield curve and the BOJ balance sheet — remain available
-  for compatibility, and the assistant may still choose them. They answer with the same
-  numbers as the generic lookups.</p>
+    <span class="lookup-ask">Ask: “Is Toyota's ROE normal for a Core30 company?”</span></dd>
+    <dt>Releases and revisions<code>get_vintages</code></dt>
+    <dd>Every release of a dataset, newest first, with the
+    period it reached, when it was known and the checksum of the source file; or, for one
+    series, how it was revised from release to release and by how much.
+    <span class="lookup-ask">Ask: “How much has last quarter's GDP been revised?”</span></dd>
+    <dt>Check a published figure<code>check_claim</code></dt>
+    <dd>Reconciles a cross-shareholding number you have
+    seen in the press against what the annual reports support, on the basis the article
+    states. It never calls a published figure wrong; it says what the filings can confirm.
+    <span class="lookup-ask">Ask: “Does the cross-shareholding figure in this article match the
+    filings?”</span></dd>
+  </dl>
+  <p>The dataset cards are also readable as MCP resources, so a client can load them without
+  spending a lookup. The original per-dataset lookups (inflation overview, contributions,
+  arrivals, the yield curve, the boards-and-pay and financials tools and others) are no
+  longer listed, but a connector that was set up with them still gets the same answers.</p>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="reading">Reading a response</h2>
   <p>Every lookup result carries the same disclosure fields. If you ever need to check the
   assistant's statement, these are what to look at:</p>
@@ -186,9 +302,11 @@
     so far” is honest; “Japan's cross-shareholdings total ¥21tn” is not, and the data says
     so.</li>
   </ul>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="sessions">Example questions</h2>
-  <ol>
+  <ul class="ask-list">
     <li>What are Japan's headline, core, and core-core inflation rates right now?</li>
     <li>Break the current headline rate into percentage-point contributions by group.</li>
     <li>What share of individually priced items is rising more than 2%, and how does that
@@ -202,18 +320,25 @@
     <li>Show me 7203's financial statements as filed, then its ROE against its Core30
     peers.</li>
     <li>What did the latest CPI month look like as of the day before it was revised?</li>
-  </ol>
+    <li>Which Apple insiders sold shares in the last year, and how much?</li>
+    <li>Chart the 10-year Treasury yield against the 10-year JGB since 2024.</li>
+    <li>What is Hong Kong's composite inflation rate, and how has retail spending moved?</li>
+  </ul>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="limits">Limitations</h2>
   <ul>
-    <li><b>Japan only, and not every Japanese statistic.</b> No wages, GDP or producer
-    prices yet; no Tokyo advance, regional or seasonally adjusted CPI; no yen price levels
-    from the CPI (an index says rice rose 30%, not that it costs ¥3,000). Bank-level
-    statements and the FSA bad-loan series are built but not yet published here. The
-    coverage grows dataset by dataset.</li>
-    <li><b>Filing datasets are not the whole market.</b> They accumulate filing by filing
-    from EDINET, and several start at FY2025 or later. Every aggregate comes back with its
-    own coverage denominator — quote the denominator with the number.</li>
+    <li><b>Three markets, not every statistic in them.</b> Japan, the United States and
+    Hong Kong. No producer prices for any of them; no US GDP; no regional Japanese CPI
+    outside Tokyo; no yen price levels from the Japanese CPI (an index says rice rose 30%,
+    not what it costs). The coverage grows dataset by dataset.</li>
+    <li><b>Filing datasets are not the whole market.</b> Japanese filing datasets accumulate
+    filing by filing from EDINET, and several start at FY2025 or later. Every aggregate
+    comes back with its own coverage denominator — quote the denominator with the number.
+    US 5% stakes start in December 2024, when the filings became structured.</li>
+    <li><b>US daily prices are not adjusted</b> for splits or dividends. A price chart across
+    a split shows the jump.</li>
     <li><b>Never mix measure types.</b> Index levels, yen levels, stocks and flows are
     different things; the server labels which is which and they are never ranked or summed
     together.</li>
@@ -227,7 +352,9 @@
     you connect — this site publishes none of those. Check anything you plan to quote
     against its <code>cite</code> link.</li>
   </ul>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="trouble">Troubleshooting</h2>
   <ul>
     <li><b>The connector won't add</b> — custom connectors need a paid Claude plan; free
@@ -244,7 +371,9 @@
     <li><b>A number with no cite link, or a claim you can't reproduce</b> — treat it as the
     assistant's own words, not this site's data.</li>
   </ul>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="teams">Programmatic access</h2>
   <p>The endpoint speaks JSON-RPC 2.0 over a single stateless POST — no session, no
   authentication, gzip supported. A minimal round-trip:</p>
@@ -253,17 +382,20 @@
   <p>Tool results return the same JSON the site's public API serves, plus the disclosure
   fields above. For scheduled or bulk retrieval, use <a href="api.html">the REST API</a>
   directly — it is the same data with proper HTTP caching.</p>
+  </section>
 
+  </div>
   </div>
 </main>
 
 <footer class="site-footer">
   <div class="inner">
-    Sources: Statistics Bureau of Japan via e-Stat · Bank of Japan · Ministry of Finance ·
-    Ministry of Agriculture, Forestry and Fisheries · Japan National Tourism Organization ·
-    Japan Tourism Agency · Ministry of Internal Affairs and Communications · company filings
-    via EDINET (Financial Services Agency). Published values are official; rates of change
-    and aggregates are calculated on this platform.
+    Sources: Japanese government statistics via e-Stat and the ministries · Bank of Japan ·
+    Financial Services Agency (EDINET) · Japan Exchange Group · U.S. Bureau of Labor
+    Statistics · U.S. Treasury · U.S. Securities and Exchange Commission · Census and Statistics
+    Department, Hong Kong · full list on the <a href="methodology.html#license">Methodology</a>
+    page. Published values are official; rates of change and aggregates are calculated on this
+    platform.
   </div>
 </footer>
 

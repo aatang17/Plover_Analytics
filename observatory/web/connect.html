@@ -12,25 +12,67 @@
 <header class="site-header" data-section="connect" data-page="connect"></header>
 <script src="assets/nav.js"></script>
 
-<main class="container">
-  <div class="page-head">
+<main class="container docs-layout">
+  <aside class="docs-side" aria-label="Docs"></aside>
+  <div class="docs-body">
+  <div class="page-head connect-hero">
     <h1>Connect Your AI</h1>
     <p class="page-sub">Use this site's data from Claude — or any assistant that supports the
     Model Context Protocol — with one URL. No account, no key.</p>
+    <div class="connect-url" id="url">
+      <code id="mcp-url">https://ploveranalytics.com/mcp</code>
+      <button type="button" class="btn btn-primary" id="copy-url">Copy URL</button>
+    </div>
+    <div class="strip">
+      <div class="strip-grid cols-4">
+        <div class="strip-cell"><div class="strip-label">Datasets</div>
+          <div class="strip-value">82</div>
+          <div class="strip-foot">in 19 sections, from US prices since 1913 to this week's filings</div></div>
+        <div class="strip-cell"><div class="strip-label">Markets</div>
+          <div class="strip-value">3</div>
+          <div class="strip-foot">Japan 60 · United States 16 · Hong Kong 6</div></div>
+        <div class="strip-cell"><div class="strip-label">Lookups</div>
+          <div class="strip-value">12</div>
+          <div class="strip-foot">read-only, the same numbers this site publishes</div></div>
+        <div class="strip-cell"><div class="strip-label">Access</div>
+          <div class="strip-value">Open</div>
+          <div class="strip-foot">no account or key · about 120 lookups a minute</div></div>
+      </div>
+    </div>
   </div>
 
   <div class="prose">
 
-  <h2 id="url">Your connect URL</h2>
-  <p>Add this URL to your assistant as a custom connector. It gives the assistant read-only
-  lookups over the same numbers this site publishes — 25 datasets of Japanese official
-  statistics and company filings, from consumer prices back to 1970 to last month's board
-  and pay disclosures.</p>
-  <div class="connect-url">
-    <code id="mcp-url">https://ploveranalytics.com/mcp</code>
-    <button type="button" class="btn" id="copy-url">Copy</button>
+  <section class="doc-panel">
+  <h2 id="how">How It Works</h2>
+  <div class="flow" role="list" aria-label="How a question is answered">
+    <div class="flow-step" role="listitem">
+      <div class="flow-n">1 · You ask</div>
+      <b>A question in plain English</b>
+      <p>In Claude, Cursor, VS Code, Codex or any assistant that takes an MCP connector.</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 24 12"><path d="M0 6h20M15 1l6 5-6 5"/></svg></div>
+    <div class="flow-step" role="listitem">
+      <div class="flow-n">2 · It looks up</div>
+      <b>Your assistant picks a lookup</b>
+      <p>One of twelve read-only lookups, such as the headline reading for national CPI.</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 24 12"><path d="M0 6h20M15 1l6 5-6 5"/></svg></div>
+    <div class="flow-step is-here" role="listitem">
+      <div class="flow-n">3 · Plover answers</div>
+      <b>Published figures, with their source</b>
+      <p>From the accepted release, with publisher, formula and the period the data runs to.</p>
+    </div>
+    <div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 24 12"><path d="M0 6h20M15 1l6 5-6 5"/></svg></div>
+    <div class="flow-step" role="listitem">
+      <div class="flow-n">4 · You check</div>
+      <b>An answer with a citation link</b>
+      <p>The link opens the page on this site that shows the same numbers.</p>
+    </div>
   </div>
+  </section>
 
+  <section class="doc-panel">
   <h2 id="setup">Set up in your client</h2>
   <p>Cursor and VS Code add the server in one click. Claude Code and Codex take one command,
   which the button copies. Claude on the web or the desktop takes one paste.</p>
@@ -80,42 +122,58 @@
   The server is stateless and requires no authentication.</p>
   <p>Once connected, the <a href="manual.html">full manual</a> covers every lookup, how to
   read the trust labels in what comes back, and what to do when something looks wrong.</p>
+  </section>
 
-  <h2 id="covers">What it covers</h2>
-  <p>Twenty-five datasets in twelve sections. The assistant sees all of them through the
-  same handful of lookups, so you never have to name a dataset yourself.</p>
-  <ul>
-    <li><b>Prices</b> — national CPI by category and at full item depth, monthly from
-    January 1970, including the 582 individually priced items.</li>
-    <li><b>Monetary</b> — the Bank of Japan's balance sheet: stocks and monthly flows of
-    JGBs, bills, corporate bonds, ETFs, J-REITs, loans and the monetary base, from 1996.</li>
-    <li><b>Rates</b> — the JGB yield curve, 15 maturities daily since 1974.</li>
-    <li><b>Tourism</b> — visitor arrivals by market from 2003, and the Accommodation Survey's
-    guest nights and occupancy by prefecture from 2011.</li>
-    <li><b>Demography</b> — population, households and register flows by prefecture and by
-    municipality, plus the long run back to 1975.</li>
-    <li><b>Trade</b> — semiconductors, semiconductor equipment and silicon wafers by partner
-    country, monthly from 2001.</li>
-    <li><b>Agriculture</b> — farm output and input price indices, rice contract prices by
-    variety, private rice stocks, rice production cost, and the agricultural co-operatives'
-    segment income statement.</li>
-    <li><b>Ownership</b> — cross-shareholdings in both directions, the shareholder register,
-    and the 5% large-shareholding tape.</li>
-    <li><b>Governance</b> — every director as filed with pay, and AGM voting results down to
-    each director's own approval percentage.</li>
-    <li><b>Capital returns</b> — buyback programmes from authorisation to execution to
-    cancellation.</li>
-    <li><b>Assets</b> — disclosed facilities and land, with book value, area and the rental
-    property note.</li>
-    <li><b>Financials</b> — statements as filed, calculated ratios with their formulas, and
-    segment notes including named customers.</li>
-  </ul>
-  <p>Bank-level financial statements and the FSA bad-loan series are built but not yet
-  published on this server. The <a href="datasets.html">datasets directory</a> is the
-  authoritative list; <b>List datasets</b> returns the same thing to your assistant.</p>
+  <section class="doc-panel">
+  <h2 id="example">Example Lookup <span class="h2-note" id="demo-note">live from this server</span></h2>
+  <p>What your assistant sends and gets back when you ask a plain question. The figures below
+  were fetched from the server when you opened this page.</p>
+  <div class="lookup-demo">
+    <div class="lookup-demo-row">
+      <div class="lookup-demo-k">You ask</div>
+      <div class="lookup-demo-q">What is Japan's inflation rate right now?</div>
+    </div>
+    <div class="lookup-demo-row">
+      <div class="lookup-demo-k">It looks up</div>
+      <div><b>Headline reading</b> for national CPI ·
+        <code>get_overview {"dataset": "cpi-jp"}</code></div>
+    </div>
+    <div class="lookup-demo-row">
+      <div class="lookup-demo-k">It gets back</div>
+      <div id="demo-result" aria-live="polite">Fetching the latest reading…</div>
+    </div>
+    <div class="lookup-demo-row">
+      <div class="lookup-demo-k">Then the history</div>
+      <div><b>Get series history</b> for the same three measures ·
+        <code>get_series {"dataset": "cpi-jp", "series": "0001,0161,0178", "measure": "yoy", "start": "2021-01"}</code>
+        <div class="controls lookup-demo-controls">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="demo-png">Download PNG</button>
+          <button type="button" class="btn" id="demo-csv">Download CSV</button>
+        </div>
+        <div class="chart lookup-demo-chart" id="demo-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
+        <p class="source-line" id="demo-source"></p>
+      </div>
+    </div>
+  </div>
+  <p>The assistant writes its answer from that result, and quotes the citation link so you
+  can check the figure on the page it came from.</p>
+  </section>
 
-  <h2 id="ask">What to ask</h2>
-  <ul>
+  <section class="doc-panel">
+  <h2 id="covers">Coverage <span class="h2-note">82 datasets</span></h2>
+  <p>The assistant sees every dataset through the same twelve lookups, so you never have to
+  name one yourself. The <a href="manual.html#coverage">Manual</a> lists each dataset, and the
+  <a href="datasets.html">datasets directory</a> is the authoritative list.</p>
+  <div class="cover-time" id="cover-time" role="img"
+       aria-label="How far back each section of data goes, by market"></div>
+  <p class="source-line">Bars run from the first period held to the latest. Company filings
+  accumulate filing by filing and have no single start year.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="ask">Example Questions</h2>
+  <ul class="ask-list">
     <li>What is Japan's headline and core inflation right now, and which groups are driving it?</li>
     <li>How broad is inflation across individual items — what share is rising more than 2%?</li>
     <li>How much JGB did the Bank of Japan buy last month, net of redemptions?</li>
@@ -127,34 +185,54 @@
     <li>Show me Toyota's financial statements as filed, then its ROE against its Core30 peers.</li>
     <li>Which companies have the largest unspent buyback authorisations?</li>
     <li>What did last month's CPI look like as of the day before the latest release?</li>
+    <li>Which Apple insiders sold shares in the last year, and how much?</li>
+    <li>How has the 10-year Treasury moved against the 10-year JGB this year?</li>
+    <li>What is Hong Kong's inflation rate, and how does it compare with Japan's?</li>
   </ul>
+  </section>
 
-  <h2 id="tools">What your assistant can see</h2>
-  <p>Read-only lookups, each a thin wrapper over this site's public API — the assistant can
-  only see numbers the site already publishes, from the same accepted release. Eight generic
-  tools cover every dataset on the server:</p>
-  <ul>
-    <li><b>List datasets</b> — every dataset: what it is, its shape, and which tools apply.</li>
-    <li><b>Describe a dataset</b> — its source, every measure with its trust label and formula,
-    and what this server holds.</li>
-    <li><b>Search</b> — a company by name or securities code, or a series by name or code,
-    across all datasets.</li>
-    <li><b>Get a company</b> — one dataset's full view, or a profile across every dataset that
-    knows the company.</li>
-    <li><b>Get series history</b> — published values or calculated rates, as of any date.</li>
-    <li><b>Ranked screen</b> — the dataset's own screens: oldest boards, largest unspent buybacks,
-    cheapest land, lowest director approval, highest ROE.</li>
-    <li><b>List peer groups</b> — the TOPIX scale bands, JPX market segments and the industry
-    classifications a company can be compared within.</li>
-    <li><b>Compare within a peer group</b> — one metric across one peer group, ranked, with the
-    group's own median and quartiles.</li>
-  </ul>
-  <p>The dataset cards are also readable as MCP resources. The older per-dataset tools —
-  inflation overview, contributions, breadth, cross-shareholding coverage, the boards-and-pay
-  and financials lookups — remain available for compatibility.</p>
-  <p>The <a href="manual.html">manual</a> documents each one in detail.</p>
+  <section class="doc-panel">
+  <h2 id="tools">Lookups <span class="h2-note">12, read-only</span></h2>
+  <p>Each lookup is a thin wrapper over this site's public API, so the assistant can only see
+  numbers the site already publishes, from the same accepted release. Your assistant picks
+  the lookup; you never call one by name.</p>
+  <dl class="lookup-list">
+    <dt>List datasets<code>list_datasets</code></dt>
+    <dd>Every dataset: what it is, its shape, and which lookups apply.</dd>
+    <dt>Describe a dataset<code>describe_dataset</code></dt>
+    <dd>Its source, every measure with its trust label and formula, and what this server holds.</dd>
+    <dt>Search<code>search</code></dt>
+    <dd>A company by name, securities code or ticker, or a series by name or code, across all
+    datasets.</dd>
+    <dt>Get a company<code>get_company</code></dt>
+    <dd>One dataset's full view, or a profile across every dataset that knows the company.</dd>
+    <dt>Headline reading<code>get_overview</code></dt>
+    <dd>Where a dataset stands now: the figures its own page leads with.</dd>
+    <dt>Get series history<code>get_series</code></dt>
+    <dd>Published values or calculated rates, as of any date.</dd>
+    <dt>A dataset's own cut<code>get_breakdown</code></dt>
+    <dd>Contributions to inflation, breadth of price rises, the whole yield curve, one
+    product's trade with every partner.</dd>
+    <dt>Ranked screen<code>screen</code></dt>
+    <dd>The dataset's own screens: oldest boards, largest unspent buybacks, cheapest land,
+    lowest director approval, highest ROE.</dd>
+    <dt>List peer groups<code>list_cohorts</code></dt>
+    <dd>The TOPIX scale bands, JPX market segments and the industry classifications a company
+    can be compared within.</dd>
+    <dt>Compare within a peer group<code>compare_cohort</code></dt>
+    <dd>One metric across one peer group, ranked, with the group's own median and quartiles.</dd>
+    <dt>Releases and revisions<code>get_vintages</code></dt>
+    <dd>Every release of a dataset, and how one figure was revised from release to release.</dd>
+    <dt>Check a published figure<code>check_claim</code></dt>
+    <dd>A cross-shareholding number from the press, checked against what the filings support.</dd>
+  </dl>
+  <p>The dataset cards are also readable as MCP resources. The older per-dataset tools are no
+  longer listed, but a connector set up with them still gets answers. The
+  <a href="manual.html">Manual</a> documents each lookup in detail.</p>
+  </section>
 
-  <h2 id="trust">Trust and limits</h2>
+  <section class="doc-panel">
+  <h2 id="trust">Trust and Limits</h2>
   <ul>
     <li>Published values are official statistics or filed figures exactly as the source
     released them; year-over-year and other rates, ratios and aggregates are calculated by
@@ -173,24 +251,30 @@
     <li>The endpoint is rate-limited to about 120 lookups a minute per connection. For bulk or
     programmatic access, use the <a href="api.html">public API</a> directly.</li>
   </ul>
+  </section>
 
+  </div>
   </div>
 </main>
 
 <footer class="site-footer">
   <div class="inner">
-    Sources: Statistics Bureau of Japan via e-Stat · Bank of Japan · Ministry of Finance ·
-    Ministry of Agriculture, Forestry and Fisheries · Japan National Tourism Organization ·
-    Japan Tourism Agency · Ministry of Internal Affairs and Communications · company filings
-    via EDINET (Financial Services Agency). Published values are official; rates of change
-    and aggregates are calculated on this platform.
+    Sources: Japanese government statistics via e-Stat and the ministries · Bank of Japan ·
+    Financial Services Agency (EDINET) · Japan Exchange Group · U.S. Bureau of Labor
+    Statistics · U.S. Treasury · U.S. Securities and Exchange Commission · Census and Statistics
+    Department, Hong Kong · full list on the <a href="methodology.html#license">Methodology</a>
+    page. Published values are official; rates of change and aggregates are calculated on this
+    platform.
   </div>
 </footer>
 
 <script src="assets/format.js"></script>
+<script src="assets/echarts.min.js"></script>
+<script src="assets/charts.js"></script>
 <script src="assets/brandmarks.js"></script>
 <script>
-initThemeToggle();
+// demoChart is declared further down; the redraw runs only after a click.
+initThemeToggle(function () { if (demoChart) demoChart.render(); });
 paintBrandMarks();
 function wireCopy(btnId, textId) {
   var btn = document.getElementById(btnId);
@@ -219,6 +303,128 @@ function wireCopy(btnId, textId) {
 wireCopy("copy-url", "mcp-url");
 wireCopy("copy-cmd", "cc-cmd");
 wireCopy("copy-codex", "cx-cmd");
+
+// The example lookups are real calls to this server's MCP endpoint, made the
+// same way an assistant makes them, so the figures shown are the live ones.
+var demoChart = null;
+function mcpCall(name, args) {
+  return fetch("/mcp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name: name, arguments: args } }),
+  }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (msg) {
+      var res = JSON.parse(msg.result.content[0].text);
+      return res.error ? Promise.reject(res.error) : res;
+    });
+}
+
+(function demoLookup() {
+  var out = document.getElementById("demo-result");
+  var chartEl = document.getElementById("demo-chart");
+  var esc = escapeHtml;
+  var noAnswer = "The server did not answer just now, so there is nothing live to show. " +
+    "Reload the page to try again.";
+  var overview = mcpCall("get_overview", { dataset: "cpi-jp" });
+  var history = mcpCall("get_series",
+    { dataset: "cpi-jp", series: "0001,0161,0178", measure: "yoy", start: "2021-01" });
+
+  overview.then(function (res) {
+    var tiles = (res.data.tiles || []).filter(function (t) { return t.measure === "yoy"; });
+    if (!tiles.length) { out.textContent = noAnswer; return; }
+    var v = res.vintage || {}, p = res.provenance || {};
+    out.innerHTML =
+      "<table><thead><tr><th>Measure</th><th class=\"num\">Year on year</th>" +
+      "<th class=\"num\">Change " + esc(tiles[0].comparison || "") + "</th></tr></thead><tbody>" +
+      tiles.map(function (t) {
+        return "<tr><td>" + esc(t.label.replace(/ · YoY$/, "")) + "</td>" +
+          "<td class=\"num\">" + fmtRate(t.value, 1) + "</td>" +
+          "<td class=\"num\">" + fmtSigned(t.delta_pp, 1, "pp") + "</td></tr>";
+      }).join("") + "</tbody></table>" +
+      "<div class=\"lookup-demo-meta\">" +
+      "<div>" + esc(v.label || "") + " · " + esc(p.credit || "") +
+      " Rates calculated by this platform from the published index.</div>" +
+      (res.data.stale ? "<div class=\"lookup-demo-stale\">This dataset is past its expected release " +
+        "date; the reading above is the latest one held.</div>" : "") +
+      "<div>Citation: <a href=\"" + esc(res.cite) + "\">" +
+      esc(res.cite.replace(/^https?:\/\//, "")) + "</a></div></div>" +
+      "<details><summary>Show calculation</summary>" + esc(tiles[0].calc) + "</details>";
+  }).catch(function () { out.textContent = noAnswer; });
+
+  // The chart names its lines the way the headline table does.
+  Promise.all([history, overview.catch(function () { return null; })]).then(function (both) {
+    var res = both[0], ov = both[1];
+    var names = {};
+    ((ov && ov.data.main_series) || []).forEach(function (m) { names[m.code] = m.label; });
+    var series = res.data.series.map(function (s, i) {
+      return { name: names[s.code] || s.name_en, slot: i + 1, points: s.points };
+    });
+    var v = res.vintage || {}, p = res.provenance || {};
+    var src = (p.credit || "") + " " + (v.label || "") +
+      ". Year-on-year rates calculated by this platform from published index values.";
+    chartEl.innerHTML = "";
+    demoChart = obsChart(chartEl, "line", {
+      series: series, unit: "%", dp: 1, yAxisName: "Year on year, %",
+      trust: "derived", sourceLine: src,
+    });
+    document.getElementById("demo-source").textContent = src;
+    document.getElementById("demo-png").onclick = function () {
+      demoChart.exportPNG("plover-cpi-jp-yoy.png");
+    };
+    document.getElementById("demo-csv").onclick = function () {
+      demoChart.exportCSV("plover-cpi-jp-yoy.csv", [
+        "Plover Analytics — Japan CPI, year on year",
+        p.credit || "",
+        "Release: " + (v.label || "") + " (sha256 " + (v.source_sha256 || "") + ")",
+        "Calculated: " + (res.calc && res.calc.yoy || ""),
+        "Blank means not published, never zero.",
+      ]);
+    };
+  }).catch(function () {
+    chartEl.innerHTML = '<div class="state-error">' + noAnswer + "</div>";
+    document.getElementById("demo-png").disabled = true;
+    document.getElementById("demo-csv").disabled = true;
+  });
+})();
+
+// How far back each section goes. Start years are the first period the
+// catalogue holds for the oldest dataset in the section (catalog coverage.from).
+(function coverageTimeline() {
+  var MARKETS = [
+    { name: "Japan", count: 60, slot: 1, rows: [
+      ["Public finance", 1875], ["Consumer prices", 1946], ["Agriculture and rice", 1951],
+      ["Wages and employment", 1952], ["Corporate accounts by industry", 1954],
+      ["JGB yields", 1974], ["Population", 1975], ["Bank of Japan and banks", 1976],
+      ["GDP", 1994], ["Trade by partner", 2001], ["Margin and investor flows", 2002],
+      ["Tourism", 2003], ["Company filings", null]] },
+    { name: "United States", count: 16, slot: 2, rows: [
+      ["Consumer prices and wages", 1913], ["Employment", 1939], ["Treasury yields", 1990],
+      ["Daily stock prices and events", 2018], ["SEC filings", null]] },
+    { name: "Hong Kong", count: 6, slot: 3, rows: [
+      ["Merchandise trade", 1952], ["GDP", 1973], ["Consumer prices", 1974],
+      ["Labour force", 1985], ["Retail sales", 2004]] },
+  ];
+  var FROM = 1870, TO = new Date().getFullYear() + 1, span = TO - FROM;
+  var pos = function (y) { return ((y - FROM) / span * 100).toFixed(2) + "%"; };
+  var ticks = [1875, 1900, 1925, 1950, 1975, 2000, 2025];
+  var html = '<div class="ct-axis"><span></span><span></span><div class="ct-track">' +
+    ticks.map(function (y) { return '<span style="left:' + pos(y) + '">' + y + "</span>"; }).join("") +
+    "</div></div>";
+  MARKETS.forEach(function (m) {
+    html += '<div class="ct-market">' + m.name + ' <span>' + m.count + " datasets</span></div>";
+    m.rows.forEach(function (r) {
+      html += '<div class="ct-row"><span class="ct-label">' + r[0] + "</span>" +
+        '<span class="ct-year">' + (r[1] ? r[1] : "") + "</span>" +
+        '<div class="ct-track">' + (r[1]
+          ? '<i class="ct-bar s' + m.slot + '" style="left:' + pos(r[1]) + ";width:calc(100% - " +
+            pos(r[1]) + ')"></i>'
+          : '<span class="ct-filed">Filing by filing, as filed</span>') + "</div></div>";
+    });
+  });
+  document.getElementById("cover-time").innerHTML = html;
+})();
+
 </script>
 </body>
 </html>

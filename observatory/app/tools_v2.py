@@ -1709,8 +1709,9 @@ def instructions(compact=False):
     connection; the compact form names each dataset in a few words, for a
     prompt that is re-sent on every step of a run — describe_dataset gives
     the summary when one is needed."""
-    parts = ["This server is the Plover Analytics: Japanese official statistics and "
-             "company disclosures, deep on one market. Datasets by section:"]
+    parts = ["This server is Plover Analytics: official statistics, company disclosures "
+             "and market data for Japan, the United States and Hong Kong. Datasets by "
+             "section:"]
     by = dict((s["id"], s) for s in registry.by_section())
     for sec in registry.SECTIONS:
         ids = [i for i in by[sec["id"]]["datasets"] if registry.available(i)]
