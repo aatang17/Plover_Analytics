@@ -16,7 +16,12 @@ from app import ask_log, visits
 def _scope(path, q, client=("203.0.113.9", 4000), ua=b"Mozilla/5.0 (Macintosh)", **extra):
     from urllib.parse import urlencode
     return {"type": "http", "method": "GET", "path": path, "query_string": urlencode(dict({"q": q}, **extra)).encode("latin-1"),
-            "client": client, "headers": [(b"user-agent", ua), (b"host", b"ploveranalytics.com")]}
+            "client": client, "headers": [(b"user-agent", ua), (b"host", b"ploveranalytics.com"),
+                                          (b"referer", b"https://ploveranalytics.com/")]}
+
+
+# Where a request is placed by the location tables, which the tests do not load.
+_HOME = mock.patch.object(visits.geoip, "lookup", return_value=("JP", "NTT Communications Corporation"))
 
 
 class LogTest(unittest.TestCase):
@@ -101,7 +106,7 @@ class LogTest(unittest.TestCase):
         real = visits.ANALYTICS_DIR, visits.SALT_PATH
         visits.ANALYTICS_DIR, visits.SALT_PATH = self.dir, self.dir / "salt"
         try:
-            with mock.patch.dict("os.environ", {"OUR_ADDRESSES": "198.51.100.0/24, not-an-address"}):
+            with mock.patch.dict("os.environ", {"OUR_ADDRESSES": "198.51.100.0/24, not-an-address"}), _HOME:
                 visits.observe(_scope("/api/v1/us/ask", "typed by a reader"), 200, 1.0)
                 visits.observe(_scope("/api/v1/assistant/preview", "Who owns Nvidia?", via="example"), 200, 1.0)
                 visits.observe(_scope("/api/v1/us/ask", "from our machine", client=("198.51.100.7", 1)), 200, 1.0)
@@ -117,6 +122,29 @@ class LogTest(unittest.TestCase):
         for line in self.lines():
             for k in ("visitor", "country", "network", "ip", "client", "via"):
                 self.assertNotIn(k, line)
+
+    def test_a_machine_asking_is_written_but_never_shown_or_sent(self):
+        real = visits.ANALYTICS_DIR, visits.SALT_PATH
+        visits.ANALYTICS_DIR, visits.SALT_PATH = self.dir, self.dir / "salt"
+        cloud = mock.patch.object(visits.geoip, "lookup", return_value=("US", "Amazon.com, Inc."))
+        bare = _scope("/api/v1/us/ask", "straight at the api")
+        bare["headers"] = [h for h in bare["headers"] if h[0] != b"referer"]
+        try:
+            with _HOME:
+                visits.observe(_scope("/api/v1/us/ask", "typed on our page"), 200, 1.0)
+                visits.observe(bare, 200, 1.0)                 # not sent by our own page
+            with cloud:
+                visits.observe(_scope("/api/v1/us/ask", "from a data centre"), 200, 1.0)
+            visits.flush()
+        finally:
+            visits.ANALYTICS_DIR, visits.SALT_PATH = real
+        self.assertEqual([(x["q"], x["from"]) for x in self.lines()],
+                         [("typed on our page", "reader"), ("straight at the api", "machine"),
+                          ("from a data centre", "machine")])
+        self.assertEqual(self.sent, ["Ask box: typed on our page\nTyped by a reader · answered · full answer"])
+        today = datetime.datetime.utcnow().date()
+        s = ask_log.summary(1, today, today)
+        self.assertEqual([r["q"] for r in s["recent"]], ["typed on our page"])
 
     def test_a_question_from_anyone_but_us_goes_to_telegram_once(self):
         ask_log.note("/api/v1/us/ask", "who owns apple", True, "stock")

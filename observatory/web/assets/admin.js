@@ -1021,11 +1021,13 @@ function liveMarkup(d) {
       ? '<div class="table-wrap"><table class="data" data-no-enhance><thead><tr>' +
         '<th>Page Open Now</th><th class="num">Readers</th></tr></thead><tbody>' +
         rows + "</tbody></table></div>"
-      : '<p class="table-empty">Nobody has asked for anything in the last ' +
+      : '<p class="table-empty">No real reader on the site in the last ' +
         minutes + " minutes.</p>") +
-    '<p class="source-line">A reader counts as here for ' + minutes + " minutes after " +
-    "their last request; an open page reports itself every minute, so somebody sitting " +
-    "still on one page stays counted." + (places ? " Now: " + places + "." : "") + "</p>";
+    '<p class="source-line">Real readers only: the page reported in from their browser, ' +
+    "on a home, office or phone network. Robots and data centres are left out. A reader " +
+    "counts as here for " + minutes + " minutes after their last request; an open page " +
+    "reports itself every minute, so somebody sitting still on one page stays counted." +
+    (places ? " Now: " + places + "." : "") + "</p>";
 }
 
 function refreshLive(target) {
@@ -1093,26 +1095,20 @@ function trafficTab(d, tab) {
   if (tab === "arrivals") {
     return '<div class="admin-section">How Readers Arrived <span class="note">only the sending ' +
       "site is recorded, never the page a reader came from</span></div>" +
-      trafficArrivals(d) + trafficSources(d) + trafficDirect(d) + trafficAI(d);
+      trafficArrivals(d) + trafficSources(d) + trafficDirect(d);
   }
   if (tab === "places") return trafficPlaces(d);
   return trafficOverview(d);
 }
 
 function trafficOverview(d) {
-  // "Visits", never "unique visitors": the identifier rotates daily, so this
-  // is the sum of each day's visitors, not a headcount of people.
-  // People is the strict figure — a script ran, the network is placed and is
-  // not a data centre — and sits beside Visits so the gap between the two is
-  // the first thing read off the row.
-  var confirmed = d.confirmed || {};
+  // Every figure on this page is real readers only (app/visits.py
+  // _is_reader). "Readers" is the sum of each day's readers, not a headcount:
+  // the identifier rotates daily.
   var kpis =
-    kpi(fmtCount(d.visitors), "Visits", "") +
-    kpi(fmtCount(confirmed.people), "People", "") +
-    kpi(fmtCount(d.browser_visits), "Browser Visits", "") +
+    kpi(fmtCount(d.visitors), "Readers", "") +
     kpi(fmtCount(d.pageviews), "Page Views", "") +
-    kpi(fmtCount(d.api_calls + d.mcp_calls), "API Requests", "") +
-    kpi(fmtCount(d.bot_hits), "Automated Hits", "");
+    kpi(fmtDuration((d.dwell || {}).median_seconds), "Median Time on Page", "");
 
   var chart = d.counting_since
     ? '<div class="chart-panel">' +
@@ -1131,8 +1127,8 @@ function trafficOverview(d) {
     '<div id="traffic-live"><p class="admin-loading">Loading live readership…</p></div>' +
     '<div class="admin-section">This Window <span class="note">' +
     escapeHtml(fmtDay(d.from)) + " to " + escapeHtml(fmtDay(d.to)) + "</span></div>" +
-    '<div class="kpi-row">' + kpis + "</div>" + peopleNote(d) +
-    '<div class="admin-section">Daily Readership <span class="note">unique visitors and ' +
+    '<div class="kpi-row">' + kpis + "</div>" + leftOutNote(d) +
+    '<div class="admin-section">Daily Readers <span class="note">readers and ' +
     "page views per day</span></div>" + chart +
     '<div class="admin-section">Most-Read Pages</div>' +
     trafficTable((d.top_pages || []).slice(0, TRAFFIC_TOP), "Page",
@@ -1165,12 +1161,11 @@ function trafficSources(d) {
   var body = rows.map(function (r) {
     return '<tr><td class="mono">' + escapeHtml(r.key) + "</td>" +
       '<td class="num">' + fmtCount(r.visitors) + "</td>" +
-      '<td class="num">' + fmtCount(r.people) + "</td>" +
       '<td class="num">' + fmtCount(r.asked) + "</td>" +
       '<td class="num">' + (signups ? fmtCount(r.signups || 0) : MISSING) + "</td></tr>";
   }).join("");
   return head + '<div class="table-wrap"><table class="data">' +
-    '<thead><tr><th>Tag</th><th class="num">Visits</th><th class="num">People</th>' +
+    '<thead><tr><th>Tag</th><th class="num">Readers</th>' +
     '<th class="num">Asked a Question</th><th class="num">Signed Up</th></tr></thead><tbody>' +
     body + "</tbody></table></div>" +
     (signups ? "" : '<p class="source-line">Sign-ups are not shown: accounts are switched ' +
@@ -1216,7 +1211,7 @@ function trafficAsk(a) {
   var kpis =
     kpi(thisWeek ? fmtCount(thisWeek.reader) : MISSING, "Typed by Readers This Week", "") +
     kpi(fmtCount(a.searches), "Searches", "") +
-    kpi(fmtCount(a.people), "People", "") +
+    kpi(fmtCount(a.people), "Readers", "") +
     kpi(fmtCount(a.distinct_questions), "Different Questions", "") +
     kpi(share, "Answered", "") +
     kpi(fmtDuration(a.median_seconds), "Median Time", "");
@@ -1258,7 +1253,7 @@ function trafficAsk(a) {
 
   var days = (a.daily || []).filter(function (r) { return r.searches; }).slice().reverse();
   var daily = '<div class="table-wrap"><table class="data"><thead><tr><th>Day</th>' +
-    '<th class="num">Searches</th><th class="num">People</th><th class="num">Answered</th>' +
+    '<th class="num">Searches</th><th class="num">Readers</th><th class="num">Answered</th>' +
     '<th class="num">Not Answered</th></tr></thead><tbody>' +
     trafficFold(days, "ask_daily").map(function (r) {
       return '<tr><td class="ask-when" data-sort="' + escapeHtml(r.day) + '">' + escapeHtml(fmtDay(r.day)) + "</td>" +
@@ -1299,68 +1294,26 @@ function trafficAsk(a) {
   return head + '<div class="kpi-row">' + kpis + "</div>" + weekly +
     '<div class="admin-section">Searches by Day <span class="note">days with at least one ' +
     "search</span></div>" + daily + most + recent +
-    '<p class="source-line">Searches and questions from the ask log; people from the visit ' +
-    "log, counted as visitors per day, so one person on two days is two. Robots are left out. " +
+    '<p class="source-line">Real readers only. Searches and questions from the ask log; readers ' +
+    "from the visit log, counted per day, so one person on two days is two. A question not sent " +
+    "by our own page, or sent from a data centre, is left out, as are robots. " +
     "A repeated question answered from the server\u2019s cache is still counted. Answered " +
     "means the box gave an answer, not that the answer was what the reader wanted. Typed by " +
     "readers leaves out clicks on the page\u2019s own example questions and our own checks " +
     "(our addresses and browsers signed in to this console); questions asked before 21 October 2026 were not " +
-    "marked.</p>";
+    "marked, and questions before 28 October 2026 could not be checked for machines.</p>";
 }
 
-/* What each AI fetcher was doing. Three different facts, so three labels:
-   nobody read the page when it was taken for training, and somebody was asking
-   about it when it was fetched on request. */
-var AI_PURPOSE = {
-  asked: { label: "Someone asked about this page", cls: "badge-ok" },
-  search: { label: "Building an index that can cite us", cls: "badge-info" },
-  training: { label: "Taking the text to train on", cls: "badge-neutral" },
-};
-
-/* Assistants that fetched pages, and readers who arrived from an assistant's
-   answer. Given its own section because it answers a question nothing else
-   here can: is anything out there answering questions about this site. */
-function trafficAI(d) {
-  var rows = d.ai_agents || [];
-  var referred = d.ai_referrals || { views: 0, visitors: 0 };
-  var note = referred.views
-    ? fmtCount(referred.views) + " page view" + (referred.views === 1 ? "" : "s") +
-      " arrived from an assistant\u2019s answer"
-    : "no reader has arrived from an assistant\u2019s answer yet";
-  var body = rows.length
-    ? '<div class="table-wrap"><table class="data">' +
-      "<thead><tr><th>Assistant</th><th>What it was doing</th>" +
-      '<th class="num">Requests</th><th class="num">Visits</th>' +
-      "<th>Most-requested page</th><th>Last seen</th></tr></thead><tbody>" +
-      rows.map(function (r) {
-        var p = AI_PURPOSE[r.purpose] ||
-          { label: r.purpose || MISSING, cls: "badge-neutral" };
-        return "<tr><td>" + escapeHtml(r.key) + "</td>" +
-          '<td><span class="badge ' + p.cls + '">' + escapeHtml(p.label) + "</span></td>" +
-          '<td class="num">' + fmtCount(r.views) + "</td>" +
-          '<td class="num">' + fmtCount(r.visitors) + "</td>" +
-          '<td class="mono">' + (r.top_page ? escapeHtml(r.top_page) : MISSING) + "</td>" +
-          '<td class="num">' + (r.last ? escapeHtml(fmtStamp(r.last)) : MISSING) +
-          "</td></tr>";
-      }).join("") + "</tbody></table></div>"
-    : '<p class="table-empty">No assistant has fetched a page in this window. ' +
-      "They are identified by the name they send, so one that sends none is " +
-      "counted as an ordinary crawler instead.</p>";
-  return '<div class="admin-section">AI Assistants ' +
-    '<span class="note">' + escapeHtml(note) + "</span></div>" + body;
-}
-
-/* What the People figure is made of, so a small number can be read: how many
-   visits ran the page's script, how many were placed, how many were data
-   centres. A line under the row it qualifies, not a panel. */
-function peopleNote(d) {
-  var c = d.confirmed;
-  if (!c || !d.visitors) return "";
-  return '<p class="admin-page-sub">Of ' + fmtCount(d.visitors) + " visits, " +
-    fmtCount(c.scripted) + " reported a reading time, " + fmtCount(c.placed) +
-    " were placed on a network, and " + fmtCount(c.hosting) +
-    " came from a data centre. <strong>People</strong> counts the visits that reported a " +
-    "time from a placed network that is not a data centre — see Show calculation.</p>";
+/* What every figure on the page leaves out, so a small number can be read as
+   "the rest were machines" rather than "counting is broken". A line under the
+   row it qualifies, not a panel. */
+function leftOutNote(d) {
+  var o = d.left_out;
+  if (!o) return "";
+  return '<p class="admin-page-sub">Real readers only. Left out of every figure on this ' +
+    "page: " + fmtCount(o.robot_requests) + " requests from robots, and " +
+    fmtCount(o.visits) + " visits whose page never reported in from a browser or that " +
+    "came from a data centre — see Show calculation.</p>";
 }
 
 /* A share of a total, where a real but tiny share must not read as zero. */
@@ -1452,19 +1405,9 @@ function trafficTable(rows, label, opts) {
       ? '<a href="' + escapeHtml(r.key) + '" target="_blank" rel="noopener">' +
         escapeHtml(r.key) + "</a>"
       : escapeHtml(opts.label ? opts.label(r.key) : r.key);
-    if (r.hosting) {
-      name += ' <span class="badge badge-neutral" title="A cloud, hosting or CDN ' +
-        'network: its visits are never counted as people">Data Centre</span>';
-    }
     return "<tr><td" + (opts.plain ? "" : ' class="mono"') + ">" + name + "</td>" +
       '<td class="num">' + fmtCount(r.views) + "</td>" +
       '<td class="num">' + fmtCount(r.visitors) + "</td>" +
-      (opts.browser
-        ? '<td class="num">' + fmtCount(r.browser_visits) + "</td>"
-        : "") +
-      (opts.people
-        ? '<td class="num">' + fmtCount(r.people) + "</td>"
-        : "") +
       (opts.dwell
         ? '<td class="num"' +
           (r.dwell_samples
@@ -1477,9 +1420,7 @@ function trafficTable(rows, label, opts) {
   return '<div class="table-wrap"><table class="data">' +
     "<thead><tr><th>" + escapeHtml(label) + '</th><th class="num">' +
     escapeHtml(opts.viewsLabel || "Page Views") + '</th>' +
-    '<th class="num">Visits</th>' +
-    (opts.browser ? '<th class="num">Browser Visits</th>' : "") +
-    (opts.people ? '<th class="num">People</th>' : "") +
+    '<th class="num">Readers</th>' +
     (opts.dwell ? '<th class="num">Median Time on Page</th>' : "") +
     "</tr></thead><tbody>" + body + "</tbody></table></div>";
 }
@@ -1489,13 +1430,12 @@ function trafficTable(rows, label, opts) {
    detection rather than "nobody followed a link". */
 function trafficArrivals(d, max) {
   var rows = (d.top_referrers || []).map(function (r) {
-    return { key: r.key, views: r.views, visitors: r.visitors, people: r.people,
-             ai: r.ai, direct: false };
+    return { key: r.key, views: r.views, visitors: r.visitors, ai: r.ai, direct: false };
   });
   var direct = d.direct || { views: 0, visitors: 0 };
   if (direct.views) {
     rows.push({ key: "Direct — no referring link", views: direct.views,
-                visitors: direct.visitors, people: direct.people, direct: true });
+                visitors: direct.visitors, direct: true });
   }
   if (!rows.length) {
     return '<p class="table-empty">No page reads in this window.</p>';
@@ -1514,13 +1454,11 @@ function trafficArrivals(d, max) {
     return "<tr>" + name +
       '<td class="num">' + fmtCount(r.views) + "</td>" +
       '<td class="num">' + share + "%</td>" +
-      '<td class="num">' + fmtCount(r.visitors) + "</td>" +
-      '<td class="num">' + fmtCount(r.people) + "</td></tr>";
+      '<td class="num">' + fmtCount(r.visitors) + "</td></tr>";
   }).join("");
   return '<div class="table-wrap"><table class="data">' +
     '<thead><tr><th>Source</th><th class="num">Page Views</th>' +
-    '<th class="num">Share</th><th class="num">Visits</th>' +
-    '<th class="num">People</th></tr></thead><tbody>' +
+    '<th class="num">Share</th><th class="num">Readers</th></tr></thead><tbody>' +
     body + "</tbody></table></div>" + (max ? "" : trafficMore(count, "arrivals"));
 }
 
@@ -1532,8 +1470,7 @@ function trafficDirect(d) {
     '<span class="note">the closest thing to a source a direct arrival has' +
     "</span></div>" +
     trafficTable(trafficFold(d.direct_networks, "direct_networks"), "Network",
-      { plain: true, people: true,
-        empty: "No direct arrival could be attributed to a network." }) +
+      { plain: true, empty: "No direct arrival could be attributed to a network." }) +
     trafficMore((d.direct_networks || []).length, "direct_networks");
 }
 
@@ -1553,7 +1490,7 @@ function trafficDirectPages(d) {
 function trafficPlaces(d) {
   var geo = d.geoip || {};
   if (!geo.loaded) {
-    return '<div class="admin-section">Requests by Country</div>' +
+    return '<div class="admin-section">Readers by Country</div>' +
       '<p class="table-empty">Location tables are not loaded' +
       (geo.error ? ", so nothing can be placed yet. The server reported: " +
         escapeHtml(geo.error) : " yet. They are fetched once a month and read in " +
@@ -1561,23 +1498,16 @@ function trafficPlaces(d) {
         "after a restart.") + "</p>";
   }
 
-  var placed = (d.located_hits || 0) + (d.unlocated_hits || 0);
-  var share = placed ? Math.round((d.located_hits / placed) * 100) : 0;
-  var coverage = fmtCount(d.located_hits) + " of " + fmtCount(placed) +
-    " counted requests placed (" + share + "%)";
-
-  return '<div class="admin-section">Requests by Country ' +
-    '<span class="note">' + escapeHtml(coverage) + "</span></div>" +
+  return '<div class="admin-section">Readers by Country</div>' +
     trafficTable(trafficFold(d.top_countries, "countries"), "Country",
-      { plain: true, label: countryName, viewsLabel: "Requests", browser: true,
-        people: true, empty: "No request in this window could be placed." }) +
+      { plain: true, label: countryName,
+        empty: "No reader in this window could be placed in a country." }) +
     trafficMore((d.top_countries || []).length, "countries") +
-    '<div class="admin-section">Requests by Network Operator ' +
-    '<span class="note">the network a request came from, which is not the same ' +
-    "as who the reader works for</span></div>" +
+    '<div class="admin-section">Readers by Network Operator ' +
+    '<span class="note">the network a reader came from, which is not the same ' +
+    "as who they work for</span></div>" +
     trafficTable(trafficFold(d.top_networks, "networks"), "Network",
-      { plain: true, viewsLabel: "Requests", browser: true, people: true,
-        empty: "No request in this window could be attributed to a network." }) +
+      { plain: true, empty: "No reader in this window." }) +
     trafficMore((d.top_networks || []).length, "networks") +
     '<p class="source-line">Location and network from ' +
     '<a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by ' +
@@ -1587,12 +1517,24 @@ function trafficPlaces(d) {
 
 function trafficCalc(d) {
   return '<details class="calc"><summary>Show calculation</summary><div class="calc-body">' +
-    "<p>A <strong>visitor</strong> is one address-and-browser combination on one UTC day, " +
-    "identified by a salted one-way hash. The salt stays on the data volume, so a day’s " +
-    "visitors can be counted without being identified and cannot be matched across days.</p>" +
-    "<p>Because that identifier deliberately changes every day, a <strong>visit</strong> is " +
-    "one visitor on one day, and the figure for a window is the sum of its days — not a " +
-    "count of people. Someone who reads on ten days is ten visits.</p>" +
+    "<p><strong>Only real readers are counted, everywhere on this page.</strong> A " +
+    "visitor is a reader when three things hold on the same day. Their page reported how " +
+    "long it was open, which only the script in the page can send, so a real browser " +
+    "showed it. Their address was placed on a network. And that network is not a cloud, " +
+    "host or CDN — Amazon, Google, Microsoft, DigitalOcean, OVH, Hetzner, Tencent, " +
+    "Cloudflare and the like. Each test alone is weak; a scraper rarely passes all three. " +
+    "Robots that name themselves, Google’s own page renderers and our own machines " +
+    "and console browsers are never counted at all. In this window that left out " +
+    fmtCount((d.left_out || {}).robot_requests) + " robot requests and " +
+    fmtCount((d.left_out || {}).visits) + " visits that failed the test.</p>" +
+    "<p>It is deliberately an undercount. A reader on a phone using iCloud Private Relay " +
+    "leaves through Cloudflare or Akamai and is not counted; nor is a page closed within " +
+    "a second, or opened with scripts blocked. It is still not proof that a person read " +
+    "anything: a scraper can drive a real browser from a home connection.</p>" +
+    "<p>A reader is one address-and-browser combination on one UTC day, identified by a " +
+    "salted one-way hash. The salt stays on the data volume, so a day’s readers can be " +
+    "counted without being identified and cannot be matched across days. The figure for a " +
+    "window is the sum of its days — not a headcount. Someone who reads on ten days is ten.</p>" +
     "<p>A reader who accepts the banner is counted differently: they are given a cookie " +
     "holding a random number and the day it was issued, and their events are keyed on a " +
     "hash of it instead of on the daily one. That is what makes <strong>returning " +
@@ -1602,69 +1544,30 @@ function trafficCalc(d) {
     "before the window opened; <strong>first seen in this window</strong> accepted inside " +
     "it. Clearing cookies makes a reader new again, and a reader who declines, or who " +
     "never answers, is counted only by the daily identity.</p>" +
-    "<p><strong>Reading now</strong> is counted in the server's memory, not from the log: " +
-    "visitors who have asked for something in the last five minutes. An open page reports " +
-    "itself once a minute so that a reader sitting on one page does not vanish, which " +
-    "means anything without scripts — a terminal, a blocked browser — drops out of this " +
-    "figure after five quiet minutes while still being counted everywhere else. Nothing " +
-    "about it is stored, so it cannot be asked about yesterday and a restart empties it.</p>" +
+    "<p><strong>Right now</strong> is counted in the server's memory, not from the log, by " +
+    "the same test: a page that has reported in from its browser, on a network that is " +
+    "not a data centre, with a request in the last five minutes. An open page reports " +
+    "itself as it loads and once a minute after, so a reader sitting on one page does not " +
+    "vanish. Nothing about it is stored, so it cannot be asked about yesterday and a " +
+    "restart empties it.</p>" +
     "<p><strong>Time on page</strong> is reported by the page itself when it is closed or " +
     "hidden: the seconds it was actually visible, so a tab in the background does not " +
     "accrue time. Anything over an hour is recorded as an hour — that page was left open, " +
-    "not read. A page closed within a second of opening, or opened without scripts, " +
-    "reports nothing and is not in the median. <strong>Visit length</strong> is separate " +
-    "and needs no script: the span of one visitor's requests, ended by half an hour of " +
-    "silence, counting page reads and the chart data those pages fetched. A visit of one " +
-    "page has no span to measure, so it is reported as <strong>left after one page</strong> " +
-    "rather than averaged in as a very short visit.</p>" +
+    "not read. <strong>Visit length</strong> is the span of one reader's requests, ended " +
+    "by half an hour of silence, counting page reads and the chart data those pages " +
+    "fetched. A visit of one page has no span to measure, so it is reported as " +
+    "<strong>left after one page</strong> rather than averaged in as a very short visit.</p>" +
     "<p>A <strong>page view</strong> is a successful page request. Styles, scripts, images, " +
     "the admin console itself and the internal cache warm-up are not counted; a page request " +
-    "that returned an error is recorded but is not counted as a page view. " +
-    "<strong>API requests</strong> covers both the public API and connector traffic — of " +
-    "them, " + fmtCount(d.api_in_page) + " were this site's own pages fetching the data " +
-    "for a chart and " + fmtCount(d.api_external) + " came from outside it. Only the " +
-    "second is somebody using the API. Requests recorded before this split existed are " +
-    "in neither figure.</p>" +
+    "that returned an error is not counted as a page view.</p>" +
     "<p>A <strong>source</strong> is the site that linked a reader here. Arrivals with no " +
     "referring link are counted as direct rather than dropped: a typed address, a bookmark, " +
-    "and a link opened from a mail or messaging app all send nothing, and so do scripts. " +
-    "A reader moving between our own pages is not a new arrival and is not counted again.</p>" +
-    "<p><strong>Browser visits</strong> counts visits that also asked for the styles, " +
-    "images and scripts a page needs before it can be shown. A browser displaying the " +
-    "page to somebody has to fetch them; a script taking the text and leaving does not. " +
-    "It is much better evidence than the browser name, which anything can copy.</p>" +
-    "<p>It still is not proof that a person read anything. A scraper can drive a real " +
-    "browser, and a page can be opened in a tab nobody looks at. Knowing whether someone " +
-    "actually read a page would take a script running in the browser watching them, which " +
-    "this product deliberately does not do. Counted once per visitor per day, and the " +
-    "asset requests themselves are never counted as traffic or stored.</p>" +
-    "<p><strong>People</strong> is the strict figure, and the one to quote: a visit that " +
-    "passes three tests at once. Its page reported a reading time, which only the script " +
-    "in the page can send, so a real browser rendered it. Its address was placed on a " +
-    "network. And that network is not a cloud, host or CDN — Amazon, Google, Microsoft, " +
-    "DigitalOcean, OVH, Hetzner, Tencent, Cloudflare and the like, marked " +
-    "<span class=\"badge badge-neutral\">Data Centre</span> in the network table. Each " +
-    "test alone is weak; a scraper rarely passes all three. It is deliberately an " +
-    "undercount: a reader on a phone using iCloud Private Relay leaves through Cloudflare " +
-    "or Akamai and is not counted, and a page closed within a second reports no time. " +
-    "The three parts are shown beside the figure so a zero can be read — no reading " +
-    "times, nothing placed, or everything from a data centre.</p>" +
-    "<p><strong>AI assistants</strong> are counted inside automated hits, never as " +
-    "readers, but are listed separately because the three things they do are not the " +
-    "same fact. <em>Taking the text to train on</em> means no person was at the other " +
-    "end. <em>Building an index</em> means one may arrive later. <em>Someone asked " +
-    "about this page</em> means a person was asking that assistant about it at that " +
-    "moment — they read the answer, not the page, so it is still not a visit. " +
-    "Each is identified by the name the fetcher sends, which anything can copy, and " +
-    "one that sends no name is counted as an ordinary crawler. The figure beside the " +
-    "table is a different thing and is a person: page reads whose referrer was an " +
-    "assistant, meaning a reader followed a citation here out of an answer.</p>" +
-    "<p>Our own machines and browsers signed in to this console are not counted.</p>" +
-    "<p><strong>Automated hits</strong> — crawlers, uptime monitors, the platform " +
-    "healthcheck and anything sending no browser identification — are counted separately " +
-    "and excluded from every other figure here.</p>" +
+    "and a link opened from a mail or messaging app all send nothing. A reader moving " +
+    "between our own pages is not a new arrival and is not counted again. A source marked " +
+    "<span class=\"badge badge-ok\">AI Answer</span> is an assistant such as ChatGPT: the " +
+    "reader followed a citation here out of its answer.</p>" +
     "<p>These are estimates, not exact headcounts. A whole office behind one address on the " +
-    "same browser version counts as one visitor, while one person reading on a laptop and a " +
+    "same browser version counts as one reader, while one person reading on a laptop and a " +
     "phone counts as two.</p>" +
     "<p><strong>Country and network</strong> are looked up from the address while the request " +
     "is being handled, and only the result is kept — the address is still never written down. " +
@@ -1688,12 +1591,10 @@ function trafficChartCfg(d) {
   var known = d.daily.filter(function (r) { return r.visitors !== null; }).length;
   return {
     series: [
-      { name: "Visitors", slot: 1,
+      { name: "Readers", slot: 1,
         points: d.daily.map(function (r) { return [r.date, r.visitors]; }) },
       { name: "Page Views", slot: 2,
         points: d.daily.map(function (r) { return [r.date, r.pageviews]; }) },
-      { name: "People", slot: 3,
-        points: d.daily.map(function (r) { return [r.date, r.people]; }) },
     ],
     dp: 0,
     yAxisDp: 0,
@@ -1781,17 +1682,16 @@ function trafficDrawChart(d) {
       "Plover Analytics — internal traffic",
       "Counted by the server from its own request log. Not an official statistic.",
       "Window: " + d.from + " to " + d.to,
-      "Visitors = distinct address-and-browser hashes on that UTC day",
-      "The hash rotates daily by design, so days cannot be summed into people",
-      "People = visitors whose page reported a reading time (a script ran in a browser),",
-      "placed on a network that is not a cloud, host or CDN; the strict reading, so an",
-      "undercount: readers behind iCloud Private Relay leave through a CDN and are excluded",
-      "Page views = successful page requests; assets and the admin console excluded",
-      "Automated hits (crawlers, monitors, healthchecks) excluded from both series",
-      "Our own machines and browsers signed in to the admin console are not counted",
+      "Real readers only: a visitor whose page reported a reading time (a script ran in a",
+      "browser), placed on a network that is not a cloud, host or CDN; the strict reading,",
+      "so an undercount: readers behind iCloud Private Relay leave through a CDN and are excluded",
+      "Robots, Google's own renderers, our own machines and console browsers are never counted",
+      "Readers = distinct address-and-browser hashes on that UTC day that pass the test above",
+      "The hash rotates daily by design, so days cannot be summed into a headcount",
+      "Page views = successful page requests by those readers; assets and the admin console excluded",
       "An empty cell is a day before counting began, which is not the same as zero",
       "Time on page is reported by the page when hidden or closed; visit length is the",
-      "span of one visitor's requests, ended by 30 minutes of silence",
+      "span of one reader's requests, ended by 30 minutes of silence",
       "Returning readers are those carrying an accepted cookie; the rest cannot be",
       "followed across days by design",
       "Country and network: IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0",

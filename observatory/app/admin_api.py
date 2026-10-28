@@ -726,7 +726,7 @@ def visit_summary(request: Request, days: int = 30):
                 continue
             row = rows.get(tag)
             if row is None:
-                row = {"key": tag, "views": 0, "visitors": 0, "people": 0, "asked": 0}
+                row = {"key": tag, "views": 0, "visitors": 0, "asked": 0}
                 out["sources"].append(row)
             row["signups"] = n
         for row in out["sources"]:

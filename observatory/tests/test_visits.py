@@ -184,14 +184,15 @@ class AIAgentTest(unittest.TestCase):
         for host in ("www.google.com", "asiaecon.substack.com", "", None):
             self.assertFalse(visits.is_ai_referrer(host), host)
 
-    def test_an_assistant_is_reported_apart_from_the_crawlers(self):
+    def test_an_assistant_is_never_a_reader_but_its_citation_is(self):
         now = datetime.datetime.utcnow().replace(microsecond=0)
         at = now.isoformat() + "Z"
-        visits._record({"at": at, "visitor": "ai-asked", "path": "/holdings.html",
+        before = visits.summary(1)
+        visits._record({"at": at, "visitor": "ai-asked", "path": "/ai-only.html",
                         "kind": "page", "status": 200, "ref": None, "internal": False,
                         "country": "US", "network": "OpenAI", "bot": True,
                         "agent": "ChatGPT", "agent_purpose": "asked"})
-        visits._record({"at": at, "visitor": "ai-crawl", "path": "/cpi.html",
+        visits._record({"at": at, "visitor": "ai-crawl", "path": "/ai-only.html",
                         "kind": "page", "status": 200, "ref": None, "internal": False,
                         "country": "US", "network": "Amazon.com, Inc.", "bot": True,
                         "agent": "OpenAI GPTBot", "agent_purpose": "training"})
@@ -200,16 +201,14 @@ class AIAgentTest(unittest.TestCase):
                         "kind": "page", "status": 200, "ref": "chatgpt.com",
                         "internal": False, "country": "GB",
                         "network": "British Telecommunications", "bot": False})
+        visits._record({"at": at, "visitor": "ai-reader", "kind": "dwell",
+                        "path": "/holdings.html", "seconds": 30, "bot": False})
         visits.flush()
 
         got = visits.summary(1)
-        agents = dict((r["key"], r) for r in got["ai_agents"])
-        self.assertEqual(agents["ChatGPT"]["purpose"], "asked")
-        self.assertEqual(agents["ChatGPT"]["top_page"], "/holdings.html")
-        self.assertEqual(agents["OpenAI GPTBot"]["purpose"], "training")
-        # Counted as automation, never as readers.
-        self.assertNotIn("ai-asked", [r["key"] for r in got["ai_agents"]])
-        self.assertGreaterEqual(got["bot_hits"], 2)
+        self.assertNotIn("ai_agents", got)
+        self.assertNotIn("/ai-only.html", [r["key"] for r in got["top_pages"]])
+        self.assertEqual(got["left_out"]["robot_requests"] - before["left_out"]["robot_requests"], 2)
         self.assertGreaterEqual(got["ai_referrals"]["views"], 1)
         row = [r for r in got["top_referrers"] if r["key"] == "chatgpt.com"][0]
         self.assertTrue(row["ai"])
@@ -217,11 +216,12 @@ class AIAgentTest(unittest.TestCase):
         self.assertTrue(all(not r["ai"] for r in google))
 
 
-class PeopleTest(unittest.TestCase):
-    """The strict figure: a reading time, a placed network, not a data centre.
-    Written straight into the log, so the test is of the summary alone."""
+class ReadersOnlyTest(unittest.TestCase):
+    """Every figure is real readers only: a reading time, a placed network,
+    not a data centre. Written straight into the log, so the test is of the
+    summary alone."""
 
-    def test_only_a_scripted_visit_off_a_data_centre_is_a_person(self):
+    def test_only_a_scripted_visit_off_a_data_centre_is_counted_anywhere(self):
         now = datetime.datetime.utcnow().replace(microsecond=0)
         at = now.isoformat() + "Z"
 
@@ -241,24 +241,22 @@ class PeopleTest(unittest.TestCase):
             page("pp-silent", "KDDI CORPORATION"),                     # a placed ISP, no script report
             page("pp-unplaced", None), dwell("pp-unplaced"),            # ran the script, not placed
         ]
+        before = visits.summary(1)
+        got = visits.summary(1)
+        self.assertEqual(got["visitors"], before["visitors"])
         for event in events:
             visits._record(event)
         visits.flush()
-
         got = visits.summary(1)
-        self.assertEqual(got["confirmed"]["people"], 1)
-        self.assertGreaterEqual(got["confirmed"]["scripted"], 3)
-        self.assertGreaterEqual(got["confirmed"]["hosting"], 1)
+        self.assertEqual(got["visitors"] - before["visitors"], 1)
+        self.assertEqual(got["left_out"]["visits"] - before["left_out"]["visits"], 3)
         google = [r for r in got["top_referrers"] if r["key"] == "www.google.com"][0]
-        self.assertEqual(google["visitors"], 4)
-        self.assertEqual(google["people"], 1)
+        self.assertEqual(google["visitors"], 1)
         networks = dict((r["key"], r) for r in got["top_networks"])
-        self.assertTrue(networks["Amazon.com, Inc."]["hosting"])
-        self.assertFalse(networks["NTT Communications Corporation"]["hosting"])
-        self.assertEqual(networks["NTT Communications Corporation"]["people"], 1)
-        self.assertEqual(networks["Amazon.com, Inc."]["people"], 0)
-        today = got["daily"][-1]
-        self.assertEqual(today["people"], 1)
+        self.assertEqual(networks["NTT Communications Corporation"]["visitors"], 1)
+        for machine in ("Amazon.com, Inc.", "KDDI CORPORATION"):
+            self.assertNotIn(machine, networks)
+        self.assertEqual(got["daily"][-1]["visitors"] - before["daily"][-1]["visitors"], 1)
 
     def test_googles_own_machines_are_not_arrivals_from_google(self):
         # Google's renderers send a browser's user agent and a Google search
@@ -272,8 +270,10 @@ class PeopleTest(unittest.TestCase):
                     "kind": "page", "status": 200, "ref": "www.google.co.jp",
                     "internal": False, "country": "CA", "network": network, "bot": False}
 
-        visits._record(from_google("gm-renderer", "Google LLC"))
-        visits._record(from_google("gm-fiber", "Google Fiber Inc."))
+        for visitor, network in (("gm-renderer", "Google LLC"), ("gm-fiber", "Google Fiber Inc.")):
+            visits._record(from_google(visitor, network))
+            visits._record({"at": at, "visitor": visitor, "kind": "dwell", "path": "/stakes.html",
+                            "seconds": 20, "bot": False})
         visits.flush()
         got = visits.summary(1)
 
@@ -281,7 +281,7 @@ class PeopleTest(unittest.TestCase):
             rows = [r for r in summary["top_referrers"] if r["key"] == "www.google.co.jp"]
             return rows[0]["visitors"] if rows else 0
         self.assertEqual(google_visitors(got) - google_visitors(before), 1)
-        self.assertEqual(got["bot_hits"] - before["bot_hits"], 1)
+        self.assertEqual(got["left_out"]["robot_requests"] - before["left_out"]["robot_requests"], 1)
         self.assertTrue(visits.is_google_machine("Google LLC"))
         self.assertFalse(visits.is_google_machine("Google Fiber Inc."))
         self.assertFalse(visits.is_google_machine(None))
@@ -441,6 +441,11 @@ class DailyTotalsTest(unittest.TestCase):
                 event.update(extra)
                 f.write(json.dumps(event) + "\n")
 
+    def read(self, *visitors):
+        """The page's own report for each, which makes it a reader."""
+        return [("00:00:30Z", {"visitor": v, "kind": "dwell", "seconds": 20, "view": "r-" + v})
+                for v in visitors]
+
     def fresh(self, days=30):
         visits._reset_folds()
         return visits.summary(days)
@@ -454,42 +459,69 @@ class DailyTotalsTest(unittest.TestCase):
         self.lines([("01:00:00Z", {"visitor": "a", "ref": "substack.com"}),
                     ("01:10:00Z", {"visitor": "a", "path": "/cpi.html"}),
                     ("02:00:00Z", {"visitor": "bot1", "bot": True, "agent": "GPTBot", "agent_purpose": "training"}),
-                    ("03:00:00Z", {"visitor": "b", "kind": "api", "path": "/api/v1/us/ask", "internal": True})])
+                    ("03:00:00Z", {"visitor": "b", "kind": "api", "path": "/api/v1/us/ask", "internal": True}),
+                    ("03:30:00Z", {"visitor": "e", "path": "/never-read.html"})] + self.read("a"))
         first = visits.summary(30)
         self.assertEqual(first["pageviews"], 2)
         self.lines([("04:00:00Z", {"visitor": "a", "path": "/macro.html", "since": "2026-09-01"}),
                     ("04:05:00Z", {"visitor": "a", "kind": "dwell", "seconds": 40, "view": "v1"}),
-                    ("05:00:00Z", {"visitor": "c", "kind": "browser"})])
+                    ("05:00:00Z", {"visitor": "c", "kind": "browser"})] + self.read("b"))
         with open(str(self.path), "a", encoding="utf-8") as f:
             f.write('{"at": "%sT06:00:00Z", "kind": "pa' % self.today)   # still being written
         again = visits.summary(30)
-        self.assertEqual((again["pageviews"], again["visitors"], again["bot_hits"]), (3, 2, 1))
+        self.assertEqual((again["pageviews"], again["visitors"], again["left_out"]["robot_requests"]), (3, 2, 1))
+        self.assertEqual(again["left_out"]["visits"], 2, "e never reported in; c only fetched styles")
         self.same(again, self.fresh())
         with open(str(self.path), "a", encoding="utf-8") as f:
-            f.write('ge", "path": "/", "status": 200, "visitor": "d", "bot": false}\n')
+            f.write('ge", "path": "/", "status": 200, "visitor": "a", "bot": false}\n')
         done = visits.summary(30)
         self.assertEqual(done["pageviews"], 4, "the finished line is read once, whole")
         self.same(done, self.fresh())
 
     def test_a_rewritten_log_is_read_again_from_the_start(self):
-        self.lines([("01:00:00Z", {"visitor": "a"}), ("02:00:00Z", {"visitor": "b"})])
+        self.lines([("01:00:00Z", {"visitor": "a"}), ("02:00:00Z", {"visitor": "b"})] + self.read("a", "b"))
         self.assertEqual(visits.summary(30)["visitors"], 2)
         self.lines([("01:00:00Z", {"visitor": "z"}), ("02:00:00Z", {"visitor": "z", "path": "/x.html"}),
-                    ("03:00:00Z", {"visitor": "y"})], mode="w")
+                    ("03:00:00Z", {"visitor": "y"})] + self.read("z", "y"), mode="w")
         got = visits.summary(30)
         self.assertEqual((got["visitors"], got["pageviews"]), (2, 3))
         self.same(got, self.fresh())
 
     def test_a_long_log_is_read_over_several_loads(self):
-        self.lines([("01:%02d:00Z" % i, {"visitor": "v%d" % i}) for i in range(10)])
+        self.lines([("01:%02d:00Z" % i, {"visitor": "v%d" % i}) for i in range(10)] +
+                   self.read(*["v%d" % i for i in range(10)]))
         with mock.patch.object(visits, "MAX_LINES", 4):
             first = visits.summary(30)
             self.assertTrue(first["truncated"])
-            visits.summary(30)
-            last = visits.summary(30)
+            for _ in range(5):
+                last = visits.summary(30)
         self.assertFalse(last["truncated"])
         self.assertEqual(last["pageviews"], 10)
         self.same(last, self.fresh())
+
+
+    def test_a_past_day_keeps_only_its_readers(self):
+        day = (datetime.datetime.utcnow() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
+        path = self.dir / ("visits-%s.jsonl" % day[:7])
+
+        def line(at, extra):
+            event = {"at": "%sT%s" % (day, at), "kind": "page", "path": "/", "status": 200,
+                     "internal": False, "country": "SG", "network": "Singtel", "bot": False}
+            event.update(extra)
+            return json.dumps(event) + "\n"
+        with open(str(path), "a", encoding="utf-8") as f:
+            f.write(line("01:00:00Z", {"visitor": "old-reader"}))
+            f.write(line("01:01:00Z", {"visitor": "old-reader", "kind": "dwell", "seconds": 9}))
+            f.write(line("02:00:00Z", {"visitor": "old-scraper", "path": "/x.html"}))
+        got = visits.summary(30)
+        self.assertEqual((got["visitors"], got["pageviews"], got["left_out"]["visits"]), (1, 1, 1))
+        self.assertEqual(visits._DAYS[day]["settled"], {"old-reader"})
+        self.assertEqual(visits._DAYS[day]["raw"], {}, "a settled day lets its waiting events go")
+        with open(str(path), "a", encoding="utf-8") as f:
+            f.write(line("03:00:00Z", {"visitor": "old-reader", "path": "/later.html"}))
+        later = visits.summary(30)
+        self.assertEqual(later["pageviews"], 2, "a late line still counts for a known reader")
+        self.same(later, self.fresh())
 
 
 class TaggedLinkTest(unittest.TestCase):
@@ -521,7 +553,9 @@ class TaggedLinkTest(unittest.TestCase):
         at = now.isoformat() + "Z"
         for visitor, src in (("tg-a", "tg-yt"), ("tg-b", "tg-yt"), ("tg-c", "tg-tiktok")):
             visits._record({"at": at, "visitor": visitor, "path": "/", "kind": "page", "status": 200,
-                            "ref": None, "internal": False, "src": src, "bot": False})
+                            "ref": None, "internal": False, "src": src, "network": "Singtel", "bot": False})
+            visits._record({"at": at, "visitor": visitor, "kind": "dwell", "path": "/",
+                            "seconds": 15, "bot": False})
         visits._record({"at": at, "visitor": "tg-a", "path": "/api/v1/us/ask", "kind": "api",
                         "status": 200, "internal": True, "bot": False})
         visits.flush()
@@ -579,6 +613,23 @@ class TaggedSignupTest(unittest.TestCase):
         self.sign_up("plain@example.com")
         by = self.accounts.signups_by_source(0)
         self.assertEqual(by, {"yt": 1, None: 1})
+
+
+class LiveTest(unittest.TestCase):
+    """Right now: only a page that reported in, off a reader's network."""
+
+    def test_only_a_reporting_page_on_a_readers_network_is_here(self):
+        visits._touch_live("lv-reader", "/live-reader.html", "JP", "NTT Communications Corporation", scripted=True)
+        visits._touch_live("lv-cloud", "/live-cloud.html", "US", "Amazon.com, Inc.", scripted=True)
+        visits._touch_live("lv-google", "/live-google.html", "CA", "Google LLC", scripted=True)
+        visits._touch_live("lv-fetch", "/live-fetch.html", "JP", "KDDI CORPORATION")
+        pages = [r["key"] for r in visits.live()["pages"]]
+        self.assertIn("/live-reader.html", pages)
+        for machine in ("/live-cloud.html", "/live-google.html", "/live-fetch.html"):
+            self.assertNotIn(machine, pages)
+        # Its page reporting in later makes the plain fetch a reader.
+        visits._touch_live("lv-fetch", None, "JP", "KDDI CORPORATION", scripted=True)
+        self.assertIn("/live-fetch.html", [r["key"] for r in visits.live()["pages"]])
 
 
 class OursTest(unittest.TestCase):

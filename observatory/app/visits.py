@@ -110,7 +110,7 @@ MAX_LINES = 500000
 # swamp every count on the page.
 ASSET_SUFFIXES = (".css", ".js", ".map", ".png", ".jpg", ".jpeg", ".gif",
                   ".svg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".txt",
-                  ".xml", ".csv", ".pdf")
+                  ".xml", ".csv", ".pdf", ".json")
 
 # Substrings of a user agent that mean "not a person". An absent agent counts
 # too: real browsers always send one, so a blank belongs to the platform's
@@ -325,18 +325,20 @@ def _consented(jar):
     return parse_visitor_cookie(jar.get(VISITOR_COOKIE))
 
 
-def _touch_live(visitor, path, country, network):
+def _touch_live(visitor, path, country, network, scripted=False):
     """Note that this visitor is here, now. Bounded: a flood evicts the
     stalest entries rather than growing without limit.
 
     A path of None means "still here, on whatever you last had open" — a page
     fetching its own chart data must keep its reader alive without the live
-    table claiming somebody is sitting on an API endpoint.
+    table claiming somebody is sitting on an API endpoint. `scripted` is set
+    by the page's own keep-alive, the proof a browser is showing it.
     """
     with _LOCK:
         held = _LIVE.get(visitor) or {}
         _LIVE[visitor] = {"at": time.time(), "path": path or held.get("path"),
-                          "country": country, "network": network}
+                          "country": country, "network": network,
+                          "scripted": scripted or held.get("scripted", False)}
         if len(_LIVE) > LIVE_MAX:
             for key in sorted(_LIVE, key=lambda k: _LIVE[k]["at"])[:len(_LIVE) - LIVE_MAX]:
                 _LIVE.pop(key, None)
@@ -347,10 +349,13 @@ def live():
 
     Counted from memory, so this is the one figure on the traffic page that
     owes nothing to the log — and the one that cannot be asked about the past.
+    Only real readers, by the same test as summary(): the page's own script
+    has reported in, from a placed network that is not a data centre.
     """
     cutoff = time.time() - LIVE_SECONDS
     with _LOCK:
-        rows = [(v, dict(d)) for v, d in _LIVE.items() if d["at"] >= cutoff]
+        rows = [(v, dict(d)) for v, d in _LIVE.items()
+                if d["at"] >= cutoff and _is_reader(d.get("scripted"), d.get("network"))]
         for key in [v for v, d in _LIVE.items() if d["at"] < cutoff - LIVE_SECONDS]:
             _LIVE.pop(key, None)  # swept here, so no timer has to exist
     pages, countries = {}, {}
@@ -412,6 +417,9 @@ def record_dwell(scope, path, seconds, view=None):
     if view:
         event["view"] = str(view)[:16]
     _record(event)
+    with _LOCK:
+        if visitor in _LIVE:
+            _LIVE[visitor]["scripted"] = True
 
 
 def heartbeat(scope, path):
@@ -429,7 +437,7 @@ def heartbeat(scope, path):
     geoip.prepare()
     country, network = geoip.lookup(ip)
     visitor = identify(ip, user_agent, headers, now.strftime("%Y-%m-%d"))[0]
-    _touch_live(visitor, (path or "/")[:MAX_PATH_CHARS], country, network)
+    _touch_live(visitor, (path or "/")[:MAX_PATH_CHARS], country, network, scripted=True)
 
 
 def identify(ip, user_agent, headers, day):
@@ -578,7 +586,7 @@ def is_ai_referrer(host):
 def is_hosting(network):
     """True when the network operator is a cloud, host or CDN — somewhere a
     machine lives, not a reader. None (address not placed) is not hosting, but
-    it is not a person either: the People figure requires a placed network."""
+    it is not a person either: a reader needs a placed network."""
     if not network:
         return False
     name = network.lower()
@@ -586,6 +594,16 @@ def is_hosting(network):
         if marker in name:
             return True
     return False
+
+
+def _is_reader(scripted, network):
+    """The test for a real reader, used by every figure on the Traffic page:
+    the page's own script reported in (so a browser rendered it) from a
+    network that is placed and is not a data centre. Each part is evidence a
+    scraper does not usually produce; none of it is proof. Deliberately strict
+    — the figure is meant to be believed, not to be large."""
+    return bool(scripted and network and not is_hosting(network)
+                and not is_google_machine(network))
 
 
 def _kind(path):
@@ -748,7 +766,10 @@ def observe(scope, status, seconds=None):
     if not bot:
         _touch_live(visitor, path if kind == "page" else None, country, network)
         if path in ask_log.PATHS:
-            ask_log.record(scope, status, seconds, now)
+            # A reader's question is sent by our own page, from a network that
+            # is not a data centre; anything else is a machine asking.
+            ask_log.record(scope, status, seconds, now,
+                           machine=not internal or not _is_reader(True, network))
 
 
 class VisitCounter(object):
@@ -894,19 +915,32 @@ _FILES = {}                # str(path) -> {"offset", "tail", "lines", "unreadabl
 _DAYS = {}                 # "YYYY-MM-DD" -> that day's totals (_new_day)
 
 
-def _new_day():
+def _reader_totals():
+    """What a day adds to the Traffic page. Real readers only (_is_reader)."""
     return {
-        "visitors": set(), "pageviews": 0, "api": 0, "bots": 0,
+        "visitors": set(), "pageviews": 0,
         "pages": {}, "refs": {}, "sources": {}, "countries": {}, "networks": {},
         "direct": {"views": 0, "visitors": set()}, "direct_networks": {}, "direct_pages": {},
-        "located": 0, "unlocated": 0, "api_calls": 0, "mcp_calls": 0,
-        "ask_hits": [], "ai_agents": {}, "ai_referred": {"views": 0, "visitors": set()},
-        "api_in_page": 0, "api_external": 0, "browsers": set(), "scripted": set(),
-        "visitor_network": {}, "dwell_views": {}, "activity": {},
+        "ask_hits": [], "ai_referred": {"views": 0, "visitors": set()},
+        "dwell_views": {}, "activity": {},
         "stable_since": {}, "stable": set(),
         "consent": {"granted": 0, "denied": 0, "unanswered": 0},
-        "first": None, "last": None,
     }
+
+
+def _new_day():
+    d = _reader_totals()
+    d.update({
+        # Left out of every figure, and counted only so the page can say how
+        # much was left out: robot requests, and visits that failed the test.
+        "bots": 0, "left_out": 0,
+        # A visit is shown to be a reader only by a report that arrives after
+        # its page view, so a day's events wait here until it is settled.
+        # probe: visitor -> [script reported, network].
+        "raw": {}, "probe": {}, "dirty": False, "settled": None,
+        "first": None, "last": None,
+    })
+    return d
 
 
 def _count(source, key, visitor):
@@ -927,7 +961,8 @@ def is_google_machine(network):
 
 
 def _fold(d, event, at):
-    """Add one log line to its day's totals `d`."""
+    """Add one log line to its day `d`. A robot is only counted; anything else
+    waits with its visitor until the day is settled (_settle)."""
     if d["first"] is None or at < d["first"]:
         d["first"] = at
     if d["last"] is None or at > d["last"]:
@@ -936,37 +971,54 @@ def _fold(d, event, at):
     # weeks logged before the rule existed are cleaned up too.
     if event.get("bot") or is_google_machine(event.get("network")):
         d["bots"] += 1
-        label = event.get("agent")
-        if label:
-            row = d["ai_agents"].setdefault(label, {
-                "views": 0, "visitors": set(),
-                "purpose": event.get("agent_purpose") or "",
-                "pages": {}, "last": ""})
-            row["views"] += 1
-            if event.get("visitor"):
-                row["visitors"].add(event["visitor"])
-            page = event.get("path")
-            if page:
-                row["pages"][page] = row["pages"].get(page, 0) + 1
-            if at > row["last"]:
-                row["last"] = at
         return
+    visitor = event.get("visitor")
+    if not visitor:
+        return  # nothing to test, so never shown as a reader
+    probe = d["probe"].setdefault(visitor, [False, None])
+    if event.get("kind") == "dwell":
+        probe[0] = True
+    if event.get("network"):
+        probe[1] = event["network"]
+    if d["settled"] is not None:
+        # A line for a day already settled: it can only add to a known reader.
+        if visitor in d["settled"]:
+            _fold_reader(d, event, at)
+        return
+    d["raw"].setdefault(visitor, []).append((event, at))
+    d["dirty"] = True
 
+
+def _settle(d, final):
+    """Rebuild the day's totals from the visitors who pass the reader test.
+    A `final` day takes no more lines, so its waiting events are let go and
+    only its list of readers is kept."""
+    if d["settled"] is not None or not (d["dirty"] or final):
+        return
+    readers = set(v for v, (scripted, network) in d["probe"].items()
+                  if _is_reader(scripted, network))
+    d.update(_reader_totals())
+    for visitor in readers:
+        for event, at in d["raw"].get(visitor, ()):
+            _fold_reader(d, event, at)
+    d["left_out"] = len(d["probe"]) - len(readers)
+    d["dirty"] = False
+    if final:
+        d["settled"], d["raw"] = readers, {}
+
+
+def _fold_reader(d, event, at):
+    """Add one of a reader's log lines to its day's totals `d`."""
     kind = event.get("kind")
-    if event.get("path") in ask_log.PATHS and event.get("visitor"):
-        d["ask_hits"].append((at, event["visitor"]))
+    visitor = event.get("visitor")
+    if event.get("path") in ask_log.PATHS:
+        d["ask_hits"].append((at, visitor))
     # Not traffic, just the note that this visitor rendered a page.
     if kind == "browser":
-        if event.get("visitor"):
-            d["browsers"].add(event["visitor"])
-            if event.get("network"):
-                d["visitor_network"][event["visitor"]] = event["network"]
         return
     # Nor is a closing page report traffic: the page view it belongs to was
     # counted when the page was asked for.
     if kind == "dwell":
-        if event.get("visitor"):
-            d["scripted"].add(event["visitor"])
         seconds = event.get("seconds")
         if isinstance(seconds, (int, float)) and seconds > 0:
             key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
@@ -974,75 +1026,53 @@ def _fold(d, event, at):
             if not held or seconds > held[1]:
                 d["dwell_views"][key] = (event.get("path") or "/", seconds)
         return
-    visitor = event.get("visitor")
-    if visitor:
-        d["visitors"].add(visitor)
-        if event.get("network"):
-            d["visitor_network"][visitor] = event["network"]
+    d["visitors"].add(visitor)
     # Older records predate the in-page flag and cannot be told apart; they
-    # are left out of both splits rather than guessed at.
+    # are left out of the direct count rather than guessed at.
     knows_origin = "internal" in event
     in_page = bool(event.get("internal"))
 
     # A reader is somebody moving around the site: pages they asked for, and
     # the chart data their own page fetched, which is the only proof a tab is
-    # still being used. Somebody pulling the API from a terminal is not
-    # sitting in a session and would otherwise invent hours-long ones.
-    if visitor and (kind == "page" or (kind == "api" and in_page)):
+    # still being used.
+    if kind == "page" or (kind == "api" and in_page):
         d["activity"].setdefault(visitor, []).append(_epoch(at))
-    if visitor and event.get("since"):
+    if event.get("since"):
         d["stable_since"].setdefault(visitor, event["since"])
         d["stable"].add(visitor)
 
-    if kind in ("api", "mcp"):
-        if kind == "api":
-            d["api_calls"] += 1
-        else:
-            d["mcp_calls"] += 1
-        d["api"] += 1
-        if knows_origin:
-            if in_page:
-                d["api_in_page"] += 1
-            else:
-                d["api_external"] += 1
-    elif kind == "page" and (event.get("status") or 0) < 400:
-        d["pageviews"] += 1
-        choice = event.get("consent") or "unanswered"
-        if choice in d["consent"]:
-            d["consent"][choice] += 1
-        _count(d["pages"], event.get("path") or "/", visitor)
-    # How a page was reached. Page reads only: a referrer answers "how did
+    # Everything below is about page reads: a referrer answers "how did
     # someone get here", and in-page chart fetches would otherwise drown it.
+    # A file a page loads (the map's .json was logged as a page until
+    # 2026-10-28) is not a page anybody reads.
+    if kind != "page" or (event.get("status") or 0) >= 400:
+        return
+    if (event.get("path") or "").lower().endswith(ASSET_SUFFIXES):
+        return
+    d["pageviews"] += 1
+    choice = event.get("consent") or "unanswered"
+    if choice in d["consent"]:
+        d["consent"][choice] += 1
+    _count(d["pages"], event.get("path") or "/", visitor)
     sender = event.get("ref")
-    is_read = kind == "page" and (event.get("status") or 0) < 400
-    if is_read and event.get("src"):
+    if event.get("src"):
         _count(d["sources"], event["src"], visitor)
-    if is_read and sender:
+    if sender:
         _count(d["refs"], sender, visitor)
         if is_ai_referrer(sender):
             d["ai_referred"]["views"] += 1
-            if visitor:
-                d["ai_referred"]["visitors"].add(visitor)
-    elif is_read and knows_origin and not in_page:
+            d["ai_referred"]["visitors"].add(visitor)
+    elif knows_origin and not in_page:
         # No referring link: typed, bookmarked, or opened from a mail or
         # messaging app, which strip the header.
         d["direct"]["views"] += 1
-        if visitor:
-            d["direct"]["visitors"].add(visitor)
+        d["direct"]["visitors"].add(visitor)
         for source, key in ((d["direct_networks"], event.get("network")),
                             (d["direct_pages"], event.get("path"))):
             if key:
                 _count(source, key, visitor)
-
-    # Location covers page reads AND API calls: an institution pulling the API
-    # is the readership worth knowing about, and a page-only cut would hide it.
-    place = event.get("country")
-    operator = event.get("network")
-    if place or operator:
-        d["located"] += 1
-    else:
-        d["unlocated"] += 1
-    for source, key in ((d["countries"], place), (d["networks"], operator)):
+    for source, key in ((d["countries"], event.get("country")),
+                        (d["networks"], event.get("network"))):
         if key:
             _count(source, key, visitor)
 
@@ -1123,6 +1153,11 @@ def _window_totals(start, today, wanted):
         oldest = (today - datetime.timedelta(days=_DAY_KEEP)).isoformat()
         for day in [k for k in _DAYS if k < oldest]:
             del _DAYS[day]
+        # A day before yesterday takes no more lines once its file has been
+        # read to the end; today and yesterday are rebuilt as lines arrive.
+        open_from = (today - datetime.timedelta(days=1)).isoformat()
+        for day, d in _DAYS.items():
+            _settle(d, not truncated and day[:7] in wanted and day < open_from)
         w = _new_day()
         w["daily"] = {}
         w["stable_days"] = {}
@@ -1133,28 +1168,16 @@ def _window_totals(start, today, wanted):
             d = _DAYS.get(day)
             if d is None:
                 continue
-            w["daily"][day] = {"visitors": set(d["visitors"]), "pageviews": d["pageviews"],
-                               "api": d["api"], "bots": d["bots"]}
-            for k in ("pageviews", "api", "bots", "located", "unlocated", "api_calls",
-                      "mcp_calls", "api_in_page", "api_external"):
+            w["daily"][day] = {"visitors": set(d["visitors"]), "pageviews": d["pageviews"]}
+            for k in ("pageviews", "bots", "left_out"):
                 w[k] += d[k]
-            for k in ("visitors", "browsers", "scripted"):
-                w[k] |= d[k]
+            w["visitors"] |= d["visitors"]
             for k in ("pages", "refs", "sources", "countries", "networks", "direct_networks", "direct_pages"):
                 for key, row in d[k].items():
                     _join(w[k].setdefault(key, {"views": 0, "visitors": set()}), row)
             _join(w["direct"], d["direct"])
             _join(w["ai_referred"], d["ai_referred"])
-            for label, row in d["ai_agents"].items():
-                into = w["ai_agents"].setdefault(label, {
-                    "views": 0, "visitors": set(), "purpose": row["purpose"], "pages": {}, "last": ""})
-                _join(into, row)
-                for page, n in row["pages"].items():
-                    into["pages"][page] = into["pages"].get(page, 0) + n
-                if row["last"] > into["last"]:
-                    into["last"] = row["last"]
             w["ask_hits"].extend(d["ask_hits"])
-            w["visitor_network"].update(d["visitor_network"])    # the later day wins
             for key, held in d["dwell_views"].items():
                 have = w["dwell_views"].get(key)
                 if not have or held[1] > have[1]:
@@ -1178,16 +1201,12 @@ def _window_totals(start, today, wanted):
 
 
 def summary(days=30, top=15):
-    """Traffic over the last `days` UTC days, aggregated for the admin page.
+    """Real readers over the last `days` UTC days, for the admin Traffic page.
 
-    Humans and automated traffic are separated rather than merged: the
-    headline counts exclude anything that says it is a bot, and the bot total
-    is reported beside them so a crawl is never mistaken for readership.
-
-    Anything that does not say so is counted as a visit, which is why the
-    stricter "people" figure exists: visits that also reported a reading time
-    (a script ran, so a browser rendered the page) from a network that is
-    placed and is not a data centre. See `confirmed` in the result.
+    Every figure counts readers only (_is_reader): the page's own script
+    reported a reading time, from a placed network that is not a data centre.
+    Robots, data centres and visits that never ran the page are left out of
+    all of it; how many were left out is reported once, so the gap can be read.
     """
     flush()  # so the page shows the requests that just arrived
     days = max(1, min(int(days), 365))
@@ -1197,31 +1216,13 @@ def summary(days=30, top=15):
 
     w = _window_totals(start, today, wanted)
     daily = w["daily"]
-    pages, refs, countries, networks = w["pages"], w["refs"], w["countries"], w["networks"]
-    direct, direct_networks, direct_pages = w["direct"], w["direct_networks"], w["direct_pages"]
-    located, unlocated = w["located"], w["unlocated"]
-    visitors, bot_hits, api_calls, mcp_calls = w["visitors"], w["bots"], w["api_calls"], w["mcp_calls"]
     ask_hits = w["ask_hits"]  # (at, visitor) for each question to the box (the questions themselves are in ask_log)
-    ai_agents, ai_referred = w["ai_agents"], w["ai_referred"]
-    api_in_page, api_external = w["api_in_page"], w["api_external"]
-    browsers, scripted, visitor_network = w["browsers"], w["scripted"], w["visitor_network"]
-    dwell_views, activity = w["dwell_views"], w["activity"]
-    stable_since, stable_days, consent = w["stable_since"], w["stable_days"], w["consent"]
+    stable_since, stable_days = w["stable_since"], w["stable_days"]
     first_event, last_event = w["first"], w["last"]
-    lines_read, unreadable = w["lines_read"], w["unreadable"]
-
-    # A person, for the purposes of this page: a visit whose page reported its
-    # reading time (so a script ran in a real browser) from a network that is
-    # placed and is not a data centre. Every part of that is evidence a
-    # scraper does not usually produce; none of it is proof. Deliberately the
-    # strict reading — the figure is meant to be believed, not to be large.
-    hosting_visitors = set(v for v, n in visitor_network.items() if is_hosting(n))
-    placed_visitors = set(visitor_network)
-    people = (scripted & placed_visitors) - hosting_visitors
 
     # A day before counting began is UNKNOWN, not zero: padding the window
     # back to its requested length with zeros would draw weeks of invented
-    # quiet. A day after it with no traffic is a true zero.
+    # quiet. A day after it with no readers is a true zero.
     began = counting_since() or (first_event[:10] if first_event else None)
     series = []
     cursor = start
@@ -1229,25 +1230,21 @@ def summary(days=30, top=15):
         key = cursor.isoformat()
         bucket = daily.get(key)
         if began is None or key < began:
-            series.append({"date": key, "visitors": None, "people": None,
-                           "pageviews": None, "api_calls": None, "bot_hits": None})
+            series.append({"date": key, "visitors": None, "pageviews": None})
         else:
             series.append({
                 "date": key,
                 "visitors": len(bucket["visitors"]) if bucket else 0,
-                "people": len(bucket["visitors"] & people) if bucket else 0,
                 "pageviews": bucket["pageviews"] if bucket else 0,
-                "api_calls": bucket["api"] if bucket else 0,
-                "bot_hits": bucket["bots"] if bucket else 0,
             })
         cursor += datetime.timedelta(days=1)
 
     dwell, page_dwell = [], {}
-    for page_path, seconds in dwell_views.values():
+    for page_path, seconds in w["dwell_views"].values():
         dwell.append(seconds)
         page_dwell.setdefault(page_path, []).append(seconds)
 
-    session_lengths, session_pages, single_page = _sessions(activity)
+    session_lengths, session_pages, single_page = _sessions(w["activity"])
     # New here means "accepted the cookie inside this window"; returning means
     # the cookie predates it. Read off the day each cookie was issued, which
     # the cookie itself carries — no register of past readers is kept.
@@ -1256,12 +1253,7 @@ def summary(days=30, top=15):
     days_seen = [len(seen) for seen in stable_days.values()]
 
     def ranked(source, dwell_by=None):
-        rows = [{"key": k, "views": v["views"], "visitors": len(v["visitors"]),
-                 # Visits from something that also fetched the page's styles and
-                 # images, so was rendering it rather than only reading the HTML.
-                 "browser_visits": len(v["visitors"] & browsers),
-                 # Visits that pass every test for a person, defined above.
-                 "people": len(v["visitors"] & people)}
+        rows = [{"key": k, "views": v["views"], "visitors": len(v["visitors"])}
                 for k, v in source.items()]
         if dwell_by is not None:
             for row in rows:
@@ -1271,10 +1263,6 @@ def summary(days=30, top=15):
         rows.sort(key=lambda r: (-r["views"], r["key"]))
         return rows[:max(1, min(int(top), 100))]
 
-    network_rows = ranked(networks)
-    for row in network_rows:
-        row["hosting"] = is_hosting(row["key"])
-
     # Tagged links: how many arrived through each, and how many of those went
     # on to ask the box something. Sign-ups are added by the admin route, from
     # the accounts store this module does not read.
@@ -1282,67 +1270,37 @@ def summary(days=30, top=15):
     source_rows = []
     for key, v in w["sources"].items():
         source_rows.append({"key": key, "views": v["views"], "visitors": len(v["visitors"]),
-                            "people": len(v["visitors"] & people),
                             "asked": len(v["visitors"] & askers)})
     source_rows.sort(key=lambda r: (-r["visitors"], r["key"]))
 
-    referrer_rows = ranked(refs)
+    referrer_rows = ranked(w["refs"])
     for row in referrer_rows:
         row["ai"] = is_ai_referrer(row["key"])
 
-    # Assistants, busiest first. The page is the most-requested one, which is
-    # what says whether anything out there is reading a particular dataset.
-    agent_rows = []
-    for label, row in ai_agents.items():
-        by_page = sorted(row["pages"].items(), key=lambda kv: (-kv[1], kv[0]))
-        agent_rows.append({
-            "key": label, "purpose": row["purpose"], "views": row["views"],
-            "visitors": len(row["visitors"]), "last": row["last"] or None,
-            "top_page": by_page[0][0] if by_page else None,
-            "pages": len(row["pages"]),
-        })
-    agent_rows.sort(key=lambda r: (-r["views"], r["key"]))
-
+    direct = w["direct"]
     files = _log_files()
     return {
         # The front page's question box: searches and questions from its own
-        # log, which holds no visitor; people per day from this one.
+        # log, which holds no visitor; readers per day from this one.
         "ask": ask_log.summary(days, start, today, ask_hits),
         "window_days": days,
         "from": start.isoformat(),
         "to": today.isoformat(),
         "counting_since": began,
         "pageviews": sum(d["pageviews"] or 0 for d in series),
-        "visitors": len(visitors),
-        "api_calls": api_calls,
-        "mcp_calls": mcp_calls,
-        "bot_hits": bot_hits,
+        "visitors": len(w["visitors"]),
+        # What every figure here leaves out, so a small number can be read.
+        "left_out": {"visits": w["left_out"], "robot_requests": w["bots"]},
         "daily": series,
-        "top_pages": ranked(pages, page_dwell),
+        "top_pages": ranked(w["pages"], page_dwell),
         "top_referrers": referrer_rows,
         "sources": source_rows[:100],
         # Arrivals carrying no referring link, and the only things known about
         # them. Without this the referrer table silently omits most arrivals
         # and an empty table reads as broken detection.
-        "direct": {"views": direct["views"], "visitors": len(direct["visitors"]),
-                   "people": len(direct["visitors"] & people)},
-        "direct_networks": ranked(direct_networks),
-        "direct_pages": ranked(direct_pages),
-        "api_in_page": api_in_page,
-        "api_external": api_external,
-        # Visits that rendered a page rather than only pulling its HTML. The
-        # honest test for "was this a person": a browser fetches the styles and
-        # images, a script almost never does.
-        "browser_visits": len(visitors & browsers),
-        # The strict figure: visits that reported a reading time from a placed,
-        # non-hosting network. The parts are reported beside it so a zero can
-        # be read — no script reports, no placed networks, or all data centre.
-        "confirmed": {
-            "people": len(people),
-            "scripted": len(visitors & scripted),
-            "placed": len(visitors & placed_visitors),
-            "hosting": len(visitors & hosting_visitors),
-        },
+        "direct": {"views": direct["views"], "visitors": len(direct["visitors"])},
+        "direct_networks": ranked(w["direct_networks"]),
+        "direct_pages": ranked(w["direct_pages"]),
         # How long a page stayed open, and how long a visit lasted. The first
         # is reported by the page, the second read off the request log; both
         # are medians, because one tab left open for a day would carry an
@@ -1370,26 +1328,18 @@ def summary(days=30, top=15):
         # What share of page reads came from a reader who had answered the
         # banner at all. Without it the cookie figures read as the whole
         # readership rather than the part of it that said yes.
-        "consent": consent,
-        # What the AI products are doing here: the fetchers, and the readers
-        # who arrived from one of their answers. The second is the only one of
-        # the two that is a person.
-        "ai_agents": agent_rows,
-        "ai_referrals": {"views": ai_referred["views"],
-                         "visitors": len(ai_referred["visitors"])},
-        "top_countries": ranked(countries),
-        "top_networks": network_rows,
-        # What share of counted traffic could be placed at all. Without it an
-        # empty location table reads as "nobody came" rather than "the tables
-        # were not loaded".
-        "located_hits": located,
-        "unlocated_hits": unlocated,
+        "consent": w["consent"],
+        # Readers who followed a citation here out of an AI assistant's answer.
+        "ai_referrals": {"views": w["ai_referred"]["views"],
+                         "visitors": len(w["ai_referred"]["visitors"])},
+        "top_countries": ranked(w["countries"]),
+        "top_networks": ranked(w["networks"]),
         "geoip": geoip.status(),
         "first_event": first_event,
         "last_event": last_event,
         "log_files": len(files),
         "log_bytes": sum(p.stat().st_size for p in files if p.exists()),
-        "lines_read": lines_read,
-        "unreadable_lines": unreadable,
+        "lines_read": w["lines_read"],
+        "unreadable_lines": w["unreadable"],
         "truncated": w["truncated"],
     }

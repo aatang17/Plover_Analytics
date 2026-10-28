@@ -71,8 +71,11 @@
   });
   window.addEventListener("pagehide", function () { report(true); });
 
-  /* Still here. Keeps a reader who is sitting on one page inside the "right
-     now" count, which is five minutes wide; writes nothing to the log. */
+  /* Here, and still here. The first report is what puts a reader in the
+     "right now" count at all (a page that never runs this is not counted);
+     the rest keep somebody sitting on one page inside its five minutes.
+     Writes nothing to the log. */
+  if (document.visibilityState === "visible") send({ path: path }, false);
   window.setInterval(function () {
     if (document.visibilityState === "visible") send({ path: path }, false);
   }, HEARTBEAT_MS);

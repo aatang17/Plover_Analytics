@@ -22,7 +22,9 @@ Each line says who it came from in one word, never more ("from"): "us" for
 our own checks (an address in OUR_ADDRESSES, or a private one, which no
 reader behind the proxy ever has; the address itself is not kept), "example"
 for a click on one of the page's own example questions (the page adds
-via=example), and "reader" for a question somebody typed. The admin page
+via=example), "machine" for one not sent by our own page or sent from a
+data centre (written, never shown or alerted), and "reader" for a question
+somebody typed. The admin page
 counts the last, week by week: the one number that says whether strangers use
 the box. Lines written before 2026-10-21 carry no "from" and are shown as
 not marked.
@@ -135,10 +137,11 @@ def _path_of(month):
     return ANALYTICS_DIR / ("ask-%s.jsonl" % month)
 
 
-def record(scope, status, seconds=None, now=None, ours=False):
+def record(scope, status, seconds=None, now=None, ours=False, machine=False):
     """Write one line for a question the box was asked. Called by the visit
     counter for a request on one of PATHS that is not a robot's; `ours` is
-    is_ours() of the request's address, worked out there."""
+    is_ours() of the request's address, and `machine` says it was not sent by
+    our own page from a reader's network, both worked out there."""
     path = scope.get("path") or ""
     if path not in PATHS:
         return
@@ -159,7 +162,8 @@ def record(scope, status, seconds=None, now=None, ours=False):
     line = {"at": now.isoformat(timespec="seconds") + "Z", "q": q, "where": PATHS[path],
             "answered": answered, "route": (got or {}).get("route"), "shape": (got or {}).get("shape"),
             "status": status, "seconds": round(seconds, 1) if isinstance(seconds, (int, float)) else None,
-            "from": "us" if ours else ("example" if _via(scope) == "example" else "reader")}
+            "from": "us" if ours else "machine" if machine else (
+                "example" if _via(scope) == "example" else "reader")}
     try:
         os.makedirs(str(ANALYTICS_DIR), exist_ok=True)
         with _LOCK:
@@ -167,7 +171,7 @@ def record(scope, status, seconds=None, now=None, ours=False):
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except OSError as exc:
         print("ASK LOG WRITE FAILED (%s)" % exc)
-    if line["from"] != "us":
+    if line["from"] not in ("us", "machine"):
         _alert(line, now)
 
 
@@ -238,6 +242,8 @@ def _read(start, today):
                         e = json.loads(raw)
                     except ValueError:
                         continue
+                    if e.get("from") == "machine":
+                        continue                # kept in the file, never shown: real readers only
                     if start.isoformat() <= str(e.get("at", ""))[:10] <= today.isoformat():
                         lines.append(e)
         except OSError:
