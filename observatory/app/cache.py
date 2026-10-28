@@ -18,8 +18,13 @@ Entries are keyed by (path, query string) and stamped with the database
 version. A new ingest changes the stamp, which invalidates every entry at
 once — nothing here can serve data from a superseded release.
 """
+import asyncio
 import gzip
 import hashlib
+import json
+import os
+import pathlib
+import time
 from collections import OrderedDict
 from threading import Lock
 
@@ -65,6 +70,72 @@ NEVER_CACHE_PREFIXES = ("/api/v1/account/", "/api/v1/assistant/")
 # reader model is not called again, and the step route's SQL is not rewritten).
 CACHE_ANYWAY = ("/api/v1/assistant/preview",)
 
+# What keep_warm rebuilds after the stamp changes, and what the next copy of the
+# site builds when it starts: the answers readers asked for most recently. On
+# 2026-10-27 the 85 pages asked for 253 distinct answers on first view; built
+# from cold one at a time they took 14 s on a laptop, about a minute on the server.
+REWARM_KEYS = 400
+CHECK_EVERY = 30   # seconds between looks at the stamp
+SAVE_EVERY = 600   # seconds between saves of the list for the next copy
+PAUSE = 0.2        # between rebuilds, so a reader is never queued behind many
+
+_LIVE = []  # every ResponseCache built (the app has one), for keep_warm
+
+
+def remembered(path):
+    """The keys the previous copy of the site saved, most recent first; [] if none."""
+    try:
+        keys = json.loads(pathlib.Path(path).read_text())
+    except (OSError, ValueError):
+        return []
+    if not isinstance(keys, list):
+        return []
+    return [k for k in keys if isinstance(k, str) and k.startswith("/api/")][:REWARM_KEYS]
+
+
+def remember(path):
+    """Save what readers have been asking for. Never fails the caller."""
+    if not _LIVE:
+        return
+    path = pathlib.Path(path)
+    # Two copies of the site overlap during a deploy: each writes its own
+    # temporary file, and the rename means a reader never sees half of one.
+    tmp = path.with_name("%s.%d.tmp" % (path.name, os.getpid()))
+    try:
+        tmp.write_text(json.dumps(_LIVE[-1].keys()))
+        os.replace(str(tmp), str(path))
+    except OSError:
+        pass
+
+
+async def keep_warm(app, path):
+    """Rebuild what readers were using whenever the cache's stamp changes.
+
+    The stamp covers every database file and the admin console's company
+    edits, so a nightly data swap, a backfill after a deploy or one new logo
+    empties the whole cache at once. Until 2026-10-27 nothing rebuilt it before
+    the next restart, and the first reader of each page paid the full build:
+    4-5 s for the CEO pay list on the server. Also saves the list every
+    SAVE_EVERY seconds, so the next copy of the site starts with it.
+    """
+    seen, saved = None, time.monotonic()
+    while True:
+        await asyncio.sleep(CHECK_EVERY)
+        if not _LIVE:
+            continue
+        rc = _LIVE[-1]
+        stamp = rc.version()
+        if seen is not None and stamp != seen:
+            for key in rc.keys():
+                if rc.version() != stamp:
+                    break  # swapped again part-way; the next look starts over
+                await warm(app, [key])
+                await asyncio.sleep(PAUSE)
+        seen = stamp
+        if time.monotonic() - saved >= SAVE_EVERY:
+            remember(path)
+            saved = time.monotonic()
+
 
 async def warm(app, paths):
     """Fill the cache by driving `app` directly, before it serves anyone.
@@ -83,11 +154,15 @@ async def warm(app, paths):
     async def send(message):
         pass
 
-    for path in paths:
+    for url in paths:
+        # A page's own requests carry query strings (?series=…, ?basis=latest);
+        # they are part of the cache key, so they must reach the app as one.
+        path, _, query = url.partition("?")
         scope = {
             "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
             "http_version": "1.1", "method": "GET", "scheme": "http",
-            "path": path, "raw_path": path.encode("ascii"), "query_string": b"",
+            "path": path, "raw_path": path.encode("ascii"),
+            "query_string": query.encode("latin-1"),
             "root_path": "",
             "headers": [(b"host", b"localhost"), (b"accept-encoding", b"gzip")],
             "client": ("127.0.0.1", 0), "server": ("localhost", 80),
@@ -132,6 +207,14 @@ class ResponseCache(object):
         self._entries = OrderedDict()
         self._bytes = 0
         self._lock = Lock()
+        _LIVE.append(self)
+
+    def keys(self, limit=REWARM_KEYS):
+        """What readers have asked for, most recently used first. Entries from
+        a superseded release are still listed: they are removed only when next
+        asked for, which is exactly what keep_warm needs to rebuild them."""
+        with self._lock:
+            return list(reversed(self._entries))[:limit]
 
     async def __call__(self, scope, receive, send):
         # HEAD is deliberately not cached: it shares a URL with GET but carries

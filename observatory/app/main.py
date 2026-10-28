@@ -182,8 +182,16 @@ async def lifespan(app):
     # DigitalOcean server), so two copies of the site overlapping during a
     # deploy never back up twice.
     tasks = [task]
+    # What readers asked for under the copy before this one (cache.keep_warm
+    # saves it): their pages first, then the deferred series lists. Without
+    # it only the macro answers above were ready, and the first reader of
+    # every other page paid its full build (the CEO pay list: 4-5 s).
+    known = set(paths) | set(later)
+    later = [k for k in cache.remembered(WARM_KEYS) if k.rstrip("?") not in known] + later
     if later:
         tasks.append(asyncio.ensure_future(_warm_when_released(app, later)))
+    # Rebuilds the same list whenever a data swap or a company edit empties the cache.
+    tasks.append(asyncio.ensure_future(cache.keep_warm(app, WARM_KEYS)))
     if os.environ.get("WEB_RUNS_BACKUPS", "1").strip().lower() not in ("0", "false", "no", "off"):
         tasks.append(asyncio.ensure_future(research_backup.loop()))
     try:
@@ -193,6 +201,7 @@ async def lifespan(app):
             t.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await t
+        cache.remember(WARM_KEYS)
 
 
 async def _warm_when_released(app, paths):
@@ -253,6 +262,8 @@ app = FastAPI(title="Plover Analytics API", version="1",
 # a visit (visits._kind) or cached (cache.py stores only /api/ JSON).
 DRAIN_FLAG = pathlib.Path(os.environ.get("DRAIN_FLAG", "/tmp/plover-draining"))
 RELEASE_FLAG = pathlib.Path(os.environ.get("RELEASE_FLAG", "/tmp/plover-released"))
+# The answers readers asked for most recently, saved for the next copy of the site.
+WARM_KEYS = db.DATA_DIR / "warm-keys.json"
 
 
 @app.get("/healthz", include_in_schema=False)
