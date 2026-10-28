@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Stock · Plover Analytics</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/ask.css">
+<link rel="stylesheet" href="assets/co-page.css">
+<style>
+/* page-local layout only — tokens and components come from app.css; the
+   figures, tables and notes are the ask box's (ask.css), the panels and the
+   header card are co-page.css, shared with the company's other tabs. */
+#stock { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+#stock > .state-wait { margin: 0; }
+.st-gate p { margin: 0 0 14px; max-width: 640px; color: var(--obs-text); line-height: 1.55; }
+</style>
+</head>
+<body class="page-wide co-ground">
+
+<header class="site-header" data-section="us-companies" data-page="us-company"></header>
+<script src="assets/nav.js"></script>
+
+<!-- One company's Price tab, or its Insiders and holders tab (?view=owners).
+     The header card and tabs are co-head.js; us-stock.js draws the rest. -->
+<main class="container">
+  <div id="co-card"></div>
+  <section id="stock" aria-live="polite"></section>
+</main>
+
+<footer class="site-footer">
+  <div class="inner" id="source-line">
+    Source: U.S. Securities and Exchange Commission, EDGAR (annual reports, Forms 3/4/5, Form 13F),
+    and Databento (EQUS.SUMMARY) for daily closes. Figures as filed; closes as delivered.
+    Missing is —, never zero.
+    <a href="methodology.html">Methodology</a> · <a href="api.html">API</a>
+  </div>
+</footer>
+
+<script src="assets/echarts.min.js"></script>
+<script src="assets/format.js"></script>
+<script src="assets/us-logos.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/sortable.js"></script>
+<script src="assets/co-head.js"></script>
+<script src="assets/price-range.js"></script>
+<script src="assets/us-format.js"></script>
+<script src="assets/us-stock.js"></script>
+</body>
+</html>

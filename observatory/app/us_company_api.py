@@ -110,7 +110,7 @@ def items(cur, ident):
     r = _one(cur, "SELECT count(*), max(filed) FROM sec_filings WHERE cik IN (%s) "
                   "AND status IN ('clean','partial')" % ph, ciks) or (0, None)
     out.append(_item("financials", "Financial statements", r[0], "filings", r[1], "filed",
-                     "index.html?t=" + t, "/api/v1/us/financials/company/%d" % cik))
+                     "us-stock.html?t=" + t, "/api/v1/us/financials/company/%d" % cik))
     r = _one(cur, "SELECT sum(filings), max(last_filed) FROM sec_cf_companies "
                   "WHERE cik = ? OR successor_cik = ?", [cik, cik]) or (0, None)
     out.append(_item("history", "Every filed figure since 2009", r[0], "filings", r[1], "filed",
@@ -127,7 +127,7 @@ def items(cur, ident):
                      None, "/api/v1/us/text/" + t))
     r = _one(cur, "SELECT count(*), max(filed) FROM sec_ins_filings WHERE issuer_cik = ?", [cik]) or (0, None)
     out.append(_item("insiders", "Insider trades", r[0], "filings", r[1], "filed",
-                     "index.html?t=" + t, "/api/v1/us/insiders/company/" + t))
+                     "us-stock.html?t=" + t + "&view=owners", "/api/v1/us/insiders/company/" + t))
     cusips = [c.get("cusip") for c in us_link.cusips_for(cur, cik) if c.get("cusip")]
     r = (0, None)
     if cusips:
@@ -138,7 +138,7 @@ def items(cur, ident):
             WHERE h.batch = (SELECT batch FROM b) AND h.cusip IN (%s) AND NOT f.amendment"""
                  % ",".join("?" * len(cusips)), cusips) or (0, None)
     out.append(_item("holders", "Fund managers holding it (13F)", r[0], "managers", r[1], "quarter ended",
-                     "index.html?t=" + t, "/api/v1/us/holdings/issuer?cusip=" + (cusips[0] if cusips else "")))
+                     "us-stock.html?t=" + t + "&view=owners", "/api/v1/us/holdings/issuer?cusip=" + (cusips[0] if cusips else "")))
     r = _one(cur, "SELECT count(*), max(date) FILTER (WHERE NOT scheduled) FROM us_events "
                   "WHERE cik = ? AND kind = 'results' AND is_earnings", [cik]) or (0, None)
     out.append(_item("results", "Results days", r[0], "days", r[1], "last",
@@ -162,11 +162,11 @@ def items(cur, ident):
         r = _one(cur, "SELECT count(*), max(date) FROM us_px_daily WHERE symbol IN (%s) AND close > 0"
                  % ",".join("?" * len(spell)), spell) or (0, None)
     out.append(_item("prices", "Daily prices", r[0], "trading days", r[1], "last close",
-                     "index.html?t=" + t, "/api/v1/us/prices/" + t))
+                     "us-stock.html?t=" + t, "/api/v1/us/prices/" + t))
     r = _one(cur, "SELECT count(DISTINCT accn), max(end_date) FROM sec_cover_shares WHERE cik = ?",
              [cik]) or (0, None)
     out.append(_item("shares", "Shares outstanding", r[0], "filing covers", r[1], "as of",
-                     "index.html?t=" + t, "/api/v1/us/financials/metrics/" + t))
+                     "us-stock.html?t=" + t, "/api/v1/us/financials/metrics/" + t))
     return out
 
 

@@ -170,7 +170,6 @@ body.asked .hp-hero { display: none; }
 .hp #answer .fp-cta:hover, .hp #answer .fp-retry:hover { background: var(--obs-accent-dark); color: var(--obs-surface); }
 .hp #answer .fp-examples a { font-size: 15px; }
 /* a company's view is panels (us-stocks.js panelize, co-page.css) */
-.hp #stock .cp-sec:first-of-type { margin-top: 16px; }
 
 .hp .fp-footer { background: var(--obs-surface); }
 
@@ -213,7 +212,7 @@ body.asked .hp-hero { display: none; }
    the card was. Nothing jumps; with reduced motion nothing moves at all. */
 @keyframes hp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes hp-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
-#box-top .hp-box, .an-wait, #answer > .an-grid, #answer > .fp-card, #stock { animation: hp-in 0.22s ease-out; }
+#box-top .hp-box, .an-wait, #answer > .an-grid, #answer > .fp-card { animation: hp-in 0.22s ease-out; }
 .hp-main #status { margin: 0 0 16px; }
 .an-wait .an-skel { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 14px; }
 .an-wait .an-skel i { display: block; height: 14px; border-radius: 3px; background: var(--obs-grid); animation: hp-pulse 1.4s ease-in-out infinite; }
@@ -222,7 +221,7 @@ body.asked .hp-hero { display: none; }
 .an-wait .an-skel i:nth-child(3) { width: 64%; }
 .an-wait .trail { border-top: 1px solid var(--obs-grid); padding-top: 10px; }
 @media (prefers-reduced-motion: reduce) {
-  #box-top .hp-box, .an-wait, #answer > .an-grid, #answer > .fp-card, #stock, .an-wait .an-skel i { animation: none; }
+  #box-top .hp-box, .an-wait, #answer > .an-grid, #answer > .fp-card, .an-wait .an-skel i { animation: none; }
 }
 /* the wait card is as wide as the answer's main column, so nothing resizes when the answer lands */
 @media (min-width: 1081px) { .an-wait { max-width: calc(100% - 340px); box-sizing: border-box; } }

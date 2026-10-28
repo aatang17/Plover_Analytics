@@ -303,7 +303,7 @@
     if (bars.length < 2) return;
     var src = "Source: Databento (EQUS.SUMMARY), consolidated end-of-day closes, one-day delay, split-adjusted.";
     $("px-src").textContent = src;
-    $("px-more").href = "index.html?t=" + encodeURIComponent(t);
+    $("px-more").href = "us-stock.html?t=" + encodeURIComponent(t);
     $("px").hidden = false;
     // the range (1M to Max, the year to date, or from–to) and its change: price-range.js
     charts.push(priceRange.mount($("px-range"), { bars: bars, ticker: t, name: t, source: src }));

@@ -1,4 +1,4 @@
-/* US Stocks: the box, and one company's page behind ?t=TICKER.
+/* The ask box on the front page. One company's page (?t=TICKER) is us-stock.js.
    Data: /api/v1/us/ask (app/us_ask_api.py), /api/v1/us/financials/metrics,
    /api/v1/us/prices, /api/v1/us/insiders, /api/v1/us/holdings,
    /api/v1/us/earnings (the modules under app/).
@@ -7,7 +7,7 @@
    question shape and answers by code — no model. The page draws what comes
    back: a headline, the sentences, the few figures, a chart or a table, the
    sources and the formula behind every computed number. The URL carries the
-   question (?q=) or the ticker (?t=), so any answer is a link.
+   question (?q=), so any answer is a link.
 
    Filed values are as the SEC extracted them; closes as the vendor delivered
    them; every calculated figure names its formula. Missing is —, never 0. */
@@ -76,69 +76,10 @@
     });
   }
 
-  /* ---- formatting: every number carries its unit ---------------------- */
-  function money(v, dp) {
-    if (v == null) return MISSING;
-    var a = Math.abs(v), s;
-    if (a >= 1e12) s = fmtNum(a / 1e12, 2) + "tn";
-    else if (a >= 1e11) s = fmtNum(a / 1e9, 0) + "bn";
-    else if (a >= 1e9) s = fmtNum(a / 1e9, 1) + "bn";
-    else if (a >= 1e6) s = fmtNum(a / 1e6, 1) + "mn";
-    else if (a >= 1e3) s = fmtNum(a, 0);
-    else s = fmtNum(a, dp == null ? 2 : dp);
-    return (v < 0 ? MINUS : "") + "$" + s;
-  }
-  function pct(v, dp, signed) {
-    if (v == null) return MISSING;
-    var s = fmtNum(Math.abs(v), dp == null ? 1 : dp) + "%";
-    if (v < 0) return MINUS + s;
-    return (signed && v > 0 ? "+" : "") + s;
-  }
-  function mult(v) { return v == null ? MISSING : fmtNum(v, 1) + "×"; }
-  function count(v) { return v == null ? MISSING : fmtNum(v, 0); }
-  function dateWords(iso) {
-    if (!iso) return MISSING;
-    var d = new Date(iso.slice(0, 10) + "T00:00:00Z");
-    return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear();
-  }
-  function fmtBy(unit, v, dp) {
-    if (v == null) return MISSING;
-    if (unit === "USD") return money(v, dp);
-    if (unit === "%") return pct(v, dp == null ? 1 : dp, false);
-    if (unit === "×") return mult(v);
-    if (unit === "count" || unit === "shares") return count(v);
-    if (unit === "date") return dateWords(v);
-    if (typeof v === "number") return fmtNum(v, dp == null ? 2 : dp);
-    return esc(v);
-  }
-  // Table cells: the column header says what the column is; the cell guesses
-  // its unit from the header words so a reader never sees a bare 5074023879600.
-  function cellFor(col, v, unit) {
-    if (v == null || v === "") return "<td class='r'>" + MISSING + "</td>";
-    if (typeof v === "boolean") return "<td>" + (v ? "Yes" : "No") + "</td>";
-    if (typeof v === "number") {
-      var c = col.toLowerCase();
-      if (/\(usd\)/.test(c)) return "<td class='r'>" + money(v) + "</td>";
-      // a change counted in shares is a number of shares, not a percent ("Change in shares": +16,385,212)
-      if (/change/.test(c) && /shares/.test(c) && !/%/.test(c)) return "<td class='r'>" + (v > 0 ? "+" : v < 0 ? MINUS : "") + fmtNum(Math.abs(v), 0) + "</td>";
-      if (/change/.test(c) && !/close|price/.test(c)) return "<td class='r'>" + pct(v, 1, true) + "</td>";
-      if (/\(\u00d7\)/.test(c)) return "<td class='r'>" + mult(v) + "</td>";
-      if (/\(pp\)/.test(c)) return "<td class='r'>" + (v > 0 ? "+" : v < 0 ? "\u2212" : "") + fmtNum(Math.abs(v), 2) + " pp</td>";
-      if (/share of|%|change %|pct|margin|yield|roe|growth|ratio/.test(c) && !/shares|rank/.test(c)) return "<td class='r'>" + pct(v, 1, /change/.test(c)) + "</td>";
-      if (/p\/e/.test(c)) return "<td class='r'>" + mult(v) + "</td>";
-      if (/rank|holders|insiders|count|trades|positions|days/.test(c)) return "<td class='r'>" + count(v) + "</td>";
-      if (/shares|volume/.test(c)) return "<td class='r'>" + count(v) + "</td>";
-      if (/price|close/.test(c) && !/change/.test(c)) return "<td class='r'>" + money(v, 2) + "</td>";
-      if (/value|revenue|income|assets|equity|cap|buyback|dividend|net|cash|fcf|both|total|prior/.test(c) || unit === "USD") return "<td class='r'>" + money(v) + "</td>";
-      return "<td class='r'>" + fmtNum(v, Math.abs(v) < 100 ? 2 : 0) + "</td>";
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return "<td>" + dateWords(v) + "</td>";
-    if (/^\d{4}-\d{2}$/.test(String(v))) return "<td>" + esc(v) + "</td>";
-    var s = String(v);
-    if (/^cik:|^\d{10}-\d{2}-\d{6}$/.test(s)) return "<td class='quiet'>" + esc(s) + "</td>";
-    if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(s) && /ticker/.test(col.toLowerCase())) return "<td>" + (window.usLogos ? usLogos.img(s, 16) : "") + "<a href='/?t=" + encodeURIComponent(s) + "'>" + esc(s) + "</a></td>";
-    return "<td class='txt'>" + esc(s.length > 60 ? s.slice(0, 57) + "…" : s) + "</td>";
-  }
+  // number formatting, tables and the sources block: us-format.js
+  var money = usFmt.money, pct = usFmt.pct, mult = usFmt.mult, count = usFmt.count,
+      dateWords = usFmt.dateWords, fmtBy = usFmt.fmtBy, tableHtml = usFmt.tableHtml,
+      sourcesHtml = usFmt.sourcesHtml;
 
   function disposeCharts() {
     charts.forEach(function (c) { try { c.dispose && c.dispose(); } catch (e) { /* gone */ } });
@@ -155,42 +96,6 @@
       return "<div class='hit'" + title + "><dt>" + esc(f.label) + "</dt><dd>" + shown + qual + "</dd></div>";
     });
     return cells.length ? "<section class='hp-panel'><dl class='an-figs'>" + cells.join("") + "</dl></section>" : "";
-  }
-
-  function tableHtml(t, id) {
-    if (!t || !t.rows || !t.rows.length) return "";
-    var head = "<thead><tr>" + t.columns.map(function (c, i) {
-      var numeric = t.rows.some(function (r) { return typeof r[i] === "number"; });
-      return "<th" + (numeric ? " class='r'" : "") + ">" + esc(c) + "</th>";
-    }).join("") + "</tr></thead>";
-    var body = "<tbody>" + t.rows.map(function (r) {
-      return "<tr class='hit'>" + r.map(function (v, i) { return cellFor(t.columns[i], v, t.unit); }).join("") + "</tr>";
-    }).join("") + "</tbody>";
-    return "<div class='table-wrap'><table class='tbl-fin' id='" + id + "'>" + head + body + "</table></div>";
-  }
-
-  function sourcesHtml(srcs, calc, entities, match) {
-    var items = (srcs || []).map(function (s) {
-      return "<li><b>" + esc(s.name) + ".</b> " + esc(s.credit) + (s.note ? " " + esc(s.note) : "") + "</li>";
-    });
-    var calcItems = Object.keys(calc || {}).filter(function (k) { return k !== "query" && k !== "steps"; }).map(function (k) {
-      return "<li><b>" + esc(k.replace(/_/g, " ")) + ":</b> " + esc(calc[k]) + "</li>";
-    });
-    var read = [];
-    if (entities) {
-      if (entities.mentioned_companies && entities.mentioned_companies.length) {
-        read.push("company: " + entities.mentioned_companies.map(function (c) { return c.name + " (" + (c.ticker || "cik " + c.cik) + ", by " + c.matched_by + ")"; }).join("; "));
-      }
-      if (entities.industry_read) read.push("industry: " + entities.industry_read);
-      if (entities.manager_read) read.push("manager: " + entities.manager_read);
-      if (entities.since_read) read.push("since: " + dateWords(entities.since_read));
-      if (entities.amount_read) read.push("amount: " + money(entities.amount_read));
-    }
-    return "<details class='calc'><summary>Sources and formulas</summary><div class='calc-body'>" +
-      (match ? "<p class='quiet'>Question shape: " + esc(match.label) + ". " + (read.length ? "Read as — " + esc(read.join("; ")) + "." : "") + "</p>" : "") +
-      (calcItems.length ? "<ul class='sources'>" + calcItems.join("") + "</ul>" : "") +
-      (calc && calc.query ? "<p class='quiet'>The query run on the data:</p><pre class='sql'>" + esc(calc.query) + "</pre>" : "") +
-      "<ul class='sources'>" + items.join("") + "</ul></div></details>";
   }
 
   function drawChart(el, chart, sourceLine) {
@@ -382,7 +287,7 @@
       .replace("<details class='calc worked-out' open>", "<details class='calc worked-out'>");
     var calc = a.calc || {};
     var co = (a.entities && a.entities.company) || ((a.entities && a.entities.mentioned_companies) || [])[0] || null;
-    var link = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/?t=" + encodeURIComponent(co.ticker) : null);
+    var link = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/us-stock.html?t=" + encodeURIComponent(co.ticker) : null);
     var logo = co && co.ticker && window.usLogos ? usLogos.img(co.ticker, 16) : "";
     var src = (a.sources || []).map(function (s) { return s.credit; }).join(" ");
     var readAs = a.match && a.match.read_as ? String(a.match.read_as).replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return dateWords(d); }) : "";
@@ -451,7 +356,6 @@
 
     el.innerHTML = "<div class='an-grid'><div class='an-col'>" + main + "</div><aside class='an-rail' aria-label='About this answer'>" + rail + "</aside></div>";
     el.hidden = false;
-    $("stock").hidden = true;
     $("home-note").hidden = true;
 
     var c = null;
@@ -526,7 +430,6 @@
     // answer area changes only when an answer arrives.
     var el = $("answer");
     if (!el.hidden && el.innerHTML) el.classList.add("an-stale");
-    $("stock").hidden = true;
     $("home-note").hidden = true;
     // The wait card lives outside #answer, so the answer area changes only
     // when an answer arrives — a reader (or the example checker) never counts
@@ -599,7 +502,6 @@
     var el = $("answer");
     el.classList.remove("an-stale");
     el.hidden = false;
-    $("stock").hidden = true;
     var list = (tries || []).map(function (t) {
       return "<li><a href='/?q=" + encodeURIComponent(t) + "'>" + esc(t) + "</a></li>";
     }).join("");
@@ -716,7 +618,6 @@
     var el = $("answer");
     el.classList.remove("an-stale");
     el.hidden = false;
-    $("stock").hidden = true;
     if (p.kind === "none") {
       renderMiss(p.message, p.try, p.miss || "not_held", q);
       return;
@@ -756,197 +657,28 @@
     try { sessionStorage.setItem("us-ask-prev", q); } catch (e) { /* storage blocked: no memory, still answers */ }
   }
 
-  /* ---- one company ----------------------------------------------------- */
-  function renderStock(t, m, px, ins, hold) {
-    disposeCharts();
-    var el = $("stock");
-    var mt = m.metrics || {}, p = m.price || {}, ps = m.per_share || {}, mvb = m.market_value_basis || {};
-    // a split read from prices in the last year that no filing confirms makes the one-year change doubtful
-    var yearAgo = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-    var doubtfulSplit = !!(px && px.splits && px.splits.some(function (s) { return s.status && s.status !== "confirmed" && s.date >= yearAgo; }));
-    // the company's header card and tabs (co-head.js) replace this placeholder once loaded
-    var html = "<div id='stock-card'><section class='cp-card'><div class='cp-id'><div class='cp-who'><h1>" + esc(m.name) +
-      "</h1></div></div></section></div>" +
-      "<p class='sec-note'>Latest annual report: year to " + dateWords(m.period_end) + ", filed " + dateWords(m.filed) + " · " +
-      "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>filing on EDGAR</a></p>" +
-      "<dl class='fact-row'>" +
-      "<div><dt>Close</dt><dd>" + money(p.close, 2) + "<span class='qual'>" + (p.date ? dateWords(p.date) : "no price on file") + "</span></dd></div>" +
-      "<div><dt>Market value</dt><dd>" + money(mt.market_cap) + "<span class='qual'>" +
-        (mvb.note && mt.market_cap == null ? "not shown: see below" : mvb.caution ? "read with care: see below" : "close × shares outstanding") +
-        "</span></dd></div>" +
-      "<div><dt>P/E</dt><dd>" + mult(mt.pe_x) + "<span class='qual'>on diluted EPS " + (ps.eps_diluted == null ? MISSING : "$" + fmtNum(ps.eps_diluted, 2)) + "</span></dd></div>" +
-      "<div><dt>1-year change</dt><dd>" + pct(mt.price_change_1y_pct, 1, true) + "<span class='qual'>" +
-        (doubtfulSplit ? "read with care: see the note under the chart" : "split-adjusted") + "</span></dd></div>" +
-      "<div><dt>Dividend yield</dt><dd>" + pct(mt.dividend_yield_pct, 2) + "<span class='qual'>last fiscal year ÷ value</span></dd></div>" +
-      "<div><dt>Buyback yield</dt><dd>" + pct(mt.buyback_yield_pct, 2) + "<span class='qual'>last fiscal year ÷ value</span></dd></div>" +
-      "</dl>";
-    // a held-back or doubtful market value says why, and when it will fix itself
-    if (mt.market_cap == null && mvb.note && p.close != null) {
-      html += "<p class='sec-note value-note'>Market value is not shown. " + esc(mvb.note) + (mvb.expect ? " " + esc(mvb.expect) : "") + "</p>";
-    } else if (mvb.caution && mt.market_cap != null) {
-      html += "<p class='sec-note value-note'>" + esc(mvb.caution) + (mvb.expect ? " " + esc(mvb.expect) : "") + "</p>";
-    }
-    // price
-    html += "<h2>Share Price <span class='h2-note'>USD, daily close, since " + (px && px.bars.length ? dateWords(px.bars[0].date) : "—") + "</span></h2>" +
-      "<div id='px-range'></div><div class='chart-foot'><span id='px-src'></span></div>";
-    if (px && px.splits && px.splits.length) {
-      html += "<p class='sec-note' style='margin:8px 0 0'>" + px.splits.map(function (s) {
-        return s.note ? esc(s.note) : "Closes before " + dateWords(s.date) + " are adjusted for the " +
-          (s.ratio >= 1 ? fmtNum(s.ratio, 0) + "-for-1 split" : "1-for-" + fmtNum(1 / s.ratio, 0) + " reverse split") + ".";
-      }).join(" ") + " The bars themselves are as delivered.</p>";
-    }
-    // ratios
-    var fm = m.calc || {};
-    var ratioRows = (m.metric_defs || []).map(function (d) {
-      var v = mt[d.metric];
-      return [d.label, v == null ? null : (d.unit === "%" ? pct(v, 1) : d.unit === "×" ? mult(v) : d.unit === "USD" || d.unit === "unit" ? money(v) : fmtNum(v, 2)), d.formula];
-    });
-    html += "<h2>Latest Annual Report <span class='h2-note'>" + esc(m.unit || "") + " · year to " + dateWords(m.period_end) + "</span></h2>" +
-      "<dl class='fact-row'>" +
-      [["Revenue", m.size.revenue], ["Operating income", m.size.operating_income], ["Net income", m.size.net_income], ["Total assets", m.size.total_assets], ["Equity", m.size.equity], ["Cash", m.size.cash], ["Operating cash flow", m.size.cf_operating], ["Buybacks", m.size.buybacks], ["Dividends paid", m.size.dividends_paid]]
-        .map(function (x) { return "<div><dt>" + x[0] + "</dt><dd>" + money(x[1]) + "</dd></div>"; }).join("") + "</dl>" +
-      "<p class='sec-note'>As filed. Tags: " + esc(Object.keys(m.tags || {}).filter(function (k) { return m.tags[k]; }).map(function (k) { return k.replace(/_/g, " ") + " = " + m.tags[k]; }).join("; ")) + "</p>" +
-      "<div class='table-wrap'><table class='tbl-fin' data-no-enhance><thead><tr><th>Ratio</th><th class='r'>Value</th><th>Formula</th></tr></thead><tbody>" +
-      ratioRows.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td class='r'>" + (r[1] == null ? MISSING : r[1]) + "</td><td class='txt quiet'>" + esc(r[2]) + "</td></tr>"; }).join("") +
-      "</tbody></table></div>" +
-      (m.flags && m.flags.length ? "<p class='sec-note' style='margin:8px 0 0'>Flags: " + esc(m.flags.join(", ").replace(/_/g, " ")) + ".</p>" : "");
-    // insiders
-    if (ins) {
-      var s = ins.summary || {}, b = s.open_market_buys || {}, sl = s.open_market_sells || {};
-      html += "<h2>Insider Trades <span class='h2-note'>last " + ins.months + " months · Forms 3, 4, 5</span></h2>" +
-        "<dl class='fact-row'>" +
-        "<div><dt>Open-market purchases</dt><dd>" + count(b.trades) + "<span class='qual'>" + money(b.value) + " by " + count(b.insiders) + " insiders</span></dd></div>" +
-        "<div><dt>Open-market sales</dt><dd>" + count(sl.trades) + "<span class='qual'>" + money(sl.value) + " by " + count(sl.insiders) + " insiders</span></dd></div>" +
-        "<div><dt>Net shares</dt><dd>" + (s.net_open_market_shares == null ? MISSING : (s.net_open_market_shares < 0 ? MINUS : "+") + fmtNum(Math.abs(s.net_open_market_shares), 0)) + "<span class='qual'>purchases − sales</span></dd></div></dl>" +
-        "<p class='sec-note'>Awards, option exercises and tax withholding are counted separately and never as buying or selling. Value = shares × the price the filer reported.</p>" +
-        tableHtml({ columns: ["Date", "Insider", "Role", "Code", "Shares", "Price", "Value", "10b5-1 plan"],
-          rows: (ins.trades || []).slice(0, 40).map(function (t) { return [t.trans_date, t.owner_name, t.title || t.relationship, t.trans_code, t.shares, t.price, t.value, t.plan_10b5_1]; }) }, "ins-table");
-    } else {
-      html += "<h2>Insider Trades</h2><p class='sec-note'>No insider filings for this company in the loaded quarters.</p>";
-    }
-    // holders
-    if (hold) {
-      html += "<h2>Largest 13F Holders <span class='h2-note'>quarter to " + dateWords(hold.rows[0].report_period) + " · " + count(hold.holders) + " managers · " + money(hold.total_reported_value) + " reported</span></h2>" +
-        tableHtml({ columns: ["Manager", "Shares", "Value", "Share of reported", "Change in shares"],
-          rows: hold.rows.map(function (r) { return [r.manager_name, r.shares, r.value, r.share_of_reported_pct, r.shares_change]; }), unit: "USD" }, "hold-table") +
-        "<p class='sec-note' style='margin:8px 0 0'>13F covers managers over $100m and long positions only; a share of reported value is not a share of the company. Change is against the previous filing window.</p>";
-    } else {
-      html += "<h2>Largest 13F Holders</h2><p class='sec-note'>No 13F positions could be matched to this company by name.</p>";
-    }
-    html += sourcesHtml([
-      { name: "SEC filings", credit: "Source: U.S. Securities and Exchange Commission, EDGAR.", note: "Figures as filed and extracted by the SEC." },
-      { name: "Daily prices", credit: "Source: Databento (EQUS.SUMMARY). Market data provided by Databento.", note: "Consolidated end-of-day closes, one-day delay." },
-      { name: "Insider filings", credit: "Source: U.S. Securities and Exchange Commission, EDGAR (Forms 3, 4 and 5)." },
-      { name: "13F holdings", credit: "Source: U.S. Securities and Exchange Commission, EDGAR (Form 13F)." }], fm, null, null);
-    var fu = [[t + " revenue, 5 years", "Chart " + t + " revenue over the last five years"],
-              ["Who owns " + t, "Who are the biggest holders of " + t + "?"], ["Insiders at " + t, "Have insiders at " + t + " bought or sold this year?"],
-              [t + " over the past year", "How has " + t + " stock done over the past year?"], ["When " + t + " reports", "When does " + t + " report next?"]];
-    html += "<div class='followups'>" + fu.map(function (f) { return "<a href='/?q=" + encodeURIComponent(f[1]) + "'>" + esc(f[0]) + "</a>"; }).join("") + "</div>";
-    el.innerHTML = html;
-    panelize(el, "Market Data");
-    // two tabs of the company's pages share this view: Price (the market data,
-    // the price chart and the latest annual report's ratios) and Insiders and
-    // holders; panels with no heading (sources, follow-ups) show on both
-    var KEEP = stockView === "owners" ? ["Insider Trades", "Largest 13F Holders"] : ["Market Data", "Share Price", "Latest Annual Report"];
-    Array.prototype.forEach.call(el.querySelectorAll(".cp-sec"), function (sec) {
-      var h = sec.querySelector(".cp-head h2");
-      if (h && KEEP.indexOf(h.textContent) < 0) sec.remove();
-    });
-    el.hidden = false;
-    $("answer").hidden = true;
-    $("home-note").hidden = true;
-    if (window.coHead) {
-      coHead.load(m.ticker || t).then(function (d) { if ($("stock-card")) { $("stock-card").innerHTML = coHead.html(d, stockView); coHead.reveal($("stock-card")); } })
-        .catch(function () { /* the placeholder keeps the name */ });
-    }
-    document.title = m.name + " (" + (m.ticker || t) + ") · Plover Analytics";
-    var srcLine = "Source: Databento (EQUS.SUMMARY), consolidated end-of-day closes, one-day delay" + (px && px.splits && px.splits.length ? ", split-adjusted" : "") + ".";
-    if ($("px-src")) $("px-src").textContent = srcLine;
-    // the range (1M to Max, the year to date, or from–to) and its change: price-range.js
-    if ($("px-range")) charts.push(priceRange.mount($("px-range"), { bars: (px && px.bars) || [], ticker: m.ticker || t, name: m.name, source: srcLine }));
-    if (window.enhanceTables) window.enhanceTables(el);
-  }
-
-  // A page drawn as one run of headings and blocks becomes panels (co-page.css):
-  // each h2 opens a panel whose head is the heading and its note; the blocks
-  // before the first heading go under `first`; the sources and the follow-ups
-  // each get a panel of their own. Runs before any chart is drawn, so each
-  // chart is sized in its final place.
-  function panelize(el, first) {
-    var out = document.createDocumentFragment(), body = null;
-    function start(title, note) {
-      var sec = document.createElement("section");
-      sec.className = "cp-panel cp-sec";
-      if (title) {
-        var head = document.createElement("div");
-        head.className = "cp-head";
-        head.innerHTML = "<h2>" + esc(title) + "</h2>" + (note ? "<span class='note'>" + esc(note) + "</span>" : "");
-        sec.appendChild(head);
-      }
-      body = document.createElement("div");
-      body.className = "cp-body";
-      sec.appendChild(body);
-      out.appendChild(sec);
-    }
-    Array.prototype.slice.call(el.childNodes).forEach(function (n) {
-      if (n.id === "stock-card") { out.appendChild(n); body = null; return; }
-      if (n.nodeType === 1 && n.tagName === "H2") {
-        var note = n.querySelector(".h2-note"), words = note ? note.textContent : "";
-        if (note) note.remove();
-        start(n.textContent.trim(), words);
-        return;
-      }
-      if (n.nodeType === 1 && (n.matches("details.calc") || n.matches(".followups"))) start("", "");
-      if (!body) start(first, "");
-      body.appendChild(n);
-    });
-    el.innerHTML = "";
-    el.appendChild(out);
-  }
-
-  // which of the company's tabs this view shows: "price" or "owners"
-  var stockView = "price";
-  function openStock(t, push, view) {
-    t = String(t || "").toUpperCase().replace(/\s+/g, "");
-    stockView = view === "owners" ? "owners" : "price";
-    if (gated()) return ask(t, push);          // signed out, a company page is the start of its answer
-    placeBox(true);
-    var el = $("stock");
-    el.hidden = false;
-    $("answer").hidden = true;
-    el.innerHTML = "<p class='state-wait' aria-live='polite'>Loading " + esc(t) + "…</p>";
-    if (push) history.pushState({ t: t }, "", "/?t=" + encodeURIComponent(t) + (stockView === "owners" ? "&view=owners" : ""));
-    var since = new Date("2000-01-01T00:00:00Z");     // every close on file, so any range can be read
-    var quiet = function (p) { return p.catch(function () { return null; }); };
-    return getJSON(API + "/financials/metrics/" + encodeURIComponent(t)).then(function (m) {
-      var tk = m.ticker || t;
-      return Promise.all([
-        quiet(getJSON(API + "/prices/" + encodeURIComponent(tk) + "?start=" + since.toISOString().slice(0, 10))),
-        quiet(getJSON(API + "/insiders/company/cik:" + m.cik + "?months=12&limit=40")),
-        quiet(getJSON(API + "/ask/run/company_holders?company=" + encodeURIComponent(tk)).then(function (a) {
-          // the recipe already picked the common-stock CUSIP and the window
-          return getJSON(API + "/holdings/issuer?cusip=" + encodeURIComponent(a.entities.cusip) + "&limit=15");
-        })),
-      ]).then(function (r) { renderStock(tk, m, r[0], r[1], r[2]); });
-    }).catch(function (e) {
-      el.innerHTML = "<p class='state-error'>" + esc(e.message) + "</p><p class='sec-note'>Try the ticker as it trades (AAPL, BRK.B) or ask by name in the box above.</p>";
-      $("home-note").hidden = false;
-    });
-  }
-
   /* ---- routing --------------------------------------------------------- */
+  // A company's Price and Insiders and holders tabs are a page of their own
+  // since 2026-10-28 (us-stock.html). Drawn here, under the front page, the
+  // front page showed for two seconds before the company replaced it. The
+  // server forwards an old /?t= link there (app/main.py) before this runs.
+  function stockPage(t) {
+    return "/us-stock.html?t=" + encodeURIComponent(String(t).toUpperCase().replace(/\s+/g, ""));
+  }
+  // Signed out, a ticker is the start of its answer, as any question is.
+  function openStock(t, push) {
+    if (gated()) return ask(t, push);
+    location[push ? "assign" : "replace"](stockPage(t));
+  }
   function route(push) {
     var u = new URL(location.href);
     var q = (u.searchParams.get("q") || "").trim();
-    var t = (u.searchParams.get("t") || "").trim();
-    if (t) return openStock(t, false, u.searchParams.get("view"));
     if (q) {
       // a bare ticker typed into the box opens the company page
       if (/^[A-Za-z]{1,5}([.-][A-Za-z])?$/.test(q) && q.toUpperCase() === q) return openStock(q, false);
       return ask(q, false);
     }
     $("answer").hidden = true;
-    $("stock").hidden = true;
     $("home-note").hidden = false;
     placeBox(false);
     $("q").focus();

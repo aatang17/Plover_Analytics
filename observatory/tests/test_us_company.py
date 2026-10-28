@@ -119,7 +119,7 @@ class Api(Base):
         self.assertEqual(d["company"]["cik"], CIK)
         self.assertEqual(d["company"]["name"], "Acme Widgets Inc")
         fin = next(i for i in d["items"] if i["key"] == "financials")
-        self.assertEqual((fin["count"], fin["latest"], fin["page"]), (2, "2026-02-01", "index.html?t=ACMW"))
+        self.assertEqual((fin["count"], fin["latest"], fin["page"]), (2, "2026-02-01", "us-stock.html?t=ACMW"))
         pay = next(i for i in d["items"] if i["key"] == "pay")
         self.assertFalse(pay["held"])                       # not an S&P 500 member: nothing, never zero shown
         self.assertEqual(self.c.get("/api/v1/us/company/%d" % CIK).json()["company"]["ticker"], "ACMW")

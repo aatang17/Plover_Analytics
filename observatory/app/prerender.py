@@ -259,6 +259,9 @@ DESCRIPTIONS = {
     "us-companies.html":
         "Large US companies' SEC filings since 2009 — revenue, profit, cash flows and every "
         "filed concept, as latest filed, as first reported or as known on any date.",
+    "us-stock.html":
+        "A US-listed company's share price, market value and ratios from its latest annual report, "
+        "with insider trades and the largest 13F holders, from SEC filings and daily closes.",
     "us-pay.html":
         "What every S&P 500 company paid its CEO and what it returned to shareholders, from "
         "the pay-versus-performance table in each proxy statement since 2023, as filed.",
@@ -1235,7 +1238,7 @@ def _us_company_view(values):
 
 
 def _us_stock_view(values):
-    """The front page with ?t= open on one US stock (us-stocks.js openStock)."""
+    """One US stock's Price or Insiders and holders tab (us-stock.js)."""
     t = (values.get("t") or "").strip().upper().replace(".", "-")
     if not t:
         return None
@@ -1250,12 +1253,17 @@ def _us_stock_view(values):
         return NOINDEX
     name, ticker = _clean(row[0]), row[1] or t
     where = (" on %s" % row[2]) if row[2] else ""
-    sentence = ("%s (%s%s)%s: price, ratios from its latest annual report, insider "
-                "trades and the largest holders, from SEC filings." % (
-                    name, ticker, where, (", " + row[3]) if row[3] else ""))
-    return {"title": "%s (%s) — Stock, Ratios & Holders · %s" % (name, ticker, SITE),
-            "description": sentence,
-            "noscript": sentence + " Source: SEC EDGAR."}
+    industry = (", " + row[3]) if row[3] else ""
+    # the two tabs are two pages, each with its own title
+    if values.get("view") == "owners":
+        sentence = ("%s (%s%s)%s: insider purchases and sales over the last 12 months "
+                    "and the largest 13F holders, from SEC filings." % (name, ticker, where, industry))
+        title = "%s (%s) — Insider Trades & 13F Holders · %s" % (name, ticker, SITE)
+    else:
+        sentence = ("%s (%s%s)%s: share price, market value and ratios from its latest "
+                    "annual report, from SEC filings and daily closes." % (name, ticker, where, industry))
+        title = "%s (%s) — Stock Price & Ratios · %s" % (name, ticker, SITE)
+    return {"title": title, "description": sentence, "noscript": sentence + " Source: SEC EDGAR."}
 
 
 # The nine data pages built on us-series.js: one <main data-datasets="slug:Label,…">
@@ -1333,7 +1341,7 @@ ENTITY_PAGES = {
     "us-company.html": _us_company_view,
     "financials.html": _financials_company,
     "governance.html": _governance_company,
-    "index.html": _us_stock_view,
+    "us-stock.html": _us_stock_view,
 }
 for _page in ("hk-economy.html", "hk-prices.html", "labour.html", "us-cpi-areas.html",
               "us-explorer.html", "us-labour.html", "us-prices.html", "us-wages.html",

@@ -189,7 +189,7 @@ def cautions_for(cur, tickers):
 
 
 def company_link(rec):
-    return "/?t=%s" % rec["ticker"] if rec and rec.get("ticker") else None
+    return "/us-stock.html?t=%s" % rec["ticker"] if rec and rec.get("ticker") else None
 
 
 def pkg(recipe, question, headline, answer, figures=None, table=None, chart=None, sources=None,
@@ -1370,7 +1370,7 @@ def r_company_insiders(cur, q, e):
                                                    "A Form 4 is due within two business days of the trade, so the last few days may still be missing."] + cut_note,
                   period={"text": "Since %s" % date_words(since)})
         if rec.get("ticker"):
-            out["more"] = {"label": "Every trade, filing by filing", "href": "/?t=%s&view=owners" % rec["ticker"]}
+            out["more"] = {"label": "Every trade, filing by filing", "href": "/us-stock.html?t=%s&view=owners" % rec["ticker"]}
         return out
 
     has_b, has_s = bool(buys), bool(sells)
@@ -1405,7 +1405,7 @@ def r_company_insiders(cur, q, e):
                "A Form 4 is due within two business days of the trade, so the last few days may still be missing."] + cut_note,
               period={"text": "%s to %s" % (date_words(since), date_words(latest)) if latest else "Since %s" % date_words(since)})
     if rec.get("ticker"):
-        out["more"] = {"label": "Every trade, filing by filing", "href": "/?t=%s&view=owners" % rec["ticker"]}
+        out["more"] = {"label": "Every trade, filing by filing", "href": "/us-stock.html?t=%s&view=owners" % rec["ticker"]}
     return out
 
 

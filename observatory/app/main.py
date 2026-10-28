@@ -8,6 +8,7 @@ import hashlib
 import os
 import pathlib
 import threading
+from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, Response
@@ -106,6 +107,13 @@ class RevalidatedStatic(StaticFiles):
     """
 
     async def get_response(self, path, scope):
+        # A company's Price and Insiders and holders tabs were the front page
+        # with ?t= until 2026-10-28; links already shared land on their own
+        # page, permanently, without the front page showing first.
+        if path in (".", "", "index.html"):
+            query = scope.get("query_string", b"").decode("latin-1")
+            if "t" in parse_qs(query):
+                return RedirectResponse("/us-stock.html?" + query, status_code=301)
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache"
         return self._prerendered(response, scope)

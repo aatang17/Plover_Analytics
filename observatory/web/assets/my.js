@@ -365,7 +365,7 @@
   function stockHtml(run) {
     var a = run.stock, co = a.entities && a.entities.company;
     var src = (a.sources || []).map(function (x) { return x.credit; }).join(" ");
-    var page = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/?t=" + encodeURIComponent(co.ticker) : null);
+    var page = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/us-stock.html?t=" + encodeURIComponent(co.ticker) : null);
     return '<article class="my-msg my-plover">' + ploverHead(day(run.created_at)) +
       '<p class="my-head-line">' + esc(a.headline) + "</p>" +
       (a.period && a.period.text ? '<p class="my-src">' + esc(a.period.text) + "</p>" : "") +

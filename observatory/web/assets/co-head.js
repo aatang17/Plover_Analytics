@@ -42,7 +42,7 @@
     var page = function (k) { return items[k] && items[k].held && items[k].page ? items[k].page : null; };
     // Financials is the ten-year history where held; otherwise the latest
     // annual report's figures are on the Price tab, beside the valuation.
-    var stock = "index.html?t=" + encodeURIComponent(c.ticker || t);
+    var stock = "us-stock.html?t=" + encodeURIComponent(c.ticker || t);
     var held = function (k) { return !!(items[k] && items[k].held); };
     var list = [["overview", "Overview", "us-company.html?t=" + encodeURIComponent(t)],
                 ["price", "Price", held("prices") || held("financials") ? stock : null],
