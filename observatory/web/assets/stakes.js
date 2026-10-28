@@ -336,7 +336,11 @@
     var nameJa = groups.length && groups[0].issuer_name_raw
       ? groups[0].issuer_name_raw : d.issuer_name;
     var name = d.issuer_name_en || nameJa;
-    document.title = name + " · 5% Filings · Plover Analytics";
+    // The server's title already names this company, spelled for reading
+    // ("Toyota Motor Corporation", not "TOYOTA MOTOR CORPORATION"): keep it.
+    if (document.title.indexOf("(" + d.issuer_sec_code + ")") < 0) {
+      document.title = name + " (" + (d.issuer_sec_code || "") + ") · 5% Shareholders · Plover Analytics";
+    }
     $("co-name").textContent = name;
     $("co-code").textContent = d.issuer_sec_code || "";
     if (d.issuer_name_en && nameJa) {

@@ -237,7 +237,7 @@ class PeopleTest(unittest.TestCase):
 
         events = [
             page("pp-person", "NTT Communications Corporation"), dwell("pp-person"),
-            page("pp-cloud", "Google LLC"), dwell("pp-cloud"),        # ran the script, but a data centre
+            page("pp-cloud", "Amazon.com, Inc."), dwell("pp-cloud"),  # ran the script, but a data centre
             page("pp-silent", "KDDI CORPORATION"),                     # a placed ISP, no script report
             page("pp-unplaced", None), dwell("pp-unplaced"),            # ran the script, not placed
         ]
@@ -253,12 +253,38 @@ class PeopleTest(unittest.TestCase):
         self.assertEqual(google["visitors"], 4)
         self.assertEqual(google["people"], 1)
         networks = dict((r["key"], r) for r in got["top_networks"])
-        self.assertTrue(networks["Google LLC"]["hosting"])
+        self.assertTrue(networks["Amazon.com, Inc."]["hosting"])
         self.assertFalse(networks["NTT Communications Corporation"]["hosting"])
         self.assertEqual(networks["NTT Communications Corporation"]["people"], 1)
-        self.assertEqual(networks["Google LLC"]["people"], 0)
+        self.assertEqual(networks["Amazon.com, Inc."]["people"], 0)
         today = got["daily"][-1]
         self.assertEqual(today["people"], 1)
+
+    def test_googles_own_machines_are_not_arrivals_from_google(self):
+        # Google's renderers send a browser's user agent and a Google search
+        # as the referrer; they were 83 of 189 "visitors from Google" in
+        # October 2026. Google Fiber's subscribers are people.
+        at = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        before = visits.summary(1)
+
+        def from_google(visitor, network):
+            return {"at": at, "visitor": visitor, "path": "/stakes.html",
+                    "kind": "page", "status": 200, "ref": "www.google.co.jp",
+                    "internal": False, "country": "CA", "network": network, "bot": False}
+
+        visits._record(from_google("gm-renderer", "Google LLC"))
+        visits._record(from_google("gm-fiber", "Google Fiber Inc."))
+        visits.flush()
+        got = visits.summary(1)
+
+        def google_visitors(summary):
+            rows = [r for r in summary["top_referrers"] if r["key"] == "www.google.co.jp"]
+            return rows[0]["visitors"] if rows else 0
+        self.assertEqual(google_visitors(got) - google_visitors(before), 1)
+        self.assertEqual(got["bot_hits"] - before["bot_hits"], 1)
+        self.assertTrue(visits.is_google_machine("Google LLC"))
+        self.assertFalse(visits.is_google_machine("Google Fiber Inc."))
+        self.assertFalse(visits.is_google_machine(None))
 
 
 class CountedAsTest(unittest.TestCase):

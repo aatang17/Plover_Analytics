@@ -266,7 +266,11 @@
   function renderCompany(d) {
     company = d;
     var name = d.filer_name_en || d.filer_name;
-    document.title = name + " · Shareholder Register · Plover Analytics";
+    // The server's title already names this company, spelled for reading: keep it.
+    if (!d.sec_code || document.title.indexOf("(" + d.sec_code + ")") < 0) {
+      document.title = name + (d.sec_code ? " (" + d.sec_code + ")" : "") +
+        " · Major Shareholders · Plover Analytics";
+    }
     $("co-name").textContent = name;
     $("co-code").textContent = d.sec_code || d.edinet_code || "";
     if (d.filer_name_en && d.filer_name) {

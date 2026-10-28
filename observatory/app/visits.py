@@ -916,13 +916,25 @@ def _count(source, key, visitor):
         row["visitors"].add(visitor)
 
 
+def is_google_machine(network):
+    """A request from Google's own network: its page renderers and link
+    checkers send a browser's user agent and a Google search as the referrer,
+    so they read as readers arriving from Google. In October 2026 they were 83
+    of the 189 such "visitors", nearly all placed in Canada. Matched on the
+    operator, which a user agent cannot fake; Google Fiber's subscribers are
+    "Google Fiber", not "Google LLC"."""
+    return (network or "").strip().lower().startswith("google llc")
+
+
 def _fold(d, event, at):
     """Add one log line to its day's totals `d`."""
     if d["first"] is None or at < d["first"]:
         d["first"] = at
     if d["last"] is None or at > d["last"]:
         d["last"] = at
-    if event.get("bot"):
+    # Decided when the log is read, not stamped when it was written, so the
+    # weeks logged before the rule existed are cleaned up too.
+    if event.get("bot") or is_google_machine(event.get("network")):
         d["bots"] += 1
         label = event.get("agent")
         if label:

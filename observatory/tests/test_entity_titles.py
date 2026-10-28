@@ -40,7 +40,7 @@ class ViewsWithoutData(unittest.TestCase):
             html = prerender.inject(
                 (prerender.WEB_DIR / "stakes.html").read_text(encoding="utf-8"),
                 "stakes.html", query_string="c=7203")
-        self.assertIn("(7203) — 5% Filings", TITLE.search(html).group(1))
+        self.assertIn("(7203) — 5% Shareholders", TITLE.search(html).group(1))
         self.assertEqual(_h1(html, "co-name"), "トヨタ自動車株式会社")
         self.assertEqual(_h1(html, "ho-name"), "")
         self.assertIn("latest filed 27 May 2026", DESC.search(html).group(1))
@@ -100,7 +100,7 @@ class ServedFromRealData(unittest.TestCase):
 
     def test_the_link_from_the_search_result_names_cosmo_energy(self):
         html = self.client.get("/stakes.html?c=5021").text
-        self.assertIn("(5021) — 5% Filings", TITLE.search(html).group(1))
+        self.assertIn("(5021) — 5% Shareholders", TITLE.search(html).group(1))
         self.assertIn("COSMO", TITLE.search(html).group(1).upper())
         self.assertIn("5021", DESC.search(html).group(1))
 

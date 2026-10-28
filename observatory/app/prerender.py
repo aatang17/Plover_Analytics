@@ -986,7 +986,7 @@ def _then(latest, words="latest filed"):
 
 
 _stakes_company = _company_page(
-    "c", "5% Filings", """
+    "c", "5% Shareholders", """
     SELECT count(*), max(filed_date), any_value(issuer_name_raw), NULL
     FROM eq_lvh_filings
     WHERE issuer_sec_code = ? AND status IN ('clean','partial')""",
@@ -1010,7 +1010,7 @@ _stakes_holder = _holder_page(
     "ho-name", "stakes-h")
 
 _ownership_company = _company_page(
-    "c", "Shareholder Register", """
+    "c", "Major Shareholders", """
     SELECT count(*), max(f.period_end), any_value(f.filer_name), any_value(f.filer_name_en)
     FROM eq_filings f
     WHERE f.sec_code = ?
@@ -1180,7 +1180,7 @@ def _us_pay_view(values):
     sentence = ("What %s (%s) paid its chief executive and what it returned to "
                 "shareholders, from the pay-versus-performance table in its proxy "
                 "statements filed with the SEC%s." % (name, ticker, _then(_day(row[4]))))
-    return {"title": "%s (%s) — Executive Pay · %s" % (name, ticker, SITE),
+    return {"title": "%s (%s) — CEO Pay · %s" % (name, ticker, SITE),
             "description": sentence, "h1": name,
             "noscript": sentence + " Source: proxy statements (DEF 14A) on SEC EDGAR."}
 

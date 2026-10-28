@@ -136,6 +136,82 @@ def company_urls():
     return urls
 
 
+# The pages that answer what people type into Google about one company —
+# "Toyota major shareholders", "Apple CEO pay" — each already served with its
+# own title by prerender.ENTITY_PAGES, and until October 2026 listed nowhere:
+# the company list above held only the Japanese summary page, so the five-
+# percent and shareholder pages, and every US company, were found only by a
+# crawler that happened to follow a link a script drew. Each query below asks
+# the same question its page's view does before it agrees to be indexed, so a
+# listed address is never one that answers noindex (a few 5% filings carry a
+# three-digit code, which the page's view turns away).
+
+_OWNER_SQL = """
+SELECT 'stakes.html?c=' || issuer_sec_code FROM (
+    SELECT DISTINCT issuer_sec_code FROM eq_lvh_filings
+    WHERE regexp_matches(issuer_sec_code, '^[0-9A-Za-z]{4}$')
+      AND status IN ('clean', 'partial'))
+UNION ALL
+SELECT 'ownership.html?c=' || sec_code FROM (
+    SELECT DISTINCT f.sec_code FROM eq_filings f
+    WHERE regexp_matches(f.sec_code, '^[0-9A-Za-z]{4}$')
+      AND EXISTS (SELECT 1 FROM eq_major_shareholders m WHERE m.doc_id = f.doc_id))
+ORDER BY 1
+"""
+
+# A US company with no financial statements on file is a page of empty
+# panels; one listed in the S&P 500 without a proxy statement has no pay.
+_US_SQL = """
+SELECT 'us-company.html?t=' || replace(upper(c.ticker), '.', '-') FROM sec_companies c
+WHERE c.ticker IS NOT NULL AND c.ticker <> ''
+  AND EXISTS (SELECT 1 FROM sec_filings f WHERE f.cik = c.cik)
+UNION
+SELECT 'us-pay.html?t=' || replace(upper(m.ticker), '.', '-')
+FROM us_index_members m,
+     (SELECT max(snapshot_id) AS id FROM us_index_snapshots
+      WHERE index_name = 'S&P 500 (SPY holdings)') snap
+WHERE m.snapshot_id = snap.id AND m.ticker IS NOT NULL AND m.ticker <> ''
+  AND EXISTS (SELECT 1 FROM sec_px_filings x WHERE x.cik = m.cik)
+ORDER BY 1
+"""
+
+_query_lock = threading.Lock()
+_query_cache = {}
+
+
+def _query_urls(name, module, sql):
+    """Absolute URLs from `sql` against `module`'s database, cached by its
+    version; empty, never an error, when that database cannot be read."""
+    try:
+        version = module.file_version()
+    except Exception:  # noqa: BLE001 — a sitemap is never worth an error page
+        return []
+    with _query_lock:
+        held = _query_cache.get(name)
+        if held and held[0] == version:
+            return held[1]
+    try:
+        rows = module._cur().execute(sql).fetchall()
+    except Exception:  # noqa: BLE001
+        return []
+    urls = [SITE_BASE_URL + "/" + row[0] for row in rows]
+    with _query_lock:
+        _query_cache[name] = (version, urls)
+    return urls
+
+
+def owner_urls():
+    """Each Japanese company's 5% filings and shareholder register pages."""
+    from . import equity_api
+    return _query_urls("owners", equity_api, _OWNER_SQL)
+
+
+def us_company_urls():
+    """Each US company's record page, and each S&P 500 company's CEO pay page."""
+    from . import sec_api
+    return _query_urls("us", sec_api, _US_SQL)
+
+
 router = APIRouter()
 
 
@@ -260,6 +336,10 @@ def sitemap():
     parts = [SITE_BASE_URL + "/sitemap-pages.xml", SITE_BASE_URL + "/sitemap-research.xml"]
     if company_urls():
         parts.append(SITE_BASE_URL + "/sitemap-companies.xml")
+    if owner_urls():
+        parts.append(SITE_BASE_URL + "/sitemap-owners.xml")
+    if us_company_urls():
+        parts.append(SITE_BASE_URL + "/sitemap-us-companies.xml")
     body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
             "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
     for url in parts:
@@ -295,6 +375,16 @@ def indexnow_key():
 @router.get("/sitemap-companies.xml", include_in_schema=False)
 def sitemap_companies():
     return _urlset(company_urls())
+
+
+@router.get("/sitemap-owners.xml", include_in_schema=False)
+def sitemap_owners():
+    return _urlset(owner_urls())
+
+
+@router.get("/sitemap-us-companies.xml", include_in_schema=False)
+def sitemap_us_companies():
+    return _urlset(us_company_urls())
 
 
 # ---------------------------------------------------------------------------

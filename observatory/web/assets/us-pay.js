@@ -227,7 +227,7 @@
   var carded = false;
   function renderCompany() {
     var c = co.company, ys = years();
-    document.title = c.name + " (" + c.ticker + ") · US Executive Pay · Plover Analytics";
+    document.title = c.name + " (" + c.ticker + ") · CEO Pay · Plover Analytics";
     document.body.classList.add("co-ground");
     // the company's header card and tabs, drawn once (co-head.js); until it arrives the name shows
     if (!carded) {
