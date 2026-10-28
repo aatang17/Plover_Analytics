@@ -123,6 +123,19 @@ body.asked .hp-hero { display: none; }
 .hp #answer .headline { margin: 14px 0 10px; font-size: 26px; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; max-width: 880px; }
 .hp #answer .answer-text { margin: 0; font-size: 15px; line-height: 1.55; color: var(--obs-text); max-width: 820px; }
 .hp #answer .read-as { margin: 10px 0 0; }
+/* what a ranking assumed, and the switches that change it (us-stocks.js readHtml) */
+.an-read { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--obs-grid); }
+.an-read-means { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: var(--obs-text-muted); max-width: 820px; }
+.an-switches { display: flex; flex-wrap: wrap; gap: 8px; }
+.an-switches a { display: inline-block; font-size: 13px; color: var(--obs-text); background: var(--obs-surface);
+  border: 1px solid var(--obs-border); border-radius: 4px; padding: 6px 10px; text-decoration: none; }
+.an-switches a:hover { color: var(--obs-accent); border-color: var(--obs-accent); }
+.an-switches a[aria-pressed="true"] { color: var(--obs-accent); border-color: var(--obs-accent); font-weight: 600; }
+.an-dym { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 10px 0 0; font-size: 13px; color: var(--obs-text-muted); }
+.an-dym a { display: inline-block; color: var(--obs-accent); background: var(--obs-surface); border: 1px solid var(--obs-border);
+  border-radius: 4px; padding: 4px 10px; text-decoration: none; }
+.an-dym a:hover { border-color: var(--obs-accent); }
+.an-read-warn { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--obs-ink); max-width: 820px; }
 .hp #answer .answer-quote { margin: 14px 0 0; }
 .an-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 0; }
 .an-figs > div { padding: 14px 16px; border-left: 1px solid var(--obs-grid); margin-left: -1px; }

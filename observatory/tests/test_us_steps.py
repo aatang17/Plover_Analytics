@@ -66,7 +66,7 @@ class PlainTest(unittest.TestCase):
         from fastapi import FastAPI
         from app import sec_api, stock_recipes, us_ask_api
 
-        def slow(cur, q, prev):
+        def slow(cur, q, prev, opts=None):
             time.sleep(0.5)
             return {"headline": "done", "match": {}}
         app = FastAPI()

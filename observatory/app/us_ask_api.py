@@ -32,14 +32,17 @@ KEEPALIVE_SECONDS = 15
 @router.get("/", include_in_schema=False)
 def ask(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
         prev: str = Query("", max_length=300, description="the reader's previous question, so a follow-up "
-                                                            "(\"and Microsoft?\") is read whole")):
+                                                            "(\"and Microsoft?\") is read whole"),
+        opt: str = Query("", max_length=40, description="switches on a ranking's reading, comma-separated: sp500 (S&P 500 "
+                                                         "members only), all (stocks under $2bn too), tech (Amazon, Tesla and "
+                                                         "other borderline names counted as tech)")):
     """Answer a stock question from the data, by code. A question it cannot
     answer gets {"detail": one plain sentence, "miss": its kind, "try":
     questions it does answer} (app/ask_miss.py), never a bare error."""
     cur = None
     try:
         cur = sec_api._require()
-        return _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None))
+        return _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None, opt))
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content=ask_miss.reply(q, exc, cur))
     except Exception:                                              # noqa: BLE001 — the reader hears it was ours
@@ -64,7 +67,8 @@ def _noted(path, q, work):
 
 @router.get("/stream")
 async def ask_stream(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
-                     prev: str = Query("", max_length=300, description="the reader's previous question")):
+                     prev: str = Query("", max_length=300, description="the reader's previous question"),
+                     opt: str = Query("", max_length=40, description="switches on a ranking's reading (see /api/v1/us/ask)")):
     """The answer as server-sent events, so the page can say what is being
     done while it waits: `{"say": "..."}` at each step (app/ask_progress.py),
     then one `{"answer": {...}}` or `{"error": {"status", "detail"}}`."""
@@ -78,7 +82,7 @@ async def ask_stream(q: str = Query(..., min_length=1, max_length=300, descripti
         ask_progress.listen(lambda text: put({"say": text}))
         try:
             put({"answer": _noted("/api/v1/us/ask/stream", q,
-                                  lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None))})
+                                  lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None, opt))})
         except HTTPException as exc:
             cur = None
             try:
@@ -119,6 +123,18 @@ async def ask_stream(q: str = Query(..., min_length=1, max_length=300, descripti
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no",
                                       "Content-Encoding": "identity"})
+
+
+@router.get("/readings", openapi_extra={"x-example": "/api/v1/us/ask/readings?q=ford+debt"})
+def readings(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
+             prev: str = Query("", max_length=300, description="the reader's previous question")):
+    """Other common readings of a question ("Did you mean"), each a whole
+    question. The page asks for them after an answer made without the model
+    (the quick lane), so the answer is not held up; an answer the model read
+    carries them already. Empty when the model is off or finds one reading."""
+    from . import us_ask_model
+    form = us_ask_model.read(q.strip(), stock_recipes.reader_prompt(), prev.strip() or None) or {}
+    return {"question": q.strip(), "did_you_mean": form.get("alternatives") or []}
 
 
 @router.get("/recipes")

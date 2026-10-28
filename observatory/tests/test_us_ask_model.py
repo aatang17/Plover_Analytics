@@ -114,6 +114,44 @@ class CompleteTest(unittest.TestCase):
         self.assertEqual(seen.get("effort"), "low")
         self.assertEqual(seen.get("cache_key"), "plover-us-reader")
 
+    def test_other_readings_are_kept_only_when_real_and_common(self):
+        """"Did you mean" (2026-10-28): the reader's other readings reach the
+        answer only when each is a different, whole question many askers mean."""
+        raw = [{"question": "Ford long-term debt", "differs": "long-term debt only", "share": 30},
+               {"question": "ford debt", "differs": "same words", "share": 60},              # the question itself
+               {"question": "Ford debt in 2019", "differs": "2019", "share": 5},             # few askers mean it
+               {"question": "Ford long-term debt", "differs": "repeat", "share": 40},        # a repeat
+               {"question": "Ford net debt", "share": 35}, {"question": "Ford total liabilities", "share": 30}, "junk"]
+        out = us_ask_model.alternatives(raw, "Ford debt")
+        self.assertEqual(out, [{"question": "Ford long-term debt", "label": "long-term debt only"},
+                               {"question": "Ford net debt", "label": "Ford net debt"}])
+        self.assertEqual(us_ask_model.alternatives(None, "Ford debt"), [])
+        self.assertEqual(us_ask_model.alternatives("nonsense", "Ford debt"), [])
+
+        def fake(prov, key, model, messages, **kw):
+            return {"text": json.dumps({"shape": "company_figure", "alternatives": raw[:1]}), "usage": {}}
+        us_ask_model._CACHE.clear()
+        with mock.patch.object(us_ask_model, "provider", return_value=("openai", "k", "gpt-6-luna")), \
+                mock.patch.object(us_ask_model, "under_cap", return_value=True), \
+                mock.patch.object(us_ask_model, "_tick"), mock.patch.object(us_ask_model, "_complete", side_effect=fake):
+            form = us_ask_model.read("Ford debt", "sys")
+        us_ask_model._CACHE.clear()
+        self.assertEqual(form["alternatives"], [{"question": "Ford long-term debt", "label": "long-term debt only"}])
+
+    def test_the_page_can_ask_for_other_readings_after_a_quick_answer(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from app import us_ask_api
+        app = FastAPI()
+        app.include_router(us_ask_api.router)
+        alts = [{"question": "biggest banks by total assets", "label": "by total assets"}]
+        with mock.patch.object(us_ask_model, "read", return_value={"shape": "industry_rank", "alternatives": alts}):
+            r = TestClient(app).get("/api/v1/us/ask/readings?q=biggest+banks").json()
+        self.assertEqual(r["did_you_mean"], alts)
+        with mock.patch.object(us_ask_model, "read", return_value=None):           # the model is off
+            r = TestClient(app).get("/api/v1/us/ask/readings?q=biggest+banks").json()
+        self.assertEqual(r["did_you_mean"], [])
+
     def test_any_other_refusal_is_raised(self):
         with mock.patch.object(us_ask_model, "_post", side_effect=_refusal("Invalid API key")):
             with self.assertRaises(urllib.error.HTTPError):

@@ -131,6 +131,50 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(us_link.parse_count("the ten largest"), 10)
         self.assertEqual(us_link.parse_count("top 25 banks"), 25)
 
+    def test_any_span_of_time_is_read(self):
+        # 2026-10-28: "in the last 5 months" was not read and the box ranked over one year
+        today = datetime.date(2026, 10, 28)
+        for words, start in [("in the last 5 months", datetime.date(2026, 5, 28)), ("past two weeks", datetime.date(2026, 10, 14)),
+                             ("previous 90 days", datetime.date(2026, 7, 30)), ("last 18 months", datetime.date(2025, 4, 28)),
+                             ("last month", datetime.date(2026, 9, 28)), ("last 3 quarters", datetime.date(2026, 1, 28)),
+                             ("since March", datetime.date(2026, 3, 1)), ("since June 2025", datetime.date(2025, 6, 1)),
+                             ("since 4 months ago", datetime.date(2026, 6, 28)), ("over the past year", datetime.date(2025, 10, 28))]:
+            self.assertEqual(us_link.parse_since(words, today), start, words)
+            self.assertEqual(us_link.unread_time(words, today), [], words)
+        # a span no parser reads is reported, never defaulted
+        for words in ("over the past few months", "since the election", "in recent weeks of trading"):
+            self.assertTrue(us_link.unread_time(words, today), words)
+
+    def test_non_tech_is_not_tech(self):
+        # 2026-10-28: "non-tech stocks" ranked the Technology sector
+        from app import stock_recipes as s
+        for q, kept, left_out in [("what non-tech stocks have the best performance", None, "Technology"),
+                                  ("top stocks excluding energy", None, "Energy"),
+                                  ("largest companies outside the tech sector", None, "Technology"),
+                                  ("best stocks not in tech", None, "Technology"),
+                                  ("ex-financials winners", None, "Financials"),
+                                  ("best tech stocks", "Technology", None)]:
+            self.assertEqual(s.country_sector(q)[2], kept, q)
+            self.assertEqual(s.excluded_country_sector(q)[2], left_out, q)
+        self.assertEqual(s.excluded_country_sector("best non-Chinese stocks")[0], "CN")
+        self.assertIsNone(s.country_sector("best non-Chinese stocks")[0])
+
+    def test_a_ranking_reads_every_word_or_declines(self):
+        """The ready-made rankings answer only questions whose every word they
+        read; any other word could change the answer, so it is reported."""
+        from app import stock_recipes as s
+        reads = s._RANK_READS["market_rank"]
+        for q in ("what non-tech stocks have the best performance in the last 5 months", "Israeli tech stocks",
+                  "The ten largest US companies by market value, with P/E and one-year change.",
+                  "Who has the highest buyback yield among companies above $10bn in market value?",
+                  "best performing S&P 500 stocks this year", "cheapest large cap stocks by P/E"):
+            self.assertEqual(s.unread_words(None, q, reads), [], q)
+        for q, word in [("best tech and energy stocks", "and"), ("which tiny tech stocks did best", "tiny"),
+                        ("best tech stocks over the past few months", "over the past few months"),
+                        ("non-bank financial stocks", "bank"), ("best Japanese stocks", "japanese"),
+                        ("compare the big three tech stocks", "big"), ("tech stocks without debt", "without")]:
+            self.assertIn(word, s.unread_words(None, q, reads), q)
+
 
 def _live():
     p = ROOT / "data" / "sec.duckdb"
@@ -153,6 +197,50 @@ class TwentyQuestionsTest(unittest.TestCase):
     def setUpClass(cls):
         from app.main import app
         cls.c = TestClient(app)
+
+    def test_the_quick_lane_never_drops_a_word(self):
+        """Questions the quick lane once answered with a word dropped: each is
+        now read whole or left to the reader."""
+        from app import sec_api, stock_recipes as s
+        cur = sec_api._cur()
+        for q in ("best japanese banks", "which Japanese banks are cheapest", "compare the big three banks by return on equity",
+                  "earnings calendar next week big tech", "cheapest banks by price to book, only the ten largest",
+                  "non-bank financial stocks", "best tech stocks over the past few months", "which small cap tech stocks did best",
+                  "best tech and energy stocks", "is Tesla not profitable"):
+            self.assertIsNone(s.quick_match(cur, q), q)
+        hit = s.quick_match(cur, "what non-tech stocks have the best performance in the last 5 months")
+        self.assertEqual(hit[0]["id"], "market_rank")
+        out = s.answer(cur, "what non-tech stocks have the best performance in the last 5 months")
+        self.assertIn("outside the technology sector", out["headline"])
+        self.assertNotIn("past year", out["headline"])
+        self.assertEqual(out["entities"]["excluded"]["sector"], "Technology")
+        self.assertEqual(out["entities"]["since_read"], us_link._months_back(datetime.date.today(), 5).isoformat())
+
+    def test_a_ranking_says_what_it_assumed_and_can_be_switched(self):
+        """A vague ranking answers at once, says its reading, offers switches,
+        and each switch changes the list it names (2026-10-28)."""
+        from app import sec_api, stock_recipes as s
+        cur = sec_api._cur()
+        q = "what non-tech stocks have the best performance in the last 5 months"
+        base = s.answer(cur, q)
+        r = base["read"]
+        self.assertIn("outside the technology sector", r["text"])
+        self.assertIn("Amazon", r["means"])
+        self.assertIn("non-tech", r["means"])
+        self.assertEqual([x["key"] for x in r["switches"]], ["sp500", "all", "tech"])
+        self.assertFalse(any(x["on"] for x in r["switches"]))
+        tech = s.answer(cur, q, opts="tech")
+        self.assertTrue(next(x for x in tech["read"]["switches"] if x["key"] == "tech")["on"])
+        self.assertLess(tech["figures"][0]["value"], base["figures"][0]["value"])       # the borderline names left the pool
+        sp = s.answer(cur, q, opts="sp500,all,bogus")
+        self.assertEqual(sp["read"]["opts"], ["all", "sp500"])
+        self.assertIn("S&P 500", sp["headline"])
+        # a switch that changes the list says so, naming who drops out and who comes in
+        big = s.answer(cur, "largest tech companies")
+        self.assertIn("Amazon", big["read"]["warning"])
+        self.assertIn("would come in", big["read"]["warning"])
+        # an index named in the question offers no S&P 500 switch
+        self.assertNotIn("sp500", [x["key"] for x in s.answer(cur, "best performing S&P 500 stocks this year")["read"]["switches"]])
 
     def test_every_suggested_question_answers_without_the_model(self):
         """The questions the box offers on a miss (app/ask_miss.py TOPICS) answer by

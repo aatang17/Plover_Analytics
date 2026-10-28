@@ -276,6 +276,43 @@
     navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Copy blocked"); });
   }
 
+  // What a ranking assumed (app/stock_recipes.py _read_as): what "tech" means
+  // here, the switches that change the reading, and a warning only when a
+  // switch changes the list. A switch is part of the link, so any view is citable.
+  function readHtml(r) {
+    if (!r || !r.switches) return "";
+    var on = r.opts || [];
+    var sw = r.switches.map(function (x) {
+      var next = x.on ? on.filter(function (o) { return o !== x.key; }) : on.concat([x.key]);
+      return "<a href='" + esc(answerUrl(lastAsked, next.join(","))) + "' role='button' aria-pressed='" + (x.on ? "true" : "false") +
+        "' data-opt='" + esc(next.join(",")) + "'>" + (x.on ? "\u2713 " : "") + esc(x.label) + "</a>";
+    }).join("");
+    if (!sw && !r.means && !r.warning) return "";
+    return "<div class='an-read'>" + (r.means ? "<p class='an-read-means'>" + esc(r.means) + "</p>" : "") +
+      (sw ? "<div class='an-switches' role='group' aria-label='Change how the question is read'>" + sw + "</div>" : "") +
+      (r.warning ? "<p class='an-read-warn'>" + esc(r.warning) + "</p>" : "") + "</div>";
+  }
+  // other common readings of the question (app/us_ask_model.py alternatives): each a whole question, one click away
+  function dymHtml(list) {
+    if (!list || !list.length) return "";
+    return "<div class='an-dym'><span>Did you mean</span>" + list.map(function (d) {
+      return "<a href='" + esc(answerUrl(d.question, "")) + "' title='" + esc(d.question) + "'>" + esc(d.label) + "</a>";
+    }).join("") + "</div>";
+  }
+  function wireDym(el) {
+    Array.prototype.forEach.call(el.querySelectorAll(".an-dym a"), function (x) {
+      x.addEventListener("click", function (ev) {
+        var nq = new URL(x.href, location.href).searchParams.get("q");
+        if (!nq) return;
+        ev.preventDefault();
+        ask(nq, true);
+      });
+    });
+  }
+  function answerUrl(q, opt) {
+    return "/?q=" + encodeURIComponent(q) + (opt ? "&opt=" + encodeURIComponent(opt) : "");
+  }
+
   var FOLD_ROWS = 10;
   function renderAnswer(a, trail) {
     disposeCharts();
@@ -293,7 +330,8 @@
     var readAs = a.match && a.match.read_as ? String(a.match.read_as).replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return dateWords(d); }) : "";
     var when = a.period && a.period.text ? a.period.text : (typeof calc.period === "string" ? calc.period.replace(/\s*\(\d{4}-.*\)$/, "") : "");
     var hasTable = !!(a.table && a.table.rows && a.table.rows.length);
-    var stamp = "Plover Analytics, " + location.origin + "/?q=" + encodeURIComponent(a.question || lastAsked);
+    var dym = (a.did_you_mean || []).filter(function (d) { return d && d.question; });
+    var stamp = "Plover Analytics, " + location.origin + answerUrl(a.question || lastAsked, lastOpt);
     var csvHead = [a.headline, src, "Formulas: " + Object.keys(calc).filter(function (k) { return k !== "query" && k !== "steps"; })
       .map(function (k) { return calcLabel(k) + " = " + calc[k]; }).join("; "), stamp];
 
@@ -302,11 +340,15 @@
       "<div class='an-asked'><span>You asked</span><b>" + esc(a.question || lastAsked) + "</b>" +
         (co && link ? "<a class='an-co' href='" + esc(link) + "'>" + logo + esc(co.name) + "</a>" : "") +
         (when ? "<span class='when'>" + esc(when) + "</span>" : "") + "</div>" +
-      // how a question was read matters only when it was read as another (a follow-up made whole)
-      (readAs && a.question && a.question !== lastAsked ? "<p class='quiet read-as'>Read as: " + esc(readAs) + "</p>" : "") +
+      // a ranking always says what it assumed; otherwise the reading matters only when the
+      // question was read as another (a follow-up made whole)
+      (a.read && a.read.text ? "<p class='quiet read-as'><b>Read as</b> " + esc(a.read.text) + "</p>" :
+        readAs && ((a.question && a.question !== lastAsked) || dym.length) ? "<p class='quiet read-as'><b>Read as</b> " + esc(readAs) + "</p>" : "") +
+      // other common readings the question has: each a whole question, one click away (app/us_ask_model.py alternatives)
+      dymHtml(dym) +
       "<p class='headline hit'>" + esc(a.headline) + "</p>" +
       (a.answer ? "<p class='answer-text'>" + esc(a.answer) + "</p>" : "") +
-      quotesHtml(a.quotes), "an-q") +
+      quotesHtml(a.quotes) + readHtml(a.read), "an-q") +
       figuresHtml(a.figures);
     if (a.chart) {
       main += panel(a.chart.title || "Chart", a.chart.unit || "",
@@ -380,12 +422,20 @@
       // typing in the table's filter searches every row, so the fold opens
       el.querySelector(".an-detail").addEventListener("input", function () { setFold(false); });
     }
-    $("an-copy").onclick = function () { copyText(this, location.origin + "/?q=" + encodeURIComponent(a.question || lastAsked)); };
+    $("an-copy").onclick = function () { copyText(this, location.origin + answerUrl(a.question || lastAsked, lastOpt)); };
     $("an-cite").onclick = function () { copyText(this, a.headline + " " + stamp + " (answered " + dateWords(new Date().toISOString()) + ")."); };
     $("an-ask").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var nq = $("an-q").value.trim();
       if (nq) { window.scrollTo(0, 0); ask(nq, true); }
+    });
+    wireDym(el);
+    // a switch asks the same question again under the other reading
+    Array.prototype.forEach.call(el.querySelectorAll(".an-switches a"), function (x) {
+      x.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ask(lastAsked, true, null, x.getAttribute("data-opt"));
+      });
     });
     Array.prototype.forEach.call(el.querySelectorAll(".an-chips a"), function (x) {
       x.addEventListener("click", function (ev) {
@@ -398,6 +448,18 @@
     });
     if (window.enhanceTables) window.enhanceTables(el);
     document.title = a.headline.slice(0, 70) + " · Plover Analytics";
+    // an answer made by code alone (the quick lane) has not been read by the model: its other
+    // readings are fetched afterwards and added above the headline, so the answer is never held up
+    var m = a.match || {}, asked = a.question || lastAsked;
+    if (!dym.length && (m.via === "quick" || m.via === "patterns")) {
+      getJSON(API + "/ask/readings?q=" + encodeURIComponent(asked)).then(function (r) {
+        var list = (r.did_you_mean || []).filter(function (d) { return d && d.question; });
+        var head = el.querySelector(".headline");
+        if (!list.length || !head || lastAsked !== asked || el.querySelector(".an-dym")) return;
+        head.insertAdjacentHTML("beforebegin", dymHtml(list));
+        wireDym(el);
+      }, function () { /* no other readings: the answer stands as it is */ });
+    }
   }
 
   // A question first asked by clicking an example stays an example when this
@@ -419,8 +481,10 @@
 
   // via: "example" when the question is one of the page's own suggestions,
   // so the ask log can tell a click from a question somebody typed (app/ask_log.py)
-  function ask(q, push, via) {
+  var lastOpt = "";
+  function ask(q, push, via, opt) {
     via = exampleVia(q, via);
+    opt = opt || "";
     placeBox(true);
     window.scrollTo(0, 0);
     // The last answer and the front page's examples go at once: the question
@@ -447,12 +511,13 @@
     $("status").hidden = false;
     if ($("q").value.trim() !== q) $("q").value = q;
     lastAsked = q;
-    if (push) history.replaceState({ q: q }, "", "/?q=" + encodeURIComponent(q));
+    lastOpt = opt;
+    if (push) history.replaceState({ q: q }, "", answerUrl(q, opt));
     // The previous question in this tab goes with the new one, so a follow-up
     // ("and Microsoft?") is read as a whole question; the answer shows that reading.
     var prev = prevQuestion();
     var tail = (prev && prev !== q ? "&prev=" + encodeURIComponent(prev) : "") +
-      (via ? "&via=" + encodeURIComponent(via) : "");
+      (via ? "&via=" + encodeURIComponent(via) : "") + (opt ? "&opt=" + encodeURIComponent(opt) : "");
     function full() {
       return askStream("/ask?q=" + encodeURIComponent(q) + tail, function (text) {
         if (lastAsked === q) heard(text);
@@ -676,7 +741,7 @@
     if (q) {
       // a bare ticker typed into the box opens the company page
       if (/^[A-Za-z]{1,5}([.-][A-Za-z])?$/.test(q) && q.toUpperCase() === q) return openStock(q, false);
-      return ask(q, false);
+      return ask(q, false, null, (u.searchParams.get("opt") || "").trim());
     }
     $("answer").hidden = true;
     $("home-note").hidden = false;

@@ -457,5 +457,20 @@
   "must_say": [
    "Tesla"
   ]
+ },
+ {
+  "question": "what non-tech stocks have the best performance in the last 5 months",
+  "route": "market_rank",
+  "must_say": [
+   "outside the technology sector"
+  ],
+  "must_not_say": [
+   "past year",
+   "Technology sector stocks"
+  ]
+ },
+ {
+  "question": "best non-bank financial stocks",
+  "route": "steps"
  }
 ]

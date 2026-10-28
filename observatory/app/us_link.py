@@ -631,6 +631,12 @@ INDUSTRY_WORD_SET = {w.upper() for words, _, _ in INDUSTRY_WORDS for phrase in w
 
 def resolve_industry(cur, question):
     """(sic prefixes, label) for an industry named in the question, or None."""
+    hit = industry_match(cur, question)
+    return (hit[0], hit[1]) if hit else None
+
+
+def industry_match(cur, question):
+    """(sic prefixes, label, the question's words that named it), or None."""
     q = " " + re.sub(r"[^a-z0-9 ]", " ", (question or "").lower()) + " "
     best = None
     for words, codes, label in INDUSTRY_WORDS:
@@ -639,10 +645,10 @@ def resolve_industry(cur, question):
                 if best is None or len(w) > len(best[2]):
                     best = (codes, label, w)
     if best:
-        return best[0], best[1]
+        return best[0], best[1], [best[2], best[2] + "s"]
     if sec_api._has(cur, "sec_sic"):
         titles = cur.execute("SELECT sic, industry FROM sec_sic").fetchall()
-        hits = []
+        hits, used = [], set()
         for sic, title in titles:
             t = (title or "").lower()
             words = [w for w in re.findall(r"[a-z]{5,}", t) if w not in ("services", "products", "general", "related", "other")]
@@ -650,8 +656,9 @@ def resolve_industry(cur, question):
             # word ("computers") also matches its singular
             if words and all(re.search(r"\b%s\b" % (w[:-1] + "s?" if w.endswith("s") else w + "s?"), q) for w in words[:2]):
                 hits.append((str(sic), title))
+                used.update(w2 for w in words[:2] for w2 in (w, w[:-1] if w.endswith("s") else w + "s"))
         if hits and len(hits) <= 6:
-            return [h[0] for h in hits], " / ".join(h[1].title() for h in hits[:3])
+            return [h[0] for h in hits], " / ".join(h[1].title() for h in hits[:3]), sorted(used)
     return None
 
 
@@ -788,23 +795,77 @@ def parse_since(question, today=None):
         return today.replace(month=1, day=1)
     if "this week" in q or "past week" in q or "last week" in q:
         return today - datetime.timedelta(days=7)
-    if re.search(r"\b(past|last)\s+(12 months|twelve months|year|one year|1 year)\b", q) or "over the past year" in q:
-        return today - datetime.timedelta(days=365)
-    if re.search(r"\b(past|last)\s+(three|3) months\b", q) or "last quarter" in q:
+    if "last month" in q or "past month" in q:
+        return _months_back(today, 1)
+    if "last quarter" in q:
         return today - datetime.timedelta(days=92)
-    if re.search(r"\b(past|last)\s+(six|6) months\b", q):
-        return today - datetime.timedelta(days=183)
-    m = re.search(r"\b(?:over|in|across|during|for)\s+(?:the\s+)?(?:past|last)?\s*(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)[- ]years?\b|"
-                  r"\b(?:past|last)\s+(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+years\b", q)
+    # any span back from today: "past 5 months", "last two weeks", "previous 90 days", "over the past year", "last 18 months"
+    m = re.search(r"\b(?:past|last|previous|prior|trailing)\s+(?:(\d{1,3}|%s|a|one)\s+)?(days?|weeks?|months?|quarters?|years?|decade)\b" % _NUM_ALT, q) or \
+        re.search(r"\b(?:over|in|across|during|for|within)\s+(?:the\s+)?(?:past\s+|last\s+)?(\d{1,3}|%s)[- ](days?|weeks?|months?|quarters?|years?)\b" % _NUM_ALT, q) or \
+        re.search(r"\bsince\s+(\d{1,3}|%s|a)\s+(days?|weeks?|months?|quarters?|years?)\s+ago\b" % _NUM_ALT, q)
     if m:
-        v = m.group(1) or m.group(2)
-        n = int(v) if v.isdigit() else _NUM_WORDS[v]
-        return today - datetime.timedelta(days=365 * n)
+        v, unit = m.group(1), m.group(2)
+        n = 1 if v in (None, "a", "one") else (int(v) if v.isdigit() else _NUM_WORDS[v])
+        if n and unit.startswith("day"):
+            return today - datetime.timedelta(days=n)
+        if n and unit.startswith("week"):
+            return today - datetime.timedelta(days=7 * n)
+        if n and unit.startswith(("month", "quarter")):
+            return _months_back(today, n * (3 if unit.startswith("quarter") else 1))
+        if n and unit.startswith(("year", "decade")):
+            return today - datetime.timedelta(days=365 * n * (10 if unit == "decade" else 1))
+    # "since March", "since June 2025", "since last March"
+    m = re.search(r"\bsince\s+(?:last\s+)?(%s)\b(?:\s+((?:19|20)\d{2}))?" % "|".join(sorted(_MONTHS, key=len, reverse=True)), q)
+    if m:
+        mo = _MONTHS[m.group(1)]
+        y = int(m.group(2)) if m.group(2) else (today.year if mo <= today.month else today.year - 1)
+        return datetime.date(y, mo, 1)
     return None
 
 
+def _months_back(today, n):
+    """The same day n calendar months earlier (clamped to the month's end)."""
+    y, mo = divmod(today.year * 12 + today.month - 1 - n, 12)
+    for d in (today.day, 30, 29, 28):
+        try:
+            return datetime.date(y, mo + 1, d)
+        except ValueError:
+            continue
+
+
 _NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
-              "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20}
+              "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15, "eighteen": 18, "twenty": 20,
+              "thirty": 30, "sixty": 60, "ninety": 90}
+_NUM_ALT = "|".join(sorted(_NUM_WORDS, key=len, reverse=True))
+
+# Every phrase that names a span of time. A phrase found here that no parser
+# reads is a question we would otherwise answer over a default period.
+TIME_PHRASE = re.compile(
+    r"\b(?:(?:in|over|during|for|within|across)\s+)?(?:the\s+)?(?:past|last|previous|prior|trailing|recent|next|coming|few|couple of|several)\s+"
+    r"(?:(?:\d{1,3}|%(n)s|a|one|few|couple of|several)\s+)?(?:days?|weeks?|months?|quarters?|years?|decades?|sessions?|trading days?)\b|"
+    r"\b(?:\d{1,3}|%(n)s)[- ](?:days?|weeks?|months?|quarters?|years?|decades?|sessions?|trading days?)\b(?:\s+ago)?|"
+    r"\bsince\s+[a-z0-9]+(?:\s+[a-z0-9]+){0,2}|"
+    r"\b(?:this|last|next)\s+(?:week|month|quarter|year)\b|\bytd\b|\byear to date\b|\bmonth to date\b|\bmtd\b|\bqtd\b|"
+    r"\bin\s+(?:19|20)\d{2}\b|\byesterday\b|\btoday\b" % {"n": _NUM_ALT})
+
+
+def unread_time(question, today=None):
+    """The time phrases in a question that no time parser here reads ("over
+    the past few months", "since the election"); [] when every one is read."""
+    q = (question or "").lower()
+    out = []
+    for m in TIME_PHRASE.finditer(q):
+        p = m.group(0).strip()
+        if re.fullmatch(r"(?:in\s+|over\s+|during\s+|for\s+)?(?:the\s+)?(?:this|last|next|past)\s+(?:week|month|quarter|year)|today|yesterday|ytd|year to date|"
+                        r"since (?:its |the |their )?(?:ipo|listing|inception|beginning|start|it listed|it went public)(?: [a-z0-9]+)*", p):
+            continue                      # read by parse_since, parse_ahead_days or the shapes' own grammars
+        if re.match(r"(?:in\s+|over\s+|for\s+|during\s+)?(?:the\s+)?(?:next|coming)\b", p) and \
+                re.search(r"next\s+(\d+|two|three|four|one)\s+(week|weeks|day|days|month|months)", p):
+            continue                      # a window ahead, read by parse_ahead_days
+        if parse_since(p, today) or parse_year_window(p, today) or (parse_years(p) and not re.search(r"\bago\b", p)):
+            continue
+        out.append(p)
+    return out
 
 
 _YEAR = r"((?:19|20)\d{2})"

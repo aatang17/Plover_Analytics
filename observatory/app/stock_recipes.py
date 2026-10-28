@@ -3106,6 +3106,10 @@ def _size_floor(q, e):
 
 
 def _rank(cur, q, e, rows, scope_label, recipe):
+    opts = e.get("opts") or frozenset()
+    rows_in = rows
+    if "sp500" in opts and not e.get("index"):
+        e = dict(e, index="sp500")                 # the reader's switch: S&P 500 members only
     key, order, label, unit = e.get("rank") or _metric(q)
     field, floor = _size_floor(q, e)
     n = e.get("count") or 10
@@ -3156,11 +3160,12 @@ def _rank(cur, q, e, rows, scope_label, recipe):
     ratio_keys = ("roe_pct", "operating_margin_pct", "net_margin_pct", "revenue_growth_pct", "profit_growth_pct", "dividend_yield_pct", "pb_x", "ps_x",
                   "buyback_yield_pct", "pe_x", "fcf_margin_pct")
     if (key in ratio_keys or key.startswith("fig:")) and not e.get("index") and not e.get("money") and not field \
-            and not re.search(r"\ball\b|small|micro|penny", q.lower()):
+            and not re.search(r"\ball\b|small|micro|penny", q.lower()) and "all" not in opts:
         # a ratio across an industry: tiny filers post the wildest ratios (a $20mn retailer with 183% ROE)
         field, floor = "market_cap", 2e9
         perf_floor_note = " Companies under $2bn in market value are left out; ask for \u201call\u201d to include them."
-    if key == "price_change_1y_pct" and not e.get("index") and not e.get("money") and not re.search(r"\ball\b|small|micro|penny", q.lower()):
+    if key == "price_change_1y_pct" and not e.get("index") and not e.get("money") and not re.search(r"\ball\b|small|micro|penny", q.lower()) \
+            and "all" not in opts:
         # Across the whole market the top of a performance list is micro-caps and
         # reverse-split leftovers; companies above $2bn are ranked unless asked.
         field, floor = "market_cap", 2e9
@@ -3209,7 +3214,11 @@ def _rank(cur, q, e, rows, scope_label, recipe):
             continue                            # a sliver of equity makes any profit look like a 15,000% return
         if e.get("country") and (r.get("country") or "").upper() != e["country"]:
             continue
-        if e.get("sector") and us_steps_sector(r.get("sic")) != e["sector"]:
+        if e.get("sector") and _sector_of(r, opts) != e["sector"]:
+            continue
+        if e.get("country_not") and (r.get("country") or "").upper() == e["country_not"]:
+            continue
+        if e.get("sector_not") and _sector_of(r, opts) == e["sector_not"]:
             continue
         if key in ("revenue_growth_pct", "profit_growth_pct"):
             # growth from a tiny base leads any list: the year-before revenue must be real money
@@ -3226,6 +3235,8 @@ def _rank(cur, q, e, rows, scope_label, recipe):
                 len(kept), scope_label, ("; the smallest profit was %s's %s" % (short_name(smallest[1]["name"]), money(smallest[0]))) if smallest else ""))
         kept, order = sorted(losers, key=lambda kv: kv[0]), "asc"
     top = kept[:n]
+    if e.get("_probe"):
+        return [r["ticker"] for v, r in top]       # the list under another reading, for _read_as
     if not top:
         raise HTTPException(404, "No %s with a %s on file%s." % (scope_label, label, (" above %s" % money(floor)) if floor else ""))
     def fmt(v):
@@ -3307,12 +3318,108 @@ def _rank(cur, q, e, rows, scope_label, recipe):
         calc[key] = "market value \u00f7 shareholders' equity in the latest annual report (companies with negative equity left out)"
     if key == "ps_x":
         calc[key] = "market value \u00f7 revenue in the latest annual report"
-    return pkg(recipe, q, headline, answer, [fig("Companies qualifying", len(kept), "count", None)], table, chart,
-               [SEC_SOURCE, PRICE_SOURCE, COMPANIES_SOURCE], {key: calc.get(key, "as filed")},
-               {"metric": key, "order": order, "floor": {"field": field, "value": floor} if field else None, "count": n},
-               {"screener": "/api/v1/us/financials/screener?sort=%s&order=%s" % (key, order)},
-               rank_notes + ["Companies missing the ranking figure are left out and counted in the API's excluded_missing_sort."],
-               period=period_span(*e["period_span"]) if window and e.get("period_span") else None)
+    out = pkg(recipe, q, headline, answer, [fig("Companies qualifying", len(kept), "count", None)], table, chart,
+              [SEC_SOURCE, PRICE_SOURCE, COMPANIES_SOURCE], {key: calc.get(key, "as filed")},
+              {"metric": key, "order": order, "floor": {"field": field, "value": floor} if field else None, "count": n},
+              {"screener": "/api/v1/us/financials/screener?sort=%s&order=%s" % (key, order)},
+              rank_notes + ["Companies missing the ranking figure are left out and counted in the API's excluded_missing_sort."],
+              period=period_span(*e["period_span"]) if window and e.get("period_span") else None)
+    out["read"] = _read_as(cur, q, e, rows_in, scope_label, recipe, key, label, order, field, floor, bool(perf_floor_note),
+                           [r["ticker"] for v, r in top], out.get("period"))
+    return out
+
+
+# ---- what a ranking assumed, said in the answer, with switches ---------------
+# A vague question ("non-tech stocks", "the best stocks") is answered at once
+# on the usual reading; the answer says that reading in one line, offers the
+# few switches that matter, and warns only when a switch changes the list.
+# A switch is a URL parameter (opt=sp500,all,tech), so every view is citable.
+OPTS = ("sp500", "all", "tech")
+
+# what each broad sector holds, from the SEC industry codes behind it (app/us_steps.py _SECTORS)
+SECTOR_MEANS = {
+    "Technology": "software, chips, computers, communications equipment and IT services",
+    "Health Care": "drugs, medical devices, hospitals, labs and health insurers",
+    "Financials": "banks, insurers, brokers and asset managers",
+    "Real Estate": "property companies and REITs",
+    "Energy": "oil, gas and coal producers, refiners and pipelines",
+    "Utilities": "power, gas and water utilities",
+    "Materials": "mining, chemicals, metals, paper and building materials",
+    "Industrials": "machinery, transport, construction and business services",
+    "Consumer Discretionary": "retailers, carmakers, hotels, restaurants and leisure",
+    "Consumer Staples": "food, drink, household goods and grocers",
+    "Communication": "telecoms, media and publishing",
+}
+# Large companies most readers call tech whose SEC industry code puts them elsewhere
+# (a mail-order retailer, a carmaker, "business services"). Switch "tech" counts them as tech.
+TECH_BORDERLINE_NAMES = {"AMZN": "Amazon", "TSLA": "Tesla", "NFLX": "Netflix", "UBER": "Uber", "V": "Visa", "MA": "Mastercard",
+                         "PYPL": "PayPal", "BKNG": "Booking", "ABNB": "Airbnb", "DASH": "DoorDash", "SPOT": "Spotify"}
+TECH_BORDERLINE = tuple(TECH_BORDERLINE_NAMES)
+
+
+def parse_opts(raw):
+    """The reader's switches from the URL: a set of known keys, the rest ignored."""
+    return frozenset(o for o in re.split(r"[,\s]+", (raw or "").lower()) if o in OPTS)
+
+
+def _sector_of(row, opts):
+    if "tech" in opts and row.get("ticker") in TECH_BORDERLINE:
+        return "Technology"
+    return us_steps_sector(row.get("sic"))
+
+
+def _names(cur, tickers):
+    by = us_link.companies(cur)["by_ticker"]
+    return [TECH_BORDERLINE_NAMES.get(t) or (short_name(by[t]["name"]) if t in by else t) for t in tickers]
+
+
+def _read_as(cur, q, e, rows, scope_label, recipe, key, label, order, field, floor, default_floor, top, period):
+    """{"text", "means", "switches", "warning"}: the reading a ranking ran on."""
+    opts = e.get("opts") or frozenset()
+    when = (period or {}).get("text") or ("over the past year" if key == "price_change_1y_pct" else "latest close" if key == "market_cap"
+                                          else "latest close and annual reports" if key in sec_metrics.PRICE_ORDER else "latest annual reports")
+    parts = [scope_label[0].upper() + scope_label[1:]]
+    if field == "market_cap" and floor:
+        parts.append("worth over %s" % money(floor))
+    elif field and floor:
+        parts.append("revenue over %s" % money(floor))
+    parts.append("ranked by %s, %s first" % ("price change" if key == "price_change_1y_pct" else label, "lowest" if order == "asc" else "highest"))
+    if not (period or {}).get("text"):
+        parts.append(when)                         # a dated window is already shown beside the question
+    sector = e.get("sector") or e.get("sector_not")
+    means = ""
+    if sector:
+        means = "%s here means %s, grouped from the SEC's industry codes." % (sector, SECTOR_MEANS.get(sector, sector.lower()))
+        if sector == "Technology":
+            names = _names(cur, TECH_BORDERLINE)
+            means += " %s and %s are counted as %s." % (", ".join(names[:-1]), names[-1], "tech" if "tech" in opts else "non-tech")
+    switches = []
+    if not (e.get("index") and "sp500" not in opts):
+        switches.append({"key": "sp500", "label": "S&P 500 only", "on": "sp500" in opts})
+    if default_floor or "all" in opts:
+        switches.append({"key": "all", "label": "Include stocks under $2bn", "on": "all" in opts})
+    warning = ""
+    if sector == "Technology":
+        few = _names(cur, TECH_BORDERLINE[:3])
+        switches.append({"key": "tech", "label": "Count %s and others as tech" % ", ".join(few), "on": "tech" in opts})
+        other = opts ^ {"tech"}
+        try:
+            alt = _rank(cur, q, dict(e, opts=other, _probe=True), rows, scope_label, recipe)
+        except HTTPException:
+            alt = None
+        if alt is not None and alt != top:
+            gone = [t for t in top if t not in alt]
+            come = [t for t in alt if t not in top]
+            said = []
+            if gone:
+                said.append("%s would drop out" % _join(["%s (%s)" % (n, _ordinal(top.index(t) + 1)) for t, n in zip(gone, _names(cur, gone))]))
+            if come:
+                said.append("%s would come in" % _join(_names(cur, come)))
+            if said:
+                warning = "Counting %s as %s changes this list: %s." % (
+                    "them" if means else "those companies", "non-tech" if "tech" in opts else "tech", "; ".join(said))
+    return {"text": " \u00b7 ".join(parts), "means": means, "switches": switches, "warning": warning,
+            "opts": sorted(opts)}
 
 
 def us_steps_sector(sic):
@@ -3333,11 +3440,46 @@ SECTOR_WORDS = [(r"\btech(?:nology)?\b", "Technology"), (r"health ?care|\bhealth
 
 
 def country_sector(q):
-    """(country code, country word, sector) named in the question, each or None."""
+    """(country code, country word, sector) named in the question, each or None.
+    A word with "non-", "ex-", "excluding" … before it is left out, never read
+    as its opposite: "non-tech stocks" is not the Technology sector."""
+    f = _country_sector_filters(q)
+    return f["country"], f["country_word"], f["sector"]
+
+
+def excluded_country_sector(q):
+    """(country code, country word, sector) the question leaves out ("non-tech",
+    "excluding Chinese companies", "other than energy"), each or None."""
+    f = _country_sector_filters(q)
+    return f["country_not"], f["country_word_not"], f["sector_not"]
+
+
+# the words that turn the filter after them around
+_EXCLUDE_PREFIX = (r"\bnon[- ]?|\bex-|\bexclud(?:e|es|ing)\s+(?:the\s+)?|\bexcept(?: for)?\s+(?:the\s+)?|\bother than\s+(?:the\s+)?|"
+                   r"\boutside(?: of)?\s+(?:the\s+)?|\bapart from\s+(?:the\s+)?|\baside from\s+(?:the\s+)?|\bbesides\s+(?:the\s+)?|"
+                   r"\bnot\s+(?:in\s+)?(?:the\s+)?|\bno\s+")
+EXCLUDE_BEFORE = re.compile("(?:" + _EXCLUDE_PREFIX + ")$")
+# any word that can turn a filter around: a question carrying one is answered
+# only by a route that reads it (see unread_words)
+EXCLUDE_WORDS = re.compile(r"\bnon[- ]?(?=[a-z])|\bex-(?=[a-z])|\bexclud(?:e|es|ing)\b|\bexcept\b|\bother than\b|\boutside\b|\bapart from\b|"
+                           r"\baside from\b|\bbesides\b|\bwithout\b|\bnot\b|\bno\b|n['’]t\b|\bexcl\.?(?=\s)")
+
+
+def _country_sector_filters(q):
     ql = (q or "").lower()
-    cc = next(((code, word) for pat, code, word in COUNTRY_WORDS if re.search(pat, ql)), (None, None))
-    sec = next((name for pat, name in SECTOR_WORDS if re.search(pat, ql)), None)
-    return cc[0], cc[1], sec
+    out = dict.fromkeys(("country", "country_word", "sector", "country_not", "country_word_not", "sector_not"))
+    for pat, code, word in COUNTRY_WORDS:
+        for m in re.finditer(pat, ql):
+            if EXCLUDE_BEFORE.search(ql[:m.start()]):
+                if not out["country_not"]:
+                    out["country_not"], out["country_word_not"] = code, word
+            elif not out["country"]:
+                out["country"], out["country_word"] = code, word
+    for pat, name in SECTOR_WORDS:
+        for m in re.finditer(pat, ql):
+            key = "sector_not" if EXCLUDE_BEFORE.search(ql[:m.start()]) else "sector"
+            out[key] = out[key] or name
+    return out
 
 
 def r_industry_rank(cur, q, e):
@@ -3350,13 +3492,21 @@ def r_industry_rank(cur, q, e):
 
 def r_market_rank(cur, q, e):
     code, word, sector = country_sector(q)
-    e = dict(e, country=code, sector=sector)
+    code_not, word_not, sector_not = excluded_country_sector(q)
+    e = dict(e, country=code, sector=sector, country_not=code_not, sector_not=sector_not)
     label = "US-listed companies"
     if word:
         label = "US-listed %s companies" % word
+    elif word_not:
+        label = "US-listed non-%s companies" % word_not
     if sector:
-        label = "%s %s stocks" % (label.replace(" companies", ""), sector.lower()) if word else "%s sector stocks" % sector
+        label = "%s %s stocks" % (label.replace(" companies", ""), sector.lower()) if (word or word_not) else "%s sector stocks" % sector
+    elif sector_not:
+        label = "%s outside the %s sector" % (label.replace("companies", "stocks"), sector_not.lower())
     out = _rank(cur, q, e, metric_rows(cur), label, "market_rank")
+    if sector_not or code_not:
+        out["entities"]["excluded"] = {"sector": sector_not, "country": code_not}
+    word, sector = word or word_not, sector or sector_not
     if word or sector:
         out.setdefault("notes", []).append("%s%s" % (("Country is the business address as filed with the SEC. " if word else ""),
                                                       ("Sectors are approximate, grouped from the SEC's industry codes." if sector else "")))
@@ -4215,6 +4365,70 @@ _Q_MANAGER = re.compile(r"^(?:(?:what|who|which|how much|how many shares) (?:did
 
 QUICK_LANE = True            # off in tests that exercise the reader
 
+_CAL_WORDS = frozenset("""earnings results reporting report reports filing filings calendar who is are which what companies company
+stocks due upcoming coming next this week weeks month days day today tomorrow the in on of show me list""".split())
+
+
+# Words a ranking question may carry without changing what is ranked. Anything
+# else must be read by the route, or the question goes where it can be read.
+_RANK_FILLER = frozenset("""
+what which who whose whats what's is are was were the a an of in on at to for by from among across within over
+show me list give find get tell please name names
+top best worst most least highest lowest largest biggest smallest bottom weakest strongest
+stocks stock companies company firms firm shares equities listed us u.s u s us-listed american america
+do did does doing done have has had performing performed perform performance performers performer
+rank ranked ranking sorted order ordered trade trades trading traded right now currently sector sectors
+large major all
+""".split())
+
+
+_RANK_READS = {"market_rank": ("country", "sector", "exclusions", "index", "money"), "industry_rank": ("industry", "index", "money")}
+
+
+def unread_words(cur, q, reads=(), also=()):
+    """The words of a ranking question that the ready-made ranking does not
+    read. It reads a figure, a time span, a count and the size words "large"
+    and "all"; `reads` adds what else the route reads: "country", "sector",
+    "exclusions" (non-tech, excluding Chinese), "industry", "index" (S&P 500
+    members), "money" (above $10bn). Every word left over could change the
+    answer ("non-", "Japanese", "big three", "small caps", "past few
+    months"), so a question with any is never answered by a ranking that
+    would quietly drop it."""
+    ql = (q or "").lower().replace("’", "'")
+    left = list(us_link.unread_time(ql))
+    # the columns a ranking shows anyway: "with P/E and one-year change"
+    t = re.sub(r"\b(?:with|and|plus|showing)\s+(?:(?:the|their|its)\s+)?(?:p/?e|one.year change|1.year change|price change|market value|dividend yield)\b", " ", ql)
+    t = us_link.TIME_PHRASE.sub(" ", t)
+    t = re.sub(r"\blarge[- ]?caps?\b|\bbig companies\b", " ", t)       # the size floor _size_floor reads
+    if "index" in reads:
+        for b in us_benchmarks.BENCHMARKS.values():
+            t = re.sub(b["words"], " ", t)
+        t = re.sub(r"\b(?:members?|constituents?|index)\b", " ", t)
+    if "money" in reads:
+        t = re.sub(r"(?:\b(?:above|over|more than|at least|greater than|exceeding|bigger than|larger than)\s+)?\$?\d[\d.,]*\s*(?:tn|trillion|bn|billion|b|mn|million|m)\b"
+                   r"(?:\s+(?:in|of)\s+(?:market value|market cap(?:itali[sz]ation)?|revenue|sales))?", " ", t)
+    countries = "|".join(p for p, _c, _w in COUNTRY_WORDS)
+    sectors = "|".join(p for p, _s in SECTOR_WORDS)
+    if "exclusions" in reads:
+        t = re.sub(r"(?:%s)(?:%s)" % (_EXCLUDE_PREFIX, "|".join(x for x in (countries if "country" in reads else "", sectors if "sector" in reads else "") if x)),
+                   " ", t)
+    left += [m.group(0).strip() for m in EXCLUDE_WORDS.finditer(t)]
+    t = EXCLUDE_WORDS.sub(" ", t)
+    if "country" in reads:
+        t = re.sub(countries, " ", t)
+    if "sector" in reads:
+        t = re.sub(sectors, " ", t)
+    if "industry" in reads:
+        hit = us_link.industry_match(cur, t)
+        for w in (hit[2] if hit else []):
+            t = re.sub(r"\b%s\b" % re.escape(w), " ", t)
+    for pat in [p for p, _k, _o, _l, _u in METRIC_WORDS] + [f["words"] for f in FIGURES]:
+        t = re.sub(r"[\w'/-]*(?:%s)[\w'/-]*" % pat, " ", t)
+    t = re.sub(r"\b(?:\d{1,3}|%s)\b" % us_link._NUM_ALT, " ", t)
+    also = {w.strip(".'-") for w in also}
+    left += [w for w in re.findall(r"[a-z0-9&'.-]+", t) if w.strip(".'-") and w.strip(".'-") not in _RANK_FILLER and w.strip(".'-") not in also]
+    return left
+
 
 def quick_match(cur, question):
     """(recipe, entities) when the question is a company and a few words
@@ -4222,7 +4436,15 @@ def quick_match(cur, question):
     q = (question or "").strip()
     if not QUICK_LANE or not q or len(q) > 120:
         return None
+    # a span of time no parser reads ("over the past few months") would be
+    # answered over a default period: the reader takes it instead
+    if us_link.unread_time(q):
+        return None
     cos = us_link.find_companies(cur, _without_benchmarks(q))
+    # "not", "non-", "excluding" are read only by the market ranking, and only
+    # before a sector or country ("non-tech stocks"); anywhere else the reader takes it
+    if EXCLUDE_WORDS.search(q.lower()) and (cos or not any(excluded_country_sector(q))):
+        return None
     if _STEPS_DATA.search(q) and not re.search(r"\bpa(?:y|id)\b|compensation|salar|\bsold\b|\bbought\b|\bsell|\bbuy|insider|holders?|\bowns?\b|portfolio|stake", q.lower()):
         # one company's quarters, by code: "Apple Q3 2025 revenue", "Nvidia revenue every quarter", "Snowflake revenue last quarter"
         if len(cos) == 1 and re.search(r"\bquarter|\bq[1-4]\b", q.lower()) and not re.search(r"\b(vs\.?|versus|compar|segment|division|how many|which|share of|median|average)\b", q.lower()):
@@ -4241,7 +4463,8 @@ def quick_match(cur, question):
                 re.fullmatch(r"where are insiders buying(?: (?:this|last) (?:week|month|year))?\??", ql):
             return BY_ID["insider_buying_market"], entities(cur, q)
         # "earnings calendar next week", "who is reporting this week": the filing calendar, by code
-        if re.search(r"\b(earnings|results|reporting|filing) calendar\b|who (?:is|are) reporting|which companies (?:are )?reporting|companies reporting", ql):
+        if re.search(r"\b(earnings|results|reporting|filing) calendar\b|who (?:is|are) reporting|which companies (?:are )?reporting|companies reporting", ql) and \
+                not [w for w in re.findall(r"[a-z0-9&'-]+", us_link.TIME_PHRASE.sub(" ", ql)) if w not in _CAL_WORDS]:
             return BY_ID["calendar_window"], entities(cur, q)
         # "average P/E of the Dow", "median market cap of the S&P 500": one statistic across an index
         m = re.fullmatch(r"(?:what is |whats |what's |show me )?(?:the )?(average|median|mean|typical) (.+?) (?:of|for|in|across|on) (?:the )?(?:s&p 500|s&p|sp500|spx|dow|dow jones|djia)(?: members| stocks| companies| index)?\??", ql)
@@ -4249,11 +4472,13 @@ def quick_match(cur, question):
             e = entities(cur, q)
             e["index"], e["stat"], e["stat_words"] = us_link.parse_index(q), m.group(1), m.group(2)
             return BY_ID["index_stat"], e
-    # "Chinese companies listed in the US by market value", "Israeli tech stocks": a country or sector, by code
-    if not cos and not us_benchmarks.find(q) and re.search(r"\b(companies|company|stocks|stock|firms|firm|names|shares|adrs)\b", ql) and not _SHARE_WORDS.search(ql) \
-            and not _THRESHOLD_WORDS.search(ql) and not us_link.resolve_industry(cur, q) and country_sector(q)[0] or (
-            not cos and not us_benchmarks.find(q) and re.search(r"\b(companies|company|stocks|stock|firms|firm)\b", ql) and country_sector(q)[2] and not us_link.resolve_industry(cur, q)
-            and re.search(r"\b(largest|biggest|top|best|worst|cheapest|most|highest|lowest|fastest)\b", ql) and not _SHARE_WORDS.search(ql) and not _THRESHOLD_WORDS.search(ql)):
+    # "Chinese companies listed in the US by market value", "Israeli tech stocks", "non-tech stocks that did best":
+    # a country or sector, kept or left out, by code, when every other word is a figure, a time or a count
+    cs, xs = country_sector(q), excluded_country_sector(q)
+    if not cos and not us_benchmarks.find(q) and re.search(r"\b(companies|company|stocks|stock|firms|firm|names|shares|adrs)\b", ql) \
+            and (cs[0] or xs[0] or ((cs[2] or xs[2]) and re.search(r"\b(largest|biggest|top|best|worst|cheapest|most|highest|lowest|fastest)\b", ql))) \
+            and not _SHARE_WORDS.search(ql) and not _THRESHOLD_WORDS.search(ql) and not us_link.resolve_industry(cur, q) \
+            and not unread_words(cur, q, ("country", "sector", "exclusions")):
         try:
             _metric(q)
         except HTTPException:
@@ -4267,7 +4492,7 @@ def quick_match(cur, question):
                 and not re.search(r"\b(against|vs\.?|versus|moved|treasury|10.year|ten.year|interest rates?|index|s&p|dow|nasdaq|correlat|compared)\b", q.lower()) \
                 and not re.search(r"\b(and|with|without|positive|negative|no|at least|more than|less than)\b", q.lower()) \
                 and not _SHARE_WORDS.search(q.lower()) and not _THRESHOLD_WORDS.search(q.lower()) and not _PAY_WORDS.search(q) \
-                and not re.search(r"insider|13f|holders?|funds?\b", q.lower()):
+                and not re.search(r"insider|13f|holders?|funds?\b", q.lower()) and not unread_words(cur, q, ("industry",)):
             try:
                 _metric(q)                                       # a figure we do not rank on says so here
             except HTTPException:
@@ -4435,15 +4660,17 @@ def is_macro_question(cur, question):
         return True
 
 
-def answer(cur, question, prev=None):
+def answer(cur, question, prev=None, opts=None):
     """The quick lane first: a company plus a few words naming one shape is
     answered by code at once. Then the reader: a small model fills in the
     question's form (app/us_ask_model.py) and the shape it names runs on the
     same code as a pattern match. When the reader is off or its form cannot
     be placed, the word patterns answer. A refusal from the data (an index
     whose members we do not hold, a figure not filed) is returned as is,
-    never swapped for a different question."""
+    never swapped for a different question. `opts` are the reader's switches
+    on a ranking's reading (parse_opts: sp500, all, tech)."""
     from . import ask_miss, ask_progress, us_ask_model
+    opts = opts if isinstance(opts, frozenset) else parse_opts(opts)
     ql = (question or "").lower()
     if _NOT_A_QUESTION.fullmatch(ql.strip(" ?!.,")):
         raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
@@ -4492,6 +4719,7 @@ def answer(cur, question, prev=None):
         quick = quick_match(cur, question)
         if quick:
             r, e = quick
+            e["opts"] = opts
             ask_progress.say(_doing(r, e))
             out = r["run"](cur, question, e)
             out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "quick", "read_as": None}
@@ -4506,7 +4734,7 @@ def answer(cur, question, prev=None):
             # "not understood" from the reader is checked against the words: a question that names a
             # company ("Apple revenue history") goes to the word patterns instead of being refused
             if kind == "unclear" and us_link.find_companies(cur, _without_benchmarks(question)):
-                return _pattern_answer(cur, question)
+                return _pattern_answer(cur, question, opts)
             raise ask_miss.miss(_REFUSALS[form["refuse"]] or ask_miss.UNCLEAR, kind)
         # a follow-up ("and Microsoft?") is answered as the whole question the
         # reader wrote from it and the previous one; the page shows that reading
@@ -4537,6 +4765,12 @@ def answer(cur, question, prev=None):
         # a share, a count or an average is worked out step by step, never answered with a ranking
         if form.get("shape") in ("market_rank", "industry_rank") and (_SHARE_WORDS.search(ql) or _THRESHOLD_WORDS.search(ql)):
             form = dict(form, shape="steps")
+        # a ready-made ranking runs on the question's own words: one it does not read
+        # ("non-bank", "big three", "small caps") is worked out step by step, never dropped
+        if form.get("shape") in _RANK_READS and unread_words(cur, question, _RANK_READS[form["shape"]],
+                                                             also=str(form.get("industry") or "").lower().split()):
+            us_steps.log(question, "ranking leaves words unread", " ".join(unread_words(cur, question, _RANK_READS[form["shape"]])))
+            form = dict(form, shape="steps")
         if form.get("shape") in ("steps", "company_says") and re.search(r"how many risks?|how many risk factors|count (of )?(the )?risks?", ql) and form.get("companies"):
             form = dict(form, shape="company_risks")
         if form.get("shape") == "steps" and form.get("companies") and len(form.get("companies") or []) == 1 and _SEGMENT_Q.search(ql) \
@@ -4556,10 +4790,12 @@ def answer(cur, question, prev=None):
                 e = None
         if e is not None:
             r = BY_ID[form["shape"]]
+            e["opts"] = opts
             ask_progress.say(_doing(r, e))
             out = r["run"](cur, question, e)
             out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "reader",
                             "read_as": form.get("read_as")}
+            out["did_you_mean"] = form.get("alternatives") or []
             return _finish(out, e)
         # the reader found no shape at all ("no_fit"): a word pattern that names a
         # specific shape for this question answers it before the step route is
@@ -4569,12 +4805,16 @@ def answer(cur, question, prev=None):
                 recipe, e2, score, alts = match(cur, question)
             except HTTPException:
                 recipe = None
+            if recipe is not None and recipe["id"] in _RANK_READS and unread_words(cur, question, _RANK_READS[recipe["id"]]):
+                recipe = None                                    # the step route reads what the ranking would drop
             if recipe is not None and score > 0:
                 us_steps.log(question, "no_fit: answered by patterns", recipe["id"])
+                e2["opts"] = opts
                 ask_progress.say(_doing(recipe, e2))
                 out = recipe["run"](cur, question, e2)
                 out["match"] = {"recipe": recipe["id"], "label": recipe["label"], "score": score, "alternatives": alts,
                                 "via": "patterns", "read_as": form.get("read_as")}
+                out["did_you_mean"] = form.get("alternatives") or []
                 return _finish(out, e2)
         # no ready-made shape answers it: work it out step by step
         ask_progress.say("No ready-made answer fits, so working it out step by step…")
@@ -4582,11 +4822,12 @@ def answer(cur, question, prev=None):
             out = us_steps.answer(cur, question)
             if form.get("read_as"):
                 out["match"]["read_as"] = form["read_as"]       # the reading is shown however the answer was made
+            out["did_you_mean"] = form.get("alternatives") or []
             return out
         except us_steps.StepsError:
             pass
     try:
-        return _pattern_answer(cur, question)
+        return _pattern_answer(cur, question, opts)
     except HTTPException as exc:
         if form is None and exc.status_code == 422:
             us_steps.log(question, "no match (reader off)", exc.detail)
@@ -4655,7 +4896,7 @@ def _doing(recipe, e):
     return DOING.get(recipe["id"], recipe["label"]).format(co=co) + "…"
 
 
-def _pattern_answer(cur, question):
+def _pattern_answer(cur, question, opts=frozenset()):
     from . import ask_progress
     try:
         recipe, e, score, alts = match(cur, question)
@@ -4667,6 +4908,15 @@ def _pattern_answer(cur, question):
                             "alternatives": [], "via": "patterns"}
             return _finish(out, e)
         raise
+    left = unread_words(cur, question, _RANK_READS[recipe["id"]]) if recipe["id"] in _RANK_READS else []
+    if left:
+        _metric(question)                    # a figure we do not hold says so first, in its own words
+        # the reader is off or failed, and the ranking would answer without these words
+        from . import ask_miss
+        raise ask_miss.miss("I couldn't read “%s” in that question, so I won't rank without it. Try saying it another "
+                            "way, for example “best performing stocks outside the technology sector over the past 5 months”."
+                            % " ".join(dict.fromkeys(left)), "unclear")
+    e["opts"] = opts
     ask_progress.say(_doing(recipe, e))
     out = recipe["run"](cur, question, e)
     out["match"] = {"recipe": recipe["id"], "label": recipe["label"], "score": score, "alternatives": alts, "via": "patterns"}

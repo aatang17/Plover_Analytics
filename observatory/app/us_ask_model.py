@@ -116,7 +116,7 @@ TIMEOUT_SECONDS = 15
 _CACHE = OrderedDict()
 _CACHE_MAX = 5000
 FORM_KEYS = ("shape", "companies", "industry", "manager", "figure", "rank_by", "order", "universe", "benchmark",
-             "from", "to", "years", "count", "min_value", "refuse", "read_as", "question")
+             "from", "to", "years", "count", "min_value", "refuse", "read_as", "question", "alternatives")
 
 RULES = """You read one question about US-listed stocks and fill in a form. Today is %(today)s.
 Reply with one JSON object, these keys only:
@@ -135,8 +135,18 @@ Reply with one JSON object, these keys only:
  "count": <how many to list, or null>,
  "min_value": <a dollar market-value floor as a number, or null>,
  "refuse": null, or "why" (asks why something happened), "advice" (whether to buy or sell), "forecast" (estimates, targets, the future), "fragment" (a follow-up that leans on a previous question, and none is given), "unclear" (not a question at all: random letters, a greeting, a test, a lone word naming no company, figure, index or market), "no_fit" (nothing below answers it),
- "read_as": <one short plain sentence saying what will be shown, naming the period>}
+ "read_as": <one short plain sentence saying what will be shown, naming the period>,
+ "alternatives": [{"question": <the whole question rewritten so it can be read only this other way>, "differs": <a few words naming this reading, e.g. "Meta Materials (MMAT)", "calendar July-September", "the Nasdaq 100">, "share": <of 100 people typing this question, how many mean this reading>}, ... at most 2] or []}
 Rules:
+- "alternatives" are other readings many people would mean that give a DIFFERENT answer: a name several US-listed
+  companies share, a fiscal or a calendar quarter, which index "the market" means, a figure with two common meanings
+  (total debt or long-term debt), a period said loosely ("recently"). Fill the form with the most likely reading and put
+  the others here. Most questions have one plain reading and get []. Never list a different question the reader did not
+  ask ("most deposits" for "grew deposits most", revenue for a share-price question), a reading that only changes the
+  wording, or two readings that come to the same dates or companies. Only readings with a share of 25 or more count.
+  Examples: "how is the market doing" -> [the Nasdaq 100, share 30]; "Ford debt" -> [long-term debt only, share 30];
+  "how did Tencent do" -> [] when one US-listed filer carries the name; "Tesla revenue 2025", "which bank grew deposits
+  most", "largest US companies by market value", "how did Meta do this year", "Alphabet net income" -> [].
 - A follow-up names only what changes ("and Microsoft?", "what about last year?") and leans on the previous question, which is given with it when there is one. Write the whole question in "question" and fill the rest of the form from that whole question. With no previous question, a follow-up is "refuse": "fragment".
 - Never invent a company, number or date the question does not imply. "as_written" is copied from the question (the whole question, for a follow-up); the ticker is yours ("google" is GOOGL, "meta" is META).
 - "in 2026" means from 2026-01-01 (to 2026-12-31 only if that year is over); "this year" or "year to date" means from %(year)d-01-01; "past year" means from one year before today; no period named for a performance question means from %(year)d-01-01.
@@ -273,7 +283,7 @@ def read(question, system_prompt, prev=None):
     try:
         # low, not none: with no reasoning gpt-6-luna read "Apple revenue history" and "Tesla insider
         # trades" as not a question on one try in two (2026-10-21); with low, never in ten
-        out = _complete(prov, key, model, messages, cache_key="plover-us-reader", effort="low")
+        out = _complete(prov, key, model, messages, max_tokens=450, cache_key="plover-us-reader", effort="low")
     except Exception:                                             # noqa: BLE001 — a timeout, a refusal, a bad reply
         _tick("failed")
         return None
@@ -287,12 +297,39 @@ def read(question, system_prompt, prev=None):
         _tick("failed", tokens)
         return None
     form = {k: form.get(k) for k in FORM_KEYS}
+    form["alternatives"] = alternatives(form.get("alternatives"), question, form.get("question"))
     _tick("matched" if form.get("shape") else "declined", tokens)
     with _LOCK:
         _CACHE[key_] = dict(form)
         while len(_CACHE) > _CACHE_MAX:
             _CACHE.popitem(last=False)
     return form
+
+
+MIN_SHARE = 25          # of 100 askers, how many must mean another reading for it to be offered
+
+
+def alternatives(raw, question, whole=None):
+    """The model's other readings, kept only when each is a real question
+    that differs from the one asked and from each other; at most two."""
+    out, seen = [], {_norm(question), _norm(whole)}
+    for a in raw if isinstance(raw, list) else []:
+        if not isinstance(a, dict):
+            continue
+        q = re.sub(r"\s+", " ", str(a.get("question") or "")).strip()
+        label = re.sub(r"\s+", " ", str(a.get("differs") or "")).strip()
+        if not (5 <= len(q) <= 300) or _norm(q) in seen:
+            continue
+        try:
+            if float(a.get("share") if a.get("share") is not None else 100) < MIN_SHARE:
+                continue                     # a reading few askers mean is noise under the answer
+        except (TypeError, ValueError):
+            pass
+        seen.add(_norm(q))
+        out.append({"question": q, "label": label if 2 <= len(label) <= 80 else q})
+        if len(out) == 2:
+            break
+    return out
 
 
 def status():
