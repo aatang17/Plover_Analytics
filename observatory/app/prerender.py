@@ -257,7 +257,7 @@ DESCRIPTIONS = {
         "thirteen expenditure divisions — with the official year-on-year rates, from the "
         "Census and Statistics Department.",
     "us-companies.html":
-        "Large US companies' SEC filings since 2009 — revenue, profit, cash flows and every "
+        "Every S&P 500 company's SEC filings since 2009 — revenue, profit, cash flows and every "
         "filed concept, as latest filed, as first reported or as known on any date.",
     "us-stock.html":
         "A US-listed company's share price, market value and ratios from its latest annual report, "

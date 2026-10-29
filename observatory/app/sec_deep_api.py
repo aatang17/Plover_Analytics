@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""US deep coverage — full filed history for a chosen set of large US companies.
+"""US deep coverage — full filed history for every S&P 500 company.
 
 sec_api.py serves every US filer for the quarters the data-set shelf holds.
 This module serves the other cut, loaded by equity/sec_companyfacts.py from

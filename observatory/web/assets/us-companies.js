@@ -115,7 +115,7 @@
     });
     var from = cs.map(function (c) { return c.history_from; }).sort()[0];
     $("stat-strip").innerHTML = "<div class='strip-grid cols-4'>" +
-      tile("Companies", count(cs.length), d.sectors.length + " GICS sectors, five each") +
+      tile("Companies", count(cs.length), "S&P 500 members, in " + d.sectors.length + " GICS sectors") +
       tile("Filed values", count(facts), "across " + count(filings) + " filings") +
       tile("History from", from ? from.slice(0, 4) : MISSING, "first filing held: " + (from || MISSING)) +
       tile("Latest filing", latest || MISSING, latestT ? "filed by " + latestT : "") +
