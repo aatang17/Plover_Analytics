@@ -277,14 +277,15 @@ class ResponseCache(object):
             if message["type"] == "http.response.start":
                 state["status"] = message["status"]
                 state["headers"] = message["headers"]
-                ctype = b""
+                ctype, no_store = b"", False
                 for name, value in message["headers"]:
                     if name.lower() == b"content-type":
                         ctype = value
-                        break
+                    elif name.lower() == b"cache-control" and b"no-store" in value.lower():
+                        no_store = True   # an answer that dates by the hour (news on the web, app/us_web.py)
                 # Only plain successful JSON is cacheable. Errors, redirects and
                 # streamed media go straight out, still streaming.
-                if message["status"] != 200 or not ctype.startswith(b"application/json"):
+                if message["status"] != 200 or not ctype.startswith(b"application/json") or no_store:
                     state["passthrough"] = True
                     await send(message)
                     return

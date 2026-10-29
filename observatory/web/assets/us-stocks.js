@@ -294,6 +294,20 @@
     return out.slice(0, 5);
   }
 
+  // The news reports a why answer draws on (app/us_web.py), each linked, under the answer itself:
+  // the reasons are theirs, not Plover's, and the reader can check each one. A "why" answered
+  // from Plover's own record lists the announcements it points to (app/stock_recipes.py _own_record).
+  function newsHtml(sources, recipe) {
+    var news = (sources || []).filter(function (s) { return s.url && /^https?:\/\//.test(s.url); });
+    if (!news.length) return "";
+    var head = recipe === "web_news" ? "From news reports found by a web search" : "Published on the day";
+    return "<div class='an-news'><p class='an-news-head'>" + head + "</p><ul>" +
+      news.map(function (s) {
+        return "<li><a href='" + esc(s.url) + "' rel='noopener nofollow' target='_blank'>" + esc(s.credit) + "</a>" +
+          (s.note ? " <span>" + esc(s.note) + "</span>" : "") + "</li>";
+      }).join("") + "</ul></div>";
+  }
+
   /* ---- the annual report's own words ----------------------------------- */
   // Passages are quoted exactly as filed, each with the section, form and
   // year it comes from and a link to the document on EDGAR.
@@ -439,7 +453,8 @@
     var co = (a.entities && a.entities.company) || ((a.entities && a.entities.mentioned_companies) || [])[0] || null;
     var link = a.links && a.links.company ? a.links.company : (co && co.ticker ? "/us-stock.html?t=" + encodeURIComponent(co.ticker) : null);
     var logo = co && co.ticker && window.usLogos ? usLogos.img(co.ticker, 16) : "";
-    var src = (a.sources || []).map(function (s) { return s.credit; }).join(" ");
+    // the chart's source line names the data it draws, never the news reports beside it
+    var src = (a.sources || []).filter(function (s) { return !s.url; }).map(function (s) { return s.credit; }).join(" ");
     var readAs = a.match && a.match.read_as ? String(a.match.read_as).replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return dateWords(d); }) : "";
     var when = a.period && a.period.text ? a.period.text : (typeof calc.period === "string" ? calc.period.replace(/\s*\(\d{4}-.*\)$/, "") : "");
     var hasTable = !!(a.table && a.table.rows && a.table.rows.length);
@@ -461,7 +476,7 @@
       dymHtml(dym) +
       "<p class='headline hit'>" + esc(a.headline) + "</p>" +
       (a.answer ? "<p class='answer-text'>" + esc(a.answer) + "</p>" : "") +
-      quotesHtml(a.quotes) + readHtml(a.read), "an-q") +
+      newsHtml(a.sources, a.recipe) + quotesHtml(a.quotes) + readHtml(a.read), "an-q") +
       figuresHtml(a.figures);
     if (a.chart) {
       main += panel(a.chart.title || "Chart", a.chart.unit || "",
@@ -500,6 +515,8 @@
     if (a.notes && a.notes.length) rail += panel("Read With Care", "", "<div class='an-body'><ul class='plain'>" + a.notes.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") + "</ul></div>");
     if ((a.sources || []).length) {
       rail += panel("Sources", "", "<div class='an-body'><ul class='plain'>" + a.sources.map(function (s) {
+        // a news report is listed under the answer it supports (newsHtml); here it is named by its site
+        if (s.url) return "<li>" + (a.recipe === "web_news" ? "News report: " + esc(s.note || s.name) : esc(s.credit)) + "</li>";
         return "<li>" + esc(s.credit) + (s.note ? " " + esc(s.note) : "") + "</li>";
       }).join("") + (a.links && a.links.filing ? "<li><a href='" + esc(a.links.filing) + "' rel='noopener'>The filing on EDGAR</a></li>" : "") + "</ul></div>");
     }

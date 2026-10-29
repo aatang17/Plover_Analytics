@@ -23,6 +23,8 @@ import datetime
 import re
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 from .. import analysis, recipes, registry
 
@@ -255,10 +257,10 @@ def _stock(q, prev=None):
     more.append("Follow-up questions on the same answer")
     return {"kind": "stock", "read_as": (a.get("match") or {}).get("read_as") or "",
             "headline": a["headline"], "lead": _first_sentence(a.get("answer")),
-            "figures": figs, "sources": [s.get("credit") for s in a.get("sources") or [] if s.get("credit")],
+            "figures": figs, "sources": [(s.get("note") if s.get("url") else s.get("credit")) for s in a.get("sources") or [] if s.get("credit")],
             "calc": None, "more": more, "period": a.get("period"),
             # the question as the box read it (a follow-up made whole), for the next follow-up
-            "question": a.get("question") or q,
+            "question": a.get("question") or q, "recipe": a.get("recipe"),
             # the full answer is the home page itself, signed in (us-stocks.html redirects there)
             "full_url": "/?q=" + _quote(a.get("question") or q)}, None
 
@@ -644,4 +646,7 @@ def preview(q: str = Query(..., min_length=1, max_length=300),
                 "holds": HOLDS}
     ask_log.note("/api/v1/assistant/preview", q, True, out.get("kind"))
     out.setdefault("question", q)
+    if out.get("recipe") == "web_news":
+        # news on the web dates by the hour: the response cache must not keep it (app/us_web.py)
+        return JSONResponse(content=jsonable_encoder(out), headers={"Cache-Control": "no-store"})
     return out

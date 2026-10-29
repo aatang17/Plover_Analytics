@@ -42,7 +42,11 @@ def ask(q: str = Query(..., min_length=1, max_length=300, description="a questio
     cur = None
     try:
         cur = sec_api._require()
-        return _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None, opt))
+        out = _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None, opt))
+        if (out or {}).get("recipe") == "web_news":
+            # news dates by the hour: the response cache must not keep it until the next data refresh
+            return JSONResponse(content=jsonable_encoder(out), headers={"Cache-Control": "no-store"})
+        return out
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content=ask_miss.reply(q, exc, cur))
     except Exception:                                              # noqa: BLE001 — the reader hears it was ours
@@ -139,12 +143,12 @@ def readings(q: str = Query(..., min_length=1, max_length=300, description="a qu
 
 @router.get("/recipes")
 def recipes():
-    from . import us_ask_model
+    from . import us_ask_model, us_web
     return {"recipes": stock_recipes.catalogue(),
             "figures": [{"id": f["id"], "label": f["label"], "unit": f["unit"]} for f in stock_recipes.FIGURES],
             "not_held": [m for _, m in stock_recipes.NOT_HELD],
-            "unanswerable": ["why a price or figure moved", "whether to buy or sell", "forecasts, estimates or targets"],
-            "model_reader": us_ask_model.status()}
+            "unanswerable": ["whether to buy or sell", "forecasts, estimates or targets"],
+            "model_reader": us_ask_model.status(), "web_search": us_web.status()}
 
 
 @router.get("/run/{recipe}")

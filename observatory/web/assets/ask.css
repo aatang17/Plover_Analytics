@@ -46,6 +46,13 @@ pre.sql { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; line
 .followups a { display: inline-block; font-size: 13.5px; padding: 7px 12px; border: 1px solid var(--obs-text-faint); border-radius: 3px;
   color: var(--obs-ink); text-decoration: none; }
 .followups a:hover { border-color: var(--obs-primary); color: var(--obs-primary); }
+.an-news { margin: 2px 0 6px; padding-top: 12px; border-top: 1px solid var(--obs-grid); max-width: 78ch; }
+.an-news-head { margin: 0 0 6px; font-size: 12.5px; color: var(--obs-text-muted); }
+.an-news ul { list-style: none; margin: 0; padding: 0; }
+.an-news li { margin: 0 0 6px; font-size: 14.5px; line-height: 1.45; }
+.an-news a { color: var(--obs-primary); text-decoration: none; }
+.an-news a:hover { text-decoration: underline; }
+.an-news span { font-size: 12.5px; color: var(--obs-text-muted); }
 .answer-quote { margin: 4px 0 16px; padding: 2px 0 2px 16px; border-left: 3px solid var(--obs-border); max-width: 78ch; }
 .answer-quote p { margin: 0 0 10px; font-size: 15.5px; line-height: 1.6; color: var(--obs-text); text-wrap: pretty; }
 .quote-cite { margin: 0; font-size: 12.5px; color: var(--obs-text-muted); }

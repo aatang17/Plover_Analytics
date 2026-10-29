@@ -134,7 +134,7 @@ Reply with one JSON object, these keys only:
  "years": <years of history asked for, or null>,
  "count": <how many to list, or null>,
  "min_value": <a dollar market-value floor as a number, or null>,
- "refuse": null, or "why" (asks why something happened), "advice" (whether to buy or sell), "forecast" (estimates, targets, the future), "fragment" (a follow-up that leans on a previous question, and none is given), "unclear" (not a question at all: random letters, a greeting, a test, a lone word naming no company, figure, index or market), "no_fit" (nothing below answers it),
+ "refuse": null, or "why" (asks why something happened or moved, or for the news: "why did Tesla fall", "what happened" or "what caused it" after a question about a price or a move, "any news on Apple"; write the whole question in "question"), "advice" (whether to buy or sell), "forecast" (estimates, targets, the future), "fragment" (a follow-up that leans on a previous question, and none is given), "unclear" (not a question at all: random letters, a greeting, a test, a lone word naming no company, figure, index or market), "no_fit" (nothing below answers it),
  "read_as": <one short plain sentence saying what will be shown, naming the period>,
  "alternatives": [{"question": <the whole question rewritten so it can be read only this other way>, "differs": <a few words naming this reading, e.g. "Meta Materials (MMAT)", "calendar July-September", "the Nasdaq 100">, "share": <of 100 people typing this question, how many mean this reading>}, ... at most 2] or []}
 Rules:

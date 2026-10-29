@@ -3334,7 +3334,7 @@ def _rank(cur, q, e, rows, scope_label, recipe):
 # on the usual reading; the answer says that reading in one line, offers the
 # few switches that matter, and warns only when a switch changes the list.
 # A switch is a URL parameter (opt=sp500,all,tech), so every view is citable.
-OPTS = ("sp500", "all", "tech")
+OPTS = ("sp500", "all", "tech", "web")      # web: search the news even when the record answers why
 
 # what each broad sector holds, from the SEC industry codes behind it (app/us_steps.py _SECTORS)
 SECTOR_MEANS = {
@@ -3887,6 +3887,296 @@ _UNANSWERABLE = [
      "I don't give investment advice. I can show the figures people weigh: valuation, growth, who is buying, what insiders are doing."),
     (r"will .* (earn|report|make)|forecast|estimate|consensus|guidance|target price|price target", "I hold no analyst estimates or forecasts, only what companies have filed and where their shares have traded."),
 ]
+
+# a question about why something moved, or about the news: answered from news on the web (app/us_web.py).
+# "What drove the S&P 500" stays with the data (index_contribution); "News Corp" is a company.
+_NEWS_ASK = re.compile(r"\bwhy\b|what caused|\breasons? (for|behind)\b|\b(any|latest|recent) news\b|\bnews (on|about|for)\b|"
+                       r"\bheadlines? (on|about|for)\b|what'?s (going on|happening) (with|at|to)\b")
+
+
+# Why a stock or the market moved, cheapest answer first (2026-10-29: each web
+# search costs real money, and most readers ask the same few things):
+#   1. a plain "why did X move" whose biggest day was X's results day (or, for
+#      the market, a Fed decision or CPI day) is answered from what Plover
+#      holds, with the filing linked and one click to search the news instead;
+#   2. otherwise every reader asking it in the same part of the day shares one
+#      search (app/us_web.py market_slot), however the question was worded.
+_MOVE_WORDS = frozenset((
+    "why did does do is has have had was were are been the a an its it stock stocks shares share price prices "
+    "fall fell falling fallen drop dropped dropping down rise rose rising risen up jump jumped jumping surge surged surging "
+    "plunge plunged plunging sink sank sinking tumble tumbled tumbling rally rallied rallying slump slumped slide slid sliding "
+    "soar soared soaring spike spiked crash crashed decline declined declining gain gained move moved moving go went "
+    "so much sharply big what happened happening to with at on about for any news latest headlines going "
+    "caused cause behind reason reasons market index today yesterday this last week month year lately recently in during").split())
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+
+
+def _why_period(ql, today=None):
+    """(key, words, since, until) for the period a why question names; the
+    last month when it names none. None for a period this does not read."""
+    today = today or datetime.date.today()
+    m = re.search(r"\b(%s)(?:\s+((?:19|20)\d\d))?\b" % "|".join(_MONTHS), ql)
+    if m:
+        mo = _MONTHS.index(m.group(1)) + 1
+        y = int(m.group(2)) if m.group(2) else (today.year if mo <= today.month else today.year - 1)
+        since = datetime.date(y, mo, 1)
+        until = (datetime.date(y + mo // 12, mo % 12 + 1, 1) - datetime.timedelta(days=1))
+        return since.strftime("%Y-%m"), "in %s" % since.strftime("%B %Y"), since, min(until, today)
+    if re.search(r"(?<!\d)(?:19|20)\d\d\b", ql):
+        return None
+    monday = today - datetime.timedelta(days=today.weekday())
+    first = today.replace(day=1)
+    if "today" in ql:
+        return "today", "today", today, today
+    if "yesterday" in ql:
+        return "yesterday", "yesterday", today - datetime.timedelta(days=1), today - datetime.timedelta(days=1)
+    if "this week" in ql:
+        return "this week", "this week", monday, today
+    if "last week" in ql:
+        return "last week", "last week", monday - datetime.timedelta(days=7), monday - datetime.timedelta(days=1)
+    if "this month" in ql:
+        return "this month", "this month", first, today
+    if "last month" in ql:
+        prev = (first - datetime.timedelta(days=1)).replace(day=1)
+        return "last month", "last month", prev, first - datetime.timedelta(days=1)
+    if "this year" in ql:
+        return "this year", "this year", today.replace(month=1, day=1), today
+    return "lately", "over the past month", today - datetime.timedelta(days=31), today
+
+
+def _news_entities(cur, question):
+    """entities() with the news words blanked: "any news on Apple" names Apple, not News Corp."""
+    return entities(cur, _NEWS_WORDS.sub(" ", question or ""))
+
+
+_NEWS_WORDS = re.compile(r"\b(?:any|latest|recent|the)\s+(?:news|headlines?)\b|\b(?:news|headlines?)\s+(?:on|about|for)\b", re.I)
+
+
+def _news_topic(cur, question):
+    """{"share", "ask", "company" | "benchmark", "period"} when a question asks
+    only why one stock (or an index) moved, or what its news is, so every
+    wording shares one answer; None for anything narrower ("why did Apple drop
+    its car project"), which is searched as asked."""
+    ql = (question or "").lower()
+    e = _news_entities(cur, question)
+    cos = e["companies"]
+    bench = e.get("benchmark")
+    if len(cos) > 1 or (not cos and not bench):
+        return None
+    plain = _NEWS_WORDS.sub(" ", question or "")
+    left = _without_benchmarks(_strip_companies(plain, cos) if cos else plain).lower()
+    left = re.sub(r"(\w)['’]s\b", r"\1", left)
+    words = [w for w in re.findall(r"[a-z]+", left) if w not in _MOVE_WORDS and w not in _MONTHS]
+    if words:
+        return None
+    period = _why_period(ql)
+    if not period:
+        return None
+    if cos:
+        rec = cos[0]
+        subject, share = "%s (%s) stock" % (short_name(rec["name"]), rec["ticker"]), ("company", rec["cik"], period[0])
+    else:
+        b = us_benchmarks.BENCHMARKS[bench]
+        subject, share = _bench_name(b), ("index", bench, period[0])
+    # asked for the moves and their dates: "why has it moved" alone drew "fluctuations due to various factors"
+    return {"share": share, "ask": "What moved %s %s? Give the biggest moves, their dates and the reasons the reports give." % (subject, period[1]),
+            "company": cos[0] if cos else None, "benchmark": bench, "period": period}
+
+
+def _biggest_day(series, since, until):
+    """(date, % change, closes in the period) for the largest close-to-close
+    move on a day inside the period; None when there is none."""
+    moves = [(d1, (a1 / a0 - 1) * 100) for (d0, a0), (d1, a1) in zip(series, series[1:]) if a0 and since <= d1 <= until]
+    if not moves:
+        return None
+    d, m = max(moves, key=lambda x: abs(x[1]))
+    return d, m, moves
+
+
+WEB_SWITCH = {"key": "web", "label": "Search the news for why", "on": False}
+DAILY_MOVE = "close on the day ÷ close on the trading day before − 1, split-adjusted"
+
+
+def _own_record(cur, question, topic):
+    """The answer from what Plover holds, when that is enough: the period's
+    biggest daily move came on the company's results day or the trading day
+    after, or for an index on a Fed decision or CPI release day. None when
+    it did not, or when the prices on file stop short of the period."""
+    if not sec_api._has(cur, "us_events") or not sec_api._has(cur, "us_px_daily"):
+        return None
+    key, words, since, until = topic["period"]
+    rec, bench = topic["company"], topic["benchmark"]
+    if rec:
+        series = closes(cur, rec["ticker"], since - datetime.timedelta(days=10), None)
+    else:
+        b = us_benchmarks.BENCHMARKS[bench]
+        series = [(d, a) for d, c, a in us_prices_api.clean_closes(cur, b["etf"], since - datetime.timedelta(days=10), None)[0]]
+    if not series or (min(until, datetime.date.today()) - series[-1][0]).days > 4:
+        return None                                    # the prices on file stop short: the news has to say it
+    series = [x for x in series if x[0] <= until]
+    big = _biggest_day(series, since, until)
+    if not big:
+        return None
+    day, move, moves = big
+    after = {d0: d1 for (d0, _), (d1, _) in zip(series, series[1:])}
+    span = len(moves) > 1
+    inside = [a for d, a in series if d >= since]
+    total = (inside[-1] / inside[0] - 1) * 100 if len(inside) > 1 and inside[0] else None   # as the chart beside it measures it
+    links_out, sources = [], [PRICE_SOURCE]
+    if rec:
+        if abs(move) < 2:
+            return None
+        rows = cur.execute("SELECT date, source_url FROM us_events WHERE kind = 'results' AND is_earnings AND cik = ? "
+                           "AND date BETWEEN ? AND ? ORDER BY date DESC", [rec["cik"], since - datetime.timedelta(days=5), day]).fetchall()
+        hit = next(((d, u) for d, u in rows if d == day or after.get(d) == day), None)
+        if not hit:
+            return None
+        rday, url = hit
+        name = short_name(rec["name"])
+        when = "the day it reported quarterly results" if rday == day else "the trading day after it reported quarterly results on %s" % date_words(rday)
+        headline = "%s's shares %s %s on %s, %s." % (name, "rose" if move > 0 else "fell", pct(abs(move)), date_words(day), when)
+        answer = ("That was their biggest daily move %s; over the period they are %s %s. " % (words, "up" if total >= 0 else "down", pct(abs(total)))
+                  if span and total is not None else "")
+        sources.append({"name": "SEC filing", "credit": "%s results filing (8-K), %s" % (name, date_words(rday)),
+                        "note": "sec.gov", "url": url})
+        for t, u in _press_releases(rec["cik"], rday, rday + datetime.timedelta(days=1)):
+            # a title read from an exhibit can run on into its contents ("Q2 2026 Update 1 Exhibit 99.1 Highlights 03 …")
+            title = "%s's results release, %s" % (name, date_words(rday)) if re.search(r"exhibit\s*99|\b0\d\s+[A-Z]", t, re.I) else _clip(t, 90)
+            sources.append({"name": "Company release", "credit": title, "note": us_web_site(u), "url": u})
+        answer += ("The results are in the company's own announcement, linked below. Plover holds what the company published, "
+                   "not news reports on why investors reacted to it.")
+        found = "Matched it to %s's results day, from its SEC filings (8-K item 2.02)" % name
+    else:
+        if abs(move) < 1:
+            return None
+        ev = cur.execute("SELECT kind, detail, source FROM us_events WHERE kind IN ('fomc', 'cpi') AND NOT scheduled AND date = ? "
+                         "ORDER BY kind", [day]).fetchall()
+        if not ev:
+            return None
+        kind, detail, src = ev[0]
+        name = _bench_name(us_benchmarks.BENCHMARKS[bench])
+        if kind == "fomc":
+            what, link = "the day the Federal Reserve announced its interest-rate decision", (
+                "Federal Reserve Board", "FOMC statement, %s" % date_words(day), "federalreserve.gov",
+                "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
+        else:
+            m = re.search(r"for (\w+ \d{4})", detail or "")
+            what, link = "the day %s consumer price figures came out" % ("the %s" % m.group(1) if m else "the monthly"), (
+                "U.S. Bureau of Labor Statistics", "CPI release%s, %s" % (" for %s" % m.group(1) if m else "", date_words(day)),
+                "bls.gov", "https://www.bls.gov/bls/news-release/cpi.htm")
+        headline = "%s %s %s on %s, %s." % (name[0].upper() + name[1:], "rose" if move > 0 else "fell", pct(abs(move)), date_words(day), what)
+        answer = ("That was its biggest daily move %s; over the period it is %s %s. " % (words, "up" if total >= 0 else "down", pct(abs(total)))
+                  if span and total is not None else "")
+        answer += "Plover holds the release calendar, not news reports on why investors reacted."
+        sources.append({"name": link[0], "credit": link[1], "note": link[2], "url": link[3]})
+        found = "Matched it to the %s on the same day, from the official release calendars" % (
+            "Fed's rate decision" if kind == "fomc" else "CPI release")
+    out = pkg("why_record", question, headline, answer, sources=sources,
+              figures=[fig("Change on %s" % day.strftime("%-d %b"), round(move, 2), "%", _d(day), DAILY_MOVE)],
+              calc={"daily_move": DAILY_MOVE},
+              notes=["Why investors moved the price is not something filings or prices say. This shows what was published on the day; "
+                     "Search the news for reporters' explanations."] + ([] if rec else [INDEX_NOTE]))
+    out["steps"] = ["Found the biggest daily move %s in Plover's daily prices: %s on %s" % (words, pct(move, sign=True), date_words(day)),
+                    found, "Did not search the web: the Search the news for why button does that"]
+    if rec:
+        e = dict(_news_entities(cur, question), since=since, until=until if until < datetime.date.today() else None)
+        try:
+            px = r_company_price_performance(cur, question, e)
+        except HTTPException:
+            px = None
+        if px:
+            out.update(chart=px["chart"], links=px["links"], period=px.get("period"))
+            out["figures"] = out["figures"] + px["figures"]
+            out["calc"] = dict(px.get("calc") or {}, daily_move=DAILY_MOVE)
+            out["entities"].update(px.get("entities") or {})
+    out["read"] = {"text": "", "means": "", "switches": [dict(WEB_SWITCH)], "warning": "", "opts": []}
+    out["match"] = {"recipe": "why_record", "label": "What Plover holds", "score": None, "alternatives": [], "via": "quick", "read_as": question}
+    out["did_you_mean"] = []
+    return out
+
+
+def _clip(text, n):
+    """At most n characters, cut at a word: a release title read from an exhibit can run on into its contents."""
+    t = re.sub(r"\s+", " ", text or "").strip()
+    return t if len(t) <= n else t[:n].rsplit(" ", 1)[0].rstrip(" ,;:-") + "…"
+
+
+def us_web_site(url):
+    from . import us_web
+    return us_web._site(url)
+
+
+def _press_releases(cik, start, end):
+    """[(title, url)] of the company's own releases published between two dates."""
+    from . import us_press
+    try:
+        con = us_press.connect(readonly=True)
+    except Exception:                                              # noqa: BLE001 — no store: the filing alone
+        return []
+    if con is None:
+        return []
+    try:
+        return [(r["title"], r["url"]) for r in con.execute(
+            "SELECT title, url FROM press_releases WHERE cik = ? AND substr(published, 1, 10) BETWEEN ? AND ? "
+            "ORDER BY published LIMIT 2", (int(cik), start.isoformat(), end.isoformat()))]
+    finally:
+        con.close()
+
+
+def _web_answer(cur, question, prev=None, opts=frozenset()):
+    """Why a stock or the market moved: from Plover's own record when that is
+    enough (_own_record), else from news on the web, with the company's own
+    price beside it when the question names one company; None when the
+    search is off, over its cap or finds no reports."""
+    from . import ask_progress, us_steps, us_web
+    topic = _news_topic(cur, question) if not prev else None
+    if topic and "web" not in opts:
+        own = _own_record(cur, question, topic)
+        if own:
+            return _finish(own, _news_entities(cur, question))
+    if us_web.config() is None:
+        return None
+    ask_progress.say("Searching the news on the web…")
+    try:
+        got = us_web.search(topic["ask"] if topic else question, prev, share=topic["share"] if topic else None)
+    except us_web.WebError as exc:
+        us_steps.log(question, "web search: no answer", str(exc))
+        return None
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"“])", got["text"], maxsplit=1)
+    sources = [{"name": s["site"], "credit": s["title"], "note": s["site"], "url": s["url"]} for s in got["sources"]]
+    asked = datetime.date.fromisoformat(got["asked_at"][:10]) if got.get("asked_at") else datetime.date.today()
+    out = pkg("web_news", question, parts[0], parts[1] if len(parts) > 1 else "", sources=sources,
+              notes=["Why it moved comes from news reports found by a web search on %s, not from filings or prices Plover holds. "
+                     "Read the reports before relying on them." % date_words(asked)])
+    out["trust"] = {"reasons": "news on the web", "prices": "official"}
+    out["steps"] = ["Searched the web for: " + "; ".join("“%s”" % q for q in got["searches"][:4]) if got["searches"]
+                    else "Searched the web for news on the question",
+                    "Read the reports and summarised what they say (%s)" % got["model"],
+                    "Listed every report the answer draws on, with a link, under the answer"]
+    if topic:
+        out["steps"].insert(0, "Asked the news the question every reader of %s shares, so one search serves them all: “%s”" % (
+            "this company" if topic["company"] else "this index", topic["ask"]))
+    e = _news_entities(cur, question)
+    if len(e["companies"]) == 1:
+        # "why did it fall" means lately: the chart shows the last month unless the question names a period
+        if topic:
+            since, until = topic["period"][2], topic["period"][3]
+            e["since"], e["until"] = since, (until if until < datetime.date.today() else None)
+        elif not e.get("since") and not us_link.parse_year_window(question):
+            e["since"] = asked - datetime.timedelta(days=31)
+        try:
+            px = r_company_price_performance(cur, question, e)
+        except HTTPException:
+            px = None
+        if px:
+            out.update(figures=px["figures"], chart=px["chart"], calc=px["calc"], links=px["links"], period=px.get("period"),
+                       sources=[PRICE_SOURCE] + sources)
+            out["entities"].update(px.get("entities") or {})
+            out["steps"].append("Added %s's closing prices from Plover's daily price file" % e["companies"][0]["name"])
+    # a follow-up ("what happened") was made whole: the page shows that reading
+    out["match"] = {"recipe": "web_news", "label": "News on the web", "score": None, "alternatives": [], "via": "web", "read_as": question}
+    out["did_you_mean"] = []
+    return _finish(out, e)
 
 
 def _without_benchmarks(question):
@@ -4674,9 +4964,17 @@ def answer(cur, question, prev=None, opts=None):
     ql = (question or "").lower()
     if _NOT_A_QUESTION.fullmatch(ql.strip(" ?!.,")):
         raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
-    for pat, msg in _UNANSWERABLE:
+    # advice and forecasts are refused; why something moved is the news (app/us_web.py), refused only
+    # when the search is off or finds nothing. A follow-up ("why did it fall?") is read whole first.
+    for pat, msg in _UNANSWERABLE[1:]:
         if re.search(pat, ql):
             raise HTTPException(422, msg)
+    news = bool(_NEWS_ASK.search(ql))
+    if news and not prev:
+        out = _web_answer(cur, question, opts=opts)
+        if out:
+            return out
+        raise HTTPException(422, _UNANSWERABLE[0][1])
     held = not_held_early(question)
     if held:
         raise ask_miss.miss(held, "not_held")
@@ -4726,6 +5024,15 @@ def answer(cur, question, prev=None, opts=None):
             return _finish(out, e)
     ask_progress.say("Reading your question…")
     form = us_ask_model.read(question, reader_prompt(), prev)
+    # "what happened" after a price answer, or "why did it fall?": the news, on the whole question
+    if (form and form.get("refuse") == "why") or news:
+        whole = str((form or {}).get("question") or "").strip()
+        read_whole = bool(whole) and us_ask_model._norm(whole) != us_ask_model._norm(question)
+        out = _web_answer(cur, whole if read_whole else question, None if read_whole else prev, opts)
+        if out:
+            return out
+        if news and not form:
+            raise HTTPException(422, _UNANSWERABLE[0][1])
     if form:
         if form.get("refuse") in _REFUSALS and not form.get("shape"):
             from . import ask_miss
