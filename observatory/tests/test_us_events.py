@@ -198,6 +198,89 @@ class Refused(unittest.TestCase):
         con.close()
 
 
+class SixKResults(unittest.TestCase):
+    """2026-10-29: TSMC, ASML, Sony, Toyota and 1,200 other foreign filers had no results days:
+    they file 6-Ks, which carry no item number. A 6-K counts only when it says it is the results."""
+
+    def test_the_filing_list_alone_can_say_it(self):
+        q = D(2025, 3, 31)
+        f = lambda desc="", xbrl=False, report=None: ev.SixK((D(2025, 4, 29), "a", "d.htm", xbrl, report, desc))
+        self.assertTrue(ev.sixk_listed_signal(f(xbrl=True, report=D(2025, 3, 31)), q))      # the quarter's tagged statements
+        self.assertIsNone(ev.sixk_listed_signal(f(xbrl=True, report=D(2025, 5, 7)), q))     # tagged, but not for the quarter
+        for desc in ("EARNINGS RELEASE 1Q25", "1ST QUARTER RESULTS", "Q1 2025 TRADING STATEMENT", "2025 FULL YEAR RESULTS",
+                     "DISCLOSURE OF RESULTS OF OPERATIONS AND FINANCIAL CONDITION", "9M AND Q3 2025 RESULTS"):
+            self.assertTrue(ev.sixk_listed_signal(f(desc), q), desc)
+        for desc in ("TRANSACTION IN OWN SHARES", "DIRECTOR/PDMR SHAREHOLDING", "FORM 6-K", "6-K", "TOTAL VOTING RIGHTS"):
+            self.assertIsNone(ev.sixk_listed_signal(f(desc), q), desc)
+
+    def test_the_documents_say_it_and_mentions_do_not(self):
+        sig = ev.sixk_document_signal
+        self.assertTrue(sig(["form6-kquarterlyfilings.htm", "pressreleasequarterlyresul.htm"], "", ""))     # ASML
+        self.assertTrue(sig(["d91.htm"], "Exhibit Description 99.1 Press release issued by TSMC on April 17, 2025. "
+                                         "99.2 2025 First Quarter Earnings Conference Presentation", ""))     # TSMC
+        self.assertTrue(sig(["d.htm"], "Form 20-F x Exhibit 99.1 TSMC Reports Third Quarter EPS of NT$3.10", ""))  # TSMC before 2023
+        self.assertTrue(sig(["d.htm"], "FORM 6-K ... Form 40-F x Exhibit 99.1 BMO Financial Group Reports Fourth "
+                                       "Quarter and Fiscal 2025 Results", ""))
+        self.assertTrue(sig(["caq22025.htm"], "Form 20-F x Form 40-F o Financial report for the period 1 January 2025 "
+                                              "to 30 June 2025", ""))                                      # Novo Nordisk
+        for words in ("Exhibit 99.5 Transcript of April 17, 2025 earnings call",                       # filed days later
+                      "Form 40-F x Outlooks presented may vary from the actual first quarter 2025 results",   # Shell's update
+                      "Form 40-F x The detailed results from the phase 3 trial will be presented",          # a drug trial
+                      "Form 40-F x the Bank's Wealth Management segment's fourth-quarter results",           # a mention
+                      "Documents attached hereto: Press release: Notice Regarding Date of Sony Corporation's "
+                      "Announcement of Consolidated Financial Results for the Fiscal Year",                       # a date, not results
+                      "Form 20-F x TSMC will hold its 2025 Third Quarter Earnings Conference on October 16"):
+            self.assertIsNone(sig(["d.htm"], words, ""), words)
+
+    def test_a_quarter_is_judged_in_order_and_left_for_later_when_the_reads_run_out(self):
+        path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        con = ev._connect(path)
+        six = [ev.SixK((D(2026, 4, 8), "upd", "u.htm", False, None, "")),         # first in the window: not the results
+               ev.SixK((D(2026, 5, 2), "res", "r.htm", False, None, "")),
+               ev.SixK((D(2026, 7, 31), "h1", "h.htm", True, D(2026, 6, 30), "")),
+               ev.SixK((D(2026, 5, 9), "bb", "b.htm", False, None, "TRANSACTION IN OWN SHARES"))]
+        read = []
+
+        def fake_read(con_, client, cik, f):
+            read.append(f.acc)
+            v = ("results", "headline") if f.acc == "res" else ("other", None)
+            con_.execute("INSERT INTO us_event_6k VALUES (?, ?, ?, ?, ?, NULL, NULL, now(), ?)", [f.acc, cik, f.date, v[0], v[1], ev.SIXK_RULE])
+            return v
+        with mock.patch.object(ev, "_sixk_read", fake_read):
+            found, unfinished = ev.sixk_results(con, None, 7, "1231", six, D(2026, 1, 1), D(2026, 10, 29), {"left": 1})
+            self.assertEqual([(d, q) for d, _, q, _ in found], [(D(2026, 7, 31), D(2026, 6, 30))])   # tagged: no read
+            self.assertTrue(unfinished)                                                                # Q1 needs two reads
+            self.assertEqual(read, ["upd"])
+            found, unfinished = ev.sixk_results(con, None, 7, "1231", six, D(2026, 1, 1), D(2026, 10, 29), {"left": 5})
+            self.assertFalse(unfinished)
+            self.assertEqual(sorted(d for d, _, _, _ in found), [D(2026, 5, 2), D(2026, 7, 31)])
+            self.assertEqual(read, ["upd", "res"])            # the update's verdict was kept, never read twice; the buyback skipped
+        con.close()
+
+    def test_a_foreign_filer_gets_6k_results_and_a_part_judged_one_comes_back_deep(self):
+        path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        con = ev._connect(path)
+        con.execute("CREATE TABLE sec_companies (cik BIGINT, ticker VARCHAR)")
+        con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
+        con.execute("INSERT INTO sec_companies VALUES (7, 'TSM'), (8, 'AAPL')")
+        con.execute("INSERT INTO sec_filings VALUES (7, '20-F', DATE '2026-04-10', '1231', DATE '2025-12-31')")
+        self.assertIn(7, ev._sixk_waiting(con))
+        six = [ev.SixK((D(2026, 4, 16), "q1", "a.htm", False, None, "EARNINGS RELEASE 1Q26")),
+               ev.SixK((D(2026, 7, 16), "q2", "b.htm", False, None, ""))]
+
+        def fetch(client, item):
+            return item, (six if item[0] == 7 else []), 1, "2017-01-01", None
+        with mock.patch.object(ev, "_fetch_one", fetch), \
+                mock.patch.object(ev, "_sixk_read", side_effect=AssertionError("no reads allowed")):
+            ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=D(2026, 10, 29), workers=1, sixk_reads=0)
+        got = con.execute("SELECT date, label, is_earnings FROM us_events WHERE cik = 7").fetchall()
+        self.assertEqual(got, [(D(2026, 4, 16), "Results announced (6-K)", True)])
+        self.assertEqual(con.execute("SELECT status FROM us_event_filers WHERE cik = 7").fetchone()[0], "partial")
+        due = {c: deep for c, _, _, _, deep in ev._companies_due(con, 5, D(2026, 10, 30))}
+        self.assertTrue(due[7])                                   # back tomorrow, read deep, until every quarter is judged
+        con.close()
+
+
 class LoaderGuards(unittest.TestCase):
     def test_the_first_run_reads_every_company_and_later_runs_take_turns(self):
         path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
