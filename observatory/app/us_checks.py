@@ -345,7 +345,9 @@ def review_prompt(question, plan, headline, rows, cols):
             "market\" means the S&P 500; price changes are before dividends; the current month or week counts to the "
             "latest close; a question naming no period means this year, except a question about the days around dated "
             "events (after earnings, on CPI release days, after Fed decisions, during shutdowns), which uses every event "
-            "on file from 2018 unless the question names a period.\n\n"
+            "on file from 2018 unless the question names a period; \"N days after\" an event runs from the close on the "
+            "last trading day before the event day to the close N trading days after the event day, so the move on the "
+            "news is inside it whether the news came before the open or after the close.\n\n"
             "TODAY: %s\nQUESTION: %s\nSTEPS: %s\nHEADLINE: %s\nRESULT (%d rows, first %d): %s"
             % (datetime.date.today().isoformat(), question, json.dumps(plan.get("steps") or [], ensure_ascii=False), headline, len(rows),
                len(sample), json.dumps(sample, ensure_ascii=False, default=str)[:1500]))

@@ -28,6 +28,7 @@ Usage:
     ./.venv/bin/python equity/us_events.py --db data/sec.work.duckdb
     ./.venv/bin/python equity/us_events.py --db data/sec.work.duckdb --kinds fomc,cpi,shutdown
     ./.venv/bin/python equity/us_events.py --db data/sec.work.duckdb --kinds results --max-companies 1500
+    ./.venv/bin/python equity/us_events.py --db data/sec.work.duckdb --kinds results --tickers JPM,BAC
 
 The table is rebuilt kind by kind: the rows of a kind are replaced in one
 transaction when its source was read in full, and left as they were when it
@@ -64,6 +65,14 @@ from app import sec_gate                                          # noqa: E402 â
 RAW_ROOT = os.environ.get("US_EVENTS_RAW", os.path.join(HERE, "..", "data", "raw", "us-events"))
 PARSER_VERSION = "events-1"
 HISTORY_FROM = datetime.date(2018, 1, 1)          # daily prices begin 2018-05-01; nothing earlier is useful
+# Pages of a company's EDGAR filing list read per company. A nightly read takes the
+# latest six (12,000 filings: 2018 for nearly every company). A bank that files
+# thousands of structured-note prospectuses needs far more: JPMorgan's six reached
+# back only to April 2025 and it showed 6 results days, not 35 (2026-10-29). Such
+# a company is read deep once, to 2018, and the nightly reads then keep the older rows.
+SHALLOW_PAGES = 6
+DEEP_PAGES = 80                                    # JPMorgan needs 54 to reach 2018
+REMARK_DAYS = 80                                   # rows this close to the start of a read are left as stored
 KINDS = ("fomc", "cpi", "shutdown", "results")
 REFUSED_AFTER = 25          # this many failures before any success: the source is refusing us, stop
 
@@ -365,12 +374,15 @@ def _record(con, kind, status, rows, pages, sha, raw_path, detail=None):
                 [kind, status, rows, pages, sha, raw_path, PARSER_VERSION, detail])
 
 
-def _replace(con, kind, rows, cik=None):
-    """Replace a kind's rows (or one company's) in one transaction."""
+def _replace(con, kind, rows, cik=None, keep_before=None):
+    """Replace a kind's rows (or one company's) in one transaction; a company's
+    rows dated before keep_before stay as stored (its read did not reach them)."""
     con.execute("BEGIN")
     try:
         if cik is None:
             con.execute("DELETE FROM us_events WHERE kind = ?", [kind])
+        elif keep_before is not None:
+            con.execute("DELETE FROM us_events WHERE kind = ? AND cik = ? AND date >= ?", [kind, cik, keep_before])
         else:
             con.execute("DELETE FROM us_events WHERE kind = ? AND cik = ?", [kind, cik])
         for r in rows:
@@ -468,8 +480,20 @@ def _sp500(con):
         return set()
 
 
-def _companies_due(con, max_companies, today):
-    """[(cik, ticker, fye, [known period ends])]: the S&P 500 first, then the rest's turn.
+def _short_history(con):
+    """Companies whose last read stopped at the page limit short of HISTORY_FROM and
+    whose stored results do not reach back to it: read deep once (DEEP_PAGES)."""
+    return {r[0] for r in con.execute("""
+        SELECT f.cik FROM us_event_filers f
+        WHERE f.status = 'ok' AND f.pages >= ? AND f.earliest > ?
+          AND coalesce((SELECT min(e.date) FROM us_events e WHERE e.kind = 'results' AND e.cik = f.cik),
+                       DATE '9999-12-31') > ?""",
+        [SHALLOW_PAGES, HISTORY_FROM, HISTORY_FROM + datetime.timedelta(days=366)]).fetchall()}
+
+
+def _companies_due(con, max_companies, today, only=None):
+    """[(cik, ticker, fye, [known period ends], deep)]: the S&P 500 first, then the rest's turn.
+    `only` (tickers) reads just those companies, whatever their turn.
 
     S&P 500 members are read every night, since the questions asked are mostly
     about them and a results day is wanted the morning after it. The rest are
@@ -482,6 +506,12 @@ def _companies_due(con, max_companies, today):
         FROM sec_companies c LEFT JOIN us_event_filers f USING (cik)
         WHERE c.ticker IS NOT NULL""").fetchall()
     members = _sp500(con)
+    short = _short_history(con)
+    if only:
+        want = {t.upper() for t in only}
+        rows = [r for r in rows if (r[1] or "").upper() in want]
+        members = {r[0] for r in rows}                 # every one named is due tonight
+        today = today + datetime.timedelta(days=1)
     # never read and failed first, then the oldest read
     rows.sort(key=lambda r: (r[2] is not None and r[3] == "ok", r[2] or datetime.datetime.min, r[0]))
     head = [(cik, t) for cik, t, at, st in rows
@@ -495,11 +525,11 @@ def _companies_due(con, max_companies, today):
     for cik, ticker in due:
         fye = con.execute("SELECT fye FROM sec_filings WHERE cik = ? AND form IN ('10-K', '10-Q') ORDER BY filed DESC LIMIT 1", [cik]).fetchone()
         periods = [r[0] for r in con.execute("SELECT DISTINCT period FROM sec_filings WHERE cik = ? AND form IN ('10-K', '10-Q') AND period IS NOT NULL", [cik]).fetchall()]
-        out.append((cik, ticker, fye[0] if fye else None, periods))
+        out.append((cik, ticker, fye[0] if fye else None, periods, cik in short))
     return out
 
 
-def fetch_results(client, cik, max_pages=6):
+def fetch_results(client, cik, max_pages=SHALLOW_PAGES):
     """[(date, items, accession)] of a company's Item 2.02 8-Ks back to HISTORY_FROM, and the pages read."""
     body = client.get(EDGAR_SUBMISSIONS % cik)
     client.archive("results", "cik%d" % cik, body)
@@ -525,7 +555,7 @@ def _fetch_one(client, item):
     """(item, filings, pages, earliest, error): one company's filings, for a worker thread."""
     cik = item[0]
     try:
-        filings, pages, earliest = fetch_results(client, cik)
+        filings, pages, earliest = fetch_results(client, cik, DEEP_PAGES if item[4] else SHALLOW_PAGES)
         return item, filings, pages, earliest, None
     except Refused as exc:
         return item, None, 0, None, "refused: %s" % exc
@@ -535,13 +565,13 @@ def _fetch_one(client, item):
         return item, None, 0, None, str(exc)[:200]
 
 
-def load_results(con, client, max_companies=1500, log=print, today=None, workers=6):
+def load_results(con, client, max_companies=1500, log=print, today=None, workers=6, only=None):
     """Companies are fetched on `workers` threads (the client paces every
     request across them); the database is written by this thread alone."""
     from concurrent.futures import ThreadPoolExecutor
     today = today or datetime.date.today()
-    due = _companies_due(con, max_companies, today)
-    log("results: %d companies due" % len(due))
+    due = _companies_due(con, max_companies, today, only)
+    log("results: %d companies due, %d read deep to %s" % (len(due), sum(1 for d in due if d[4]), HISTORY_FROM))
     n_rows = n_ok = n_fail = 0
     t0 = time.time()
     refused = None
@@ -555,7 +585,7 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
                 yield out
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         for i, (item, filings, pages, earliest, err) in enumerate(fetched(ex)):
-            cik, ticker, fye, periods = item
+            cik, ticker, fye, periods, _deep = item
             if err is not None:
                 con.execute("DELETE FROM us_event_filers WHERE cik = ?", [cik])
                 con.execute("INSERT INTO us_event_filers VALUES (?, now(), 'failed', 0, NULL, ?)", [cik, err])
@@ -577,7 +607,13 @@ def load_results(con, client, max_companies=1500, log=print, today=None, workers
                 rows.append(("results", d, None, cik, ticker, "Results announced (8-K)" if is_e else "Results-related 8-K",
                              detail, False, is_e, "U.S. Securities and Exchange Commission, EDGAR",
                              "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=%010d&type=8-K" % cik))
-            _replace(con, "results", rows, cik=cik)
+            # a read that stopped short of HISTORY_FROM keeps the stored rows before it; rows near its
+            # start are kept too, since their quarter's first filing may lie before the read
+            read_from = datetime.date.fromisoformat(earliest) if earliest and earliest != "9999-12-31" else None
+            keep_before = read_from + datetime.timedelta(days=REMARK_DAYS) if read_from and read_from > HISTORY_FROM else None
+            if keep_before:
+                rows = [r for r in rows if r[1] >= keep_before]
+            _replace(con, "results", rows, cik=cik, keep_before=keep_before)
             con.execute("DELETE FROM us_event_filers WHERE cik = ?", [cik])
             con.execute("INSERT INTO us_event_filers VALUES (?, now(), 'ok', ?, ?, ?)",
                         [cik, pages, datetime.date.fromisoformat(earliest) if earliest and earliest != "9999-12-31" else None,
@@ -602,6 +638,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", required=True, help="the sec.duckdb to load (a working copy, never the served file)")
     ap.add_argument("--kinds", default=",".join(KINDS), help="comma-separated: fomc,cpi,shutdown,results")
+    ap.add_argument("--tickers", default="", help="results only for these companies (comma-separated tickers), whatever their turn")
     ap.add_argument("--max-companies", type=int, default=1500, help="companies outside the S&P 500 to refresh this run, "
                          "on top of every member (0 = every company due)")
     ap.add_argument("--raw", default=RAW_ROOT)
@@ -624,7 +661,8 @@ def main(argv=None):
             elif kind == "shutdown":
                 load_shutdowns(con, client)
             elif kind == "results":
-                load_results(con, client, max_companies=args.max_companies, workers=args.workers)
+                load_results(con, client, max_companies=args.max_companies, workers=args.workers,
+                             only=[t.strip() for t in args.tickers.split(",") if t.strip()] or None)
         except Exception as exc:                                   # noqa: BLE001 â€” one kind failing leaves the others
             print("%s FAILED: %s" % (kind, exc))
             failed.append(kind)

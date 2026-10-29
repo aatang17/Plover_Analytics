@@ -206,11 +206,11 @@ class LoaderGuards(unittest.TestCase):
         con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
         con.execute("INSERT INTO sec_companies VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, NULL)")
         today = D(2026, 10, 23)
-        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 2, today)], [1, 2, 3])     # nothing read yet: all
+        self.assertEqual([c for c, *_ in ev._companies_due(con, 2, today)], [1, 2, 3])     # nothing read yet: all
         con.execute("INSERT INTO us_event_filers VALUES (1, TIMESTAMP '2026-10-22 01:00:00', 'ok', 1, NULL, NULL)")
         con.execute("INSERT INTO us_event_filers VALUES (2, TIMESTAMP '2026-10-01 01:00:00', 'ok', 1, NULL, NULL)")
-        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 1, today)], [3])           # never read comes first
-        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, today)], [3, 2])        # 1 was read this week
+        self.assertEqual([c for c, *_ in ev._companies_due(con, 1, today)], [3])           # never read comes first
+        self.assertEqual([c for c, *_ in ev._companies_due(con, 5, today)], [3, 2])        # 1 was read this week
         con.close()
 
     def test_the_sp500_is_read_every_night_and_a_failed_read_the_next(self):
@@ -227,12 +227,47 @@ class LoaderGuards(unittest.TestCase):
         for cik, at, status in [(1, "2026-10-01", "ok"), (2, "2026-10-23", "failed"), (3, "2026-10-23", "ok"),
                                 (4, "2026-10-01", "ok"), (10, "2026-10-23", "ok"), (11, "2026-10-23", "failed")]:
             con.execute("INSERT INTO us_event_filers VALUES (?, ?, ?, 1, NULL, NULL)", [cik, at + " 03:00:00", status])
-        due = [c for c, _, _, _ in ev._companies_due(con, 1, today)]
+        due = [c for c, *_ in ev._companies_due(con, 1, today)]
         # members first, both of them (read yesterday or not), then one of the rest: the failed read before the old one
         self.assertEqual(due, [11, 10, 2])
-        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, today)], [11, 10, 2, 1, 4])
+        self.assertEqual([c for c, *_ in ev._companies_due(con, 5, today)], [11, 10, 2, 1, 4])
         con.execute("UPDATE us_event_filers SET fetched_at = TIMESTAMP '2026-10-24 02:00:00', status = 'ok' WHERE cik IN (10, 11)")
-        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, today)][:2], [2, 1])     # read tonight already
+        self.assertEqual([c for c, *_ in ev._companies_due(con, 5, today)][:2], [2, 1])     # read tonight already
+        con.close()
+
+    def test_a_heavy_filer_is_read_deep_once_and_nightly_reads_keep_its_history(self):
+        """2026-10-29: JPMorgan's six pages of filings reached back only to 2025, so it had 6
+        results days, not 35. A company cut short is read deep once; a later read that stops
+        short keeps the stored rows before it instead of deleting them."""
+        path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        con = ev._connect(path)
+        con.execute("CREATE TABLE sec_companies (cik BIGINT, ticker VARCHAR)")
+        con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
+        con.execute("INSERT INTO sec_companies VALUES (1, 'JPM'), (2, 'AAPL')")
+        con.execute("INSERT INTO sec_filings VALUES (1, '10-Q', DATE '2025-08-01', '1231', DATE '2025-06-30')")
+        con.execute("INSERT INTO us_event_filers VALUES (1, TIMESTAMP '2026-10-01 01:00:00', 'ok', 6, DATE '2025-04-30', NULL), "
+                    "(2, TIMESTAMP '2026-10-01 01:00:00', 'ok', 1, DATE '2015-10-02', NULL)")
+        today = D(2026, 10, 29)
+        self.assertEqual(ev._short_history(con), {1})                       # stopped at the limit, nothing older stored
+        self.assertEqual([(c, deep) for c, _, _, _, deep in ev._companies_due(con, 5, today)], [(1, True), (2, False)])
+        pages = []
+
+        def deep_read(client, item):
+            pages.append(ev.DEEP_PAGES if item[4] else ev.SHALLOW_PAGES)
+            if item[0] != 1:
+                return item, [], 1, "2015-10-02", None
+            return item, [(D(2018, 1, 12), "2.02,9.01", "a1"), (D(2025, 7, 15), "2.02,9.01", "a2")], 54, "2017-11-02", None
+        with mock.patch.object(ev, "_fetch_one", deep_read):
+            ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=today, workers=1)
+        self.assertEqual(pages, [ev.DEEP_PAGES, ev.SHALLOW_PAGES])
+        self.assertEqual(ev._short_history(con), set())                     # now holds 2018: never read deep again
+
+        def shallow_read(client, item):                                     # the next night: six pages, back to May 2025
+            return item, [(D(2025, 7, 15), "2.02,9.01", "a2"), (D(2026, 10, 13), "2.02,9.01", "a3")], 6, "2025-05-02", None
+        with mock.patch.object(ev, "_fetch_one", shallow_read):
+            ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=D(2026, 10, 30), workers=1, only=["JPM"])
+        dates = [r[0] for r in con.execute("SELECT date FROM us_events WHERE kind = 'results' AND cik = 1 ORDER BY date").fetchall()]
+        self.assertEqual(dates, [D(2018, 1, 12), D(2025, 7, 15), D(2026, 10, 13)])   # 2018 kept, no row twice
         con.close()
 
     def test_no_member_list_leaves_the_turns_as_they_were(self):
@@ -242,7 +277,7 @@ class LoaderGuards(unittest.TestCase):
         con.execute("CREATE TABLE sec_filings (cik BIGINT, form VARCHAR, filed DATE, fye VARCHAR, period DATE)")
         con.execute("INSERT INTO sec_companies VALUES (1, 'A'), (2, 'B')")
         con.execute("INSERT INTO us_event_filers VALUES (1, TIMESTAMP '2026-10-01 01:00:00', 'ok', 1, NULL, NULL)")
-        self.assertEqual([c for c, _, _, _ in ev._companies_due(con, 5, D(2026, 10, 24))], [2, 1])
+        self.assertEqual([c for c, *_ in ev._companies_due(con, 5, D(2026, 10, 24))], [2, 1])
         con.close()
 
 

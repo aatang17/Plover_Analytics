@@ -861,14 +861,14 @@
     "question": "How did Tesla perform 3 days after earnings?",
     "steps": [
       "Earnings days are the company's quarterly results announcements: events with kind 'results', is_earnings and its ticker.",
-      "Three days means three trading days, from the close on the results day (the last trading day on or before it) to the close three trading days later, with prices numbered in date order.",
+      "Three days means three trading days after the results day: from the close on events.before_date (the last trading day before the results day, the price before the news whether it came before the open or after the close) to the close three trading days after the results day, with prices numbered in date order.",
       "No period is named, so every results day on file: the price history begins in 2018, so the period is from 2018-01-01; give the median change, how many were up and the count, and list each one."
     ],
     "period": {
       "from": "2018-01-01",
       "to": null
     },
-    "sql": "WITH ev AS (SELECT date AS event_date FROM events WHERE ticker = 'TSLA' AND kind = 'results' AND is_earnings AND NOT scheduled AND date >= '2018-01-01'), px AS (SELECT date, adj_close_usd, row_number() OVER (ORDER BY date) AS rn FROM prices WHERE ticker = 'TSLA'), base AS (SELECT e.event_date, max(p.rn) AS rn0 FROM ev e JOIN px p ON p.date <= e.event_date GROUP BY e.event_date), w AS (SELECT b.event_date, p0.date AS from_date, p3.date AS to_date, 100 * (p3.adj_close_usd / p0.adj_close_usd - 1) AS change_pct FROM base b JOIN px p0 ON p0.rn = b.rn0 JOIN px p3 ON p3.rn = b.rn0 + 3) SELECT event_date, from_date, to_date, change_pct, median(change_pct) OVER () AS median_change_pct, count(*) FILTER (WHERE change_pct > 0) OVER () AS up, count(*) OVER () AS n FROM w ORDER BY event_date DESC",
+    "sql": "WITH ev AS (SELECT date AS event_date, before_date FROM events WHERE ticker = 'TSLA' AND kind = 'results' AND is_earnings AND NOT scheduled AND date >= '2018-01-01'), px AS (SELECT date, adj_close_usd, row_number() OVER (ORDER BY date) AS rn FROM prices WHERE ticker = 'TSLA'), d0 AS (SELECT e.event_date, e.before_date, min(p.rn) AS rn0 FROM ev e JOIN px p ON p.date >= e.event_date GROUP BY e.event_date, e.before_date), w AS (SELECT d.event_date, pb.date AS from_date, p3.date AS to_date, 100 * (p3.adj_close_usd / pb.adj_close_usd - 1) AS change_pct FROM d0 d JOIN px pb ON pb.date = d.before_date JOIN px p3 ON p3.rn = d.rn0 + 3) SELECT event_date, from_date, to_date, change_pct, median(change_pct) OVER () AS median_change_pct, count(*) FILTER (WHERE change_pct > 0) OVER () AS up, count(*) OVER () AS n FROM w ORDER BY event_date DESC",
     "headline": "Tesla changed a median of {median_change_pct} over the three trading days after each of its {n} quarterly results {period}, rising after {up} of them.",
     "chart": null,
     "cannot": null

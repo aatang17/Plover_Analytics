@@ -114,6 +114,8 @@ TABLES = {
         ("label", "VARCHAR", "what happened, in words"),
         ("scheduled", "BOOLEAN", "a date on a published calendar that has not happened yet (no prices for it)"),
         ("is_earnings", "BOOLEAN", "results rows: the quarter's results announcement (true), or another Item 2.02 filing such as delivery numbers (false)"),
+        ("before_date", "DATE", "the last trading day before the event day (for a results row, the company's own last trading day): "
+                                "its close is the price before the news, whether the news came before the open or after the close"),
     ]),
     "fund_holdings": ("13F holdings by investment managers: per stock, the latest quarter against the one before (one row per stock).", [
         ("ticker", "VARCHAR", "joins stocks.ticker"),
@@ -658,6 +660,7 @@ def _build_sandbox(cur, v):
         n_prices = price_table(cur, db, _price_tickers(cur))
     else:
         _empty_prices(db)
+    _event_before_dates(db)
     # nothing outside these tables from here on, and no query can undo it
     db.execute("SET memory_limit='%s'" % MEMORY_LIMIT)
     db.execute("SET threads=2")
@@ -666,6 +669,23 @@ def _build_sandbox(cur, v):
     with _LOCK:
         _STATE.update(v=v, db=db, counts=dict({k: len(r) for k, r in data.items()}, prices=n_prices))
     return db
+
+
+def _event_before_dates(db):
+    """events.before_date: the last trading day before each event, from the
+    company's own prices for a results row and the S&P 500 fund's otherwise.
+    The filing hour is not held, so every window starts from that close: the
+    price before the news whether a company reported before the open or after
+    the close (2026-10-29: "after earnings" was measured from the results-day
+    close on one question and the next day's close on another)."""
+    try:
+        db.execute("""
+            CREATE OR REPLACE TABLE events AS
+            SELECT e.* EXCLUDE (before_date), p.date AS before_date
+            FROM events e ASOF LEFT JOIN prices p
+              ON p.ticker = coalesce(e.ticker, 'SPY') AND p.date < e.date""")
+    except Exception:                                             # noqa: BLE001 — no prices: the column stays blank
+        pass
 
 
 def counts():

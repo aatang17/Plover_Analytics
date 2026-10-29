@@ -140,6 +140,26 @@ class Sandbox(unittest.TestCase):
             cur.close()
         us_tables._STATE.clear()
 
+    def test_every_event_knows_the_close_before_its_news(self):
+        """2026-10-29: "after earnings" was measured from the results-day close on one
+        question and the next day's close on another. Every window now starts from
+        events.before_date, the last trading day before the event, for any filing hour."""
+        db = duckdb.connect(":memory:")
+        db.execute("CREATE TABLE prices AS SELECT * FROM (VALUES ('JPM', DATE '2026-10-09'), ('JPM', DATE '2026-10-12'), "
+                   "('JPM', DATE '2026-10-13'), ('SPY', DATE '2026-10-13'), ('SPY', DATE '2026-10-14')) t(ticker, date)")
+        db.execute("CREATE TABLE events AS SELECT * FROM (VALUES ('results', DATE '2026-10-13', 'JPM', NULL::DATE), "
+                   "('results', DATE '2026-10-12', 'JPM', NULL::DATE), ('cpi', DATE '2026-10-14', NULL, NULL::DATE), "
+                   "('results', DATE '2026-10-13', 'NOPX', NULL::DATE)) t(kind, date, ticker, before_date)")
+        us_tables._event_before_dates(db)
+        got = db.execute("SELECT kind, date, ticker, before_date FROM events ORDER BY kind, date, ticker").fetchall()
+        self.assertEqual(got, [("cpi", D(2026, 10, 14), None, D(2026, 10, 13)),                  # the S&P 500 fund's day before
+                               ("results", D(2026, 10, 12), "JPM", D(2026, 10, 9)),              # over a weekend
+                               ("results", D(2026, 10, 13), "JPM", D(2026, 10, 12)),
+                               ("results", D(2026, 10, 13), "NOPX", None)])                       # no prices: blank, never a guess
+        self.assertIn("before_date", us_tables.doc())
+        from app import us_checks
+        self.assertIn("last trading day before the event day", us_checks.review_prompt("q", {}, "h", [], []))
+
     def test_every_table_is_described_for_the_model(self):
         d = us_tables.doc()
         for name, (_, cols) in us_tables.TABLES.items():
