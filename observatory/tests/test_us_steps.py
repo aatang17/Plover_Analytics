@@ -109,6 +109,14 @@ class PlainTest(unittest.TestCase):
         self.assertEqual(us_steps.sector_for(5331), "Consumer Staples")
         self.assertIsNone(us_steps.sector_for(None))
 
+    def test_benchmarks_show_words_not_keys(self):
+        # the shutdown answer charted "consumer_disc" and "real_estate": the table holds the labels
+        from app import us_benchmarks
+        self.assertEqual(set(us_benchmarks.LABELS), set(us_benchmarks.BENCHMARKS))
+        self.assertEqual(us_benchmarks.LABELS["consumer_disc"], "Consumer Discretionary")
+        sector_funds = [k for k, b in us_benchmarks.BENCHMARKS.items() if b["name"].endswith(" sector")]
+        self.assertEqual(sorted(us_benchmarks.LABELS[k] for k in sector_funds), sorted(us_steps.SECTOR_NAMES))
+
     def test_period_words(self):
         t = datetime.date(2026, 10, 19)
         self.assertEqual(us_steps.period_words(datetime.date(2026, 1, 1), None, t), "so far in 2026")

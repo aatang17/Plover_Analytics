@@ -11,7 +11,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
     "headline": "{beat} of {members} S&P 500 members beat the index {period}, when the index changed {index_change_pct}.",
     "chart": null,
     "cannot": null
@@ -27,7 +27,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
     "headline": "{beat} of {members} S&P 500 members beat the index {period}, when it changed {index_change_pct}.",
     "chart": null,
     "cannot": null
@@ -43,7 +43,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'dow') SELECT count(*) FILTER (WHERE s.change_period_pct < idx.index_change_pct) AS lagged, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_dow",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'Dow') SELECT count(*) FILTER (WHERE s.change_period_pct < idx.index_change_pct) AS lagged, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_dow",
     "headline": "{lagged} of {members} Dow members lagged the Dow {period}, when it changed {index_change_pct}.",
     "chart": null,
     "cannot": null
@@ -59,7 +59,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS companies, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.market_cap_usd >= 2e9",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS companies, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.market_cap_usd >= 2e9",
     "headline": "{beat} of {companies} US companies above $2bn beat the S&P 500 {period}, when it changed {index_change_pct}.",
     "chart": null,
     "cannot": null
@@ -107,7 +107,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.ticker, s.name, s.change_period_pct, s.change_period_pct - idx.index_change_pct AS vs_index_pp, s.revenue_growth_pct, s.market_cap_usd FROM stocks s CROSS JOIN idx WHERE s.sector = 'Technology' AND s.market_cap_usd >= 2e9 AND s.change_period_pct > idx.index_change_pct AND s.revenue_growth_pct > 10 ORDER BY s.change_period_pct DESC LIMIT 20",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT s.ticker, s.name, s.change_period_pct, s.change_period_pct - idx.index_change_pct AS vs_index_pp, s.revenue_growth_pct, s.market_cap_usd FROM stocks s CROSS JOIN idx WHERE s.sector = 'Technology' AND s.market_cap_usd >= 2e9 AND s.change_period_pct > idx.index_change_pct AND s.revenue_growth_pct > 10 ORDER BY s.change_period_pct DESC LIMIT 20",
     "headline": "{name} leads the technology companies above $2bn that beat the S&P 500 {period} with revenue growth above 10%: {change_period_pct}.",
     "chart": {
       "label": "ticker",
@@ -175,7 +175,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT median(s.change_period_pct) AS median_member_change_pct, any_value(idx.index_change_pct) AS index_change_pct, median(s.change_period_pct) - any_value(idx.index_change_pct) AS gap_pp FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT median(s.change_period_pct) AS median_member_change_pct, any_value(idx.index_change_pct) AS index_change_pct, median(s.change_period_pct) - any_value(idx.index_change_pct) AS gap_pp FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
     "headline": "The median S&P 500 member changed {median_member_change_pct} {period}, against {index_change_pct} for the index: a gap of {gap_pp}.",
     "chart": null,
     "cannot": null
@@ -354,7 +354,7 @@
       "from": "ONE_YEAR_AGO",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.ticker, s.name, s.change_period_pct, s.change_period_pct - idx.index_change_pct AS vs_index_pp FROM stocks s CROSS JOIN idx WHERE s.sector = 'Energy' AND s.market_cap_usd >= 2e9 AND s.change_period_pct > idx.index_change_pct ORDER BY s.change_period_pct DESC LIMIT 30",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT s.ticker, s.name, s.change_period_pct, s.change_period_pct - idx.index_change_pct AS vs_index_pp FROM stocks s CROSS JOIN idx WHERE s.sector = 'Energy' AND s.market_cap_usd >= 2e9 AND s.change_period_pct > idx.index_change_pct ORDER BY s.change_period_pct DESC LIMIT 30",
     "headline": "{name} did best of the energy companies above $2bn that beat the S&P 500 {period}: {change_period_pct}.",
     "chart": {
       "label": "ticker",
@@ -372,10 +372,10 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "SELECT name, fund_ticker, change_period_pct FROM benchmarks WHERE name ILIKE '%sector%' ORDER BY change_period_pct DESC",
-    "headline": "The {name} did best {period}, {change_period_pct}.",
+    "sql": "SELECT key AS sector, name AS fund_name, fund_ticker, change_period_pct FROM benchmarks WHERE name ILIKE '%sector%' ORDER BY change_period_pct DESC",
+    "headline": "{sector} did best {period}, {change_period_pct}.",
     "chart": {
-      "label": "fund_ticker",
+      "label": "sector",
       "value": "change_period_pct"
     },
     "cannot": null
@@ -409,7 +409,7 @@
       "from": "YEAR-03-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'dow') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_dow",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'Dow') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_dow",
     "headline": "{beat} of {members} Dow stocks beat the Dow {period}, when it changed {index_change_pct}.",
     "chart": null,
     "cannot": null
@@ -424,7 +424,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'nasdaq100') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'Nasdaq-100') SELECT count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members, any_value(idx.index_change_pct) AS index_change_pct FROM stocks s CROSS JOIN idx WHERE s.in_sp500",
     "headline": "{beat} of {members} S&P 500 members beat the Nasdaq-100 {period}, when its fund changed {index_change_pct}.",
     "chart": null,
     "cannot": null
@@ -504,7 +504,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.sector, count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members FROM stocks s CROSS JOIN idx WHERE s.in_sp500 AND s.sector IS NOT NULL GROUP BY s.sector ORDER BY beat DESC",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT s.sector, count(*) FILTER (WHERE s.change_period_pct > idx.index_change_pct) AS beat, count(s.change_period_pct) AS members FROM stocks s CROSS JOIN idx WHERE s.in_sp500 AND s.sector IS NOT NULL GROUP BY s.sector ORDER BY beat DESC",
     "headline": "{sector} has the most S&P 500 members that beat the index {period}: {beat} of {members}.",
     "chart": {
       "label": "sector",
@@ -537,7 +537,7 @@
       "from": "YEAR-01-01",
       "to": null
     },
-    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'sp500') SELECT s.name, s.change_period_pct, idx.index_change_pct, s.change_period_pct - idx.index_change_pct AS gap_pp FROM stocks s CROSS JOIN idx WHERE s.ticker = 'AAPL'",
+    "sql": "WITH idx AS (SELECT change_period_pct AS index_change_pct FROM benchmarks WHERE key = 'S&P 500') SELECT s.name, s.change_period_pct, idx.index_change_pct, s.change_period_pct - idx.index_change_pct AS gap_pp FROM stocks s CROSS JOIN idx WHERE s.ticker = 'AAPL'",
     "headline": "{name} changed {change_period_pct} {period}, against {index_change_pct} for the S&P 500: a gap of {gap_pp}.",
     "chart": null,
     "cannot": null

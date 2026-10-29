@@ -152,10 +152,10 @@ STOCK_COLUMNS = [
     ("fiscal_year_end", "DATE", "end of the fiscal year the annual figures cover"),
 ]
 BENCH_COLUMNS = [
-    ("key", "VARCHAR", "short key: " + ", ".join(us_benchmarks.ORDER)),
+    ("key", "VARCHAR", "the benchmark's short name, as readers see it: " + ", ".join(us_benchmarks.LABELS[k] for k in us_benchmarks.ORDER)),
     ("name", "VARCHAR", "the index or fund's name"),
     ("fund_ticker", "VARCHAR", "the fund that tracks it (its price is the benchmark)"),
-    ("has_members", "BOOLEAN", "true when the stocks table flags its members (sp500, dow); others are fund prices only"),
+    ("has_members", "BOOLEAN", "true when the stocks table flags its members (S&P 500, Dow); others are fund prices only"),
     ("change_period_pct", "DOUBLE", "price change over the period, %"),
     ("change_ytd_pct", "DOUBLE", "price change this year, %"),
     ("change_1y_pct", "DOUBLE", "price change over the past year, %"),
@@ -270,7 +270,7 @@ def bench_rows(cur, start, end):
     for key in us_benchmarks.ORDER:
         b = us_benchmarks.BENCHMARKS[key]
         f = b["etf"]
-        out.append({"key": key, "name": b["name"], "fund_ticker": f, "has_members": bool(b["members"]),
+        out.append({"key": us_benchmarks.LABELS[key], "name": b["name"], "fund_ticker": f, "has_members": bool(b["members"]),
                     "change_period_pct": pc(f), "change_ytd_pct": (ytd.get(f) or (None,) * 5)[4],
                     "change_1y_pct": (one_y.get(f) or (None,) * 5)[4]})
     return out
@@ -615,7 +615,7 @@ def fill_headline(template, cols, row, words, question, sql=""):
 
 
 _LABELS = {"ticker": "Ticker", "name": "Company", "sector": "Sector", "industry": "Industry", "exchange": "Exchange",
-           "key": "Key", "fund_ticker": "Fund", "n": "Count", "members": "Members"}
+           "key": "Benchmark", "fund_ticker": "Fund", "n": "Count", "members": "Members"}
 
 
 def label(col):
@@ -832,7 +832,8 @@ def answer(cur, question):
         notes.append(verdict["reason"])
     if re.search(r"change_(period|ytd|1y)", sql):
         notes.append("Price changes run from the first to the last close in the period, adjusted for splits, before dividends.")
-    if "sector" in sql:
+    bare = re.sub(r"'[^']*'", "''", sql)         # "name ILIKE '%sector%'" picks sector funds, not the SIC sectors
+    if re.search(r"\bsector\b", bare) and re.search(r"\bstocks\b", bare):
         notes.append("Sectors are approximate, grouped from the SEC's industry codes, not the index providers' sectors.")
     if "ticker" in cols and rows:
         # figures in this result that rest on a doubtful count or an unconfirmed split say so
@@ -846,7 +847,7 @@ def answer(cur, question):
         if re.search(r"\b%s\b" % name, sql) and src not in srcs:
             srcs.insert(0, src)
     for key, word in (("sp500", "in_sp500"), ("dow", "in_dow")):
-        if word in sql or ("'%s'" % key) in sql:
+        if word in sql or ("'%s'" % us_benchmarks.LABELS[key]) in sql:
             _, _, mas = us_benchmarks.members(cur, key)
             b = us_benchmarks.BENCHMARKS[key]
             if mas:

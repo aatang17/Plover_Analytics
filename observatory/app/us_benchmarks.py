@@ -51,6 +51,18 @@ BENCHMARKS = {
                    "words": r"treasur(y|ies) (index|etf|bonds?)|long bonds?|\btlt\b"},
 }
 ORDER = list(BENCHMARKS)
+# What a reader sees for each benchmark: the ask box's `benchmarks` table holds
+# these, not the keys, so a query that shows the column shows words. Sector
+# labels are spelled as the stocks table's sectors (app/us_steps.py) so the two join.
+LABELS = {
+    "sp500": "S&P 500", "dow": "Dow", "nasdaq100": "Nasdaq-100", "russell2000": "Russell 2000",
+    "total": "Total Market", "sp500_equal": "S&P 500 Equal Weight", "midcap": "S&P MidCap 400",
+    "intl": "International (EAFE)", "tech": "Technology", "financials": "Financials", "energy": "Energy",
+    "health": "Health Care", "industrials": "Industrials", "consumer_disc": "Consumer Discretionary",
+    "staples": "Consumer Staples", "utilities": "Utilities", "materials": "Materials", "real_estate": "Real Estate",
+    "communication": "Communication", "semis": "Semiconductors", "regional_banks": "Regional Banks",
+    "gold": "Gold", "treasuries": "Long Treasuries",
+}
 # Broad equity indexes: a question can rank "within" these. Sector funds, gold and
 # bonds are benchmarks to compare against, never a universe ("gold miners" is an
 # industry, not the gold price).
