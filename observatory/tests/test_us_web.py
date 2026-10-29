@@ -96,6 +96,12 @@ FOUND = {"text": "Tesla fell on Thursday after weaker profit. Reuters said margi
          "searches": ["Tesla shares fall"], "model": "m", "asked_at": "2026-10-29T09:00+00:00"}
 
 
+def _live():
+    from tests.test_us_ask import _live as live
+    return live()
+
+
+@unittest.skipUnless(_live(), "data/sec.duckdb without the full US set")
 class Routing(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -140,11 +146,6 @@ class Routing(unittest.TestCase):
             self.assertTrue(_NEWS_ASK.search(q), q)
         for q in ("news corp revenue", "what drove the s&p 500 this year?", "who owns nvidia"):
             self.assertFalse(_NEWS_ASK.search(q), q)
-
-
-def _live():
-    from tests.test_us_ask import _live as live
-    return live()
 
 
 @unittest.skipUnless(_live(), "data/sec.duckdb without the full US set")
