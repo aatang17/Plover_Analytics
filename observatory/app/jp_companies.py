@@ -25,9 +25,10 @@ import os
 import re
 import tempfile
 
-from . import db
+from . import db, edit_reads
 from .us_companies import EditError, MAX_LOGO_BYTES, NAME_MAX, TYPES, _now, logo_type  # noqa: F401
 
+STORE = "jp-companies"
 STORE_PATH = db.DATA_DIR / "admin" / "jp_companies.json"
 SCHEMA_VERSION = 1
 _CODE = re.compile(r"^[0-9][0-9A-Z]{2}[0-9A-Z]$")
@@ -53,8 +54,18 @@ def _version():
 
 
 def version():
-    """Changes whenever an edit is saved: part of the response cache's stamp."""
+    """Changes whenever an edit is saved; see us_companies.version()."""
     return _version()
+
+
+def _stamp(e):
+    return (e.get("updated_at"), len(e.get("history") or ()))
+
+
+def stamp(code):
+    """Changes with each edit saved for this company."""
+    c = code_of(code)
+    return _stamp((load()["companies"].get(c) or {}) if c else {})
 
 
 def load():
@@ -97,8 +108,13 @@ def _save(doc):
 
 
 def _get(code):
+    """The company's stored edits, noted for the response cache (app/edit_reads.py)."""
     c = code_of(code)
-    return (load()["companies"].get(c) or {}) if c else {}
+    if not c:
+        return {}
+    e = load()["companies"].get(c) or {}
+    edit_reads.note(STORE, c, _stamp(e))
+    return e
 
 
 def entry(code):
@@ -200,6 +216,7 @@ def shown_name(code, name_en):
 
 def edited():
     """Codes with any edit in force, newest first."""
+    edit_reads.note_all(STORE)
     rows = [(e.get("updated_at") or "", c) for c, e in load()["companies"].items()
             if any(e.get(k) for k in ("name", "logo"))]
     return [c for _, c in sorted(rows, reverse=True)]

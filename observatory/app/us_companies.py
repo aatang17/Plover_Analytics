@@ -27,8 +27,9 @@ import os
 import re
 import tempfile
 
-from . import db
+from . import db, edit_reads
 
+STORE = "us-companies"
 STORE_PATH = db.DATA_DIR / "admin" / "us_companies.json"
 SCHEMA_VERSION = 1
 MAX_LOGO_BYTES = 256 * 1024
@@ -60,9 +61,26 @@ def _version():
 
 
 def version():
-    """Changes whenever an edit is saved: part of the response cache's stamp,
-    so a renamed company or a new logo is served at once."""
+    """Changes whenever an edit is saved. The response cache then clears the
+    answers that read an edited company (app/edit_reads.py), so a renamed
+    company or a new logo is served at once."""
     return _version()
+
+
+def _stamp(e):
+    return (e.get("updated_at"), len(e.get("history") or ()))
+
+
+def stamp(cik):
+    """Changes with each edit saved for this company."""
+    return _stamp(load()["companies"].get(str(int(cik))) or {})
+
+
+def _read(cik):
+    """The company's stored edits, noted for the response cache."""
+    e = load()["companies"].get(str(int(cik))) or {}
+    edit_reads.note(STORE, int(cik), _stamp(e))
+    return e
 
 
 def load():
@@ -111,7 +129,7 @@ def _now():
 
 def entry(cik):
     """This company's edits ({} when none), without the logo bytes."""
-    e = load()["companies"].get(str(int(cik))) or {}
+    e = _read(cik)
     out = {k: v for k, v in e.items() if k != "logo_b64"}
     return copy.deepcopy(out)
 
@@ -209,7 +227,7 @@ def _put(e, key, value):
 # ---- read side, for every surface -------------------------------------------
 def logo_url(cik):
     """'' for a hidden logo, the uploaded file's address, or None (no edit)."""
-    e = load()["companies"].get(str(int(cik))) or {}
+    e = _read(cik)
     if e.get("logo") == "hidden":
         return ""
     if e.get("logo") == "uploaded" and e.get("logo_sha"):
@@ -229,15 +247,16 @@ def logo_file(name):
 
 
 def name(cik):
-    return (load()["companies"].get(str(int(cik))) or {}).get("name")
+    return _read(cik).get("name")
 
 
 def website(cik):
-    return (load()["companies"].get(str(int(cik))) or {}).get("website")
+    return _read(cik).get("website")
 
 
 def edited():
     """CIKs with any edit in force, newest first."""
+    edit_reads.note_all(STORE)
     rows = [(e.get("updated_at") or "", int(c)) for c, e in load()["companies"].items()
             if any(e.get(k) for k in ("name", "website", "logo"))]
     return [c for _, c in sorted(rows, reverse=True)]

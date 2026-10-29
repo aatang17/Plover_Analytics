@@ -16,7 +16,9 @@ the megabyte down again.
 
 Entries are keyed by (path, query string) and stamped with the database
 version. A new ingest changes the stamp, which invalidates every entry at
-once — nothing here can serve data from a superseded release.
+once — nothing here can serve data from a superseded release. A company edit
+in the admin console clears only the entries that read that company
+(app/edit_reads.py).
 """
 import asyncio
 import gzip
@@ -27,6 +29,8 @@ import pathlib
 import time
 from collections import OrderedDict
 from threading import Lock
+
+from . import edit_reads
 
 # Level 6, not gzip's default 9: on the largest payload here 9 costs ~110ms of
 # CPU to save 6% over 6's ~17ms, and that cost lands on the first visitor after
@@ -111,27 +115,33 @@ def remember(path):
 async def keep_warm(app, path):
     """Rebuild what readers were using whenever the cache's stamp changes.
 
-    The stamp covers every database file and the admin console's company
-    edits, so a nightly data swap, a backfill after a deploy or one new logo
-    empties the whole cache at once. Until 2026-10-27 nothing rebuilt it before
-    the next restart, and the first reader of each page paid the full build:
-    4-5 s for the CEO pay list on the server. Also saves the list every
-    SAVE_EVERY seconds, so the next copy of the site starts with it.
+    The stamp covers every database file, so a nightly data swap or a
+    backfill after a deploy empties the whole cache at once. Until 2026-10-27
+    nothing rebuilt it before the next restart, and the first reader of each
+    page paid the full build: 4-5 s for the CEO pay list on the server. A
+    company edit clears only the answers that showed the company, and only
+    those are rebuilt. Also saves the list every SAVE_EVERY seconds, so the
+    next copy of the site starts with it.
     """
-    seen, saved = None, time.monotonic()
+    seen, seen_edits, saved = None, None, time.monotonic()
     while True:
         await asyncio.sleep(CHECK_EVERY)
         if not _LIVE:
             continue
         rc = _LIVE[-1]
-        stamp = rc.version()
+        stamp, edits = rc.version(), rc.edit_versions()
         if seen is not None and stamp != seen:
-            for key in rc.keys():
-                if rc.version() != stamp:
-                    break  # swapped again part-way; the next look starts over
-                await warm(app, [key])
-                await asyncio.sleep(PAUSE)
-        seen = stamp
+            keys = rc.keys()
+        elif seen_edits is not None and edits != seen_edits:
+            keys = rc.edited_keys()
+        else:
+            keys = []
+        for key in keys:
+            if rc.version() != stamp:
+                break  # swapped again part-way; the next look starts over
+            await warm(app, [key])
+            await asyncio.sleep(PAUSE)
+        seen, seen_edits = stamp, edits
         if time.monotonic() - saved >= SAVE_EVERY:
             remember(path)
             saved = time.monotonic()
@@ -181,14 +191,17 @@ def _size(entry):
 
 
 class _Entry(object):
-    __slots__ = ("version", "etag", "content_type", "body", "gz")
+    __slots__ = ("version", "etag", "content_type", "body", "gz", "reads", "edit_versions")
 
-    def __init__(self, version, etag, content_type, body, gz):
+    def __init__(self, version, etag, content_type, body, gz, reads=None, edit_versions=None):
         self.version = version
         self.etag = etag
         self.content_type = content_type
         self.body = body
         self.gz = gz
+        # the company edits it read, and each store's version when it was built
+        self.reads = reads or {}
+        self.edit_versions = edit_versions or {}
 
 
 class ResponseCache(object):
@@ -199,9 +212,11 @@ class ResponseCache(object):
     passes through untouched instead of compressing it a second time.
     """
 
-    def __init__(self, app, version, prefix="/api/v1", max_age=MAX_AGE):
+    def __init__(self, app, version, prefix="/api/v1", max_age=MAX_AGE, edits=()):
         self.app = app
         self.version = version
+        # the company-edit stores (app/edit_reads.py); not part of `version`
+        self.edits = tuple(edits)
         self.prefix = prefix
         self.max_age = max_age
         self._entries = OrderedDict()
@@ -215,6 +230,15 @@ class ResponseCache(object):
         asked for, which is exactly what keep_warm needs to rebuild them."""
         with self._lock:
             return list(reversed(self._entries))[:limit]
+
+    def edit_versions(self):
+        return tuple(s.version() for s in self.edits)
+
+    def edited_keys(self, limit=REWARM_KEYS):
+        """The entries a company edit has made out of date, most recently used first."""
+        with self._lock:
+            return [k for k, e in reversed(self._entries.items())
+                    if not edit_reads.holds(e.reads, e.edit_versions, self.edits)][:limit]
 
     async def __call__(self, scope, receive, send):
         # HEAD is deliberately not cached: it shares a URL with GET but carries
@@ -240,7 +264,7 @@ class ResponseCache(object):
             entry = self._entries.get(key)
             if entry is None:
                 return None
-            if entry.version != version:
+            if entry.version != version or not edit_reads.holds(entry.reads, entry.edit_versions, self.edits):
                 del self._entries[key]
                 self._bytes -= _size(entry)
                 return None
@@ -268,6 +292,7 @@ class ResponseCache(object):
         state = {"status": None, "headers": None, "passthrough": False,
                  "flushed": False}
         chunks = []
+        edit_versions = {s.STORE: s.version() for s in self.edits}
 
         async def capture(message):
             if state["passthrough"]:
@@ -305,7 +330,11 @@ class ResponseCache(object):
 
             await send(message)  # anything else (trailers) passes through
 
-        await self.app(scope, receive, capture)
+        reads, token = edit_reads.begin()
+        try:
+            await self.app(scope, receive, capture)
+        finally:
+            edit_reads.end(token)
         if state["passthrough"] or state["status"] is None:
             return None
 
@@ -317,7 +346,7 @@ class ResponseCache(object):
                 break
         gz = gzip.compress(body, GZIP_LEVEL) if len(body) >= MIN_GZIP_BYTES else None
         etag = b'"' + hashlib.sha256(body).hexdigest()[:32].encode("ascii") + b'"'
-        entry = _Entry(version, etag, ctype, body, gz)
+        entry = _Entry(version, etag, ctype, body, gz, reads, edit_versions)
         self._put(key, entry)
         return entry
 

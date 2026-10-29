@@ -302,12 +302,14 @@ def api_docs():
 # own pre-compressed hits pass through it untouched.
 # Stamped with EVERY database file: any of them can be swapped in by app/backfill.py
 # while the server runs, and an entry must not outlive the file it came from.
-# The admin console's company edits (app/us_companies.py, app/jp_companies.py) too: a new logo or
-# name is served at once, not after the next data swap.
+# The admin console's company edits (app/us_companies.py, app/jp_companies.py) are
+# served at once too, not after the next data swap, but an edit clears only the
+# answers that read that company (app/edit_reads.py): in this stamp, one new logo
+# emptied the cache and the rebuild held the server for seven minutes (2026-10-29).
 app.add_middleware(cache.ResponseCache,
                    version=lambda: (db.file_version(), equity_api.file_version(),
-                                    sec_api.file_version(), us_companies.version(),
-                                    jp_companies.version()))
+                                    sec_api.file_version()),
+                   edits=(us_companies, jp_companies))
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 # Outermost, so a reader served from the response cache is still counted: a
 # cache hit never reaches the routers. See app/visits.py.

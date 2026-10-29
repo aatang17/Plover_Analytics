@@ -21,7 +21,7 @@ import zlib
 import duckdb
 from fastapi import APIRouter, HTTPException, Query
 
-from . import sec_api
+from . import db, sec_api
 
 router = APIRouter(prefix="/api/v1/us/text", tags=["US annual report text"])
 
@@ -65,7 +65,10 @@ def cur():
                 except Exception:                              # noqa: BLE001
                     pass
             try:
-                _READER = duckdb.connect(str(DB_PATH), read_only=True)
+                # capped like the other readers: left alone, DuckDB takes 80% of the
+                # container for this file's buffer (2026-10-29: the web server was
+                # 1.2 GB into swap)
+                _READER = db.limit_memory(duckdb.connect(str(DB_PATH), read_only=True))
             except duckdb.Error:
                 _READER = None                                 # being written: the next call tries again
                 return None
