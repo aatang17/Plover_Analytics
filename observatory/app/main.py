@@ -65,6 +65,7 @@ from .us_events_api import router as us_events_router  # noqa: E402
 from .us_ask_api import router as us_ask_router  # noqa: E402
 from .us_press_api import router as us_press_router  # noqa: E402
 from .us_pay_api import router as us_pay_router  # noqa: E402
+from .us_build_api import router as us_build_router  # noqa: E402
 from .us_company_api import router as us_company_router, logo_router as us_logo_router  # noqa: E402
 from .us_company_admin_api import router as us_company_admin_router  # noqa: E402
 from .jp_company_admin_api import router as jp_company_admin_router, logo_router as jp_logo_router  # noqa: E402
@@ -352,6 +353,7 @@ app.include_router(us_events_router)
 app.include_router(us_ask_router)
 app.include_router(us_press_router)
 app.include_router(us_pay_router)
+app.include_router(us_build_router)
 app.include_router(us_company_router)
 app.include_router(us_logo_router)
 app.include_router(jp_logo_router)

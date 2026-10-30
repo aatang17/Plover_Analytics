@@ -733,7 +733,8 @@ def _decorate(cur, rows):
         r["industry"] = (titles.get(int(r["sic"])) if r.get("sic") is not None else None) or m[2]
         px = (closes.get(r["ticker"]) or by_symbol.get(sec_shares._norm(r["ticker"]))) if r["ticker"] else None
         if px is not None:
-            sec_metrics.with_prices(r, px[1], px[2], _d(px[0]), sec_shares.basis(cur, r, by_symbol))
+            sec_metrics.with_prices(r, px[1], px[2], _d(px[0]), sec_shares.basis(cur, r, by_symbol),
+                                    close_1m=px[3] if len(px) > 3 else None)
     sec_shares.hold_back_uncorroborated(cur, rows)
     return rows
 
@@ -769,7 +770,7 @@ def metrics(company: str):
 @router.get("/screener", openapi_extra={"x-example": "/api/v1/us/financials/screener?sort=roe_pct&limit=20"})
 def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit prefix (37)"),
              industry: str = Query("", description="substring of the SIC industry title, e.g. motor vehicles"),
-             exchange: str = Query("", description="Nasdaq | NYSE | OTC | CBOE | TXSE"),
+             exchange: str = Query("", description="Nasdaq | NYSE | OTC | CBOE | TXSE, or several separated by commas"),
              tickers: str = Query("", description="comma-separated tickers to rank within"),
              q: str = Query("", max_length=80, description="part of the company's name, its ticker, or its SEC number"),
              unit: str = Query("USD", description="reporting currency ranked; size sorts never mix units"),
@@ -779,6 +780,14 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
              equity_ratio_min: str = Query(""), equity_ratio_max: str = Query(""),
              revenue_growth_min: str = Query(""), cash_to_assets_min: str = Query(""),
              payout_ratio_min: str = Query(""), buyback_ratio_min: str = Query(""),
+             profit_growth_min: str = Query(""), fcf_margin_min: str = Query(""),
+             # price-based limits (only rows with a close carry these figures)
+             market_cap_min: str = Query("", description="US dollars, e.g. 20000000000"), market_cap_max: str = Query(""),
+             pe_min: str = Query(""), pe_max: str = Query(""),
+             dividend_yield_min: str = Query(""), buyback_yield_min: str = Query(""),
+             price_change_1y_min: str = Query(""), price_change_1y_max: str = Query(""),
+             price_change_1m_min: str = Query(""), price_change_1m_max: str = Query(""),
+             sp500: bool = Query(False, description="members of the S&P 500 only"),
              sort: str = Query("roe_pct", description="a metric or a size field to rank on"),
              order: str = Query("desc", description="desc | asc"),
              current_only: bool = Query(True, description="leave out filers whose latest annual report "
@@ -804,12 +813,23 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
         ("net_margin_min", net_margin_min), ("equity_ratio_min", equity_ratio_min),
         ("equity_ratio_max", equity_ratio_max), ("revenue_growth_min", revenue_growth_min),
         ("cash_to_assets_min", cash_to_assets_min), ("payout_ratio_min", payout_ratio_min),
-        ("buyback_ratio_min", buyback_ratio_min))}
+        ("buyback_ratio_min", buyback_ratio_min), ("profit_growth_min", profit_growth_min),
+        ("fcf_margin_min", fcf_margin_min), ("market_cap_min", market_cap_min), ("market_cap_max", market_cap_max),
+        ("pe_min", pe_min), ("pe_max", pe_max), ("dividend_yield_min", dividend_yield_min),
+        ("buyback_yield_min", buyback_yield_min), ("price_change_1y_min", price_change_1y_min),
+        ("price_change_1y_max", price_change_1y_max), ("price_change_1m_min", price_change_1m_min),
+        ("price_change_1m_max", price_change_1m_max))}
     sic_q = (sic or "").strip()
-    if sic_q and not sic_q.isdigit():
-        raise HTTPException(400, "sic must be digits: a full code or a prefix")
+    sic_set = [s.strip() for s in sic_q.split(",") if s.strip()]
+    if any(not s.isdigit() for s in sic_set):
+        raise HTTPException(400, "sic must be digits: a full code or a prefix, or several separated by commas")
     ind_q = (industry or "").strip().lower()
-    ex_q = (exchange or "").strip().lower()
+    ex_set = {e.strip().lower() for e in (exchange or "").split(",") if e.strip()}
+    ex_q = ",".join(sorted(ex_set))
+    sp_members = None
+    if sp500:
+        from . import us_benchmarks
+        sp_members = us_benchmarks.members(cur, "sp500")[0] or set()
     want = {t.strip().upper().replace(".", "-") for t in (tickers or "").split(",") if t.strip()}
     name_q = " ".join((q or "").split()).lower()
     u = (unit or "USD").strip().upper()
@@ -827,11 +847,13 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
         m, z = r["metrics"], r["size"]
         if current_only and (r.get("period_end") or "") < cutoff:
             continue
-        if sic_q and not (r.get("sic") is not None and str(int(r["sic"])).startswith(sic_q)):
+        if sic_set and not (r.get("sic") is not None and any(str(int(r["sic"])).startswith(s) for s in sic_set)):
             continue
         if ind_q and ind_q not in (r.get("industry") or "").lower():
             continue
-        if ex_q and (r.get("exchange") or "").lower() != ex_q:
+        if ex_set and (r.get("exchange") or "").lower() not in ex_set:
+            continue
+        if sp_members is not None and r["cik"] not in sp_members:
             continue
         if want and (r.get("ticker") or "") not in want:
             continue
@@ -849,7 +871,17 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
                 and ge(m["revenue_growth_pct"], f["revenue_growth_min"])
                 and ge(m["cash_to_assets_pct"], f["cash_to_assets_min"])
                 and ge(m["payout_ratio_pct"], f["payout_ratio_min"])
-                and ge(m["buyback_ratio_pct"], f["buyback_ratio_min"])):
+                and ge(m["buyback_ratio_pct"], f["buyback_ratio_min"])
+                and ge(m.get("profit_growth_pct"), f["profit_growth_min"])
+                and ge(m.get("fcf_margin_pct"), f["fcf_margin_min"])
+                and ge(m.get("market_cap"), f["market_cap_min"]) and le(m.get("market_cap"), f["market_cap_max"])
+                and ge(m.get("pe_x"), f["pe_min"]) and le(m.get("pe_x"), f["pe_max"])
+                and ge(m.get("dividend_yield_pct"), f["dividend_yield_min"])
+                and ge(m.get("buyback_yield_pct"), f["buyback_yield_min"])
+                and ge(m.get("price_change_1y_pct"), f["price_change_1y_min"])
+                and le(m.get("price_change_1y_pct"), f["price_change_1y_max"])
+                and ge(m.get("price_change_1m_pct"), f["price_change_1m_min"])
+                and le(m.get("price_change_1m_pct"), f["price_change_1m_max"])):
             continue
         kept.append(r)
 
@@ -875,7 +907,7 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
         })
     return {"sort": sort, "order": "asc" if asc else "desc",
             "filters": {"sic": sic_q or None, "industry": ind_q or None, "exchange": ex_q or None, "q": name_q or None,
-                        "tickers": sorted(want) or None, "unit": u,
+                        "tickers": sorted(want) or None, "unit": u, "sp500": sp500 or None,
                         **{k: v for k, v in f.items() if v is not None}},
             "universe": len(rows), "matched": len(kept), "ranked": len(ranked),
             "excluded_missing_sort": missing, "offset": offset, "limit": limit,

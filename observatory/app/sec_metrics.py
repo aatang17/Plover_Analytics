@@ -96,19 +96,23 @@ PRICE_FORMULAS = {
     "dividend_yield_pct": "dividends paid in the latest fiscal year ÷ market cap × 100",
     "price_change_1y_pct": ("(latest close ÷ close one year earlier − 1) × 100, nearest trading day; the earlier close is "
                             "adjusted for any split in between (a day whose previous close ÷ close is a whole number)"),
+    "price_change_1m_pct": ("(latest close ÷ close one month earlier − 1) × 100, nearest trading day; the earlier close is "
+                            "adjusted for any split in between"),
 }
 PRICE_LABELS = {
     "market_cap": ("Market value", "USD"), "pe_x": ("Price / earnings", "×"),
     "buyback_yield_pct": ("Buyback yield", "%"), "dividend_yield_pct": ("Dividend yield", "%"),
-    "price_change_1y_pct": ("Price change, 1 year", "%"),
+    "price_change_1y_pct": ("Price change, 1 year", "%"), "price_change_1m_pct": ("Price change, 1 month", "%"),
 }
-PRICE_ORDER = ["market_cap", "pe_x", "buyback_yield_pct", "dividend_yield_pct", "price_change_1y_pct"]
+PRICE_ORDER = ["market_cap", "pe_x", "buyback_yield_pct", "dividend_yield_pct", "price_change_1y_pct",
+               "price_change_1m_pct"]
 
 
-def with_prices(row, close, close_1y, price_date, basis=None):
+def with_prices(row, close, close_1y, price_date, basis=None, close_1m=None):
     """Attach the price-based figures to one metrics row, in place. `close`
     is the latest close for the row's ticker, `close_1y` the close nearest
-    one year earlier (None when the feed does not reach back that far).
+    one year earlier and `close_1m` the one nearest a month earlier (None
+    when the feed does not reach back that far).
     `basis` is app/sec_shares.basis(): the cover-page share count and, for a
     company with several share classes, each class priced on its own; without
     one, the year-end balance-sheet count is used."""
@@ -127,7 +131,7 @@ def with_prices(row, close, close_1y, price_date, basis=None):
                      "listing": None, "shares_date": row.get("period_end"), "market_cap": mcap, "classes": [],
                      "note": "no cover-page count on file; the year-end balance-sheet count is used"}
     row["market_value_basis"] = basis
-    row["price"] = {"close": close, "date": price_date, "close_1y": close_1y}
+    row["price"] = {"close": close, "date": price_date, "close_1y": close_1y, "close_1m": close_1m}
     # earnings per listed share: a depositary share earns what the shares it stands for earn
     eps_listed = (eps * per) if eps is not None else None
     row["metrics"].update({
@@ -139,6 +143,7 @@ def with_prices(row, close, close_1y, price_date, basis=None):
         "buyback_yield_pct": _r(_pct(_div(bb, mcap))) if (usd and mcap) else None,
         "dividend_yield_pct": _r(_pct(_div(divs, mcap))) if (usd and mcap) else None,
         "price_change_1y_pct": _r(_pct(_div(close, close_1y) - 1.0)) if (close is not None and close_1y) else None,
+        "price_change_1m_pct": _r(_pct(_div(close, close_1m) - 1.0)) if (close is not None and close_1m) else None,
     })
     return row
 

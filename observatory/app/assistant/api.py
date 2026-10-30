@@ -1761,3 +1761,9 @@ router.include_router(_reading.router)
 from . import preview as _preview  # noqa: E402
 
 router.include_router(_preview.router)
+
+# Saved charts and screens (the Charts and Screener tabs of Your Plover):
+# /api/v1/assistant/charts, /api/v1/assistant/screens. See app/assistant/views.py.
+from . import views as _views  # noqa: E402
+
+router.include_router(_views.router)

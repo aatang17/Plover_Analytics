@@ -199,6 +199,10 @@ function lineOptions(cfg, pal, narrow, below) {
       // rate, a policy target) is invisible unless the axis is told to reach
       // it: a markLine does not extend the scale. Opt-in only.
       max: cfg.yMax !== undefined ? cfg.yMax : null,
+      // A log axis otherwise spans whole powers of ten (10 to 1,000 for
+      // values between 80 and 130) and flattens the lines: a caller passes
+      // the floor it wants. Opt-in only.
+      min: cfg.yMin !== undefined ? cfg.yMin : null,
       // Whole-number series (counts of things) opt in with 1: without it a
       // range as narrow as 3 to 5 is split into half steps, and fixed-zero
       // tick labels then print "5, 5, 4, 4, 3". Unset for every other caller.
@@ -1042,7 +1046,8 @@ function obsChart(el, kind, cfg) {
   // other just resizes. A chart whose legend a caller has hidden (thumbnails,
   // the desk's chart picker) keeps what the caller made of it.
   window.addEventListener("resize", () => {
-    if (!chart) return;
+    // a chart the page has disposed (Your Plover redraws into the same box) has no options
+    if (!chart || (chart.isDisposed && chart.isDisposed())) return;
     const now = layoutNarrow(el.clientWidth);
     const lg = chart.getOption().legend;
     const hidden = lg && lg[0] && lg[0].show === false;

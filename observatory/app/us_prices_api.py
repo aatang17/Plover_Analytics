@@ -310,9 +310,10 @@ def adjusted_closes(cur, symbol, start=None, end=None):
 
 
 def latest_closes(cur):
-    """{symbol: (date, close, close about one year earlier)} for every symbol
-    with a bar in the last ten days. One query, cached per database version;
-    the year-earlier close is split-adjusted and taken across a ticker change."""
+    """{symbol: (date, close, close about one year earlier, close about one
+    month earlier)} for every symbol with a bar in the last ten days. One
+    query, cached per database version; the earlier closes are split-adjusted
+    and taken across a ticker change."""
     if not sec_api._has(cur, "us_px_daily"):
         return {}
     v = sec_api.file_version()
@@ -327,19 +328,30 @@ def latest_closes(cur):
             SELECT p.symbol, arg_max(p.close, p.date) AS close_1y
             FROM us_px_daily p JOIN last l USING (symbol)
             WHERE p.close > 0 AND p.date <= l.date - INTERVAL 1 YEAR AND p.date >= l.date - INTERVAL 1 YEAR - INTERVAL 10 DAY
+            GROUP BY p.symbol),
+        ago_m AS (
+            SELECT p.symbol, arg_max(p.close, p.date) AS close_1m
+            FROM us_px_daily p JOIN last l USING (symbol)
+            WHERE p.close > 0 AND p.date <= l.date - INTERVAL 1 MONTH AND p.date >= l.date - INTERVAL 1 MONTH - INTERVAL 10 DAY
             GROUP BY p.symbol)
-        SELECT l.symbol, l.date, l.close, a.close_1y FROM last l LEFT JOIN ago a USING (symbol)""").fetchall()
+        SELECT l.symbol, l.date, l.close, a.close_1y, m.close_1m
+        FROM last l LEFT JOIN ago a USING (symbol) LEFT JOIN ago_m m USING (symbol)""").fetchall()
     ev = _events(cur)
     out = {}
-    for sym, d, close, close_1y in rows:
+    for sym, d, close, close_1y, close_1m in rows:
         brk = ev["breaks"].get(sym)
         if brk and brk[0] > d - datetime.timedelta(days=366):
             series, _ = clean_closes(cur, sym, d - datetime.timedelta(days=376), d)
             first = [r for r in series if r[0] <= d - datetime.timedelta(days=365)]
             close_1y = first[-1][2] if first else None
-        elif close_1y is not None and sym in ev["splits"]:
-            close_1y = close_1y / adjust_factor(ev["splits"][sym], d - datetime.timedelta(days=366), d)
-        out[sym] = (d, close, close_1y)
+            first_m = [r for r in series if r[0] <= d - datetime.timedelta(days=30)]
+            close_1m = first_m[-1][2] if first_m else None
+        elif sym in ev["splits"]:
+            if close_1y is not None:
+                close_1y = close_1y / adjust_factor(ev["splits"][sym], d - datetime.timedelta(days=366), d)
+            if close_1m is not None:
+                close_1m = close_1m / adjust_factor(ev["splits"][sym], d - datetime.timedelta(days=31), d)
+        out[sym] = (d, close, close_1y, close_1m)
         if "." in sym:
             out.setdefault(sym.replace(".", "-"), out[sym])
     _LATEST["v"], _LATEST["rows"] = v, out

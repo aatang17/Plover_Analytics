@@ -102,6 +102,17 @@ class PriceMetricsTest(unittest.TestCase):
         self.assertEqual(m["buyback_yield_pct"], 4.0)
         self.assertEqual(m["dividend_yield_pct"], 1.0)
         self.assertEqual(m["price_change_1y_pct"], 25.0)
+        self.assertIsNone(m["price_change_1m_pct"])      # no month-earlier close given
+
+    def test_one_month_change(self):
+        # the screener's "down 10% this month": close ÷ the close a month earlier − 1
+        row = {"unit": "USD", "metrics": {}, "per_share": {"shares_outstanding": 1000.0, "eps_diluted": 5.0},
+               "size": {"buybacks": None, "dividends_paid": None}}
+        sec_metrics.with_prices(row, 45.0, 40.0, "2026-10-28", close_1m=50.0)
+        self.assertEqual(row["metrics"]["price_change_1m_pct"], -10.0)
+        self.assertEqual(row["price"]["close_1m"], 50.0)
+        self.assertIn("price_change_1m_pct", sec_metrics.PRICE_ORDER)
+        self.assertEqual([d["metric"] for d in sec_metrics.metric_defs(prices=True)][-1], "price_change_1m_pct")
 
     def test_loss_and_foreign_currency_withhold(self):
         row = {"unit": "USD", "metrics": {}, "per_share": {"shares_outstanding": 1000.0, "eps_diluted": -1.0},

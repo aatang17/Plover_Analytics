@@ -280,7 +280,9 @@
     "write.js#wd-cvq": "The coverage search on a publication's Coverage tab, inside the signed-in Writer Desk. tests/test_search_examples.py types the box's own examples and the obvious company queries into the same search.",
     "desk-research.js#class=dk-rs-q": "Inside the signed-in research desk, on every Research data tab. Its examples and the obvious queries run against the same search in tests/test_search_examples.py.",
     "desk.js#data-f=q": "The search box on a chart in the signed-in desk. An empty chart runs the desk's data search, and tests/test_search_examples.py types the box's own examples into it.",
-    "my.html#my-co-q": "The Add a company box on the Companies tab of Plover (my.html), behind a sign-in. It searches Japan (app/assistant/api.find_companies, as the Writer Desk's coverage box) and US listed companies (find_us_companies) together; tests/test_search_examples.py types the box's own examples and the obvious company queries into it."
+    "my.html#my-co-q": "The Add a company box on the Companies tab of Plover (my.html), behind a sign-in. It searches Japan (app/assistant/api.find_companies, as the Writer Desk's coverage box) and US listed companies (find_us_companies) together; tests/test_search_examples.py types the box's own examples and the obvious company queries into it.",
+    "my.html#ch-q": "The Describe-the-chart box on the Charts tab of Your Plover (my.html), behind a sign-in. It sends its sentence to /api/v1/us/build/chart (app/us_build_api.py); tests/test_us_build.py types the box's own example and the obvious requests into that endpoint and requires a company to come back.",
+    "my.html#sc-q": "The Describe-what-you-are-looking-for box on the Screener tab of Your Plover (my.html), behind a sign-in. It sends its sentence to /api/v1/us/build/screen (app/us_build_api.py); tests/test_us_build.py types the box's own example and the obvious requests into that endpoint and requires filters to come back."
   },
   "not_run": {
     "desk-tabs.js#class=dk-at-q": "Filters the writer's own articles, already listed under + Open Article in the desk; there is nothing to fetch.",

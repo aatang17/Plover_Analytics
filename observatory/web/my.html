@@ -26,6 +26,8 @@
       <nav class="my-tabs" role="tablist" aria-label="Plover">
         <a role="tab" href="#overview" data-tab="overview" id="tab-overview">Overview</a>
         <a role="tab" href="#chat" data-tab="chat" id="tab-chat">Ask</a>
+        <a role="tab" href="#charts" data-tab="charts" id="tab-charts">Charts <span class="my-count" id="my-ch-n"></span></a>
+        <a role="tab" href="#screener" data-tab="screener" id="tab-screener">Screener <span class="my-count" id="my-sc-n"></span></a>
         <a role="tab" href="#companies" data-tab="companies" id="tab-companies">Watchlist <span class="my-count" id="my-cos-n"></span></a>
         <!-- Reading is off until the browser extension is published (READING_ON in my.js) -->
         <a role="tab" href="#reading" data-tab="reading" id="tab-reading" hidden>Reading <span class="my-count" id="my-read-n"></span></a>
@@ -45,7 +47,8 @@
         </section>
         <section class="my-card">
           <div class="my-card-head"><h2>Watchlist</h2><span class="note" id="ov-wl-note"></span>
-            <a class="ov-right" href="#companies">Add or remove companies</a></div>
+            <button type="button" class="my-link ov-right ov-compare" id="ov-compare">Compare</button>
+            <a class="ov-right ov-right-next" href="#companies">Add or remove companies</a></div>
           <div class="my-tbl ov-tbl"><table data-no-enhance id="ov-wl"></table></div>
           <p class="my-card-foot" id="ov-wl-foot">Change = last close ÷ the earlier close − 1, on closes adjusted for splits. US results dates are
             estimated from the same filing a year earlier; Japanese dates are the ones the company announced. Source: SEC EDGAR, Databento, JPX.</p>
@@ -89,6 +92,145 @@
         </div>
       </section>
 
+      <!-- Charts: describe a chart in the box, then change it with the controls beside it
+           or in more words (my.js charts). The chart is drawn from the same price and
+           filing endpoints as every other page; saved charts redraw from today's data. -->
+      <section class="my-panel my-over my-charts" id="panel-charts" role="tabpanel" aria-labelledby="tab-charts" hidden>
+        <section class="my-card">
+          <form id="ch-ask" class="ov-ask" autocomplete="off">
+            <label for="ch-q" class="my-sr">Describe the chart</label>
+            <input type="text" id="ch-q" maxlength="300" placeholder="Describe a chart, e.g. Apple, Microsoft and Nvidia against the S&amp;P 500 this year">
+            <button type="submit" class="btn btn-primary" id="ch-go">Draw It</button>
+          </form>
+          <p class="ov-cont ch-hints">Describe any chart, or change this one in words:
+            <button type="button" class="my-link ch-hint">add Amazon</button> ·
+            <button type="button" class="my-link ch-hint">make it revenue, not price</button> ·
+            <button type="button" class="my-link ch-hint">show operating margin since 2015</button> ·
+            <button type="button" class="my-link ch-hint">mark the results days</button></p>
+          <p class="my-note ch-read" id="ch-read" hidden></p>
+        </section>
+        <div class="ch-two">
+          <section class="my-card ch-chartcard">
+            <div class="my-card-head ch-head">
+              <label for="ch-title" class="my-sr">Chart title</label>
+              <input type="text" id="ch-title" class="ch-title" maxlength="160" placeholder="Chart title">
+              <div class="ch-acts">
+                <button type="button" class="btn" id="ch-save">Save to My Charts</button>
+                <button type="button" class="btn" id="ch-png">PNG</button>
+                <button type="button" class="btn" id="ch-csv">CSV</button>
+                <button type="button" class="btn" id="ch-link">Copy Link</button>
+              </div>
+            </div>
+            <div class="ch-body">
+              <p class="my-empty ch-empty" id="ch-empty">Describe a chart above, or pick companies on the right.</p>
+              <div id="ch-plot" class="my-plot" hidden></div>
+            </div>
+            <div class="my-card-foot ch-foot">
+              <span id="ch-src"></span>
+              <details class="my-calc ch-calc" id="ch-calcbox"><summary>Show calculation</summary><ul id="ch-calc"></ul></details>
+            </div>
+          </section>
+          <aside class="my-card ch-side" aria-label="Customize">
+            <p class="ch-side-head">Customize</p>
+            <div class="ch-field">
+              <span class="ch-lab">Series</span>
+              <div class="ch-chips" id="ch-series"></div>
+              <div class="my-add ch-add">
+                <label for="ch-add" class="my-sr">Add a company</label>
+                <input id="ch-add" type="text" autocomplete="off" spellcheck="false" placeholder="+ Add a company">
+                <ul id="ch-add-hits" class="my-hits" hidden></ul>
+              </div>
+            </div>
+            <div class="ch-field">
+              <label class="ch-lab" for="ch-measure">Measure</label>
+              <select id="ch-measure" class="ch-sel"></select>
+            </div>
+            <div class="ch-field">
+              <span class="ch-lab" id="ch-period-lab">Period</span>
+              <div class="ch-pills" role="group" aria-labelledby="ch-period-lab" id="ch-period">
+                <button type="button" data-p="1m">1M</button><button type="button" data-p="3m">3M</button><button type="button" data-p="ytd">YTD</button><button type="button" data-p="1y">1Y</button><button type="button" data-p="5y">5Y</button><button type="button" data-p="max">Max</button>
+              </div>
+              <p class="ch-since" id="ch-since" hidden></p>
+            </div>
+            <div class="ch-field">
+              <label class="ch-lab" for="ch-bench">Compare to</label>
+              <select id="ch-bench" class="ch-sel"></select>
+            </div>
+            <div class="ch-field">
+              <label class="ch-lab" for="ch-display">Display</label>
+              <select id="ch-display" class="ch-sel">
+                <option value="rebased">Rebased to 100 at the start</option>
+                <option value="actual">Actual values</option>
+                <option value="yoy">Change from a year earlier, %</option>
+              </select>
+            </div>
+            <div class="ch-checks">
+              <label><input type="checkbox" id="ch-log"> Log scale</label>
+              <label><input type="checkbox" id="ch-events"> Mark results days</label>
+            </div>
+            <div class="ch-field">
+              <label class="ch-lab" for="ch-type">Chart type</label>
+              <select id="ch-type" class="ch-sel"><option value="line">Line</option><option value="bars">Bars</option></select>
+            </div>
+            <p class="ch-side-note">Every control here can also be changed by typing in the box above.</p>
+          </aside>
+        </div>
+        <section class="my-card">
+          <div class="my-card-head"><h2>My Charts</h2><span class="note">saved charts update themselves with each day's closes and each new filing</span></div>
+          <ul class="ch-saved" id="ch-saved"><li class="my-empty">Loading…</li></ul>
+        </section>
+      </section>
+      <!-- Screener: describe what to look for; the filters Plover read are shown as chips
+           to remove or add to, and the screener (/api/v1/us/financials/screener) runs them. -->
+      <section class="my-panel my-over my-screener" id="panel-screener" role="tabpanel" aria-labelledby="tab-screener" hidden>
+        <section class="my-card">
+          <form id="sc-ask" class="ov-ask" autocomplete="off">
+            <label for="sc-q" class="my-sr">Describe what you are looking for</label>
+            <input type="text" id="sc-q" maxlength="300" placeholder="Describe what you are looking for, e.g. big companies still growing sales, that are cheap on earnings">
+            <button type="submit" class="btn btn-primary" id="sc-go">Find Them</button>
+          </form>
+          <div class="sc-chips-row" id="sc-chips-row" hidden>
+            <span class="sc-readas">Plover read that as:</span>
+            <span id="sc-chips" class="sc-chips"></span>
+            <button type="button" class="btn sc-undo" id="sc-undo" hidden>Undo</button>
+            <label for="sc-addsel" class="my-sr">Add a filter</label>
+            <select id="sc-addsel" class="sc-addsel"><option value="">+ Add a filter</option></select>
+          </div>
+          <form class="sc-addform" id="sc-addform" hidden>
+            <label for="sc-addval" id="sc-addlab"></label>
+            <input type="text" id="sc-addval" inputmode="decimal" maxlength="20">
+            <button type="submit" class="btn btn-primary" id="sc-addgo">Add</button>
+            <button type="button" class="btn" id="sc-addcancel">Cancel</button>
+          </form>
+          <p class="ov-cont sc-hints">Edit a filter by clicking it, or just say it:
+            <button type="button" class="my-link sc-hint">only technology</button> ·
+            <button type="button" class="my-link sc-hint">add dividend yield over 2%</button> ·
+            <button type="button" class="my-link sc-hint">drop the size limit</button></p>
+        </section>
+        <section class="my-card" id="sc-results" hidden>
+          <div class="my-card-head sc-head">
+            <h2 class="sc-count" id="sc-count"></h2>
+            <span class="note" id="sc-of"></span>
+            <div class="ch-acts">
+              <button type="button" class="btn" id="sc-save">Save Screen</button>
+              <button type="button" class="btn" id="sc-chart">Chart the Top 5</button>
+              <button type="button" class="btn" id="sc-csv">CSV</button>
+              <button type="button" class="btn" id="sc-link">Copy Link</button>
+            </div>
+          </div>
+          <div class="my-tbl ov-tbl sc-tbl"><table data-no-enhance id="sc-table"></table></div>
+          <div class="my-card-foot sc-foot">
+            <button type="button" class="my-link" id="sc-more" hidden></button>
+            <span id="sc-note"></span>
+            <details class="my-calc sc-calc"><summary>Show calculation</summary><ul id="sc-calc"></ul></details>
+          </div>
+        </section>
+        <p class="my-empty sc-empty" id="sc-empty" hidden></p>
+        <section class="my-card">
+          <div class="my-card-head"><h2>My Screens</h2><span class="note">a saved screen runs again when you open it, and says which companies are new</span></div>
+          <ul class="sc-saved" id="sc-saved"><li class="my-empty">Loading…</li></ul>
+        </section>
+      </section>
       <section class="my-panel" id="panel-companies" role="tabpanel" aria-labelledby="tab-companies" hidden>
         <p class="my-intro">Keep a list of the companies you follow, in the US or Japan. Each one shows when its
         next results are due. Click a company to open its page with financial statements and filings.</p>
