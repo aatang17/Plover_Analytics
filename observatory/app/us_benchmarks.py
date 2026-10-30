@@ -17,7 +17,7 @@ BENCHMARKS = {
     "sp500": {"name": "S&P 500", "etf": "SPY", "members": "S&P 500 (SPY holdings)",
               "words": r"s ?& ?p(?: ?500)?\b|\bsp ?500\b|s and p 500|\bspx\b|\bspy\b"},
     "dow": {"name": "Dow Jones Industrial Average", "etf": "DIA", "members": "Dow Jones Industrial Average (DIA holdings)",
-            "words": r"dow jones(?: industrial average)?|\bdow\b|\bdjia\b|\bdia\b"},
+            "words": r"dow jones(?: industrial average)?|\bdow\b|\bdjia?\b|\bdia\b"},
     "nasdaq100": {"name": "Nasdaq-100", "etf": "QQQ", "members": None,
                   "words": r"nasdaq.?100|\bndx\b|\bqqq\b|nasdaq (index|composite)|\bthe nasdaq\b"},
     "russell2000": {"name": "Russell 2000", "etf": "IWM", "members": None,

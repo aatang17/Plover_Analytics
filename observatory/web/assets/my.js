@@ -1065,7 +1065,7 @@
      the same chart; a saved chart is the spec, redrawn from today's data. */
   var US = "/api/v1/us";
   var CH = { spec: null, id: null, chart: null, seq: 0, measures: [], benchmarks: [], saved: [], cache: {} };
-  var CH_DEFAULT = { series: [], measure: "price", period: "ytd", from: null, to: null, benchmark: "sp500",
+  var CH_DEFAULT = { series: [], measure: "price", period: "ytd", from: null, to: null, benchmarks: ["sp500"],
                      display: "rebased", log: false, chart_type: "line", mark_results: false, title: "" };
   var MEASURE_TEXT = {
     price: "Share price", revenue: "Revenue, quarterly", revenue_ttm: "Revenue, trailing 12 months",
@@ -1104,7 +1104,10 @@
     for (var i = 0; i < CH.benchmarks.length; i++) if (CH.benchmarks[i].id === key) return CH.benchmarks[i];
     return null;
   }
-  function chSeriesColor(i) { return typeof cssVar === "function" ? cssVar("--obs-series-" + ((i % 6) + 1)) : "#1a4d8f"; }
+  function chBenches(spec) { return (spec.benchmarks || []).map(chBench).filter(Boolean); }
+  // a chart holds six lines, one colour each: companies from the first colour, indexes from the last
+  function chBenchColor(j) { return chSeriesColor(5 - j); }
+  function chSeriesColor(i) { return "var(--obs-series-" + ((i % 6) + 1) + ")"; }
   /* quarterly rows from the indicators panel, with each fourth quarter derived
      as the year less its three filed quarters (the SEC's own convention) */
   function chQuarters(t) {
@@ -1192,21 +1195,22 @@
         for (var k = 0; k < pts.length && base == null; k++) base = pts[k][1];
         pts = pts.map(function (p) { return [p[0], (p[1] != null && base) ? p[1] / base * 100 : null]; });
       }
-      return { name: s.name, ticker: s.ticker, points: pts, daily: s.daily, source: s.source, derived: s.derived, splits: s.splits, tag: s.tag };
+      return { name: s.name, ticker: s.ticker, slot: s.slot, points: pts, daily: s.daily, source: s.source, derived: s.derived, splits: s.splits, tag: s.tag };
     });
   }
   function chDescribe(spec) {
     var m = MEASURE_TEXT[spec.measure] || "Share price";
     var how = { rebased: ", rebased to 100", yoy: ", change on a year earlier", actual: "" }[spec.display] || "";
     var names = spec.series.map(function (s) { return s.name || s.ticker; });
-    var b = chBench(spec.benchmark);
-    var who = names.length ? names.slice(0, -1).join(", ") + (names.length > 1 ? " and " : "") + names[names.length - 1] : "";
-    if (b && spec.measure === "price") who += (who ? " against the " : "") + b.name;
+    var both = function (xs) { return xs.length ? xs.slice(0, -1).join(", ") + (xs.length > 1 ? " and " : "") + xs[xs.length - 1] : ""; };
+    var who = both(names), idx = spec.measure === "price" ? chBenches(spec).map(function (b) { return b.name; }) : [];
+    if (idx.length) who += (who ? " against the " : "") + both(idx);
     return m + how + (who ? ": " + who : "");
   }
   function chCalc(spec, series) {
     var lines = [];
     if (spec.measure === "price") lines.push("Closes are Databento's end-of-day prices, adjusted for splits.");
+    if (spec.measure === "price") chBenches(spec).forEach(function (b) { lines.push(b.label + " is drawn from " + b.fund + ", the fund that tracks it: its share price, without dividends, not the index level itself."); });
     if (spec.display === "rebased") lines.push("Rebased value = value ÷ the first value in the period × 100.");
     if (spec.display === "yoy") lines.push("Change = value ÷ the value a year earlier − 1, as a percentage.");
     if (spec.measure === "operating_margin") lines.push("Operating margin = operating income ÷ revenue × 100, each quarter as filed.");
@@ -1239,8 +1243,8 @@
     } else if (spec.display === "actual" && unit === "USD/share") label = "$ per share";
     var dp = spec.display === "rebased" ? 1 : (unit === "%" ? 1 : (k > 1 ? 1 : 2));
     var cfg = {
-      series: series.map(function (s, i) {
-        return { name: s.name, slot: (s.isBench ? 6 : i + 1), points: s.points.map(function (p) { return [p[0], p[1] == null ? null : p[1] / k]; }) };
+      series: series.map(function (s) {
+        return { name: s.name, slot: s.slot, points: s.points.map(function (p) { return [p[0], p[1] == null ? null : p[1] / k]; }) };
       }),
       dp: dp, unit: unit === "%" && spec.display !== "rebased" ? "%" : "x",
       unitSuffix: spec.display === "rebased" ? "" : (unit === "%" ? "" : label),
@@ -1285,12 +1289,13 @@
   function chLoad() {
     var spec = CH.spec, mine = ++CH.seq;
     chSync();
-    var ss = spec.series.slice(0, 6), b = chBench(spec.benchmark);
-    if (b && spec.measure === "price") ss = ss.concat([{ ticker: b.fund, name: b.name, isBench: true }]);
+    // each line keeps the colour of its chip, even when another line has no data to draw
+    var ss = spec.series.slice(0, 6).map(function (s, i) { return Object.assign({}, s, { slot: i + 1 }); });
+    if (spec.measure === "price") ss = ss.concat(chBenches(spec).map(function (b, j) { return { ticker: b.fund, name: b.name, slot: 6 - j }; }));
     if (!ss.length) { chEmpty("Describe a chart above, or pick companies on the right."); return Promise.resolve(); }
     chEmpty("Loading…");
     var start = chStart(spec);
-    var work = ss.map(function (s) { return chLoadSeries(s, spec).then(function (r) { r.isBench = !!s.isBench; return r; }); });
+    var work = ss.map(function (s) { return chLoadSeries(s, spec).then(function (r) { r.slot = s.slot; return r; }); });
     if (spec.mark_results) {
       work.push(Promise.all(spec.series.slice(0, 6).map(function (s) {
         return chGet(US + "/events?kind=results&ticker=" + encodeURIComponent(s.ticker) + "&since=" + start).then(function (d) {
@@ -1326,8 +1331,7 @@
     var since = $("#ch-since");
     since.hidden = !spec.from;
     if (spec.from) since.textContent = "From " + day(spec.from) + (spec.to ? " to " + day(spec.to) : "") + ".";
-    $("#ch-bench").value = spec.benchmark || "none";
-    $("#ch-bench").disabled = spec.measure !== "price";
+    chSyncBenches(spec);
     $("#ch-display").value = spec.display;
     $("#ch-log").checked = !!spec.log;
     $("#ch-events").checked = !!spec.mark_results;
@@ -1336,11 +1340,40 @@
     $("#ch-save").disabled = false;
     history.replaceState(null, "", "#charts?" + chHash(spec));
   }
+  function chSyncBenches(spec) {
+    var room = Math.max(0, 6 - spec.series.length);
+    if (spec.benchmarks.length > room) spec.benchmarks = spec.benchmarks.slice(0, room);
+    var isPrice = spec.measure === "price", box = $("#ch-benches"), sel = $("#ch-bench"), note = $("#ch-bench-note");
+    box.hidden = sel.hidden = !isPrice;
+    box.innerHTML = !isPrice ? "" : spec.benchmarks.map(function (key, j) {
+      var b = chBench(key), name = b ? b.label : key;
+      return '<button type="button" class="ch-chip" data-key="' + esc(key) + '" title="Remove ' + esc(name) + '">' +
+        '<span class="ch-dot" style="background:' + chBenchColor(j) + '"></span>' + esc(name) + '<span class="ch-x" aria-hidden="true">×</span></button>';
+    }).join("");
+    Array.prototype.forEach.call(box.querySelectorAll(".ch-chip"), function (c) {
+      c.onclick = function () { CH.spec.benchmarks = CH.spec.benchmarks.filter(function (k) { return k !== c.dataset.key; }); CH.spec.title = ""; chChanged(); };
+    });
+    var full = spec.benchmarks.length >= room;
+    sel.disabled = full;
+    sel.innerHTML = '<option value="">+ Add an index</option>' + CH.benchmarks.filter(function (b) { return spec.benchmarks.indexOf(b.id) < 0; }).map(function (b) {
+      return '<option value="' + esc(b.id) + '">' + esc(b.name) + "</option>";
+    }).join("");
+    sel.value = "";
+    note.hidden = isPrice && !full;
+    note.textContent = "";
+    if (!isPrice) {
+      note.appendChild(document.createTextNode("An index has no " + (MEASURE_TEXT[spec.measure] || "").toLowerCase().replace(/, .*$/, "") + ". Indexes show on share price only. "));
+      var go = document.createElement("button");
+      go.type = "button"; go.className = "my-link"; go.textContent = "Show share price";
+      go.onclick = function () { var m = $("#ch-measure"); m.value = "price"; m.dispatchEvent(new Event("change")); };
+      note.appendChild(go);
+    } else if (full) note.textContent = "A chart holds six lines. Remove one to add another index.";
+  }
   function chHash(spec) {
     var p = new URLSearchParams();
     p.set("s", spec.series.map(function (s) { return s.ticker; }).join(","));
     p.set("m", spec.measure); if (spec.from) { p.set("from", spec.from); if (spec.to) p.set("to", spec.to); } else p.set("p", spec.period || "ytd");
-    p.set("b", spec.benchmark || "none"); p.set("d", spec.display);
+    p.set("b", (spec.benchmarks || []).join(",") || "none"); p.set("d", spec.display);
     if (spec.log) p.set("log", "1"); if (spec.mark_results) p.set("ev", "1"); if (spec.chart_type === "bars") p.set("ct", "bars");
     if (spec.title) p.set("title", spec.title);
     return p.toString();
@@ -1352,7 +1385,7 @@
     s.series = tks.map(function (t) { return { ticker: t, name: t }; });
     s.measure = MEASURE_HOW[p.get("m")] ? p.get("m") : "price";
     if (p.get("from")) { s.from = p.get("from"); s.to = p.get("to") || null; s.period = null; } else s.period = PERIOD_TEXT[p.get("p")] ? p.get("p") : "ytd";
-    s.benchmark = p.get("b") && p.get("b") !== "none" ? p.get("b") : null;
+    s.benchmarks = p.get("b") ? p.get("b").split(",").filter(function (k) { return k && k !== "none"; }) : CH_DEFAULT.benchmarks;
     s.display = ["rebased", "actual", "yoy"].indexOf(p.get("d")) >= 0 ? p.get("d") : (s.measure === "price" ? "rebased" : "actual");
     s.log = p.get("log") === "1"; s.mark_results = p.get("ev") === "1"; s.chart_type = p.get("ct") === "bars" ? "bars" : "line";
     s.title = p.get("title") || "";
@@ -1375,6 +1408,9 @@
   function chSetSpec(spec) {
     var s = Object.assign({}, CH_DEFAULT, spec);
     s.series = (s.series || []).slice(0, 6);
+    // a chart saved before several indexes were allowed holds one
+    if (spec && spec.benchmarks === undefined && "benchmark" in spec) s.benchmarks = spec.benchmark ? [spec.benchmark] : [];
+    delete s.benchmark;
     if (s.measure !== "price") { if (s.display === "rebased") s.display = "actual"; }
     CH.spec = s;
     chSync();                                      // the controls show at once; names fill in as they arrive
@@ -1391,12 +1427,14 @@
       btn.disabled = false;
       if (!d || !d.spec) throw new Error();
       CH.measures = d.measures || CH.measures; CH.benchmarks = d.benchmarks || CH.benchmarks;
-      if (!d.spec.series.length && !d.spec.benchmark) {
+      if (!d.spec.series.length && !(d.spec.benchmarks || []).length) {
         read.textContent = "Plover could not find a company in that. Name one, e.g. “Apple and Microsoft this year”.";
         return;
       }
       if (CH.spec && CH.spec.series.length && chHash(Object.assign({}, CH.spec, d.spec, { title: "" })) === chHash(Object.assign({}, CH.spec, { title: "" }))) {
-        read.textContent = "That made no change to the chart. Try \u201cadd Amazon\u201d, \u201cmake it revenue\u201d or \u201csince 2020\u201d, or describe a new chart.";
+        read.textContent = CH.spec.series.length + CH.spec.benchmarks.length >= 6
+          ? "That made no change to the chart. A chart holds six lines, so remove one to add another."
+          : "That made no change to the chart. Try \u201cadd Amazon\u201d, \u201cmake it revenue\u201d or \u201csince 2020\u201d, or describe a new chart.";
         return;
       }
       read.textContent = "Read as: " + (d.read_as || d.spec.title);
@@ -1457,13 +1495,8 @@
   }
   function setupCharts() {
     $("#ch-measure").innerHTML = Object.keys(MEASURE_TEXT).map(function (k) { return '<option value="' + k + '">' + esc(MEASURE_TEXT[k]) + "</option>"; }).join("");
-    var benchSel = $("#ch-bench");
-    var fill = function () {
-      benchSel.innerHTML = '<option value="none">Nothing</option>' + CH.benchmarks.map(function (b) { return '<option value="' + esc(b.id) + '">' + esc(b.name) + "</option>"; }).join("");
-    };
-    fill();
     fetch(US + "/build/chart?q=S%26P%20500", { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }).then(function (d) {
-      CH.benchmarks = d.benchmarks || []; CH.measures = d.measures || []; fill();
+      CH.benchmarks = d.benchmarks || []; CH.measures = d.measures || [];
       if (CH.spec) chSync();
     }).catch(function () { /* the select stays short */ });
     $("#ch-ask").addEventListener("submit", function (e) { e.preventDefault(); chFromWords($("#ch-q").value); });
@@ -1481,7 +1514,11 @@
       var b = e.target.closest("button"); if (!b || !CH.spec) return;
       CH.spec.period = b.dataset.p; CH.spec.from = CH.spec.to = null; chChanged();
     });
-    $("#ch-bench").addEventListener("change", function () { if (!CH.spec) return; CH.spec.benchmark = this.value === "none" ? null : this.value; CH.spec.title = ""; chChanged(); });
+    $("#ch-bench").addEventListener("change", function () {
+      if (!this.value) return;
+      if (!CH.spec) CH.spec = Object.assign({}, CH_DEFAULT, { benchmarks: [] });
+      CH.spec.benchmarks = CH.spec.benchmarks.concat([this.value]); CH.spec.title = ""; chChanged();
+    });
     $("#ch-display").addEventListener("change", function () { if (!CH.spec) return; CH.spec.display = this.value; CH.spec.title = ""; chChanged(); });
     $("#ch-log").addEventListener("change", function () { if (!CH.spec) return; CH.spec.log = this.checked; chChanged(); });
     $("#ch-events").addEventListener("change", function () { if (!CH.spec) return; CH.spec.mark_results = this.checked; chChanged(); });

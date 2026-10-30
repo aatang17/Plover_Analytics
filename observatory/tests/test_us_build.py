@@ -105,10 +105,10 @@ class ChartWords(unittest.TestCase):
         s = self.spec("Tesla operating margin by quarter since 2020")
         self.assertEqual(s["measure"], "operating_margin")
         self.assertEqual(s["from"], "2020-01-01")
-        self.assertIsNone(s["benchmark"])
+        self.assertEqual(s["benchmarks"], [])
         self.assertEqual(s["display"], "actual")
         s = self.spec("chart the Nasdaq since 2015 log scale")
-        self.assertEqual(s["benchmark"], "nasdaq100")
+        self.assertEqual(s["benchmarks"], ["nasdaq100"])
         self.assertTrue(s["log"])
         s = self.spec("revenue, trailing 12 months, since 2019")
         self.assertEqual(s["measure"], "revenue_ttm")
@@ -116,13 +116,13 @@ class ChartWords(unittest.TestCase):
 
     def test_defaults(self):
         s = self.spec("something with no period")
-        self.assertEqual((s["period"], s["benchmark"], s["display"], s["chart_type"]), ("ytd", "sp500", "rebased", "line"))
+        self.assertEqual((s["period"], s["benchmarks"], s["display"], s["chart_type"]), ("ytd", ["sp500"], "rebased", "line"))
 
     @unittest.skipUnless(_live(), "data/sec.duckdb without US prices")
     def test_the_boxs_own_example_names_three_companies(self):
         s = self.spec("Apple, Microsoft and Nvidia against the S&P 500 this year")
         self.assertEqual([x["ticker"] for x in s["series"]], ["AAPL", "MSFT", "NVDA"])
-        self.assertEqual((s["period"], s["benchmark"]), ("ytd", "sp500"))
+        self.assertEqual((s["period"], s["benchmarks"]), ("ytd", ["sp500"]))
         self.assertTrue(us_build_api._chart_title(s).startswith("Share price, rebased to 100: Apple"))
 
     @unittest.skipUnless(_live(), "data/sec.duckdb without US prices")
@@ -130,10 +130,27 @@ class ChartWords(unittest.TestCase):
         cur = self.spec("Apple vs Microsoft this year")
         s = self.spec("add Amazon", cur)
         self.assertEqual([x["ticker"] for x in s["series"]], ["AAPL", "MSFT", "AMZN"])
-        self.assertEqual((s["period"], s["benchmark"]), ("ytd", "sp500"))
+        self.assertEqual((s["period"], s["benchmarks"]), ("ytd", ["sp500"]))
         s = self.spec("drop Microsoft and the S&P", s)
         self.assertEqual([x["ticker"] for x in s["series"]], ["AAPL", "AMZN"])
-        self.assertIsNone(s["benchmark"])
+        self.assertEqual(s["benchmarks"], [])
+
+    def test_several_indexes(self):
+        s = self.spec("compare to Nasdaq & DJI")
+        self.assertEqual(s["benchmarks"], ["nasdaq100", "dow"])
+        self.assertIn("Nasdaq-100 and Dow Jones", us_build_api._chart_title(s))
+        s = self.spec("add the S&P 500", s)
+        self.assertEqual(s["benchmarks"], ["nasdaq100", "dow", "sp500"])
+        s = self.spec("drop the Dow", s)
+        self.assertEqual(s["benchmarks"], ["nasdaq100", "sp500"])
+        s = self.spec("against the Russell 2000", s)
+        self.assertEqual(s["benchmarks"], ["russell2000"])
+        s = self.spec("remove the index", s)
+        self.assertEqual(s["benchmarks"], [])
+
+    def test_six_lines_at_most_and_companies_come_first(self):
+        s = us_build_api._fit_lines({"series": [{"ticker": str(i)} for i in range(5)], "benchmarks": ["sp500", "dow"]})
+        self.assertEqual(s["benchmarks"], ["sp500"])
 
     @unittest.skipUnless(_live(), "data/sec.duckdb without US prices")
     def test_the_routes(self):
@@ -238,7 +255,7 @@ class SavedViews(unittest.TestCase):
 
     def test_chart_saved_updated_deleted_and_private(self):
         me, other = self.client("tok-a"), self.client("tok-b")
-        spec = {"series": [{"ticker": "AAPL", "name": "Apple Inc."}], "measure": "price", "period": "ytd", "benchmark": "sp500",
+        spec = {"series": [{"ticker": "AAPL", "name": "Apple Inc."}], "measure": "price", "period": "ytd", "benchmarks": ["sp500"],
                 "display": "rebased", "log": False, "chart_type": "line", "mark_results": False}
         r = me.post("/api/v1/assistant/charts", json={"title": "Apple this year", "spec": spec})
         self.assertEqual(r.status_code, 200, r.text)

@@ -367,6 +367,10 @@ body.my-page .container { max-width: 1360px; }
 .ch-chip .ch-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 .ch-chip .ch-x { color: var(--obs-text-muted); font-size: 15px; line-height: 1; }
 .ch-chip.is-off { border-style: dashed; opacity: 0.7; }
+.ch-chips:not(:empty) + .ch-sel { margin-top: 6px; }
+.ch-chips[hidden], .ch-sel[hidden] { display: none; }
+.ch-bench-note { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--obs-text-muted); }
+.ch-bench-note .my-link { font-size: 12px; }
 .ch-add { margin: 0; z-index: 6; }
 .ch-add input { height: 32px; font-size: 13px; border-style: dashed; border-radius: 16px; padding: 0 10px; }
 .ch-pills { display: flex; border: 1px solid var(--obs-text-faint); border-radius: 3px; overflow: hidden; }

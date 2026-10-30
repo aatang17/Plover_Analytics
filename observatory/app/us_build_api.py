@@ -59,8 +59,9 @@ MEASURE_WORDS = [
 ]
 PERIODS = ("1m", "3m", "ytd", "1y", "5y", "max")
 DISPLAYS = ("rebased", "actual", "yoy")
+MAX_LINES = 6
 
-CHART_FORM_KEYS = ("companies", "measure", "period", "from", "to", "benchmark", "display", "log",
+CHART_FORM_KEYS = ("companies", "measure", "period", "from", "to", "benchmarks", "display", "log",
                    "chart_type", "mark_results", "read_as")
 CHART_RULES = """You read one request for a chart of US-listed stocks and fill in a form. Today is %(today)s.
 Reply with one JSON object, these keys only:
@@ -68,7 +69,7 @@ Reply with one JSON object, these keys only:
  "measure": <one of: %(measures)s>,
  "period": <one of: 1m, 3m, ytd, 1y, 5y, max, or null when "from" is given>,
  "from": "YYYY-MM-DD" or null, "to": "YYYY-MM-DD" or null,
- "benchmark": <the index or fund to draw beside the stocks: %(benchmarks)s; or null; "none" when the request says to drop it>,
+ "benchmarks": <the indexes or funds to draw beside the stocks, as a list, from: %(benchmarks)s; [] when the request says to drop them; null when it says nothing about them>,
  "display": "rebased" (each line starts at 100, the default for a price chart of several stocks), "actual" (the values themselves), or "yoy" (change from a year earlier, %%),
  "log": true for a log scale, else false,
  "chart_type": "line" or "bars",
@@ -77,8 +78,8 @@ Reply with one JSON object, these keys only:
 Rules:
 - Never invent a company. "as_written" is copied from the request; the ticker is yours ("google" is GOOGL, "meta" is META).
 - "this year" or "year to date" is ytd; "past year" or "12 months" is 1y; "five years" is 5y; "since 2015" is from 2015-01-01; nothing said about time is ytd for prices and 5y for filed figures.
-- "S&P", "S&P 500", "the market" is sp500; "Nasdaq" is nasdaq100; "Dow" is dow; sector words name the sector fund (tech, financials, energy, health, industrials, consumer_disc, staples, utilities, materials, real_estate, communication, semis, regional_banks, gold, treasuries).
-- A price chart of stocks with no other instruction gets benchmark sp500 and display rebased; a filed figure (revenue, margin, EPS, cash flow, research, shares) gets display actual and no benchmark.
+- "S&P", "S&P 500", "the market" is sp500; "Nasdaq" is nasdaq100; "Dow", "DJI" or "DJIA" is dow; "against the Nasdaq and the Dow" is both; sector words name the sector fund (tech, financials, energy, health, industrials, consumer_disc, staples, utilities, materials, real_estate, communication, semis, regional_banks, gold, treasuries).
+- A price chart of stocks with no other instruction gets benchmarks ["sp500"] and display rebased; a filed figure (revenue, margin, EPS, cash flow, research, shares) gets display actual and benchmarks [].
 - "revenue growth" or "year on year" is display yoy of that measure. "margin" with no qualifier is operating_margin.
 - A request to change a chart ("add Amazon", "make it revenue", "drop the S&P", "log scale", "since 2020") names only the change; the current chart is given as JSON: return the whole form with that change applied."""
 
@@ -213,10 +214,22 @@ def _company(cur, ticker=None, words=None):
 
 
 def _benchmark_words(q):
+    """Every index a chart request names, in the order it names them. On a
+    chart "Nasdaq" alone is the index; in a screen it is the exchange."""
+    found = []
     for key, b in us_benchmarks.BENCHMARKS.items():
-        if re.search(b["words"], q, re.I):
-            return key
-    return None
+        words = b["words"] + (r"|\bnasdaq\b" if key == "nasdaq100" else "")
+        m = re.search(words, q, re.I)
+        if m:
+            found.append((m.start(), key))
+    return [key for _, key in sorted(found)]
+
+
+def _fit_lines(spec):
+    """A chart holds MAX_LINES lines (the six colours); companies come first."""
+    spec["series"] = (spec.get("series") or [])[:MAX_LINES]
+    spec["benchmarks"] = (spec.get("benchmarks") or [])[:MAX_LINES - len(spec["series"])]
+    return spec
 
 
 def _period_words(q):
@@ -266,8 +279,6 @@ def _chart_by_words(cur, q, current=None):
         if drop:
             gone = {c["ticker"] for c in cos}
             have = [s for s in have if s["ticker"] not in gone]
-            if re.search(r"s ?& ?p|benchmark|index|the market", ql):
-                spec["benchmark"] = None
         else:
             for c in cos:
                 if all(s["ticker"] != c["ticker"] for s in have):
@@ -285,11 +296,19 @@ def _chart_by_words(cur, q, current=None):
     elif not current:
         spec["period"] = "ytd" if spec["measure"] == "price" else "5y"
         spec["from"] = spec["to"] = None
-    b = _benchmark_words(q)
-    if b and not drop:
-        spec["benchmark"] = b
+    named = _benchmark_words(q)
+    had = list((current or {}).get("benchmarks") or [])
+    if drop:
+        if named:
+            spec["benchmarks"] = [b for b in had if b not in named]
+        elif re.search(r"benchmarks?|ind(?:ex|exes|ices)\b|the market", ql):
+            spec["benchmarks"] = []
+    elif named and current and re.match(r"\s*(add|also|plus)\b", ql):
+        spec["benchmarks"] = had + [b for b in named if b not in had]
+    elif named:
+        spec["benchmarks"] = named
     elif not current:
-        spec["benchmark"] = "sp500" if spec["measure"] == "price" else None
+        spec["benchmarks"] = ["sp500"] if spec["measure"] == "price" else []
     if re.search(r"\byoy\b|year on year|year-on-year|growth\b", ql):
         spec["display"] = "yoy"
     elif re.search(r"actual|in dollars|not rebased|raw", ql):
@@ -331,13 +350,12 @@ def _chart_from_form(cur, form, current=None):
         spec["period"], spec["from"], spec["to"] = preset, (start if ok(start) else None), (end if ok(end) else None)
     elif not current:
         spec["period"], spec["from"], spec["to"] = ("ytd" if measure == "price" else "5y"), None, None
-    b = form.get("benchmark")
-    if b == "none":
-        spec["benchmark"] = None
-    elif b in us_benchmarks.BENCHMARKS:
-        spec["benchmark"] = b
+    b = form.get("benchmarks")
+    if isinstance(b, list):
+        spec["benchmarks"] = [k for k in OrderedDict.fromkeys(x for x in b if isinstance(x, str))
+                              if k in us_benchmarks.BENCHMARKS]
     elif not current:
-        spec["benchmark"] = "sp500" if measure == "price" else None
+        spec["benchmarks"] = ["sp500"] if measure == "price" else []
     d = form.get("display")
     spec["display"] = d if d in DISPLAYS else (current or {}).get("display") or ("rebased" if measure == "price" else "actual")
     spec["log"] = bool(form.get("log")) if form.get("log") is not None else bool((current or {}).get("log"))
@@ -351,12 +369,14 @@ def _chart_from_form(cur, form, current=None):
 def _chart_title(spec):
     m = MEASURES.get(spec["measure"], MEASURES["price"])
     names = [s["name"] or s["ticker"] for s in spec.get("series") or []]
-    b = us_benchmarks.BENCHMARKS.get(spec.get("benchmark") or "") if spec["measure"] == "price" else None
-    who = ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + (names[-1] if names else "")
-    if b and names:
-        who += " against the " + b["name"]
-    elif b:
-        who = b["name"]
+    keys = (spec.get("benchmarks") or []) if spec["measure"] == "price" else []
+    idx = [us_benchmarks.BENCHMARKS[k]["name"] for k in keys if k in us_benchmarks.BENCHMARKS]
+    both = lambda xs: ", ".join(xs[:-1]) + (" and " if len(xs) > 1 else "") + (xs[-1] if xs else "")  # noqa: E731
+    who = both(names)
+    if idx and names:
+        who += " against the " + both(idx)
+    elif idx:
+        who = both(idx)
     how = {"rebased": ", rebased to 100", "yoy": ", change on a year earlier", "actual": ""}[spec.get("display") or "actual"]
     return (m["label"] + how + ": " + who) if who else m["label"] + how
 
@@ -373,18 +393,22 @@ def chart(q: str = Query(..., min_length=1, max_length=300, description="the cha
             cur_spec = None
     except ValueError:
         cur_spec = None
+    if cur_spec is not None and "benchmarks" not in cur_spec:     # a chart saved when it held one index
+        one = cur_spec.pop("benchmark", None)
+        cur_spec["benchmarks"] = [one] if one else []
     rules = CHART_RULES % {"today": _today().isoformat(), "measures": ", ".join(MEASURES),
                            "benchmarks": ", ".join(us_benchmarks.BENCHMARKS)}
     form = _read_form("chart", q, rules, CHART_FORM_KEYS, cur_spec)
     how = "model"
     spec = _chart_from_form(cur, form, cur_spec) if form else None
-    if spec is None or (not spec.get("series") and not spec.get("benchmark")):
+    if spec is None or (not spec.get("series") and not spec.get("benchmarks")):
         spec, how = _chart_by_words(cur, q, cur_spec), "words"
+    _fit_lines(spec)
     spec["title"] = _chart_title(spec)
     read_as = (form or {}).get("read_as") if form else None
     return {"question": q, "spec": spec, "read_as": read_as if isinstance(read_as, str) else spec["title"],
             "how": how, "measures": [{"id": k, "label": v["label"], "how": v["how"], "unit": v["unit"]} for k, v in MEASURES.items()],
-            "benchmarks": [{"id": k, "name": b["name"], "fund": b["etf"]} for k, b in us_benchmarks.BENCHMARKS.items()]}
+            "benchmarks": [{"id": k, "name": b["name"], "label": us_benchmarks.LABELS.get(k, b["name"]), "fund": b["etf"]} for k, b in us_benchmarks.BENCHMARKS.items()]}
 
 
 # ------------------------------------------------------------------ screens
