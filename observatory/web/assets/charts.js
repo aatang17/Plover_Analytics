@@ -31,6 +31,49 @@ function paletteFor(theme) {
   return p;
 }
 
+/* Does this chart hold a reading per day rather than per month? Callers with
+   daily data say so (cfg.isoPeriods); two readings under three weeks apart say
+   so for the rest. Monthly data must never reach this as daily, and daily data
+   cut to "2026-10" gives every day of a month the same label. */
+function showsDays(cfg) {
+  if (cfg.hourlyPeriods || cfg.xType === "category") return false;
+  if (cfg.isoPeriods) return true;
+  return (cfg.series || []).some(s => (s.points || []).some((p, i, all) => {
+    if (!i) return false;
+    const gap = Date.parse(p[0]) - Date.parse(all[i - 1][0]);
+    return gap > 0 && gap < 21 * 864e5;
+  }));
+}
+
+/* "2026-10-29" -> "29 Oct 2026" */
+function fmtDay(iso) {
+  return Number(iso.slice(8, 10)) + " " + MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3) + " " + iso.slice(0, 4);
+}
+
+/* A time axis over daily data names the day; left alone it prints month names
+   alone, and over a whole year "Feb" could be any day of February. */
+function dayAxis(pal, narrow, cfg) {
+  const axis = { minInterval: 864e5, axisLabel: { color: pal.muted, fontSize: 11,
+    formatter: { year: "{yyyy}", month: "{d} {MMM}", day: "{d} {MMM}" } } };
+  if (!narrow) return axis;
+  // "1 Feb" is wider than "Feb": at phone width labels a month or a few days
+  // apart run together, and the axis's own spacing settings do not thin day
+  // ticks. So keep about four labels across the span and blank the rest.
+  const times = [];
+  cfg.series.forEach(s => s.points.forEach(p => times.push(Date.parse(p[0]))));
+  const step = times.length ? (Math.max(...times) - Math.min(...times)) / 4.5 : 0;
+  let shown = -Infinity;
+  axis.axisLabel.formatter = (v, i) => {
+    if (i === 0) shown = -Infinity;
+    if (v - shown < step) return "";
+    shown = v;
+    const d = new Date(v);
+    return d.getMonth() === 0 && d.getDate() === 1 ? String(d.getFullYear())
+      : d.getDate() + " " + MONTHS[d.getMonth()].slice(0, 3);
+  };
+  return axis;
+}
+
 function axisCommon(pal) {
   return {
     axisLine: { lineStyle: { color: pal.border } },
@@ -187,7 +230,7 @@ function lineOptions(cfg, pal, narrow, below) {
     xAxis: Object.assign(axisCommon(pal), isCat
       ? { type: "category", boundaryGap: false, splitLine: { show: false },
           data: cfg.series[0].points.map(p => p[0]) }
-      : { type: "time", splitLine: { show: false } }),
+      : Object.assign({ type: "time", splitLine: { show: false } }, showsDays(cfg) ? dayAxis(pal, narrow, cfg) : {})),
     yAxis: Object.assign(axisCommon(pal), {
       // A log axis is the honest way to put series orders of magnitude apart
       // on one chart: on a linear axis the smaller one is pinned to the
@@ -229,6 +272,7 @@ function lineOptions(cfg, pal, narrow, below) {
       formatter: params => {
         const date = isCat ? params[0].name
           : cfg.hourlyPeriods ? new Date(params[0].value[0]).toISOString().slice(0, 16).replace("T", " ") + " UTC"
+          : showsDays(cfg) ? fmtDay(new Date(params[0].value[0]).toISOString())
           : fmtPeriod(new Date(params[0].value[0]).toISOString());
         const rows = params.slice()
           .sort((a, b) => ((isCat ? b.value : b.value[1]) ?? -Infinity) -
@@ -338,7 +382,7 @@ function stackOptions(cfg, pal, narrow, below) {
       ? { left: 8, right: 12, top: cfg.yAxisName ? 26 : 12, bottom: Math.max(56, below || 0),
           containLabel: true }
       : { left: 8, right: 20, top: 34, bottom: 8, containLabel: true },
-    xAxis: Object.assign(axisCommon(pal), { type: "time", splitLine: { show: false } }),
+    xAxis: Object.assign(axisCommon(pal), { type: "time", splitLine: { show: false } }, showsDays(cfg) ? dayAxis(pal, narrow, cfg) : {}),
     yAxis: Object.assign(axisCommon(pal), {
       type: "value",
       name: cfg.yAxisName || "",
@@ -355,6 +399,7 @@ function stackOptions(cfg, pal, narrow, below) {
       textStyle: { color: pal.text, fontSize: 12 },
       formatter: params => {
         const date = isCat ? params[0].name
+          : showsDays(cfg) ? fmtDay(new Date(params[0].value[0]).toISOString())
           : fmtPeriod(new Date(params[0].value[0]).toISOString());
         const rows = params.slice()
           .sort((a, b) => ((isCat ? b.value : b.value[1]) ?? -Infinity) -
@@ -1004,7 +1049,7 @@ function obsChart(el, kind, cfg) {
           return hit && hit[1] !== null ? hit[1] : "";
         });
         // daily series keep the full date; monthly series keep YYYY-MM
-        const label = cfg.hourlyPeriods ? period : cfg.isoPeriods ? period.slice(0, 10) : fmtPeriod(period);
+        const label = cfg.hourlyPeriods ? period : showsDays(cfg) ? period.slice(0, 10) : fmtPeriod(period);
         csv += label + "," + row.join(",") + "\n";
       });
     } else if (kind === "rank") {
