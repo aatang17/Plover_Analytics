@@ -325,7 +325,7 @@
           "<th class=r>Latest month</th></tr></thead><tbody>" +
           d.companies.map(function (c) {
             return "<tr><td>" + nameCell(c.name_en, c.filer_name,
-                     c.sec_code ? "buyback.html?c=" + esc(c.sec_code) : null) +
+                     c.sec_code ? "buyback.html?c=" + esc(c.sec_code) : null) + delistedTag(c) +
               "</td><td class=r><span class='mono'>" + esc(c.sec_code || MISSING) +
               "</span></td><td class=r>" + count(c.filings) +
               "</td><td class=r>" + esc(monthShort(c.last_reporting_month)) + "</td></tr>";

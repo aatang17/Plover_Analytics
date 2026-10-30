@@ -39,6 +39,7 @@ WHAT A CONSUMER MUST NOT ASSUME, carried in the data rather than in prose:
 from fastapi import APIRouter, HTTPException, Query
 
 from . import aliases, asof
+from . import listing
 from .equity_api import NAMES_NOTE, _cur, _rows
 
 router = APIRouter(prefix="/api/v1/equity/shorts", tags=["Short positions"])
@@ -252,6 +253,7 @@ def recent(limit: int = Query(50, ge=1, le=500),
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="issuer name or code substring"),
               sort: str = Query("disclosed_pct",
                                 description="disclosed_pct | holders | shares"),

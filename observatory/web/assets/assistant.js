@@ -360,17 +360,17 @@
       const close = () => { menu.classList.add('hidden'); active = -1; };
       const draw = () => {
         if (!hits.length) { menu.innerHTML = input.value.trim().length >= 1 ? '<div class="covnone">No company matches.</div>' : ''; menu.classList.toggle('hidden', !input.value.trim()); return; }
-        menu.innerHTML = hits.map((c, i) => `<button type="button" role="option" class="${i === active ? 'on' : ''}" data-i="${i}" ${c.covered ? 'disabled' : ''}><span class="cc">${esc(c.code)}</span><span class="cn">${esc(prettyName(c.name_en) || c.name_ja || '')}</span>${c.name_ja && c.name_en ? `<span class="cj">${esc(c.name_ja)}</span>` : ''}${c.covered ? '<span class="cd">Added</span>' : ''}</button>`).join('');
+        menu.innerHTML = hits.map((c, i) => `<button type="button" role="option" class="${i === active ? 'on' : ''}" data-i="${i}" ${c.covered || c.delisted ? 'disabled' : ''}><span class="cc">${esc(c.code)}</span><span class="cn">${esc(prettyName(c.name_en) || c.name_ja || '')}</span>${c.name_ja && c.name_en ? `<span class="cj">${esc(c.name_ja)}</span>` : ''}${c.covered ? '<span class="cd">Added</span>' : c.delisted ? '<span class="cd">Delisted</span>' : ''}</button>`).join('');
         menu.classList.remove('hidden');
         $$('button[data-i]', menu).forEach(o => o.onmousedown = ev => { ev.preventDefault(); pick(hits[+o.dataset.i]); });
       };
       const search = () => {
         const q = input.value.trim(); const mine = ++seq;
         if (!q) { hits = []; close(); return; }
-        api('/companies?q=' + encodeURIComponent(q) + (+b.dataset.list ? '&list_id=' + b.dataset.list : '')).then(r => { if (mine !== seq) return; hits = r.companies || []; active = hits.findIndex(c => !c.covered); draw(); }).catch(() => {});
+        api('/companies?q=' + encodeURIComponent(q) + (+b.dataset.list ? '&list_id=' + b.dataset.list : '')).then(r => { if (mine !== seq) return; hits = r.companies || []; active = hits.findIndex(c => !c.covered && !c.delisted); draw(); }).catch(() => {});
       };
       const pick = async c => {
-        if (!c || c.covered) return;
+        if (!c || c.covered || c.delisted) return;
         close(); b.disabled = true; input.disabled = true;
         try { await api('/coverage', { method: 'POST', body: { code: c.code, list_id: +b.dataset.list || 0 } }); toast('Added ' + (prettyName(c.name_en) || c.code)); render(); }
         catch (e) { toast(e.detail || 'Could not add'); b.disabled = false; input.disabled = false; }
@@ -415,7 +415,7 @@
     if (covUi.mode === 'rename') bar = `<div class="lbar"><input id="l-name" value="${esc(cur.name)}" maxlength="60"><button class="btn primary" id="l-rename">Save name</button><button class="btn" data-lcancel>Cancel</button></div>`;
     if (covUi.mode === 'delete') bar = `<div class="lbar warn"><span>Delete the list <b>${esc(cur.name)}</b>${cur.count ? ` and its ${cur.count} compan${cur.count === 1 ? 'y' : 'ies'}` : ''}? Specialists watching it go back to the main list. This cannot be undone.</span><button class="btn danger" id="l-delete">Delete list</button><button class="btn" data-lcancel>Cancel</button></div>`;
     const table = rows.length ? `<table class="t covtable"><thead><tr><th style="width:72px">Code</th><th>Company</th><th>Japanese name</th><th style="width:120px">Added</th><th style="width:150px"></th></tr></thead><tbody>
-      ${rows.map(c => `<tr data-code="${esc(c.sec_code)}"><td><span class="code">${esc(c.sec_code)}</span></td><td class="ink">${esc(prettyName(c.name) || c.sec_code)}</td><td class="muted">${esc(c.name_ja || '')}</td><td class="muted nowrap">${fmtDate(c.added_at)}</td><td class="right rowact"><a class="linkbtn" href="company.html?code=${encodeURIComponent(c.sec_code)}" target="_blank" rel="noopener">Profile</a><button class="linkbtn quiet" data-rm="${esc(c.sec_code)}">Remove</button></td></tr>`).join('')}</tbody></table>`
+      ${rows.map(c => `<tr data-code="${esc(c.sec_code)}"><td><span class="code">${esc(c.sec_code)}</span></td><td class="ink">${esc(prettyName(c.name) || c.sec_code)}${delistedTag(c)}</td><td class="muted">${esc(c.name_ja || '')}</td><td class="muted nowrap">${fmtDate(c.added_at)}</td><td class="right rowact"><a class="linkbtn" href="company.html?code=${encodeURIComponent(c.sec_code)}" target="_blank" rel="noopener">Profile</a><button class="linkbtn quiet" data-rm="${esc(c.sec_code)}">Remove</button></td></tr>`).join('')}</tbody></table>`
       : `<div class="covempty"><b>This list is empty.</b><span>Search above to add the first company.</span></div>`;
     $('#main').innerHTML = topbar(cur.is_default ? [['Coverage']] : [['Coverage', 'coverage'], [cur.name]]) + `<div class="content"><div class="page">
       ${pageHead('Coverage', 'The companies your specialists watch. Keep your main list here, and group names into your own lists.')}

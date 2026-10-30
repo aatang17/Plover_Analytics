@@ -21,6 +21,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 from . import db
 from . import jp_enums
 from . import plausibility
@@ -789,6 +790,7 @@ def summary(year: str = Query("", description="fiscal year, e.g. 2025; default l
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or code substring")):
     """Search box feed: filers with extracted tables and/or companies that are held."""
     cur = _cur()

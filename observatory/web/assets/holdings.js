@@ -780,7 +780,7 @@
             ? "<div class='table-wrap' style='margin-top:8px'><table class='tbl-hold'><tbody>" +
               d.companies.map(function (c) {
                 return "<tr><td>" +
-                  nameCell(c.name_en, c.name, "holdings.html?c=" + esc(c.sec_code)) +
+                  nameCell(c.name_en, c.name, "holdings.html?c=" + esc(c.sec_code)) + delistedTag(c) +
                   "</td><td class='r mono'>" + esc(c.sec_code) + "</td>" +
                   "<td class=r>" + (c.holdings_count ? fmtNum(c.holdings_count, 0) + " holdings" : "") + "</td>" +
                   "<td class=r>" + (c.held_by_count ? "held by " + fmtNum(c.held_by_count, 0) : "") + "</td></tr>";

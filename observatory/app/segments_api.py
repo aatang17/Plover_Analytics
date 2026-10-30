@@ -35,6 +35,7 @@ import unicodedata
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 from fastapi.responses import PlainTextResponse
 
 from . import aliases, api, company_labels, fiscal
@@ -290,6 +291,7 @@ def company(sec_code: str):
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or code substring"),
               limit: int = Query(25, ge=1, le=100)):
     """Search box feed: every company whose annual report has an accepted

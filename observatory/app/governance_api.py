@@ -29,6 +29,7 @@ import re
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 from . import person_en
 from . import plausibility
 from . import equity_api
@@ -445,6 +446,7 @@ SCREENS = {
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or code substring")):
     """Search feed for this dataset — a company is here if a board was extracted.
 

@@ -164,6 +164,12 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/* A company no longer listed (app/listing.py): plain words beside its name, on
+   the row of any search feed. Its filings stay reachable. */
+function delistedTag(c) {
+  return c && c.delisted ? ' <span class="co-delisted">Delisted</span>' : "";
+}
+
 /* ---- theme ---- */
 
 function currentTheme() {

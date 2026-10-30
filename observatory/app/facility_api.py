@@ -33,6 +33,7 @@ them so the literal /equity/facilities/ paths win.
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 
 from . import aliases
 from . import facility_labels
@@ -348,6 +349,7 @@ def rental_ranking(metric: str = Query("unrealized",
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or securities code substring")):
     """Search feed for this dataset — a company is here if a facilities filing
     was extracted, clean OR partial: someone searching for a specific company

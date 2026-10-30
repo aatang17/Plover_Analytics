@@ -20,7 +20,7 @@ from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from .. import accounts, analysis, jp_companies, recipes, tools_v2
+from .. import accounts, analysis, jp_companies, listing, recipes, tools_v2
 from . import (codex, delivery, drive, free, gateway, keychain, market_data, mcp_client, memory, runner,
                specialists, store, study_export)
 
@@ -129,7 +129,8 @@ def find_companies(q, limit=8):
         if not code or len(str(code)) != 4:
             continue
         out.append({"code": code, "name_en": jp_companies.shown_name(code, (r.get("name_en") or "").strip()) or None,
-                    "name_ja": _clean_ja(r.get("name")) or None, "logo": jp_companies.logo(code)})
+                    "name_ja": _clean_ja(r.get("name")) or None, "logo": jp_companies.logo(code),
+                    "delisted": bool(r.get("delisted"))})
         if len(out) >= limit:
             break
     return out
@@ -347,6 +348,7 @@ def coverage(request: Request, list_id: int = 0):
             # saved as filed, often in capitals; an admin edit wins (app/jp_companies.py)
             r["name"] = jp_companies.shown_name(r["sec_code"], r.get("name"))
             r["logo"] = jp_companies.logo(r["sec_code"])
+            r["delisted"] = listing.is_delisted(r["sec_code"])
         if not r.get("name_ja") and not str(r["sec_code"]).startswith("cik:"):
             _en, ja = _company(r["sec_code"])
             if ja:
@@ -372,6 +374,9 @@ def add_coverage(payload: CoverageRequest, request: Request):
     name, name_ja = _company(code)
     if name is None:
         raise HTTPException(404, "The platform holds no filings for %s." % code)
+    if listing.is_delisted(code):
+        raise HTTPException(400, "%s is no longer listed, so there is nothing new to follow. "
+                                 "Its past filings stay on its company page." % name)
     return {"coverage": store.add_coverage(aid, code, name, lid, name_ja)}
 
 

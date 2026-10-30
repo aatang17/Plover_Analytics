@@ -257,7 +257,7 @@
           '<th class="r">Facilities</th><th class="r nw">FY</th><th>Status</th></tr></thead><tbody>' +
           d.companies.map(function (c) {
             return "<tr><td>" +
-              nameCell(c.name_en, c.name, "facilities.html?code=" + esc(c.sec_code)) + "</td>" +
+              nameCell(c.name_en, c.name, "facilities.html?code=" + esc(c.sec_code)) + delistedTag(c) + "</td>" +
               '<td class="r">' + yenBn(c.land_book_yen) + "</td>" +
               '<td class="r">' + areaFmt(c.land_area_m2) + "</td>" +
               '<td class="r">' + (c.n_rows == null ? MISSING : fmtNum(c.n_rows, 0)) + "</td>" +

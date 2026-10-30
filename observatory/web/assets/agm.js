@@ -422,7 +422,7 @@
       "<th>Company</th><th class='r'>Meetings</th><th class='r'>Director results</th>" +
       "<th>Latest meeting</th></tr></thead><tbody>" +
       rows.map(function (r) {
-        return "<tr><td>" + companyCell(r) + "</td>" +
+        return "<tr><td>" + companyCell(r) + delistedTag(r) + "</td>" +
           "<td class='r'>" + count(r.meetings) + "</td>" +
           "<td class='r'>" + count(r.director_results) + "</td>" +
           "<td class='nowrap'>" + day(r.latest_meeting) + "</td></tr>";

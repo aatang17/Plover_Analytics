@@ -812,6 +812,23 @@ class AssistantTests(unittest.TestCase):
 
     # ---- named coverage lists
 
+    def test_a_delisted_company_cannot_be_followed(self):
+        from unittest import mock
+        from app import listing
+        c = self.client()
+        cov = c.post("/api/v1/assistant/coverage", json={"code": "7203"}).json()["coverage"]
+        self.assertTrue(cov)
+        with mock.patch.object(listing, "is_delisted", lambda code: code == "7203"):
+            c.delete("/api/v1/assistant/coverage/7203")
+            r = c.post("/api/v1/assistant/coverage", json={"code": "7203"})
+            self.assertEqual(r.status_code, 400)
+            self.assertIn("no longer listed", r.json()["detail"])
+            # one that delisted after it was added stays, and says so
+            store.add_coverage(self.account_id, "7203", "TOYOTA", None, None)
+            row = c.get("/api/v1/assistant/coverage").json()["coverage"][0]
+            self.assertTrue(row["delisted"])
+        c.delete("/api/v1/assistant/coverage/7203")
+
     def test_coverage_lists(self):
         c = self.client()
         # an old single-list desk moves into the main list, once

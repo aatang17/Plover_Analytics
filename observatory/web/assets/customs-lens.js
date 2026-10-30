@@ -481,7 +481,7 @@ function renderSearch(d) {
     "<th>Company</th><th>Sector</th><th class='num'>Filings</th>" +
     "<th class='num'>Latest FY end</th></tr></thead><tbody>" +
     d.companies.map(c =>
-      "<tr><td>" + nameCell(c.name_en, c.name, c.sec_code) + "</td>" +
+      "<tr><td>" + nameCell(c.name_en, c.name, c.sec_code) + delistedTag(c) + "</td>" +
       "<td>" + escapeHtml(c.industry || MISSING) + "</td>" +
       "<td class='num'>" + fmtNum(c.filings, 0) + "</td>" +
       "<td class='num'>" + (c.period_end ? escapeHtml(fmtPeriodLong(c.period_end)) : MISSING) +

@@ -153,7 +153,7 @@ function renderResults() {
     box.innerHTML = matches.map(function (c, i) {
       return '<li role="option" data-code="' + escapeHtml(c.sec_code) + '" aria-selected="' +
         (i === sel) + '"><span class="co-code">' + escapeHtml(c.sec_code) + "</span>" +
-        escapeHtml(c.name_en || c.name || "") +
+        escapeHtml(c.name_en || c.name || "") + delistedTag(c) +
         '<span class="co-ja">' + escapeHtml(c.name || "") + "</span></li>";
     }).join("");
   }
@@ -279,7 +279,7 @@ function renderIdentity() {
   $("co-name").innerHTML = (c.logo ? '<img class="co-logo" src="' + escapeHtml(c.logo) +
       '" alt="" width="32" height="32">' : "") +
     '<span class="co-tick">' + escapeHtml(c.sec_code) + "</span>" +
-    escapeHtml(c.display_name || c.name_en || c.name || c.sec_code);
+    escapeHtml(c.display_name || c.name_en || c.name || c.sec_code) + delistedTag(c);
   $("page-asof").textContent = "FY to " + day(f.period) + " · filed " + day(f.filed);
   $("page-sub").textContent = [c.name, c.industry, edinet ? "EDINET " + edinet : "",
     fin.accounting_standard ? fin.accounting_standard +

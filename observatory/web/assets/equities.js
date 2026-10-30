@@ -98,7 +98,7 @@ initThemeToggle();
       ? matches.map(function (c, i) {
           return '<li role="option" data-code="' + escapeHtml(c.sec_code) + '" aria-selected="' +
             (i === sel) + '"><span class="co-code">' + escapeHtml(c.sec_code) + "</span>" +
-            escapeHtml(c.name_en || c.name || "") +
+            escapeHtml(c.name_en || c.name || "") + delistedTag(c) +
             '<span class="co-ja">' + escapeHtml(c.name || "") + "</span></li>";
         }).join("")
       : '<li class="none">No company files a report under that name.</li>';

@@ -817,7 +817,7 @@
         return '<li class="my-row" data-code="' + esc(c.sec_code) + '"><a class="my-open" href="' +
           (us ? "us-company.html?t=" + encodeURIComponent(c.sec_code.slice(4))
               : "company.html?code=" + encodeURIComponent(c.sec_code)) + '">' +
-          '<span class="my-name">' + esc(c.name || c.name_ja || c.sec_code) + "</span>" +
+          '<span class="my-name">' + esc(c.name || c.name_ja || c.sec_code) + delistedTag(c) + "</span>" +
           '<span class="my-meta">' + (us ? "United States" : esc(c.sec_code) + (c.name_ja && c.name_ja !== c.name ? " · " + esc(c.name_ja) : "")) + "</span></a>" +
           '<span class="my-when" data-code="' + esc(c.sec_code) + '">…</span>' +
           '<button type="button" class="my-del" data-code="' + esc(c.sec_code) + '" aria-label="Remove ' +
@@ -879,9 +879,9 @@
           return;
         }
         hits.innerHTML = found.map(function (c, i) {
-          return '<li><button type="button" data-i="' + i + '"><span>' + esc(c.name_en || c.name_ja) + "</span>" +
+          return '<li><button type="button" data-i="' + i + '"' + (c.delisted ? " disabled" : "") + "><span>" + esc(c.name_en || c.name_ja) + "</span>" +
             '<span class="my-meta">' + (c.market === "US" ? esc(c.ticker) + (c.exchange ? " · " + esc(c.exchange) : "") : esc(c.code) + " · Japan") +
-            (c.covered || state.covered[c.code] ? " · on your list" : "") + "</span></button></li>";
+            (c.delisted ? " · Delisted" : c.covered || state.covered[c.code] ? " · on your list" : "") + "</span></button></li>";
         }).join("");
         hits.hidden = false;
         Array.prototype.forEach.call(hits.querySelectorAll("button"), function (b) {
@@ -891,7 +891,7 @@
     }
     input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(search, 180); });
     input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); if (found.length) add(found[0]); else search(); }
+      if (e.key === "Enter") { e.preventDefault(); var first = found.filter(function (c) { return !c.delisted; })[0]; if (first) add(first); else search(); }
       if (e.key === "Escape") hide();
     });
     document.addEventListener("click", function (e) { if (!e.target.closest(".my-add")) hide(); });

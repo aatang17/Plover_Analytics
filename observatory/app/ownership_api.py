@@ -29,6 +29,7 @@ names, addresses, share counts and ratios are as filed.
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 from . import equity_api
 
 from . import aliases
@@ -190,6 +191,7 @@ def summary(year: str = Query("", description="fiscal year, e.g. 2026; default l
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or code substring"),
               limit: int = Query(25, ge=1, le=500),
               offset: int = Query(0, ge=0)):

@@ -31,7 +31,7 @@ import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import asof, registry
+from . import asof, listing, registry
 
 router = APIRouter(prefix="/api/v1/company", tags=["Company"])
 
@@ -143,6 +143,8 @@ def _identity(code, blocks):
     if out.get("name_en") or jp_companies.name(code):
         out["display_name"] = jp_companies.shown_name(code, out.get("name_en"))
     out["logo"] = jp_companies.logo(code)
+    if listing.is_delisted(code):
+        out["delisted"] = True
     return out
 
 

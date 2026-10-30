@@ -251,7 +251,7 @@
           "<th>Sector</th><th class=r>Named holders</th><th class=r>Top holders (%)</th>" +
           "<th class=r>Foreign (%)</th><th class=r>FY</th></tr></thead><tbody>" +
           d.companies.map(function (c) {
-            return "<tr><td>" + nameCell(c.name_en, c.name, "ownership.html?c=" + esc(c.sec_code)) +
+            return "<tr><td>" + nameCell(c.name_en, c.name, "ownership.html?c=" + esc(c.sec_code)) + delistedTag(c) +
               "</td><td>" + esc(c.industry || MISSING) +
               "</td><td class=r>" + count(c.majors_rows) +
               "</td><td class=r>" + pct(c.majors_ratio_filed_pct, 1) +

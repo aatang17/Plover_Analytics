@@ -34,6 +34,7 @@ import re
 from fastapi import APIRouter, HTTPException, Query
 
 from . import aliases, asof
+from . import listing
 from .equity_api import EDINET_SOURCE as _EDINET_SOURCE
 from .equity_api import NAME_CTES, _cur, _rows
 
@@ -132,6 +133,7 @@ def summary():
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or securities code substring")):
     """Search feed: companies with a business-risks section on file."""
     cur = _require()

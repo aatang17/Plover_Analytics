@@ -320,7 +320,7 @@
           "<th class=r>Reports</th><th class=r>Filing groups</th>" +
           "<th class=r>Proposal reports</th><th>Latest report</th></tr></thead><tbody>" +
           d.companies.map(function (c) {
-            return "<tr><td>" + nameCell(c.name_en, c.name, "stakes.html?c=" + esc(c.sec_code)) +
+            return "<tr><td>" + nameCell(c.name_en, c.name, "stakes.html?c=" + esc(c.sec_code)) + delistedTag(c) +
               "</td><td class=r>" + count(c.reports) +
               "</td><td class=r>" + count(c.groups) +
               "</td><td class=r>" + count(c.activist_reports) +

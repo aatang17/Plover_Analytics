@@ -257,7 +257,7 @@
           "<th>Sector</th><th class=r>Board</th><th class=r>Avg age</th>" +
           "<th class=r>Disclosed individuals</th><th class=r>FY</th></tr></thead><tbody>" +
           d.companies.map(function (c) {
-            return "<tr><td>" + nameCell(c.name_en, c.name, "governance.html?c=" + esc(c.sec_code)) +
+            return "<tr><td>" + nameCell(c.name_en, c.name, "governance.html?c=" + esc(c.sec_code)) + delistedTag(c) +
               "</td><td>" + esc(c.industry || MISSING) +
               "</td><td class=r>" + count(c.board_size) +
               "</td><td class=r>" + pct(c.avg_director_age) +

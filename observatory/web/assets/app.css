@@ -2452,6 +2452,10 @@ pre.code {
   color: var(--obs-primary); border: 1px solid var(--obs-border); border-radius: 3px;
   padding: 2px 7px; margin-right: 10px; vertical-align: 3px;
 }
+/* words, not a badge: a company no longer listed (app/listing.py) */
+.co-delisted { font-size: 12px; font-weight: 600; color: var(--obs-text-muted); white-space: nowrap; }
+/* on the name's own line: no second line under a table entry */
+td > div:has(+ .co-delisted) { display: inline-block; }
 /* a logo uploaded in the admin console (app/jp_companies.py) */
 .co-logo {
   width: 32px; height: 32px; object-fit: contain; border-radius: 3px; background: var(--obs-logo-bg);

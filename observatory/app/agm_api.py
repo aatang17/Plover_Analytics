@@ -47,6 +47,7 @@ WHAT A CONSUMER MUST NOT ASSUME, carried in the data rather than in prose:
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 from . import person_en
 
 from .agm_labels import label_en
@@ -345,6 +346,7 @@ def proposals(category: str = Query("", description="e.g. takeover_defence"),
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name in English or Japanese, or securities code")):
     u"""Issuers with a meeting on file, searchable by either language.
 

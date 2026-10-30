@@ -52,6 +52,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from . import asof
+from . import listing
 from . import jp_enums
 from . import plausibility
 
@@ -382,6 +383,7 @@ def recent(limit: int = Query(50, ge=1, le=1000),
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="issuer name or code substring")):
     u"""Search feed: issuers that at least one 5% report names."""
     cur = _require()

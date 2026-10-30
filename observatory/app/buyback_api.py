@@ -32,6 +32,7 @@ roughly a year, so nothing before 2025-08-12 is retrievable by anyone.
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 
 from . import aliases
 from .equity_api import NAME_CTES, _cur, _rows
@@ -322,6 +323,7 @@ def retirements(limit: int = Query(50, ge=1, le=500)):
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or code substring")):
     """Companies with at least one buyback filing — the search feed."""
     cur = _require()

@@ -33,6 +33,7 @@ import re
 from fastapi import APIRouter, HTTPException, Query
 
 from . import asof
+from . import listing
 
 from . import aliases
 from .equity_api import NAME_CTES, _cur, _rows
@@ -906,6 +907,7 @@ def summary():
 
 
 @router.get("/companies")
+@listing.marked
 def companies(q: str = Query("", description="name or code substring"),
               limit: int = Query(25, ge=1, le=100)):
     """Search box feed: companies with an accepted financial filing."""

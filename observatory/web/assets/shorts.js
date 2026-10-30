@@ -171,7 +171,7 @@
       "<th class=r>Holders</th><th class=r>Shares short</th>" +
       "<th>Measured</th><th>Published</th></tr></thead><tbody>" +
       rows.map(function (c) {
-        return "<tr><td>" + nameCell(c.name_en, c.name, "shorts.html?c=" + esc(c.sec_code)) +
+        return "<tr><td>" + nameCell(c.name_en, c.name, "shorts.html?c=" + esc(c.sec_code)) + delistedTag(c) +
           "</td><td class=r>" + pct(c.disclosed_short_pct) +
           "</td><td class=r>" + count(c.holders) +
           "</td><td class=r>" + count(c.disclosed_short_shares) +
@@ -339,7 +339,7 @@
           "<th>Company</th><th class=r>Disclosed short (%)</th><th class=r>Holders</th>" +
           "<th>Measured</th></tr></thead><tbody>" +
           d.companies.map(function (c) {
-            return "<tr><td>" + nameCell(c.name_en, c.name, "shorts.html?c=" + esc(c.sec_code)) +
+            return "<tr><td>" + nameCell(c.name_en, c.name, "shorts.html?c=" + esc(c.sec_code)) + delistedTag(c) +
               "</td><td class=r>" + pct(c.disclosed_short_pct) +
               "</td><td class=r>" + count(c.holders) +
               "</td><td class=nowrap>" + esc(day(c.latest_calc_date)) + "</td></tr>";

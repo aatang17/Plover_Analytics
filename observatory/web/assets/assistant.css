@@ -620,6 +620,7 @@ a.src:hover { color: var(--obs-primary); border-color: var(--obs-primary); text-
 .covmenu button[disabled] .cn { color: var(--obs-text-faint); }
 .covmenu .cj { grid-column: 2; font-size: 12px; color: var(--obs-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .covmenu .cd { grid-column: 3; grid-row: 1; font-size: 11px; color: var(--obs-text-faint); }
+.co-delisted { font-size: 12px; font-weight: 600; color: var(--obs-text-muted); white-space: nowrap; }
 .covnone { padding: 8px 12px; font-size: 13px; color: var(--obs-text-muted); }
 .gs, .gs ol, .gs-step, .gs-body { overflow: visible; }
 .covadd { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }

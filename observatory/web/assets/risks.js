@@ -98,7 +98,7 @@
           "<div class='table-wrap'><table class='tbl-stk' data-no-enhance><thead><tr>" +
           "<th>Company</th><th>Fiscal year</th><th class=r>Items</th></tr></thead><tbody>" +
           d.companies.map(function (c) {
-            return "<tr><td>" + nameCell(c.name_en, c.name, "risks.html?c=" + esc(c.sec_code)) +
+            return "<tr><td>" + nameCell(c.name_en, c.name, "risks.html?c=" + esc(c.sec_code)) + delistedTag(c) +
               "</td><td class=nowrap>" +
               esc(fmtFiscalYear(c.period_end)) + "</td><td class=r>" +
               (c.status === "unsplit" ? MISSING : count(c.n_top_items)) + "</td></tr>";
