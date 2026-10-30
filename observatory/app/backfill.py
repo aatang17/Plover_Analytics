@@ -56,6 +56,7 @@ Environment (all optional):
 """
 import datetime
 import errno
+import fcntl
 import os
 import pathlib
 import shutil
@@ -81,6 +82,14 @@ DEFAULT_DATASETS = "accommodation-jp population-jp-municipal"
 
 _child = None
 _stopping = False
+# What fresh_copy saw of the served file, by working copy: swap compares it.
+_copied_from = {}
+# The update lock this process holds, by served file: (open lock file, working copy).
+_held = {}
+
+
+class SwapRefused(Exception):
+    """The served file changed after this copy was taken; the copy was dropped."""
 
 
 def log(msg):
@@ -108,12 +117,81 @@ def _wal(path):
     return path.with_name(path.name + ".wal")
 
 
-def _discard(work):
+def _drop_files(work):
     for p in (work, _wal(work)):
         try:
             p.unlink()
         except OSError:
             pass
+
+
+def _discard(work):
+    """Throw a working copy away; its update is over, so its lock goes too."""
+    _drop_files(work)
+    _copied_from.pop(str(work), None)
+    _let_go(work)
+
+
+def _stamp(live):
+    """Which file is being served: replaced whole means a new inode, an in-place
+    write that grows it means a new size. Not the modified time, so nothing a
+    reader does to the clock can freeze the refresh. None if there is no file."""
+    try:
+        st = live.stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_size)
+
+
+def _take_lock(live, work):
+    """One update at a time per served file. False if another process has it.
+
+    Every step is copy, work, swap, so two at once lose the rows of whichever
+    swapped first. On 2026-10-29 a hand-run price fill swapped in at 14:59 and a
+    hand-run company update, which had copied the file a minute earlier, swapped
+    over it at 15:52: every price since 16 October was gone until someone looked
+    at a chart. The operating system drops the lock when its process ends, however
+    it ends, so a killed job can never leave it stuck. A lock that cannot be
+    opened only logs: the check in swap still protects the data.
+    """
+    key = str(live)
+    if key in _held:                            # this process's own earlier step
+        _held[key] = (_held[key][0], str(work))
+        return True
+    try:
+        fh = open(key + ".update-lock", "a+")
+    except OSError as exc:
+        log("no update lock for %s (%s); carrying on" % (live.name, exc))
+        return True
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fh.seek(0)
+        log("%s is being updated by another job (%s); not starting a second one, "
+            "served data untouched" % (live.name, fh.read().strip() or "no details"))
+        fh.close()
+        return False
+    except OSError as exc:
+        log("no update lock for %s (%s); carrying on" % (live.name, exc))
+        fh.close()
+        return True
+    try:
+        fh.seek(0)
+        fh.truncate()
+        fh.write("pid %d, copy %s, since %s" % (os.getpid(), work.name, datetime.datetime.utcnow()
+                                                .strftime("%Y-%m-%d %H:%M UTC")))
+        fh.flush()
+    except OSError:
+        pass
+    _held[key] = (fh, str(work))
+    return True
+
+
+def _let_go(work):
+    for key, (fh, held_work) in list(_held.items()):
+        if held_work == str(work):
+            fh.close()
+            del _held[key]
 
 
 def _fresh_copy_once(live, work):
@@ -133,10 +211,11 @@ def _fresh_copy_once(live, work):
     week while the archive kept filling. A guard that cannot clear itself is
     not a guard.
     """
-    _discard(work)
+    _drop_files(work)
     if not live.exists():
         log("%s does not exist yet; nothing to copy" % live.name)
         return None
+    _copied_from[str(work)] = _stamp(live)
     shutil.copyfile(str(live), str(work))
     wal = _wal(live)
     if not (wal.exists() and wal.stat().st_size > 0):
@@ -150,7 +229,7 @@ def _fresh_copy_once(live, work):
     if (live.stat().st_mtime_ns, live.stat().st_size) != (stat_before.st_mtime_ns,
                                                           stat_before.st_size):
         log("%s moved while being copied; leaving it for the next pass" % live.name)
-        _discard(work)
+        _drop_files(work)
         return None
     # Replay and flatten, so the copy is self-contained from here on and the
     # swap has one file to rename rather than a pair to keep consistent.
@@ -164,7 +243,7 @@ def _fresh_copy_once(live, work):
     except duckdb.Error as exc:
         log("%s has a write-ahead log that will not replay (%s); left untouched"
             % (live.name, exc))
-        _discard(work)
+        _drop_files(work)
         return None
     log("%s carried an unflushed write-ahead log; replayed %d bytes of it into the copy"
         % (live.name, wal.stat().st_size))
@@ -199,20 +278,30 @@ def fresh_copy(live, work):
     why the space is usually on its way back. Any other failure to copy is
     reported and refused. Either way this returns None instead of raising, so
     one bad copy costs this pass of this step, never the rest of the refresh,
-    and the served file is untouched throughout.
+    and the served file is untouched throughout. The same goes for a file
+    another job is already updating (_take_lock).
     """
+    if not _take_lock(live, work):
+        return None
+    work_copy = _copy_with_retries(live, work)
+    if work_copy is None:
+        _discard(work)
+    return work_copy
+
+
+def _copy_with_retries(live, work):
     for attempt, wait in enumerate((0,) + tuple(COPY_RETRY_WAITS)):
         if wait:
             log("no room to copy %s; waiting %ds for the space a swap is still "
                 "holding (attempt %d of %d)"
                 % (live.name, wait, attempt + 1, len(COPY_RETRY_WAITS) + 1))
             if _pause(wait):
-                _discard(work)
+                _drop_files(work)
                 return None
         try:
             return _fresh_copy_once(live, work)
         except OSError as exc:
-            _discard(work)
+            _drop_files(work)
             if exc.errno != errno.ENOSPC:
                 log("could not copy %s (%s); served data untouched" % (live.name, exc))
                 return None
@@ -221,14 +310,35 @@ def fresh_copy(live, work):
     return None
 
 
+def _refuse_swap(work, live):
+    """Keep the served file, drop the copy, say so. A copy older than the served
+    file would silently erase whatever went in since; its own work comes back
+    the next time the step runs."""
+    _discard(work)
+    text = ("%s changed after %s was copied from it, so that copy was not swapped in. "
+            "The live data is untouched; the update that made the copy needs to run again."
+            % (live.name, work.name))
+    log("ATTENTION " + text)
+    try:
+        from . import refresh
+        refresh._send_telegram("Plover refresh: " + text)
+    except Exception as exc:  # noqa: BLE001 — an alert must not change the outcome
+        log("alert not sent: %s" % exc)
+    raise SwapRefused(text)
+
+
 def swap(work, live):
-    """Checkpoint the copy, then rename it over the served file."""
+    """Checkpoint the copy, then rename it over the served file, unless the
+    served file is no longer the one the copy was taken from."""
     con = duckdb.connect(str(work))
     try:
         con.execute("CHECKPOINT")
     finally:
         con.close()
     _discard_wal_only(work)
+    copied, now = _copied_from.pop(str(work), None), _stamp(live)
+    if copied is not None and now is not None and copied != now:
+        _refuse_swap(work, live)
     # Any log beside the served file was already replayed into this copy by
     # fresh_copy, so it is redundant — and about to be actively dangerous,
     # because a log left next to a file it no longer matches is replayed into
@@ -238,6 +348,7 @@ def swap(work, live):
     # leaves a mismatched pair, which is the served database corrupted.
     _discard_wal_only(live)
     os.replace(str(work), str(live))
+    _let_go(work)
     log("swapped %s in (%d bytes)" % (live.name, live.stat().st_size))
 
 
@@ -1023,7 +1134,7 @@ def main():
     log("starting: datasets=%s, equity slice=%d days, gdp vintages=%s"
         % (" ".join(datasets) or "-", days, "yes" if gdp_vintages else "no"))
     if datasets:
-        backfill_macro(datasets)
+        _phase("macro", backfill_macro, datasets)
     # Stamp here, not at the end. What follows walks history backwards and can
     # run for hours; the daily cycle stops it long before it is "done", and a
     # heartbeat that waited for that would report the refresh as dead every
@@ -1085,6 +1196,8 @@ def _phase(name, fn, *args):
     """
     try:
         fn(*args)
+    except SwapRefused as exc:
+        log("%s phase stopped: %s" % (name, exc))
     except Exception as exc:                                 # noqa: BLE001
         import traceback
         traceback.print_exc()

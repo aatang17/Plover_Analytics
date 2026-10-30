@@ -142,6 +142,9 @@ Every number on every surface says where it came from:
   that you're not looking at a cached response.
 - Before declaring a feature done: hit the real endpoints and load the real pages, not a
   mock. Data must round-trip: ingest → API → rendered page.
+- **A production fill is done only when the live API shows it, after all other running jobs
+  have finished.** Before a manual fill, check nothing else is updating that database.
+  (2026-10-29: a price fill was reported done, then another job's older copy erased it.)
 - Numbers shown to users must reconcile: contributions sum to headline (residual disclosed
   and bundled, never hidden); exports match what the chart shows.
 

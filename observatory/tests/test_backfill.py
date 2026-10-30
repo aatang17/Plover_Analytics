@@ -8,6 +8,8 @@ import datetime
 import os
 import pathlib
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -16,6 +18,7 @@ import duckdb
 from app import backfill, heartbeat, refresh
 
 UTC = datetime.timezone.utc
+ROOT = backfill.ROOT
 
 # The two columns backfill reads, and the supersede-on-publish behaviour that
 # made counting rows useless. Deliberately a hand-built miniature rather than
@@ -235,6 +238,142 @@ class SwapTest(unittest.TestCase):
         backfill.swap(self.work, self.live)
         self.assertFalse(stale.exists())
         self.assertTrue(self.live.exists())
+
+
+class OverlapTest(unittest.TestCase):
+    """2026-10-29: a company update copied sec.duckdb, a price fill swapped in a
+    minute later, and the company update's older copy then erased the prices."""
+
+    def setUp(self):
+        self.dir = pathlib.Path(tempfile.mkdtemp())
+        self.live = self.dir / "sec.duckdb"
+        con = duckdb.connect(str(self.live))
+        con.execute("CREATE TABLE prices (d VARCHAR)")
+        con.execute("INSERT INTO prices VALUES ('16 Oct')")
+        con.close()
+        self.addCleanup(shutil.rmtree, str(self.dir), True)
+        self.addCleanup(backfill._held.clear)
+        self.addCleanup(backfill._copied_from.clear)
+        self.alerts = []
+        from app import refresh
+        real = refresh._send_telegram
+        refresh._send_telegram = self.alerts.append
+        self.addCleanup(setattr, refresh, "_send_telegram", real)
+
+    def _prices(self, path=None):
+        con = duckdb.connect(str(path or self.live), read_only=True)
+        try:
+            return [r[0] for r in con.execute("SELECT d FROM prices ORDER BY d").fetchall()]
+        finally:
+            con.close()
+
+    def _write(self, path, day):
+        con = duckdb.connect(str(path))
+        con.execute("INSERT INTO prices VALUES (?)", [day])
+        con.close()
+
+    def _other_job(self, code):
+        """Run code in a second process, as a hand-run job is. Its last printed
+        line is returned."""
+        script = ("import pathlib, sys\n"
+                  "from app import backfill\n"
+                  "live = pathlib.Path(sys.argv[1]); work = pathlib.Path(sys.argv[2])\n" + code)
+        out = subprocess.run([sys.executable, "-c", script, str(self.live),
+                              str(self.dir / "other.duckdb")], cwd=str(ROOT),
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return out.stdout.strip().splitlines()[-1]
+
+    def test_an_older_copy_cannot_erase_what_went_in_after_it(self):
+        work = self.dir / "sec.companies.duckdb"
+        self.assertEqual(backfill.fresh_copy(self.live, work), work)
+        # Someone swaps newer prices in by hand while the long job runs.
+        newer = self.dir / "newer.duckdb"
+        shutil.copyfile(str(self.live), str(newer))
+        self._write(newer, "28 Oct")
+        os.replace(str(newer), str(self.live))
+        self._write(work, "company facts")
+        with self.assertRaises(backfill.SwapRefused):
+            backfill.swap(work, self.live)
+        self.assertEqual(self._prices(), ["16 Oct", "28 Oct"])
+        self.assertFalse(work.exists(), "the refused copy was left on the volume")
+        self.assertEqual(len(self.alerts), 1)
+        self.assertIn("sec.duckdb", self.alerts[0])
+
+    def test_an_unchanged_file_still_swaps(self):
+        work = self.dir / "sec.prices.duckdb"
+        backfill.fresh_copy(self.live, work)
+        self._write(work, "28 Oct")
+        backfill.swap(work, self.live)
+        self.assertEqual(self._prices(), ["16 Oct", "28 Oct"])
+        self.assertEqual(self.alerts, [])
+
+    def test_steps_in_sequence_each_swap(self):
+        """The nightly cycle: one step's swap must not trip the next step's."""
+        for n, name in enumerate(("a", "b", "c")):
+            work = self.dir / ("sec.%s.duckdb" % name)
+            self.assertEqual(backfill.fresh_copy(self.live, work), work)
+            self._write(work, "step %d" % n)
+            backfill.swap(work, self.live)
+        self.assertEqual(self._prices(), ["16 Oct", "step 0", "step 1", "step 2"])
+
+    def test_readers_do_not_count_as_a_change(self):
+        """The web server has the file open read-only all day."""
+        work = self.dir / "sec.prices.duckdb"
+        backfill.fresh_copy(self.live, work)
+        self.assertEqual(self._prices(), ["16 Oct"])
+        os.utime(str(self.live))
+        self._write(work, "28 Oct")
+        backfill.swap(work, self.live)
+        self.assertEqual(self._prices(), ["16 Oct", "28 Oct"])
+
+    def test_a_second_job_is_turned_away_while_one_runs(self):
+        work = self.dir / "sec.prices.duckdb"
+        backfill.fresh_copy(self.live, work)
+        self.assertEqual(self._other_job("print(backfill.fresh_copy(live, work))"), "None")
+        self.assertFalse((self.dir / "other.duckdb").exists())
+
+    def test_the_second_job_can_start_once_the_first_swaps(self):
+        work = self.dir / "sec.prices.duckdb"
+        backfill.fresh_copy(self.live, work)
+        backfill.swap(work, self.live)
+        self.assertIn("other.duckdb", self._other_job("print(backfill.fresh_copy(live, work))"))
+
+    def test_the_second_job_can_start_once_the_first_discards(self):
+        work = self.dir / "sec.prices.duckdb"
+        backfill.fresh_copy(self.live, work)
+        backfill._discard(work)
+        self.assertIn("other.duckdb", self._other_job("print(backfill.fresh_copy(live, work))"))
+
+    def test_a_job_that_died_leaves_no_lock_behind(self):
+        self._other_job("backfill.fresh_copy(live, work); print('died', flush=True); import os; os._exit(0)")
+        work = self.dir / "sec.prices.duckdb"
+        self.assertEqual(backfill.fresh_copy(self.live, work), work)
+
+    def test_a_step_that_never_finished_does_not_block_its_own_process(self):
+        first, second = self.dir / "sec.a.duckdb", self.dir / "sec.b.duckdb"
+        backfill.fresh_copy(self.live, first)
+        self.assertEqual(backfill.fresh_copy(self.live, second), second)
+
+    def test_a_failed_copy_lets_go_of_the_lock(self):
+        work = self.dir / "sec.prices.duckdb"
+        real = shutil.copyfile
+        def refuse(*a, **k):
+            raise OSError(13, "Permission denied")
+        shutil.copyfile = refuse
+        try:
+            self.assertIsNone(backfill.fresh_copy(self.live, work))
+        finally:
+            shutil.copyfile = real
+        self.assertNotIn(str(self.live), backfill._held)
+
+    def test_a_refused_swap_costs_one_phase_not_the_night(self):
+        ran = []
+        def refused():
+            raise backfill.SwapRefused("changed")
+        backfill._phase("first", refused)
+        backfill._phase("second", lambda: ran.append("second"))
+        self.assertEqual(ran, ["second"])
 
 
 class JournalTest(unittest.TestCase):
