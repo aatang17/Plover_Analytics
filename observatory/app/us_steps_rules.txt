@@ -96,8 +96,18 @@ Looking first
 - Look ("look") only when you are unsure how something is held in the data: how a segment or industry is spelt, whether a ticker has prices on the dates needed, which quarters a company has. A question the tables plainly answer needs no look.
 - A look is a short query with LIMIT. What it shows you never goes into the final query as a number: the final query works every figure out itself.
 
+Filed figures (stocks and table annual)
+- One company's or many companies' latest year: the column in stocks. "Capex as a share of revenue": 100.0 * capex_usd / revenue_usd AS capex_share_pct. Two figures against each other: both columns, or their ratio with an _x name.
+- Anything over years ("over the last 5 years", "since 2015", "each year", "in 2019", a growth rate between two years): table annual, filtered on ticker, ordered by fiscal_year, with the same column names. Return fiscal_year so the table shows every year; the headline reads the first row, so order newest first when the headline is about the latest year. A company's latest year: is_latest.
+- annual holds S&P 500 members from 2009 and other companies from about 2021: use the years held, and say which in the headline. Figures are as last filed, in dollars; a filer in another currency has blanks, so say the figure is not on file in dollars.
+- "No debt", "debt-free": a blank borrowings_usd means no debt line was tagged, not that there is no debt, so never answer with a list of blanks or a filter on 0. Say in "cannot": "Plover can't tell a company with no debt from one that didn't tag it."
+- A ratio of two filed figures across many companies: revenue_usd >= 1e8, or the base at least 1e8, said in the headline. Tiny bases give rates in the thousands of percent.
+- A country in a question about a named company or about where companies sell is that company's revenue there (table segments), never another stock market: "Apple revenue from Japan", "Nvidia revenue from Taiwan". A foreign company listed in the US (Taiwan Semiconductor, Sony, British American Tobacco) is in stocks.
+- A blank is a figure the company did not file under that line: leave it out with IS NOT NULL, never treat it as zero. Do not say Plover lacks the figure because one company left it blank.
+
 What cannot be answered
 - Why something happened, whether to buy or sell, forecasts, estimates, targets: "cannot".
-- Figures the tables do not hold: employees, research spending, analyst ratings, short interest, options, intraday prices, dividends per share history, pay below the executive level, pay outside the S&P 500, which fund holds what (a single fund's portfolio). Say which figure is missing in "cannot", and leave "sql" empty.
+- Before saying "cannot", read the table list again: stocks and annual hold every filed line, capital expenditure, research spending, gross profit, cost of sales, overheads, depreciation, inventories, receivables, goodwill, interest, tax, deposits and the rest. A refusal naming a figure that is listed is sent back.
+- Figures the tables do not hold: employees, analyst ratings, short interest, options, intraday prices, pay below the executive level, pay outside the S&P 500, which fund holds what (a single fund's portfolio). Say which figure is missing in "cannot", and leave "sql" empty.
 - "cannot" is shown to the reader word for word: one plain sentence about what Plover's data does not hold ("Plover's data doesn't include employee counts."), never "the tables" or a column name.
 - A message that is not a question about US companies, their shares, filings or prices (random letters, a greeting, a test, a single vague word): "cannot": "unclear", and no sql. Never answer it by counting or describing the tables.

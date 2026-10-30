@@ -348,7 +348,8 @@ class LoaderGuards(unittest.TestCase):
         def shallow_read(client, item):                                     # the next night: six pages, back to May 2025
             return item, [(D(2025, 7, 15), "2.02,9.01", "a2"), (D(2026, 10, 13), "2.02,9.01", "a3")], 6, "2025-05-02", None
         with mock.patch.object(ev, "_fetch_one", shallow_read):
-            ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=D(2026, 10, 30), workers=1, only=["JPM"])
+            # "today" follows the clock: the row just written is stamped now(), and a fixed date stopped being after it on 2026-10-31
+            ev.load_results(con, mock.Mock(pages=0), log=lambda *a: None, today=max(D(2026, 10, 30), D.today()), workers=1, only=["JPM"])
         dates = [r[0] for r in con.execute("SELECT date FROM us_events WHERE kind = 'results' AND cik = 1 ORDER BY date").fetchall()]
         self.assertEqual(dates, [D(2018, 1, 12), D(2025, 7, 15), D(2026, 10, 13)])   # 2018 kept, no row twice
         con.close()

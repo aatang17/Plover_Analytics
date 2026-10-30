@@ -888,5 +888,68 @@
     "headline": "The S&P 500 changed a median of {median_day_change_pct} on the {n} CPI release days {period}, rising on {up} of them.",
     "chart": null,
     "cannot": null
+  },
+  {
+    "question": "Alphabet capex as a share of revenue",
+    "steps": [
+      "Take Alphabet's latest annual report.",
+      "Divide its capital expenditure by its revenue."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, capex_usd, revenue_usd, 100.0 * capex_usd / revenue_usd AS capex_share_pct, fiscal_year_end FROM stocks WHERE ticker = 'GOOGL'",
+    "headline": "{name} spent {capex_share_pct} of its revenue on capital expenditure, {capex_usd} of {revenue_usd} in the year to {fiscal_year_end}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Microsoft capex vs operating cash flow over the last 5 years",
+    "steps": [
+      "Take Microsoft's last five fiscal years.",
+      "Set capital expenditure against the cash its operations brought in each year."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT fiscal_year, capex_usd, cf_operating_usd, 100.0 * capex_usd / cf_operating_usd AS capex_share_of_cash_pct FROM annual WHERE ticker = 'MSFT' AND capex_usd IS NOT NULL AND cf_operating_usd IS NOT NULL ORDER BY fiscal_year DESC LIMIT 5",
+    "headline": "In fiscal {fiscal_year} Microsoft's capital expenditure was {capex_usd} against operating cash flow of {cf_operating_usd}, {capex_share_of_cash_pct} of it.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Which big chipmakers spend the most on research as a share of revenue?",
+    "steps": [
+      "Take chipmakers worth over $10bn.",
+      "Divide each one's research spending by its revenue.",
+      "Rank them."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, rd_usd, revenue_usd, 100.0 * rd_usd / revenue_usd AS rd_share_pct FROM stocks WHERE industry ILIKE '%SEMICONDUCTOR%' AND market_cap_usd >= 1e10 AND rd_usd IS NOT NULL AND revenue_usd > 1e8 ORDER BY rd_share_pct DESC LIMIT 10",
+    "headline": "{name} spends the most on research among chipmakers worth over $10bn, {rd_share_pct} of revenue.",
+    "chart": {
+      "label": "ticker",
+      "value": "rd_share_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "Biggest companies with no debt",
+    "steps": [
+      "A blank debt line means none was tagged, which is not the same as having no debt."
+    ],
+    "period": {
+      "from": "YEAR-01-01",
+      "to": null
+    },
+    "sql": "",
+    "headline": "",
+    "chart": null,
+    "cannot": "Plover can't tell a company with no debt from one that didn't tag it."
   }
 ]

@@ -28,6 +28,8 @@ written by a model:
   prices           every trading day's close for each stock and benchmark
                    fund, split-adjusted like /api/v1/us/prices (monthly
                    returns, worst days, drawdowns, "how many months ...")
+  annual           every filed figure, one row per company per fiscal year
+                   (app/us_figures.py)
 
 The tables are built once per database version into a shared in-memory
 DuckDB (sandbox()); each question gets its own cursor on it, so the query
@@ -40,12 +42,12 @@ import json
 import re
 import threading
 
-from . import sec_api
+from . import sec_api, us_figures
 
 _LOCK = threading.Lock()
 _BUILD_LOCK = threading.Lock()     # one build at a time: a question during the warm-up waits for it, not a second build
 _STATE = {}
-MEMORY_LIMIT = "512MB"
+MEMORY_LIMIT = "640MB"     # the price history alone is 400 MB and grows daily; a question needs room beside it
 
 # ---------------------------------------------------------------- columns
 # (column, SQL type, what it means) — the descriptions are what the model reads
@@ -138,6 +140,8 @@ TABLES = {
         ("volume", "BIGINT", "shares traded that day, as traded (not split-adjusted)"),
     ]),
 }
+TABLES["annual"] = ("Every filed figure year by year, as last filed, in US dollars (one row per company per fiscal year): "
+                    "S&P 500 members from 2009, other companies from about 2021. A blank was not filed.", us_figures.annual_columns())
 # tables built by their own route (not from row dicts): see price_table()
 _DIRECT = {"prices"}
 
@@ -149,7 +153,8 @@ def sources():
             "quarters": {"name": "Quarterly results (10-Q and 10-K)", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (10-Q and 10-K)."},
             "segments": {"name": "Segment revenue (10-K)", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (10-K segment disclosures)."},
             "insider_trades": {"name": "Insider trades", "credit": sec_insiders_api.PROVENANCE["credit"]},
-            "fund_holdings": {"name": "13F holdings", "credit": sec_13f_api.PROVENANCE["credit"]}}
+            "fund_holdings": {"name": "13F holdings", "credit": sec_13f_api.PROVENANCE["credit"]},
+            "annual": {"name": "Annual reports (10-K, 20-F, 40-F)", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (annual reports)."}}
     # prices: every step answer already names the daily-price source (stock_recipes.PRICE_SOURCE)
 
 
@@ -525,8 +530,15 @@ def event_rows(cur):
         FROM us_events ORDER BY date, kind, ticker""").fetchall()]
 
 
+def annual_rows(cur):
+    """Every filed figure year by year, for the companies in `stocks`."""
+    from . import us_steps
+    have = {r["ticker"] for r in us_steps.base_rows(cur)}
+    return us_figures.annual_rows(cur, {cik: t for cik, t in _tickers(cur).items() if t in have})
+
+
 BUILDERS = {"pay": pay_rows, "quarters": quarter_rows, "segments": segment_rows,
-            "insider_trades": insider_rows, "fund_holdings": fund_rows, "events": event_rows}
+            "insider_trades": insider_rows, "fund_holdings": fund_rows, "events": event_rows, "annual": annual_rows}
 
 
 def _load(con, table, cols, rows):
@@ -655,6 +667,7 @@ def _build_sandbox(cur, v):
     for name, (_, cols) in TABLES.items():
         if name not in _DIRECT:
             _load(db, name, cols, data.get(name) or [])
+    _load_filed(db, cur)
     n_prices = 0
     if cur is not None and _has(cur, "us_px_daily"):
         n_prices = price_table(cur, db, _price_tickers(cur))
@@ -669,6 +682,27 @@ def _build_sandbox(cur, v):
     with _LOCK:
         _STATE.update(v=v, db=db, counts=dict({k: len(r) for k, r in data.items()}, prices=n_prices))
     return db
+
+
+FILED_TABLE = "stocks_filed"
+
+
+def _load_filed(db, cur):
+    """The filed figures of `stocks`, once: see us_steps._connect."""
+    from . import us_steps
+    cols = [("ticker", "VARCHAR", "")] + [(c, "DOUBLE", "") for c in us_steps._FILED_COLUMNS]
+    try:
+        _load(db, FILED_TABLE, cols, us_steps.base_rows(cur))
+    except Exception as exc:                                      # noqa: BLE001 — `stocks` then carries them itself
+        print("filed figures not shared: %s" % exc)
+
+
+def has_filed(db):
+    try:
+        db.cursor().execute("SELECT 1 FROM %s LIMIT 0" % FILED_TABLE)
+        return True
+    except Exception:                                             # noqa: BLE001 — an older sandbox, or none
+        return False
 
 
 def _event_before_dates(db):

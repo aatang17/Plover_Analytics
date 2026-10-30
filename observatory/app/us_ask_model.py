@@ -68,9 +68,22 @@ def _env(name):
     return ""
 
 
+_THIS_THREAD = threading.local()
+
+
+class no_model:
+    """The model is off for this thread only, for a check that must not call it
+    (app/ask_coverage.py). Readers on other threads are not touched."""
+    def __enter__(self):
+        _THIS_THREAD.off = True
+
+    def __exit__(self, *exc):
+        _THIS_THREAD.off = False
+
+
 def provider():
     """(provider, key, model) or None when the layer is off."""
-    if _env("US_ASK_MODEL") == "0":
+    if _env("US_ASK_MODEL") == "0" or getattr(_THIS_THREAD, "off", False):
         return None
     order = (("deepseek", "DEEPSEEK_API_KEY"), ("openai", "OPENAI_API_KEY"))
     want = _env("US_ASK_PROVIDER").lower()

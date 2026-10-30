@@ -1957,21 +1957,21 @@ FIGURES = [
               ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "ShortTermBorrowings", "CommercialPaper", "DebtCurrent"], ["LongTermDebt", "ShortTermBorrowings"],
               ["LongTermDebtAndFinanceLeasesNoncurrent", "LongTermDebtAndFinanceLeasesCurrent"], ["LongTermNotesPayable", "NotesPayable"],
               ["LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities", "ShortTermBorrowings"], ["LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities"]]},
-    {"id": "rd", "words": r"research|r&d|\br ?and ?d\b|development spend", "label": "research and development spending", "unit": "USD", "kind": "duration",
+    {"id": "rd", "words": r"research(?: and development)?(?: spending| spend| costs?| expenses?)?|r&d|\br ?and ?d\b|development spend", "label": "research and development spending", "unit": "USD", "kind": "duration",
      "tags": [["ResearchAndDevelopmentExpense"], ["ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"]]},
     {"id": "gross_profit", "words": r"gross profit", "label": "gross profit", "unit": "USD", "kind": "duration", "tags": [["GrossProfit"]]},
     {"id": "gross_margin", "words": r"gross margin", "label": "gross margin", "unit": "%", "kind": "duration", "tags": [["GrossProfit"]], "ratio_to": "revenue"},
     {"id": "cost_of_sales", "words": r"cost of (sales|revenue|goods)|cogs", "label": "cost of sales", "unit": "USD", "kind": "duration",
      "tags": [["CostOfGoodsAndServicesSold"], ["CostOfRevenue"]]},
-    {"id": "sga", "words": r"sg&a|selling, general|overheads?|general and administrative", "label": "selling, general and administrative expense", "unit": "USD", "kind": "duration",
+    {"id": "sga", "words": r"sg&a|selling, general(?:,? and administrative)?(?: expenses?)?|overheads?|general and administrative(?: expenses?)?", "label": "selling, general and administrative expense", "unit": "USD", "kind": "duration",
      "tags": [["SellingGeneralAndAdministrativeExpense"], ["GeneralAndAdministrativeExpense", "SellingAndMarketingExpense"], ["GeneralAndAdministrativeExpense"]]},
     {"id": "opex", "words": r"operating expenses?|opex", "label": "operating expenses", "unit": "USD", "kind": "duration", "tags": [["OperatingExpenses"]]},
     {"id": "interest_expense", "words": r"interest expense|interest cost|interest bill", "label": "interest expense", "unit": "USD", "kind": "duration", "tags": [["InterestExpense"]]},
-    {"id": "tax", "words": r"\btax(es)?\b", "label": "income tax expense", "unit": "USD", "kind": "duration", "tags": [["IncomeTaxExpenseBenefit"]]},
-    {"id": "da", "words": r"depreciation|amortis|amortiz", "label": "depreciation and amortisation", "unit": "USD", "kind": "duration", "tags": [["DepreciationDepletionAndAmortization"]]},
+    {"id": "tax", "words": r"(?:income )?\btax(es)?\b(?: expenses?)?", "label": "income tax expense", "unit": "USD", "kind": "duration", "tags": [["IncomeTaxExpenseBenefit"]]},
+    {"id": "da", "words": r"depreciation(?: and amorti[sz]ation)?|amortis|amortiz", "label": "depreciation and amortisation", "unit": "USD", "kind": "duration", "tags": [["DepreciationDepletionAndAmortization"]]},
     {"id": "inventory", "words": r"inventor(y|ies)|stock on hand", "label": "inventories", "unit": "USD", "kind": "instant", "tags": [["InventoryNet"]]},
-    {"id": "receivables", "words": r"receivables?", "label": "accounts receivable", "unit": "USD", "kind": "instant", "tags": [["AccountsReceivableNetCurrent"]]},
-    {"id": "ppe", "words": r"property, plant|plant and equipment|fixed assets|\bppe\b|\bpp&e\b", "label": "property, plant and equipment", "unit": "USD", "kind": "instant",
+    {"id": "receivables", "words": r"(?:accounts )?receivables?", "label": "accounts receivable", "unit": "USD", "kind": "instant", "tags": [["AccountsReceivableNetCurrent"]]},
+    {"id": "ppe", "words": r"property, plant(?: and equipment)?|plant and equipment|fixed assets|\bppe\b|\bpp&e\b", "label": "property, plant and equipment", "unit": "USD", "kind": "instant",
      "tags": [["PropertyPlantAndEquipmentNet"]]},
     {"id": "goodwill", "words": r"goodwill", "label": "goodwill", "unit": "USD", "kind": "instant", "tags": [["Goodwill"]]},
     {"id": "intangibles", "words": r"intangible", "label": "intangible assets", "unit": "USD", "kind": "instant", "tags": [["IntangibleAssetsNetExcludingGoodwill"]]},
@@ -1981,33 +1981,51 @@ FIGURES = [
     {"id": "current_assets", "words": r"current assets", "label": "current assets", "unit": "USD", "kind": "instant", "tags": [["AssetsCurrent"]]},
     {"id": "current_liabilities", "words": r"current liabilities", "label": "current liabilities", "unit": "USD", "kind": "instant", "tags": [["LiabilitiesCurrent"]]},
     {"id": "sbc", "words": r"stock.based comp|share.based comp|stock comp", "label": "share-based compensation", "unit": "USD", "kind": "duration", "tags": [["ShareBasedCompensation"]]},
-    {"id": "acquisitions", "words": r"acquisition spend|spent on acquisitions|m&a spend|acquisitions", "label": "cash paid for acquisitions", "unit": "USD", "kind": "duration",
+    {"id": "acquisitions", "words": r"cash paid for acquisitions?|acquisition spend|spent on acquisitions|m&a spend|acquisitions", "label": "cash paid for acquisitions", "unit": "USD", "kind": "duration",
      "tags": [["PaymentsToAcquireBusinessesNetOfCashAcquired"]]},
-    {"id": "leases", "words": r"lease liabilit|operating leases", "label": "operating lease liabilities", "unit": "USD", "kind": "instant",
+    {"id": "leases", "words": r"(?:operating )?lease liabilit\w*|operating leases", "label": "operating lease liabilities", "unit": "USD", "kind": "instant",
      "tags": [["OperatingLeaseLiability"], ["OperatingLeaseLiabilityNoncurrent", "OperatingLeaseLiabilityCurrent"], ["LeaseLiabilityNoncurrent", "LeaseLiabilityCurrent"], ["LeaseLiabilityNoncurrent"]]},
     {"id": "tax_rate", "words": r"effective tax rate|\btax rate\b", "label": "effective tax rate", "unit": "%", "kind": "duration",
      "tags": [["IncomeTaxExpenseBenefit"]], "ratio_to": "pretax_income"},
-    {"id": "dps", "words": r"dividend per share|dividends per share|\bdps\b", "label": "dividends declared per share", "unit": "USD/share", "kind": "duration",
+    {"id": "dps", "words": r"dividends? (?:declared |paid )?per share|\bdps\b", "label": "dividends declared per share", "unit": "USD/share", "kind": "duration",
      "tags": [["CommonStockDividendsPerShareDeclared"], ["CommonStockDividendsPerShareCashPaid"]]},
     {"id": "capex", "words": r"\bcapex\b|capital (expenditures?|spending|investment)|investment in (plant|property)", "label": "capital expenditure", "unit": "USD", "kind": "duration",
      "tags": [["PaymentsToAcquirePropertyPlantAndEquipment"], ["PaymentsToAcquireProductiveAssets"]]},
-    {"id": "diluted_shares", "words": r"diluted shares|share count|number of shares", "label": "weighted diluted shares", "unit": "shares", "kind": "duration",
+    {"id": "diluted_shares", "words": r"(?:weighted )?diluted shares|share count|number of shares", "label": "weighted diluted shares", "unit": "shares", "kind": "duration",
      "tags": [["WeightedAverageNumberOfDilutedSharesOutstanding"]]},
     {"id": "deposits", "words": r"deposits", "label": "deposits", "unit": "USD", "kind": "instant", "tags": [["Deposits"]]},
     {"id": "nii", "words": r"net interest income", "label": "net interest income", "unit": "USD", "kind": "duration", "tags": [["InterestIncomeExpenseNet"]]},
     {"id": "provisions", "words": r"provision for (loan|credit) loss|credit costs|loan loss", "label": "provision for loan losses", "unit": "USD", "kind": "duration",
      "tags": [["ProvisionForLoanLossesExpensed"], ["ProvisionForLoanLeaseAndOtherLosses"], ["ProvisionForCreditLosses"]]},
     {"id": "noninterest_expense", "words": r"non.?interest expense", "label": "non-interest expense", "unit": "USD", "kind": "duration", "tags": [["NoninterestExpense"]]},
-    {"id": "advertising", "words": r"advertising|marketing spend", "label": "advertising expense", "unit": "USD", "kind": "duration", "tags": [["AdvertisingExpense"]]},
+    {"id": "advertising", "words": r"advertising(?: expenses?| spend(?:ing)?| costs?)?|marketing spend", "label": "advertising expense", "unit": "USD", "kind": "duration", "tags": [["AdvertisingExpense"]]},
     {"id": "interest_paid", "words": r"interest paid", "label": "interest paid", "unit": "USD", "kind": "duration", "tags": [["InterestPaidNet"]]},
-    {"id": "taxes_paid", "words": r"taxes paid|tax paid", "label": "income taxes paid", "unit": "USD", "kind": "duration", "tags": [["IncomeTaxesPaidNet"]]},
+    {"id": "taxes_paid", "words": r"(?:income )?tax(?:es)? paid", "label": "income taxes paid", "unit": "USD", "kind": "duration", "tags": [["IncomeTaxesPaidNet"]]},
     {"id": "rd_intensity", "words": r"research intensity|r&d intensity|r&d as a share|research as a share", "label": "research spending as a share of revenue", "unit": "%", "kind": "duration",
      "tags": [["ResearchAndDevelopmentExpense"]], "ratio_to": "revenue"},
     {"id": "debt_to_equity", "words": r"debt.to.equity|gearing", "label": "borrowings as a share of equity", "unit": "%", "kind": "instant",
      "tags": [], "ratio_to": "equity"},
 ]
 FIGURES[-1]["tags"] = FIGURES[0]["tags"]                       # the same borrowings lines as the debt figure
-FIGURE_BY_ID = {f["id"]: f for f in FIGURES}
+# Lines a ranking takes as well, read the same way. They are not in FIGURES because a question about one
+# company's equity or assets has its own answers; "which company has the most total assets" has only this one.
+RANK_FIGURES = [
+    {"id": "operating_income", "words": r"operating (?:income|profit)", "label": "operating income", "unit": "USD", "kind": "duration"},
+    {"id": "pretax_income", "words": r"pre.?tax (?:income|profit|earnings)", "label": "pre-tax income", "unit": "USD", "kind": "duration"},
+    {"id": "eps_diluted", "words": r"(?:diluted )?earnings per share|\beps\b", "label": "diluted earnings per share", "unit": "USD/share", "kind": "duration"},
+    {"id": "total_assets", "words": r"total assets|\bassets\b", "label": "total assets", "unit": "USD", "kind": "instant"},
+    {"id": "total_liabilities", "words": r"total liabilities|\bliabilities\b", "label": "total liabilities", "unit": "USD", "kind": "instant"},
+    {"id": "equity", "words": r"(?:shareholders|stockholders)'? equity|book value|\bequity\b", "label": "shareholders' equity", "unit": "USD", "kind": "instant"},
+    {"id": "cash", "words": r"cash and(?: cash)? equivalents|\bcash\b(?! (?:flow|paid|from))", "label": "cash and equivalents", "unit": "USD", "kind": "instant"},
+    {"id": "cf_operating", "words": r"operating cash flow|cash (?:flow )?from operations", "label": "operating cash flow", "unit": "USD", "kind": "duration"},
+    {"id": "cf_investing", "words": r"investing cash flow|cash (?:flow )?from investing", "label": "investing cash flow", "unit": "USD", "kind": "duration"},
+    {"id": "cf_financing", "words": r"financing cash flow|cash (?:flow )?from financing", "label": "financing cash flow", "unit": "USD", "kind": "duration"},
+    {"id": "dividends_paid", "words": r"dividends? paid", "label": "dividends paid", "unit": "USD", "kind": "duration"},
+    {"id": "buybacks", "words": r"buybacks?|share repurchases?", "label": "buybacks", "unit": "USD", "kind": "duration"},
+]
+for _f in RANK_FIGURES:
+    _f["tags"] = [[t] for field, _k, tags in sec_api.FIELDS if field == _f["id"] for t in tags]
+FIGURE_BY_ID = {f["id"]: f for f in FIGURES + RANK_FIGURES}
 # Figures people ask for that the data sets do not carry, each with the honest reason.
 NOT_HELD = [
     (r"(?!.*\b(?:at|does|do|has|have|of|employ)\b.*)(?:employees|headcount|staff\b|workforce|workers|people work|how many people)",
@@ -2060,7 +2078,7 @@ def _all_figure_tags():
     return sorted(tags)
 
 
-FIGURE_TAGS = sorted(set(_all_figure_tags()) | {t for f, k, tags in sec_api.FIELDS if f == "pretax_income" for t in tags})
+FIGURE_TAGS = sorted(set(_all_figure_tags()) | {t for f in RANK_FIGURES for alt in f["tags"] for t in alt})
 
 
 def _pick_alt(fig, have):
@@ -2123,8 +2141,8 @@ def figure_cross(cur, fig):
             if tag not in have.setdefault(cik, {}):
                 have[cik][tag] = v
                 unit[cik] = uom
-        # a dollar ranking never carries a rupee figure: only USD-tagged lines rank
-        have = {cik: vals for cik, vals in have.items() if unit.get(cik) == "USD"}
+        # a dollar ranking never carries a rupee figure: only USD-tagged lines rank (a share count is in shares)
+        have = {cik: vals for cik, vals in have.items() if unit.get(cik) in ("USD", "USD/shares", "shares")}
         out = {}
         for cik, vals in have.items():
             v, used = _pick_alt(fig, vals)
@@ -2237,6 +2255,9 @@ _COMPARE_WORDS = [(r"\bytd\b|year to date|this year|performance|share price|stoc
                   (r"market (value|cap)|bigger|larger|\bworth\b|valuable", "market_cap")]
 
 
+_COMPARE_OWN = {s[3] for s in COMPARE_LINES}
+
+
 def _compare_key(q):
     """The metrics-row key a comparison question asks about, or None."""
     ql = (q or "").lower()
@@ -2298,7 +2319,11 @@ def r_compare_companies(cur, q, e):
     key = _compare_key(q)
     if key == "price_change":
         return _compare_prices(cur, q, e, cos)
-    if figd and key and key != "revenue" and not figd.get("ratio_to"):
+    # a filed line the comparison's own rows do not carry ("total assets", "operating cash flow") is that line
+    named = _named_line((q or "").lower())
+    if named and named["id"] not in _COMPARE_OWN:
+        figd = named
+    elif figd and key and key != "revenue" and not figd.get("ratio_to"):
         figd = None if key in ("fcf", "cash", "revenue_growth_pct", "market_cap", "pe_x") else figd
     lines = []
     if figd:
@@ -2402,6 +2427,11 @@ def history_figure(question):
     question asks about; None if it names none. Figures we do not hold raise."""
     q = (question or "").lower()
     figure_in(q)                               # employees, EBITDA … say so here
+    named = _named_line(q)                     # "income taxes paid" is not "income tax": the longest phrase decides
+    if named:
+        if named["id"] in _FIELD_TAGS:
+            return {"id": named["id"], "label": named["label"], "unit": named["unit"]}
+        return {"id": "fig:" + named["id"], "label": named["label"], "unit": named["unit"], "figure": named}
     for pat, fid, label, unit in HIST_SPECIFIC:
         if re.search(pat, q):
             return {"id": fid, "label": label, "unit": unit}
@@ -2418,7 +2448,7 @@ def _units_of(cur, cik):
     """The units a filer's figures may carry: dollars, or its own currency when it reports in one."""
     row = row_for(cur, cik)
     u = (row or {}).get("unit")
-    out = ["USD", "USD/shares"]
+    out = ["USD", "USD/shares", "shares"]
     if u and u != "USD":
         out += [u, u + "/shares"]
     return out
@@ -2600,7 +2630,11 @@ def r_company_history(cur, q, e):
         full = annual_history(cur, rec["cik"], hf, cur.execute(
             "SELECT max(period) FROM sec_filings WHERE cik = ? AND form IN (%s)" % ",".join("?" * len(sec_api.ANNUAL_FORMS)),
             [rec["cik"]] + list(sec_api.ANNUAL_FORMS)).fetchone()[0])
-        if full:
+        if full and since and since.year >= datetime.date.today().year and re.search(r"\bthis year\b|\bcurrent year\b", (q or "").lower()):
+            # this year has no annual report yet: the latest one, and it says which year it is
+            hist = full[-1:]
+            per_co = [(rec, hist)]
+        elif full:
             raise HTTPException(404, "No annual %s for %s is on file for %s; the years on file run %d to %d." % (
                 hf["label"], rec["name"], ("fiscal %d" % since.year) if since and until and since.year == until.year else "those years",
                 full[0][0].year, full[-1][0].year))
@@ -2685,7 +2719,12 @@ def r_company_history(cur, q, e):
                     c["name"], ("%s a year" % pct(g, 1, sign=True)) if g is not None else "no average", _fmt_hist_ccy(hh[0][1]["value"], unit),
                     _fy(hh[0][0]), _fmt_hist_ccy(hh[-1][1]["value"], unit), _fy(hh[-1][0]))))
         parts.sort(key=lambda x: -x[0])
-        if unit == "%":
+        if since and until and since.year == until.year and all(len(hh) <= 1 for _, hh in per_co) and any(hh for _, hh in per_co):
+            # one named year has no growth to average: the figures themselves
+            have = sorted(((c, hh[0]) for c, hh in per_co if hh), key=lambda x: -(x[1][1]["value"] or 0))
+            headline = "%s in fiscal %d: %s." % (hf["label"].capitalize(), since.year, "; ".join(
+                "%s %s" % (short_name(c["name"]), _fmt_hist_ccy(h[1]["value"], unit)) for c, h in have))
+        elif unit == "%":
             headline = "%s, latest year: %s." % (hf["label"].capitalize(), "; ".join(p for _, p in parts))
         else:
             headline = "%s growth on average: %s." % (hf["label"].capitalize(), "; ".join(p for _, p in parts))
@@ -3052,6 +3091,54 @@ _SUPERLATIVE = re.compile(r"\b(?:most|highest|lowest|largest|biggest|smallest|ch
 _FILLER = {"companies", "company", "stocks", "stock", "us", "the", "a", "an", "of", "value", "valuable", "listed", "firms", "names", "ones"}
 
 
+# what "largest" or "best" say about any figure: they never name one
+# A ratio of two filed lines means nothing on a sliver of a base: the rule that already keeps a sliver of equity
+# out of return on equity. 2026-10-31: "highest R&D intensity" led with 164,633%, "highest tax rate" with 16,082.9%.
+RATIO_FLOOR_NOTES = {"gross_margin": "Companies with revenue under $100mn are left out.",
+                     "rd_intensity": "Companies with revenue under $100mn are left out.",
+                     "tax_rate": "Companies with pre-tax income under $100mn, and rates outside 0% to 100%, are left out.",
+                     "debt_to_equity": "Companies whose equity is negative or under 5% of assets are left out."}
+
+
+def _ratio_is_sound(figd, v, r, base):
+    fid = figd["id"]
+    if fid not in RATIO_FLOOR_NOTES:
+        return True
+    size = r.get("size") or {}
+    if fid in ("gross_margin", "rd_intensity"):
+        return (size.get("revenue") or 0) >= 1e8
+    if fid == "tax_rate":
+        return (base or 0) >= 1e8 and 0 <= v <= 100
+    equity, assets = size.get("equity"), size.get("total_assets")
+    return bool(equity and equity > 0 and (not assets or equity >= 0.05 * assets))
+
+
+_METRIC_GENERIC = {"largest", "biggest", "best", "worst", "bottom", "top", "valuable", "most valuable", "perform", "growth"}
+
+
+def _named_line(ql):
+    """The filed line a ranking question names, when it comes before any other
+    measure or holds one inside it: "highest gross profit" is not "profit",
+    "biggest debt" is not "biggest" (2026-10-30), "return on equity" stays a
+    ratio. The longest phrase wins, as in figure_in()."""
+    best = None
+    for f in FIGURES + RANK_FIGURES:
+        for m in re.finditer(f["words"], ql):
+            if best is None or m.end() - m.start() > best[0].end() - best[0].start():
+                best = (m, f)
+    if not best:
+        return None
+    m, f = best
+    for pat, _key, _order, _label, _unit in METRIC_WORDS:
+        for hit in re.finditer(pat, ql):
+            if hit.group(0) in _METRIC_GENERIC:
+                continue
+            inside = hit.start() >= m.start() and hit.end() <= m.end()
+            if not inside and (hit.start() < m.start() or hit.end() > m.end()) and hit.start() <= m.start():
+                return None
+    return f
+
+
 def _metric(q, strict=True):
     """The ranking figure: a 'by …' or 'on …' phrase decides first ("largest by
     market value, with P/E" ranks on market value and merely shows P/E); then
@@ -3068,7 +3155,7 @@ def _metric(q, strict=True):
                 if key == "pe_x" and high and not re.search(r"cheap|lowest", ql):
                     order = "desc"                  # "most expensive by P/E"
                 return key, order, label, unit
-        for f in FIGURES:
+        for f in FIGURES + RANK_FIGURES:
             if re.search(f["words"], phrase):
                 return "fig:" + f["id"], "desc", f["label"], f["unit"]
         if strict and [w for w in phrase.split() if w not in _FILLER]:
@@ -3076,6 +3163,9 @@ def _metric(q, strict=True):
                                      "return on equity, yields, revenue, net income, cash, and lines such as debt, research spending, "
                                      "gross margin, inventories or goodwill." % phrase)
     low = bool(re.search(r"\b(worst|lowest|bottom|smallest|least|weakest)\b", ql))
+    named = _named_line(ql)
+    if named:
+        return "fig:" + named["id"], ("asc" if low else "desc"), named["label"], named["unit"]
     for pat, key, order, label, unit in METRIC_WORDS:
         if re.search(pat, ql):
             if low and order == "desc" and key != "price_change_1y_pct":
@@ -3197,7 +3287,13 @@ def _rank(cur, q, e, rows, scope_label, recipe):
             v = hit[0] if hit else None
             if v is not None and figd.get("ratio_to"):
                 base = r["size"].get(figd["ratio_to"])
+                if base is None and figd["ratio_to"] in FIGURE_BY_ID:      # pre-tax income is not in the size block
+                    base = (figure_cross(cur, FIGURE_BY_ID[figd["ratio_to"]]).get(r["cik"]) or (None,))[0]
                 v = (v / base * 100) if base else None
+            if v is not None and not _ratio_is_sound(figd, v, r, base if figd.get("ratio_to") else None):
+                continue
+            if v is not None and order == "asc" and figd["unit"] == "USD" and v <= 0:
+                continue                       # "lowest capex": a zero or a sign slip is not the smallest spender
         elif key == "pb_x":
             mc, eq = r["metrics"].get("market_cap"), r["size"].get("equity")
             v = (mc / eq) if (mc and eq and eq > 0) else None
@@ -3226,6 +3322,10 @@ def _rank(cur, q, e, rows, scope_label, recipe):
             if (prior.get("revenue") or 0) < GROWTH_BASE_USD or (key == "profit_growth_pct" and (prior.get("net_income") or 0) < GROWTH_BASE_USD / 5):
                 continue
         kept.append((v, r))
+    if figd and figd["id"] in RATIO_FLOOR_NOTES:
+        base_note += " " + RATIO_FLOOR_NOTES[figd["id"]]
+    if figd and order == "asc" and figd["unit"] == "USD":
+        base_note += " Companies filing zero or less are left out."
     kept.sort(key=lambda x: x[0], reverse=(order == "desc"))
     if key == "net_income" and re.search(r"lost money|made a loss|loss.making|unprofitable|negative (net )?income|in the red|losses", q.lower()):
         losers = [kv for kv in kept if kv[0] < 0]
@@ -4685,6 +4785,7 @@ def unread_words(cur, q, reads=(), also=()):
     months"), so a question with any is never answered by a ranking that
     would quietly drop it."""
     ql = (q or "").lower().replace("’", "'")
+    ql = re.sub(r"\bnon.?interest (?:expenses?|income)\b", " ", ql)  # a line's name, not an exclusion
     left = list(us_link.unread_time(ql))
     # the columns a ranking shows anyway: "with P/E and one-year change"
     t = re.sub(r"\b(?:with|and|plus|showing)\s+(?:(?:the|their|its)\s+)?(?:p/?e|one.year change|1.year change|price change|market value|dividend yield)\b", " ", ql)
@@ -4712,12 +4813,66 @@ def unread_words(cur, q, reads=(), also=()):
         hit = us_link.industry_match(cur, t)
         for w in (hit[2] if hit else []):
             t = re.sub(r"\b%s\b" % re.escape(w), " ", t)
-    for pat in [p for p, _k, _o, _l, _u in METRIC_WORDS] + [f["words"] for f in FIGURES]:
-        t = re.sub(r"[\w'/-]*(?:%s)[\w'/-]*" % pat, " ", t)
+    # the longest phrase goes first: "gross profit" whole, never "profit" leaving "gross" unread
+    spans = []
+    for pat in [p for p, _k, _o, _l, _u in METRIC_WORDS] + [f["words"] for f in FIGURES + RANK_FIGURES]:
+        spans += [m.span() for m in re.finditer(r"[\w'/-]*(?:%s)[\w'/-]*" % pat, t)]
+    taken = [False] * len(t)
+    for a, b in sorted(spans, key=lambda x: x[0] - x[1]):
+        if not any(taken[a:b]):
+            taken[a:b] = [True] * (b - a)
+    t = "".join(" " if taken[i] else c for i, c in enumerate(t))
     t = re.sub(r"\b(?:\d{1,3}|%s)\b" % us_link._NUM_ALT, " ", t)
     also = {w.strip(".'-") for w in also}
     left += [w for w in re.findall(r"[a-z0-9&'.-]+", t) if w.strip(".'-") and w.strip(".'-") not in _RANK_FILLER and w.strip(".'-") not in also]
     return left
+
+
+_LINE_FILLER = frozenset("""what whats what's is was were are the a an of for in on show me give tell get find how much many did does do has have had
+its their his her it they compare comparing compared vs versus against and or with latest last recent most year fiscal annual annually s 's please
+history trend chart graph plot over time each every by past years year-by-year""".split())
+
+
+def _not_a_quarterly_line(ql):
+    """A filed line the quarterly table does not carry: "financing cash flow last
+    quarter" was answered with the quarter's revenue."""
+    line = _named_line(ql)
+    return bool(line and line["id"] not in ("operating_income", "eps_diluted"))
+
+
+def line_match(cur, question):
+    """(recipe, entities) for one to four companies and a filed line no quick
+    grammar knows, and nothing else: "What is Nvidia's investing cash flow?",
+    "Compare total assets of Nvidia, Apple and Alphabet". Read before the
+    reader, because the word patterns behind it answered these with the
+    company's market value and, for "dividends paid", its CEO's pay
+    (2026-10-30). A ratio, a threshold or any word not read goes on."""
+    q = (question or "").strip()
+    ql = q.lower().replace("\u2019", "'")
+    line = _named_line(ql)
+    if not line or _SHARE_WORDS.search(ql) or _THRESHOLD_WORDS.search(ql) or us_link.unread_time(q) or len(q) > 120:
+        return None
+    if re.search(r"\bquarter|\bq[1-4]\b|\bmonths?\b|\bweeks?\b", ql):
+        return None                                     # annual lines only: "last quarter" is never answered with a year
+    cos = us_link.find_companies(cur, _without_benchmarks(q))
+    if not cos and re.search(r"\b(?:most|highest|lowest|largest|biggest|smallest|least|top)\b", ql) \
+            and not unread_words(cur, q, _RANK_READS["market_rank"]):
+        # "the highest advertising expense" is a line, not the advertising industry
+        return BY_ID["market_rank"], entities(cur, q)
+    if not 1 <= len(cos) <= 4:
+        return None
+    rest = _strip_companies(_without_benchmarks(q), cos).lower().replace("\u2019", "'")
+    rest = re.sub(line["words"], " ", rest, count=1)
+    rest = us_link.TIME_PHRASE.sub(" ", rest)
+    if [w for w in re.findall(r"[a-z&'-]+", rest) if w.strip("'-") and w not in _LINE_FILLER]:
+        return None
+    over_time = bool(_HIST_WORDS.search(ql) or us_link.parse_year_window(q))
+    e = entities(cur, q)
+    if over_time:
+        return BY_ID["company_history"], e
+    if len(cos) >= 2:
+        return BY_ID["compare_companies"], dict(e, figure=line)
+    return BY_ID["company_figure"], dict(e, figure=line)
 
 
 def quick_match(cur, question):
@@ -4737,7 +4892,7 @@ def quick_match(cur, question):
         return None
     if _STEPS_DATA.search(q) and not re.search(r"\bpa(?:y|id)\b|compensation|salar|\bsold\b|\bbought\b|\bsell|\bbuy|insider|holders?|\bowns?\b|portfolio|stake", q.lower()):
         # one company's quarters, by code: "Apple Q3 2025 revenue", "Nvidia revenue every quarter", "Snowflake revenue last quarter"
-        if len(cos) == 1 and re.search(r"\bquarter|\bq[1-4]\b", q.lower()) and not re.search(r"\b(vs\.?|versus|compar|segment|division|how many|which|share of|median|average)\b", q.lower()):
+        if len(cos) == 1 and not _not_a_quarterly_line(q.lower()) and re.search(r"\bquarter|\bq[1-4]\b", q.lower()) and not re.search(r"\b(vs\.?|versus|compar|segment|division|how many|which|share of|median|average)\b", q.lower()):
             rest_q = _strip_companies(_without_benchmarks(q), cos)
             if re.fullmatch(_Q_LEAD + r"(?:(?:revenue|sales|net income|profit|earnings|operating income|operating profit|eps|earnings per share|results) )?"
                             r"(?:(?:in|for|of|from) )?(?:(?:the )?(?:last|latest|most recent|previous|past|this) quarter|q[1-4] ?(?:fy)?'?\d{2,4}|(?:fy)?\d{4} ?q[1-4]|(?:first|second|third|fourth) quarter(?: of)? (?:fy)?\d{4}|"
@@ -4981,7 +5136,7 @@ def answer(cur, question, prev=None, opts=None):
     if not prev and is_macro_question(cur, question):
         raise ask_miss.miss(MACRO_MISS, "not_held")
     from . import us_steps
-    pointer = us_steps.other_market(question) if not prev else None
+    pointer = us_steps.other_market(question, cur) if not prev else None
     if pointer:
         us_steps.log(question, "other market", pointer)
         raise HTTPException(422, pointer)
@@ -5014,9 +5169,18 @@ def answer(cur, question, prev=None, opts=None):
             raise ask_miss.miss("No proxy pay figures for %s are loaded: the pay table covers the S&P 500 members' latest proxy "
                                 "statements, and that name is not among their CEOs." % " ".join(who[:3]), "not_held")
     if not prev:
-        quick = quick_match(cur, question)
+        # "dividends paid", "interest paid": the quick lane reads "paid" as CEO pay
+        quick = (line_match(cur, question) if re.search(r"\bpaid\b", ql) else None) or quick_match(cur, question)
         if quick:
             r, e = quick
+            e["opts"] = opts
+            ask_progress.say(_doing(r, e))
+            out = r["run"](cur, question, e)
+            out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "quick", "read_as": None}
+            return _finish(out, e)
+        lined = line_match(cur, question)
+        if lined:
+            r, e = lined
             e["opts"] = opts
             ask_progress.say(_doing(r, e))
             out = r["run"](cur, question, e)
@@ -5053,7 +5217,7 @@ def answer(cur, question, prev=None, opts=None):
                 exc = ask_miss.miss(MACRO_MISS, "not_held")
                 exc.question = whole                       # the economy answers read the follow-up whole
                 raise exc
-            pointer = us_steps.other_market(whole)
+            pointer = us_steps.other_market(whole, cur)
             if pointer:
                 raise HTTPException(422, pointer)
         e = None
@@ -5081,11 +5245,20 @@ def answer(cur, question, prev=None, opts=None):
         if form.get("shape") in ("steps", "company_says") and re.search(r"how many risks?|how many risk factors|count (of )?(the )?risks?", ql) and form.get("companies"):
             form = dict(form, shape="company_risks")
         if form.get("shape") == "steps" and form.get("companies") and len(form.get("companies") or []) == 1 and _SEGMENT_Q.search(ql) \
-                and not re.search(r"\bquarter|\bq[1-4]\b|history|over time|each year|every year", ql):
+                and not _named_line(ql) and not re.search(r"\bquarter|\bq[1-4]\b|history|over time|each year|every year", ql):
             form = dict(form, shape="company_segment")
         if form.get("shape") in ("market_rank", "industry_rank", "company_figure", "company_value", "steps") and _PAY_WORDS.search(ql) \
                 and not re.search(r"\b(median|average|mean|how many|ratio|employee|over time|histor)\b", ql):
             form = dict(form, shape="ceo_pay")
+        # one line against another ("capex as a share of revenue over 5 years") is worked out step by step:
+        # the history shape answered it with the capex alone
+        if form.get("shape") in _FIGURE_SHAPES and _RATIO_ASK.search(ql) and not _named_ratio(ql):
+            form = dict(form, shape="steps")
+        if form.get("shape") == "company_quarters" and _not_a_quarterly_line(ql):
+            form = dict(form, shape="steps")
+        # a filed line is not a revenue segment: "no revenue line called 'advertising expense'"
+        if form.get("shape") == "company_segment" and _named_line(ql):
+            form = dict(form, shape="steps")
         # a span of years, or growth over years, is the history shape, not one year's growth
         if form.get("shape") in ("company_growth_margin", "company_figure") and (
                 (us_link.parse_year_window(question) or _SPAN_WORDS.search(ql)) and form.get("companies")):
@@ -5139,6 +5312,16 @@ def answer(cur, question, prev=None, opts=None):
         if form is None and exc.status_code == 422:
             us_steps.log(question, "no match (reader off)", exc.detail)
         raise
+
+
+_RATIO_ASK = re.compile(r"\bas (?:a )?(?:share|percent(?:age)?|proportion|fraction|multiple|%) of\b|\bas % of\b|\b\d*% of (?:revenue|sales|profit|income|assets|equity)\b|"
+                        r"\brelative to\b|\b(?:divided|compared) (?:by|to)\b|\bratio of\b|\bper dollar\b")
+
+
+def _named_ratio(ql):
+    """A ratio with its own line ("R&D as a share of revenue"), which the fixed answers know."""
+    line = _named_line(ql)
+    return bool(line and line.get("ratio_to"))
 
 
 _FIGURE_SHAPES = ("market_rank", "industry_rank", "company_figure", "company_growth_margin", "compare_companies", "company_history",
@@ -5203,6 +5386,9 @@ def _doing(recipe, e):
     return DOING.get(recipe["id"], recipe["label"]).format(co=co) + "…"
 
 
+_NOT_A_LINE = {"company_growth_margin", "company_value", "ceo_pay", "company_price_performance", "company_holders", "company_business"}
+
+
 def _pattern_answer(cur, question, opts=frozenset()):
     from . import ask_progress
     try:
@@ -5216,6 +5402,13 @@ def _pattern_answer(cur, question, opts=frozenset()):
             return _finish(out, e)
         raise
     left = unread_words(cur, question, _RANK_READS[recipe["id"]]) if recipe["id"] in _RANK_READS else []
+    # the patterns read one word and answer: with the reader off, "Nvidia capex as a share of revenue" came back
+    # as its revenue growth. Better to say so than to answer another question (2026-10-31).
+    ql = (question or "").lower()
+    line = _named_line(ql)
+    if (_RATIO_ASK.search(ql) and not _named_ratio(ql)) or (line and recipe["id"] in _NOT_A_LINE and "book value" not in ql):
+        from . import ask_miss
+        raise ask_miss.miss(ask_miss.UNSURE, "unsure")
     if left:
         _metric(question)                    # a figure we do not hold says so first, in its own words
         # the reader is off or failed, and the ranking would answer without these words

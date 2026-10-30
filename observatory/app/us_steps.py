@@ -43,7 +43,7 @@ import threading
 
 from fastapi import HTTPException
 
-from . import analysis, ask_progress, sec_api, us_benchmarks, us_checks, us_link, us_prices_api, us_tables
+from . import analysis, ask_progress, sec_api, us_benchmarks, us_checks, us_figures, us_link, us_prices_api, us_tables
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RULES_FILE = os.path.join(HERE, "us_steps_rules.txt")
@@ -151,6 +151,10 @@ STOCK_COLUMNS = [
     ("payout_ratio_pct", "DOUBLE", "dividends / net income, %"),
     ("fiscal_year_end", "DATE", "end of the fiscal year the annual figures cover"),
 ]
+# every other filed figure, from the one list the fixed answers read too (app/us_figures.py)
+STOCK_COLUMNS += us_figures.stock_columns({c for c, _, _ in STOCK_COLUMNS})
+_FILED_COLUMNS = [c for c, _, _ in us_figures.stock_columns() if c not in
+                  ("revenue_usd", "operating_income_usd", "net_income_usd", "cash_usd", "total_assets_usd", "equity_usd", "eps_usd", "borrowings_usd")]
 BENCH_COLUMNS = [
     ("key", "VARCHAR", "the benchmark's short name, as readers see it: " + ", ".join(us_benchmarks.LABELS[k] for k in us_benchmarks.ORDER)),
     ("name", "VARCHAR", "the index or fund's name"),
@@ -218,6 +222,7 @@ def _build_base_rows(cur, v):
     today = datetime.date.today()
     last_day = us_prices_api.latest_date(cur)
     debt = stock_recipes.figure_cross(cur, stock_recipes.FIGURE_BY_ID["debt"])
+    filed = us_figures.latest_values(cur, rows)
     ytd = us_prices_api.window_changes(cur, datetime.date(today.year, 1, 1))
     one_y = us_prices_api.window_changes(cur, today - datetime.timedelta(days=365))
     out = []
@@ -245,6 +250,11 @@ def _build_base_rows(cur, v):
             rec[col] = ((r.get(part) or {}).get(field)) if usd else None   # a 20-F filer's own currency is not US$
         for col in _RATIOS:
             rec[col] = m.get(col)
+        got = filed.get(r["cik"]) or {}
+        for col in _FILED_COLUMNS:
+            rec[col] = got.get(col)
+        if rec.get("shares_outstanding") is None:      # the count the market value uses, when the filing's own tag is not read
+            rec["shares_outstanding"] = (r.get("per_share") or {}).get("shares_outstanding") or (r.get("market_value_basis") or {}).get("shares")
         eq, ta = size.get("equity"), size.get("total_assets")
         if rec.get("roe_pct") is not None and (eq is None or eq <= 0 or (ta and eq < 0.05 * ta)):
             rec["roe_pct"] = None                      # a sliver of equity makes any profit a 15,000% return: blank, never a ranking
@@ -299,14 +309,20 @@ def _connect(stocks, benches, cur=None):
         except Exception:                                         # noqa: BLE001 — the extra tables are a bonus, never a failure
             base = None
     con = base.cursor() if base is not None else duckdb.connect(":memory:")
+    # With the shared database, the filed figures are one table in it (us_tables.FILED_TABLE) and `stocks` is
+    # this question's own columns joined to it: 45 more columns per question ran the sandbox out of memory.
+    shared = us_tables.FILED_TABLE if base is not None and us_tables.has_filed(base) else None
     for table, cols, rows in (("stocks", STOCK_COLUMNS + [("change_period_pct", "DOUBLE", "")], stocks),
                               ("benchmarks", BENCH_COLUMNS, benches)):
         seen, defs = set(), []
         for c, t, _ in cols:
-            if c not in seen:
+            if c not in seen and not (table == "stocks" and shared and c in _FILED_COLUMNS):
                 seen.add(c)
                 defs.append((c, t))
-        _load(con, table, defs, rows, temp=base is not None)
+        _load(con, "_stocks_own" if table == "stocks" and shared else table, defs, rows, temp=base is not None)
+    if shared:
+        con.execute("CREATE TEMP VIEW stocks AS SELECT o.*, %s FROM _stocks_own o LEFT JOIN %s f USING (ticker)"
+                    % (", ".join("f.%s" % c for c in _FILED_COLUMNS), shared))
     if base is None:
         # nothing outside these two tables from here on, and the query cannot undo it
         con.execute("SET memory_limit='256MB'")
@@ -663,9 +679,11 @@ OTHER_MARKETS = [
 ]
 
 
-def other_market(question):
+def other_market(question, cur=None):
     """A pointer when the question names a market this box does not cover, else None."""
     ql = (question or "").lower()
+    if us_checks.about_us_listed(question, cur):
+        return None
     for pat, where in OTHER_MARKETS:
         if re.search(pat, ql):
             return (OTHER_MARKET_PREFIX + " %s. A Japanese or Hong Kong company appears here only if it "
@@ -717,13 +735,26 @@ def answer(cur, question):
         if plan.get("cannot") and not plan.get("sql"):
             from . import ask_miss
             log(question, "cannot", plan["cannot"])
-            if str(plan["cannot"]).strip().lower().strip(".") == "unclear":
+            is_unclear = str(plan["cannot"]).strip().lower().strip(".") == "unclear"
+            if not is_unclear and not str(plan["cannot"]).startswith(OTHER_MARKET_PREFIX):
+                # "we don't hold X" is checked against what we hold (app/us_figures.py), never taken on trust:
+                # 2026-10-30, "Plover's data doesn't include capital expenditure figures", with the figure on file
+                held = us_figures.judge(plan["cannot"], question)
+                if held["verdict"] == "held" and attempt < 3:
+                    log(question, "refusal sent back", "; ".join(n["label"] for n in held["names"]))
+                    ask_progress.say("Plover holds that figure, so working it out…")
+                    messages += [{"role": "assistant", "content": raw}, {"role": "user", "content": us_figures.pointer(held["names"])}]
+                    continue
+                if held["verdict"] != "gap":
+                    log(question, "refusal not believed", "%s | %s" % (held["verdict"], plan["cannot"]))
+                    raise ask_miss.miss(ask_miss.UNSURE, "unsure")
+            if is_unclear:
                 # a question that names a company is not gibberish: the word patterns get it
                 from . import stock_recipes
                 if us_link.find_companies(cur, stock_recipes._without_benchmarks(question)):
                     raise StepsError("read as unclear, but the question names a company")
                 raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")
-            if str(plan["cannot"]).startswith(OTHER_MARKET_PREFIX) and not other_market(question):
+            if str(plan["cannot"]).startswith(OTHER_MARKET_PREFIX) and not other_market(question, cur):
                 # the model copied the other-market wording for a US question it could not answer
                 raise ask_miss.miss("Plover's data doesn't hold what that question needs.", "not_held")
             # the questions offered instead are the fixed ones in app/ask_miss.py: a model's own suggestion
@@ -763,6 +794,17 @@ def answer(cur, question):
             continue
         words = period_words(start, end, last=last)
         headline = fill_headline(plan.get("headline"), cols, rows[0], words, question, plan.get("sql") or "") if rows else None
+        blank = _blank_in_headline(plan.get("headline"), cols, rows)
+        if blank:
+            # a headline is never "spent — of its revenue" (2026-10-31, Taiwan Semiconductor's capex)
+            if len(rows) == 1:
+                from . import ask_miss
+                raise ask_miss.miss(_files_in_other_currency(cur, question) or _not_filed_sentence(rows[0], cols, blank), "not_held")
+            if attempt < 3:
+                messages += [{"role": "assistant", "content": raw},
+                             {"role": "user", "content": "The first row has no value for %s. Leave blanks out with IS NOT NULL, and reply "
+                                                          "with the whole JSON object again." % ", ".join(blank)}]
+                continue
         if not checks_on():
             break
         findings = us_checks.check(question, plan, rows, cols, headline, cur=cur) if rows else []
@@ -795,11 +837,16 @@ def answer(cur, question):
         if len(_PLANS) >= _PLANS_MAX:
             _PLANS.clear()
         _PLANS[_plan_key(question)] = {k: plan.get(k) for k in ("steps", "period", "sql", "headline", "chart", "cannot")}
+    if not rows or all(v is None for r in rows for c, v in zip(cols, r) if c not in ("ticker", "name")):
+        foreign = _files_in_other_currency(cur, question)
+        if foreign:
+            from . import ask_miss
+            raise ask_miss.miss(foreign, "not_held")
     words = period_words(start, end, last=last)
     steps = [str(s) for s in (plan.get("steps") or []) if s][:6]
     row0 = rows[0] if rows else None
     if not rows:
-        headline = "No stock matches that %s." % words if "change_period" in (plan.get("sql") or "") else "No stock matches that."
+        headline = "No stock matches that %s." % words if "change_period" in (plan.get("sql") or "") else "Nothing on file matches that."
     elif headline is None:
         if len(rows) == 1 and len(cols) <= 3:
             headline = "; ".join("%s: %s" % (label(c), fmt_value(c, v)) for c, v in zip(cols, row0)) + "."
@@ -841,7 +888,10 @@ def answer(cur, question):
         care = stock_recipes.cautions_for(cur, [r[ti] for r in rows[:50]])
         if care:
             notes.append(care)
-    srcs = [stock_recipes.PRICE_SOURCE, stock_recipes.SEC_SOURCE]
+    # a source is named only when the query read it
+    srcs = [stock_recipes.SEC_SOURCE]
+    if re.search(r"price|change_|market_cap|pe_x|_yield|\bprices\b", sql):
+        srcs.insert(0, stock_recipes.PRICE_SOURCE)
     # each extra table the query read names its own source
     for name, src in us_tables.sources().items():
         if re.search(r"\b%s\b" % name, sql) and src not in srcs:
@@ -853,8 +903,9 @@ def answer(cur, question):
             if mas:
                 srcs.append({"name": "%s members" % b["name"],
                              "credit": "Holdings of the %s fund (State Street), %s." % (b["etf"], stock_recipes.date_words(mas))})
-    calc = {"steps": " ".join("%d. %s" % (i + 1, s) for i, s in enumerate(steps)),
-            "query": sql, "period": "%s (%s to %s)" % (words, _d(start), _d(end or last))}
+    calc = {"steps": " ".join("%d. %s" % (i + 1, s) for i, s in enumerate(steps)), "query": sql}
+    if re.search(r"change_period|market_cap_(?:start|end)|\bprices\b", sql):       # a filed figure has its own year, not "so far in 2026"
+        calc["period"] = "%s (%s to %s)" % (words, _d(start), _d(end or last))
     out = stock_recipes.pkg("steps", question, headline, "", figures, table, chart, srcs, calc,
                             {"steps": steps, "query": sql, "period": {"from": _d(start), "to": _d(end)}}, {}, notes)
     out["steps"] = steps
@@ -868,6 +919,39 @@ def answer(cur, question):
     log(question, "answered by steps", sql if not findings else
         "%s | checks: %s" % (sql, "; ".join("%s (%s)" % (f["check"], f["severity"]) for f in findings)))
     return out
+
+
+def _blank_in_headline(template, cols, rows):
+    """The result columns a headline names that are blank in the row it reads."""
+    if not rows or not template:
+        return []
+    return [k for k in (x.strip() for x in re.findall(r"\{([^}]*)\}", str(template))) if k in cols and rows[0][cols.index(k)] is None]
+
+
+def _not_filed_sentence(row, cols, blank):
+    """Why a worked-out figure is blank for one company: the line is not on file."""
+    who = row[cols.index("name")] if "name" in cols else "That company"
+    labels = {e["col"]: e["label"] for e in us_figures.catalogue()}
+    named = [labels[c] for c in blank if c in labels]
+    return "%s has not filed %s in US dollars under a line Plover reads, so this can't be worked out for it." % (
+        who, " or ".join(named[:2]) if named else "what this needs")
+
+
+def _files_in_other_currency(cur, question):
+    """The sentence for a named company whose figures are not in dollars
+    (Sony files in yen), so a worked-out answer finds blanks; else None."""
+    from . import stock_recipes
+    try:
+        cos = us_link.find_companies(cur, stock_recipes._without_benchmarks(question))
+    except Exception:                                             # noqa: BLE001 — no sentence, the plain answer stands
+        return None
+    for c in cos[:4]:
+        row = stock_recipes.row_for(cur, c["cik"])
+        if row and row.get("unit") and row["unit"] != "USD":
+            name = us_link.display_name(c.get("name"))
+            return ("%s files in %s, and worked-out answers use US dollars only, so this can't be worked out for it. "
+                    "Ask for one figure at a time, such as “What is %s's revenue?”" % (name, row["unit"], name))
+    return None
 
 
 def checks_on():

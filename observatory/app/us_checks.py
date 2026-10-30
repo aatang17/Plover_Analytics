@@ -56,7 +56,7 @@ _MARKETS = [
     (r"\bhong\s*kong\b|\bhang\s*seng\b|\bhk\b|\bhsi\b", "Hong Kong is under the Asia tab"),
     (r"\beurope(an)?\b|\buk\b|\bbritish\b|\blondon\b|\bftse\b|\bdax\b|\bcac\b|\bstoxx\b|\bgerman\b|\bfrench\b",
      "European companies are not covered yet"),
-    (r"\bshanghai\b|\bshenzhen\b|\ba.shares?\b|\bcsi\s*300\b|\bkospi\b|\bkorean?\b|\btaiwan(ese)?\b|\btwse\b|\bindian?\b|\bnifty\b|\bsensex\b|\basx\b|\baustralian?\b",
+    (r"\bshanghai\b|\bshenzhen\b|\bchina a.shares?\b|\ba-shares?\b|\bcsi\s*300\b|\bkospi\b|\bkorean?\b|\btaiwan(ese)?\b|\btwse\b|\bindian?\b|\bnifty\b|\bsensex\b|\basx\b|\baustralian?\b",
      "that market is not covered yet"),
 ]
 # the question's word -> (columns that measure it, patterns that mean another figure was used instead)
@@ -86,8 +86,36 @@ def _num(v):
 
 
 # ---------------------------------------------------------------- the checks
-def other_market(question):
+# A country in a question about a company's own business is where that company sells, not a market it trades in
+_OWN_BUSINESS = re.compile(r"\b(?:revenues?|sales|sell|sells|sold|earn|earns|earned|makes?|made|exposure|exposed|business|operations)\b")
+
+
+def about_us_listed(question, cur=None):
+    """True when a country word does not mean another stock market: the question
+    names a company that files here ("Taiwan Semiconductor capex", "Apple revenue
+    from Japan") or asks where US companies sell ("the most revenue in India").
+    "Best Japanese banks" and "largest UK companies" stay pointed elsewhere."""
     ql = (question or "").lower()
+    # a market's own stocks, however a ticker is spelt ("UK" is Ubiquiti's old symbol, "Taiwan" an alias of TSMC)
+    if re.search(r"\b(?:japan(?:ese)?|tokyo|korean?|taiwan(?:ese)?|india[n]?|australian?|europe(?:an)?|british|uk|german|french|chinese|china|shanghai|"
+                 r"shenzhen|hong kong|hk|london) (?:banks?|stocks?|shares|compan|firms?|markets?|equities|listed|index|indices)", ql) \
+            or re.search(r"\b(?:companies|stocks|firms|banks|shares) (?:in|from|listed in) (?:the )?(?:japan|tokyo|korea|taiwan|india|australia|europe|uk|germany|france|china|shanghai|hong kong|london)", ql):
+        return False
+    if _OWN_BUSINESS.search(ql) and re.search(r"\b(?:us|u\.s\.|american|s&p|dow) (?:compan|firms?|stocks?)|\b(?:in|from|to) (?:the )?[a-z]", ql):
+        return True
+    if cur is None:
+        return False
+    try:
+        from . import stock_recipes, us_link
+        return bool(us_link.find_companies(cur, stock_recipes._without_benchmarks(question)))
+    except Exception:                                             # noqa: BLE001 — unsure: the pointer stands
+        return False
+
+
+def other_market(question, cur=None):
+    ql = (question or "").lower()
+    if about_us_listed(question, cur):
+        return None
     for pat, where in _MARKETS:
         if re.search(pat, ql):
             return finding("other_market", REFUSE,
@@ -282,7 +310,7 @@ def check(question, plan, rows, cols, headline=None, today=None, cur=None):
     """Every finding on this plan and result, most serious first. `headline`
     is the filled headline, or None when us_steps refused the template."""
     out = []
-    om = other_market(question)
+    om = other_market(question, cur)
     if om:
         return [om]
     wc = wrong_company(question, rows, cols, cur)

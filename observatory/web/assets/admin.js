@@ -1180,8 +1180,39 @@ var ASK_ROUTE = {
   stock: "Stock Answer", macro: "US Economy Answer", error: "Failed on Our Side",
   // why a question was not answered (app/ask_miss.py)
   not_held: "Not in Plover's Data", policy: "Outside What Plover Does", unclear: "Not Understood",
-  other_market: "Another Market",
+  other_market: "Another Market", unsure: "Could Not Work Out",
 };
+// which pile the daily review put a refused question on (app/ask_review.py)
+var ASK_PILE = { fix: "We Hold It: Fix", gap: "Not Held", look: "Read It", fine: "Not a Data Question", fixed: "Now Answers" };
+var ASK_PILE_ORDER = { fix: 0, look: 1, gap: 2, fine: 3, fixed: 4 };
+
+function trafficReview(rv) {
+  var head = '<div class="admin-section">Refusals to Review <span class="note">' +
+    (rv ? "checked " + escapeHtml(fmtStamp(rv.at)) + ", questions refused in the last " + fmtCount(rv.window_days) + " days, asked again" : "") + "</span></div>";
+  if (!rv) return head + '<p class="table-empty">The first daily review has not run on this server yet. It starts half an hour after the server does.</p>';
+  var m = rv.matrix || {};
+  var failed = (m.code_failed || []).concat(m.model_failed || []);
+  var line = "<p>Every filed figure, asked every way: " + fmtCount((m.code_asked || 0) - (m.code_failed || []).length) + " of " + fmtCount(m.code_asked || 0) +
+    " answered without the AI; " + fmtCount((m.model_asked || 0) - (m.model_failed || []).length) + " of " + fmtCount(m.model_asked || 0) +
+    " answered with it (today\u2019s sample from " + fmtCount(m.model_total || 0) + " questions).</p>";
+  var fails = failed.length
+    ? '<div class="table-wrap"><table class="data"><thead><tr><th>Figure Check That Failed</th><th>What Happened</th></tr></thead><tbody>' +
+      failed.slice(0, 40).map(function (f) {
+        return "<tr><td>" + escapeHtml(f.question || f.col || "") + "</td><td>" + escapeHtml(String(f.why || "")) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : "";
+  var rows = (rv.questions || []).slice().sort(function (x, y) {
+    return (ASK_PILE_ORDER[x.pile] - ASK_PILE_ORDER[y.pile]) || (y.times - x.times);
+  });
+  var table = rows.length
+    ? '<div class="table-wrap"><table class="data"><thead><tr><th>Question</th><th>Verdict</th><th class="num">Times Asked</th><th>Now Says</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return "<tr><td>" + escapeHtml(r.q) + '</td><td data-sort="' + ASK_PILE_ORDER[r.pile] + '">' + askLabel(ASK_PILE, r.pile) + "</td>" +
+          '<td class="num">' + fmtCount(r.times) + "</td><td>" + escapeHtml(r.said || MISSING) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : '<p class="table-empty">Readers had no questions refused in this window.</p>';
+  return head + line + fails + table;
+}
 var ASK_WHERE = { full: "Full Answer", preview: "Signed-Out Preview" };
 // who a question came from (app/ask_log.py): never more than this one word
 var ASK_FROM = { reader: "Reader", example: "Example Click", us: "Us" };
@@ -1293,7 +1324,7 @@ function trafficAsk(a) {
 
   return head + '<div class="kpi-row">' + kpis + "</div>" + weekly +
     '<div class="admin-section">Searches by Day <span class="note">days with at least one ' +
-    "search</span></div>" + daily + most + recent +
+    "search</span></div>" + daily + trafficReview(a.review) + most + recent +
     '<p class="source-line">Real readers only. Searches and questions from the ask log; readers ' +
     "from the visit log, counted per day, so one person on two days is two. A question not sent " +
     "by our own page, or sent from a data centre, is left out, as are robots. " +

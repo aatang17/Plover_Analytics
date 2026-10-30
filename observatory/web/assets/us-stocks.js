@@ -489,7 +489,7 @@
     // a long table shows its first rows; the rest are one click away and always in Copy and CSV
     var nRows = hasTable ? a.table.rows.length : 0, fold = nRows > FOLD_ROWS + 2;
     if (hasTable) {
-      main += panel("Detail", count(nRows) + " rows" + (a.table.unit ? " · " + a.table.unit : ""),
+      main += panel("Detail", count(nRows) + (nRows === 1 ? " row" : " rows") + (a.table.unit ? " · " + a.table.unit : ""),
         "<div class='an-tbl" + (fold ? " an-fold" : "") + "'>" + tableHtml(a.table, "an-table") + "</div>" +
         (fold || a.more ? "<div class='an-foot an-tbl-foot'>" +
           (fold ? "<button type='button' class='an-link' id='an-all' aria-expanded='false'>Show all " + count(nRows) + " rows</button>" : "") +

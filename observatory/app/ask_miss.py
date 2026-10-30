@@ -2,7 +2,7 @@
 """What the front page's box says when it cannot answer.
 
 A reader never sees a status code, a blank, or the box's own plumbing. Every
-miss is one of five kinds, each with one plain sentence and, where it helps,
+miss is one of six kinds, each with one plain sentence and, where it helps,
 up to three questions the box does answer:
 
   not_held      the data does not carry it ("most employees"): say what is
@@ -12,6 +12,9 @@ up to three questions the box does answer:
   unclear       not a question it can read ("asdf qwerty"): say so, show
                 examples; never attempt an answer
   other_market  a market this box does not cover: point to where it is
+  unsure        the model gave up and what it said is missing could not be
+                confirmed (app/us_figures.py): say the box could not work it
+                out, never that the data lacks it
   error         our fault (a failure, a time-out, data not loaded): say so;
                 the page offers Try Again and keeps the question in the box
 
@@ -25,7 +28,7 @@ import re
 
 from fastapi import HTTPException
 
-KINDS = ("not_held", "policy", "unclear", "other_market", "error")
+KINDS = ("not_held", "unsure", "policy", "unclear", "other_market", "error")
 
 # the front page's own examples, every one of which answers (ci/search_examples.py checks them)
 EXAMPLES = ["Who owns Nvidia?", "Most valuable US companies", "Is US core inflation falling?"]
@@ -83,6 +86,7 @@ UNCLEAR = ("I couldn't tell what you're asking. Ask about a US company (its owne
 ERROR = "That didn't work on our side. Try again in a moment; your question is still in the box."
 NOT_LOADED = "US company data isn't available on this server right now. Try again in a few minutes."
 NOTHING = "That isn't something Plover can answer yet."
+UNSURE = "I couldn't work that out from Plover's data. Try asking for one figure at a time."
 
 
 def miss(detail, kind, tries=None, status=422):
@@ -157,6 +161,11 @@ def company_in(cur, question):
     return _short(us_link.display_name(cos[0].get("name"))) or cos[0].get("ticker")
 
 
+def _figures_named(question):
+    from . import us_figures
+    return [n for n in us_figures.held_in(question) if n["id"]]
+
+
 def suggestions(question, kind, text, cur=None, given=None):
     """Up to three questions the box answers, closest first."""
     if kind in ("unclear", "error", "other_market"):
@@ -179,6 +188,8 @@ def suggestions(question, kind, text, cur=None, given=None):
         if re.search(r"employees|headcount|staff\b|workforce", ql):
             out += ["Largest US companies by revenue"]
         if co:
+            # the figure the reader asked about, first: a question about Alphabet's capex is not served by "Who owns Alphabet?"
+            out += ["What is %s's %s?" % (co, n["label"]) for n in _figures_named(question)[:2]]
             # price and filings every listed company has (a 20-F filer's revenue growth can come back empty)
             out += ["What does %s do?" % co, "How has %s done this year?" % co, "Who owns %s?" % co]
         # the subject the reader asked about, before the front page's examples

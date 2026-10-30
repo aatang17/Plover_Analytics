@@ -328,6 +328,15 @@ def weekly(today, weeks=8):
     return out
 
 
+def _review():
+    """The daily review's last report, for the Ask Box tab (app/ask_review.py)."""
+    try:
+        from . import ask_review
+        return ask_review.latest()
+    except Exception:                                             # noqa: BLE001 — the page works without it
+        return None
+
+
 def summary(days, start, today, hits=None, recent=50, top=15):
     """The Ask Box section: totals, one row per day, the latest questions and
     the ones asked most. `hits` comes from the visit log: [(at, visitor)] for
@@ -396,4 +405,5 @@ def summary(days, start, today, hits=None, recent=50, top=15):
         "recent": [{k: e.get(k) for k in ("at", "q", "where", "answered", "route", "shape", "seconds", "from")}
                    for e in sorted(lines, key=lambda e: e["at"], reverse=True)[:recent]],
         "most_asked": most,
+        "review": _review(),
     }

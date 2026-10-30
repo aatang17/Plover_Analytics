@@ -435,6 +435,16 @@ def _poll_press():
         print("refresh: press-release poll failed: %s" % exc)
 
 
+def _review_asks():
+    """The ask box's daily review (app/ask_review.py), on its own thread: asks
+    refused questions again and tests every figure. A failure is printed."""
+    try:
+        from . import ask_review
+        ask_review.run_if_due()
+    except Exception as exc:  # noqa: BLE001 — never let the review stop the watch
+        print("refresh: ask review failed: %s" % exc)
+
+
 async def run():
     """Tick until cancelled: refresh on the clock, watch health in between."""
     if not enabled():
@@ -464,6 +474,7 @@ async def run():
                 await run_in_threadpool(watch)
                 await run_in_threadpool(_refresh_studies)
                 await run_in_threadpool(_poll_press)
+                await run_in_threadpool(_review_asks)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 — the loop outlives any one failure
