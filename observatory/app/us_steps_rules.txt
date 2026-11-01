@@ -50,6 +50,7 @@ Result columns and the headline
 CEO pay (table pay)
 - "Highest-paid CEOs", "CEO pay": ceo_total_pay_usd (total pay as reported) unless the question says "actually paid" or "realised"; then ceo_actually_paid_usd. Pay covers S&P 500 members only: say "S&P 500 CEOs".
 - Each company's pay year ends on its own fiscal_year_end: return it, and say "in each company's latest fiscal year" in the headline.
+- A raise, a pay cut, a past year or pay over time: table pay_years. A person's raise compares one company's two latest years only where ceo is the same and sole_ceo is true in both; a new CEO's pay against the last one's is not a raise.
 - Pay against performance: join stocks on ticker; tsr_value_of_100 is what $100 became since tsr_since, not a percentage.
 
 Quarterly results (table quarters)

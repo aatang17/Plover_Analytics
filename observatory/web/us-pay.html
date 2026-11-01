@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/co-page.css">
+<link rel="stylesheet" href="assets/page-ask.css">
 <style>
 /* page-local layout only — tokens and components come from app.css.
    Same shapes as us-companies.html, so the two US company pages read alike. */
@@ -83,6 +84,10 @@ span.co-logo { background: none; }
       proxy statement since 2023. Exactly as the company tagged it.</p>
     </div>
 
+    <div data-page-ask data-label="Ask About CEO Pay"
+         data-examples="Who are the highest paid CEOs?|Median CEO pay|How does Tesla's CEO pay compare with shareholder return?"
+         data-topic="Who are the highest paid CEOs in the S&amp;P 500?"></div>
+
     <div class="strip" id="stat-strip"><div class="strip-grid cols-4">
       <div class="strip-cell skeleton" style="min-height:96px"></div>
       <div class="strip-cell skeleton" style="min-height:96px"></div>
@@ -111,6 +116,10 @@ span.co-logo { background: none; }
     <!-- the company's header card and tabs (co-head.js), Executive pay marked -->
     <div id="co-card"><section class="cp-card"><div class="cp-id"><div class="cp-who"><h1 id="co-name"></h1></div></div></section></div>
     <p class="cp-msg" id="co-meta"></p>
+
+    <div data-page-ask data-company data-label="Ask About CEO Pay at {company}"
+         data-examples="How much was {company}'s CEO paid?|How does {company}'s CEO pay compare with shareholder return?"
+         data-topic="What was {company}'s CEO paid?"></div>
 
     <section class="cp-panel cp-sec">
     <div class="cp-head"><h2>CEO Pay</h2><span class="note" id="co-facts-note"></span></div>
@@ -172,6 +181,8 @@ span.co-logo { background: none; }
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
 <script src="assets/co-head.js"></script>
+<script src="assets/us-format.js"></script>
+<script src="assets/page-ask.js"></script>
 <script src="assets/us-pay.js"></script>
 </body>
 </html>

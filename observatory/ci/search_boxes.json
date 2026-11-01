@@ -5,7 +5,9 @@
     "placeholder, or the whole placeholder when it is a plain list), plus the 'extra' queries,",
     "and require at least one hit. 'area' is the element the results are drawn into; 'hits'",
     "counts the results. 'ready' (optional) must match before typing: a page with nothing in",
-    "it has no data on this server, and is reported as skipped rather than failed.",
+    "it has no data on this server, and is reported as skipped rather than failed. 'wait'",
+    "(optional) is the milliseconds to allow instead of 8000: the first answer on this check's",
+    "own cold server takes 30 to 40 seconds to prepare, which the live site keeps warm.",
     "ci/guards.py fails when a search box in web/ is missing from this file. A box that cannot",
     "be run here goes under 'elsewhere' or 'not_run' with the reason: gaps stay visible."
   ],
@@ -252,6 +254,20 @@
       "ready": "#cn-table tbody tr",
       "extra": [
         "revenue"
+      ]
+    },
+    {
+      "key": "page-ask.js#class=pa-q",
+      "url": "/us-pay.html?t=AAPL",
+      "input": "#company-view .pa-q",
+      "ready": "#company-view .pa-q",
+      "submit": true,
+      "area": "#company-view .pa-result",
+      "hits": "#company-view .pa-result .hit",
+      "wait": 60000,
+      "extra": [
+        "How does Apple's CEO pay compare with shareholder return?",
+        "Who owns Apple?"
       ]
     },
     {

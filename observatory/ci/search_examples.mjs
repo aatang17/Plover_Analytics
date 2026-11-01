@@ -118,9 +118,9 @@ async function worker(wsUrl, boxes, report) {
     cdp.send("Input.dispatchKeyEvent", { type, key: k, code, windowsVirtualKeyCode: vk })));
 
   // Wait until the result area has changed from `before` and stopped changing.
-  async function settle(area, before) {
+  async function settle(area, before, wait) {
     await sleep(300);
-    const until = Date.now() + 8000;
+    const until = Date.now() + (wait || 8000);
     let last = await areaHtml(area);
     let stableSince = Date.now();
     while (Date.now() < until) {
@@ -167,7 +167,7 @@ async function worker(wsUrl, boxes, report) {
                                                      text: "\r", unmodifiedText: "\r" });
           await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
         }
-        await settle(box.area, before);
+        await settle(box.area, before, box.wait);
         const n = await count(box.hits);
         if (process.env.TIMING) console.log(`${box.key} "${ex}" ${n} hits ${Date.now() - t0}ms`);
         if (n === 0) report.failures.push(`${box.key}: "${ex}" finds nothing (placeholder: "${placeholder}")`);

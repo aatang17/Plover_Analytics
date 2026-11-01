@@ -52,6 +52,15 @@ MEMORY_LIMIT = "640MB"     # the price history alone is 400 MB and grows daily; 
 # ---------------------------------------------------------------- columns
 # (column, SQL type, what it means) — the descriptions are what the model reads
 TABLES = {
+    "pay_years": ("CEO pay at S&P 500 members year by year, from their proxy statements (one row per company per fiscal year, up to five years). Use it for a change in pay, a past year, or anything over time; use pay for the latest year.", [
+        ("ticker", "VARCHAR", "joins stocks.ticker"),
+        ("ceo", "VARCHAR", "the CEO at the year end; two names joined by ' / ' for co-CEOs"),
+        ("sole_ceo", "BOOLEAN", "true when one person was CEO for that whole year; compare a person's pay across years only where both years are true and ceo is the same"),
+        ("fiscal_year_end", "DATE", "the fiscal year the pay is for"),
+        ("ceo_total_pay_usd", "DOUBLE", "total pay as reported in the Summary Compensation Table, US$"),
+        ("ceo_actually_paid_usd", "DOUBLE", "the SEC's 'compensation actually paid', can be negative, US$"),
+        ("tsr_value_of_100", "DOUBLE", "what $100 invested at the start of the proxy's measurement period was worth at fiscal_year_end"),
+    ]),
     "pay": ("CEO pay at S&P 500 members, from each company's latest proxy statement (one row per company).", [
         ("ticker", "VARCHAR", "joins stocks.ticker"),
         ("ceo", "VARCHAR", "the CEO's name as the proxy gives it; two names joined by ' / ' when the CEO changed in the year"),
@@ -150,6 +159,7 @@ def sources():
     """{table: source} for the answer's source line, from each dataset's own provenance."""
     from . import sec_13f_api, sec_insiders_api, us_pay_api
     return {"pay": {"name": "CEO pay (proxy statements)", "credit": us_pay_api.PROVENANCE["credit"]},
+            "pay_years": {"name": "CEO pay by year (proxy statements)", "credit": us_pay_api.PROVENANCE["credit"]},
             "quarters": {"name": "Quarterly results (10-Q and 10-K)", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (10-Q and 10-K)."},
             "segments": {"name": "Segment revenue (10-K)", "credit": "Source: U.S. Securities and Exchange Commission, EDGAR (10-K segment disclosures)."},
             "insider_trades": {"name": "Insider trades", "credit": sec_insiders_api.PROVENANCE["credit"]},
@@ -247,6 +257,19 @@ def pay_rows(cur):
                     "tsr_value_of_100": _num(v.get("tsr")), "peer_tsr_value_of_100": _num(v.get("peer_tsr")),
                     "tsr_since": r.get("tsr_base"), "proxy_filed": (r.get("source") or {}).get("filed")})
     return out
+
+
+def pay_year_rows(cur):
+    from . import us_pay_api
+    if not _has(cur, "sec_px_facts"):
+        return []
+    try:
+        years = us_pay_api.all_years()
+    except Exception:                                             # noqa: BLE001 — no pay data: no pay table
+        return []
+    return [{"ticker": y["ticker"], "ceo": y["ceo"], "sole_ceo": y["sole_ceo"], "fiscal_year_end": y["fiscal_year_end"],
+             "ceo_total_pay_usd": _num(y["total_pay"]), "ceo_actually_paid_usd": _num(y["actually_paid"]), "tsr_value_of_100": _num(y["tsr"])}
+            for y in years if y["ticker"] and y["fiscal_year_end"]]
 
 
 # ---------------------------------------------------------------- quarters
@@ -537,7 +560,7 @@ def annual_rows(cur):
     return us_figures.annual_rows(cur, {cik: t for cik, t in _tickers(cur).items() if t in have})
 
 
-BUILDERS = {"pay": pay_rows, "quarters": quarter_rows, "segments": segment_rows,
+BUILDERS = {"pay": pay_rows, "pay_years": pay_year_rows, "quarters": quarter_rows, "segments": segment_rows,
             "insider_trades": insider_rows, "fund_holdings": fund_rows, "events": event_rows, "annual": annual_rows}
 
 

@@ -1409,7 +1409,7 @@ def r_company_insiders(cur, q, e):
     return out
 
 
-_PERSON_STOP = {"Insider", "Insiders", "Has", "Have", "Did", "Does", "Is", "Are", "Who", "Which", "What", "When", "Shares", "Stock",
+_PERSON_STOP = {"Insider", "Insiders", "Has", "Have", "Did", "Does", "Is", "Are", "Who", "Which", "What", "When", "Shares", "Stock", "Whose", "New",
                 "Form", "The", "Sold", "Bought", "Buy", "Sell", "Selling", "Buying", "This", "Last", "Year", "Month", "Ceo", "Cfo", "Chairman"}
 
 
@@ -1827,9 +1827,274 @@ def r_company_quarters(cur, q, e):
                ["Each quarter is as last filed in a 10-Q or 10-K; the table holds the last %d quarters." % len(rows)])
 
 
+_PAY_RISE = re.compile(r"\braises?\b|\bpay (?:rise|rises|increase|increases|hike|hikes|bump|bumps)\b|\b(?:pay|paid|compensation|salar(?:y|ies))\b.*\b(?:rose|risen|up|went up|gone up|increased?|grew|jumped|more than)\b", re.I)
+_PAY_CUT = re.compile(r"\bpay ?cuts?\b|\bcuts? (?:in|to) (?:ceo )?pay\b|\b(?:pay|paid|compensation|salar(?:y|ies))\b.*\b(?:fell|fallen|fall|down|went down|gone down|dropped|declined?|decreased?|shrank|less than|lower)\b", re.I)
+_PAY_CHANGE = re.compile(r"\b(?:pay|paid|compensation)\b.*\b(?:change|changed|changes)\b|\b(?:change|changes) in\b.*\b(?:pay|compensation)\b", re.I)
+_PAY_HISTORY = re.compile(r"\bhistor(?:y|ical)\b|\bover (?:time|the years)\b|\beach year\b|\bevery year\b|\bby year\b|\byear by year\b|\btrend\b", re.I)
+_PAY_MEDIAN = re.compile(r"\b(median|average|mean|typical)\b", re.I)
+# the words the fixed pay answers read; any other word could change the answer ("bank", "compared with return")
+_PAY_READS = re.compile(
+    r"\b(?:new|two|co|joint|companies|company|turnover|replaced|compared?|versus|vs|against|for|shareholders?|returns?|performance|tsr|peers?|group|"
+    r"the|a|an|of|in|on|for|to|at|by|and|or|is|are|was|were|has|have|had|did|do|does|who|whose|whom|which|what|whats|what's|how|much|many|s|p|500|sp500|s&p|s&amp;p|"
+    r"us|american|ceos?|chief|executives?|bosses|boss|pay|paid|paying|compensation|comp|salar(?:y|ies)|package|packages|total|reported|latest|last|this|fiscal|year|years|"
+    r"get|got|gets|getting|give|given|receive|received|earn|earns|earned|make|makes|made|highest|lowest|top|best|worst|biggest|largest|most|least|greatest|smallest|"
+    r"raises?|rises?|rose|risen|hikes?|bumps?|increases?|increased|cuts?|fell|fallen|fall|falls|dropped|drops?|declined?|decreased?|up|down|went|gone|change|changed|changes|"
+    r"more|less|than|one|ones|list|show|me|give|tell|ranking|rank|ranked|their|with|while|stock|shares|share|price|median|average|mean|typical|histor(?:y|ical)|over|time|"
+    r"each|every|trend|actually|realised|realized|\d+|(?:19|20)\d{2})\b", re.I)
+
+
+def pay_unread(q):
+    """Words of a question about CEOs across companies that the fixed pay answers do not read."""
+    left = [w for w in _PAY_READS.sub(" ", (q or "").replace("\u2019", "'")).split() if re.search(r"[a-z]", w, re.I)]
+    if _PAY_MEDIAN.search(q or "") and (_PAY_RISE.search(_pay_text(q)) or _PAY_CUT.search(_pay_text(q))):
+        left.append("average of a change")                       # worked out step by step
+    return left
+
+
+_STOCK_CLAUSE = re.compile(r"\b(?:while|as|when|but|and|though|even though|despite)?\s*(?:the |their |its )?(?:stock|shares?|share price|shareholder returns?)s?\s+(?:fell|fall|falls|fallen|dropped|down|declined?|lost|rose|rise|rises|risen|up|gained)\b", re.I)
+_STOCK_FELL = re.compile(r"\b(?:stock|shares?|share price|shareholder returns?)s?\s+(?:fell|fall|falls|fallen|dropped|down|declined?|lost)\b", re.I)
+_CEO_PAIRS = re.compile(r"\bco-?ceos?\b|\b(?:two|joint|dual) ceos\b", re.I)
+_CEO_NEW = re.compile(r"\bnew ceos?\b|\bceo (?:change|changes|turnover)\b|\bchanged (?:their |its )?ceos?\b|\breplaced (?:their |its |the )?ceos?\b", re.I)
+_PAY_VS = re.compile(r"\b(?:compared?|versus|vs\.?|against|relative|for|while)\b.*\b(?:shareholder returns?|returns?|performance|tsr|peers?)\b", re.I)
+
+
+def _pay_text(q):
+    """The question without a clause about the shares: "pay rose while the stock fell" reads as a raise."""
+    return _STOCK_CLAUSE.sub(" ", q or "")
+
+
+def _latest_pay_year(cur):
+    """{ticker: [newest year, the year before, ...]}"""
+    by = {}
+    for y in _pay_years(cur):
+        by.setdefault(y["ticker"], []).append(y)
+    return by
+
+
+def _pay_co_ceos(cur, q, src, calc):
+    rows = [ys[0] for ys in _latest_pay_year(cur).values() if ys and ys[0].get("co_ceos")]
+    rows.sort(key=lambda y: y["name"])
+    if not rows:
+        return pkg("ceo_pay", q, "No S&P 500 member's latest proxy statement names two CEOs at the year end.", "", [], None, None, [src], calc, {}, {}, [])
+    names = "; ".join("%s (%s)" % (short_name(y["name"]), y["ceo"]) for y in rows[:8])
+    table = {"columns": ["Company", "Ticker", "CEOs at the year end", "Fiscal year end"], "rows": [[y["name"], y["ticker"], y["ceo"], _d(y["fiscal_year_end"])] for y in rows]}
+    return pkg("ceo_pay", q, "%d S&P 500 %s two CEOs at the end of the latest fiscal year: %s." % (len(rows), "company has" if len(rows) == 1 else "companies have", names), "",
+               [fig("Companies", len(rows), "count", None)], table, None, [src], calc, {}, {}, ["From the proxy statements; someone who left during the year is not counted as a second CEO."])
+
+
+def _pay_new_ceos(cur, q, src, calc):
+    moves = []
+    for ys in _latest_pay_year(cur).values():
+        if len(ys) >= 2 and ys[0].get("ceo") and ys[1].get("ceo") and not ys[0].get("co_ceos") and ys[0]["ceo"] != ys[1]["ceo"] and ys[1]["ceo"].split()[-1] != ys[0]["ceo"].split()[-1]:
+            moves.append(ys)
+    moves.sort(key=lambda ys: str(ys[0]["fiscal_year_end"]), reverse=True)
+    if not moves:
+        return None
+    t = moves[:10]
+    head = "%d S&P 500 companies have a different CEO in their latest proxy statement than the year before. The most recent year end: %s, where %s followed %s (year to %s)." % (
+        len(moves), re.sub(r"^The ", "", short_name(t[0][0]["name"])), t[0][0]["ceo"], t[0][1]["ceo"], date_words(t[0][0]["fiscal_year_end"]))
+    table = {"columns": ["Company", "Ticker", "CEO at the year end", "CEO the year before", "Fiscal year end"],
+             "rows": [[ys[0]["name"], ys[0]["ticker"], ys[0]["ceo"], ys[1]["ceo"], _d(ys[0]["fiscal_year_end"])] for ys in moves]}
+    return pkg("ceo_pay", q, head, "", [fig("Companies with a new CEO", len(moves), "count", None)], table, None, [src], calc, {}, {},
+               ["Each company's two latest fiscal years in its proxy statements, so a change since the last proxy is not here yet."])
+
+
+def _pay_vs_return(cur, q, rows, src, calc, e):
+    """The highest-paid CEOs against what their shares returned beside their own peer group."""
+    ranked = [r for r in rows if r.get("ceo_total_pay_usd") is not None and r.get("tsr_value_of_100") is not None and r.get("peer_tsr_value_of_100") is not None]
+    ranked.sort(key=lambda r: r["ceo_total_pay_usd"], reverse=True)
+    if not ranked:
+        return None
+    n = e.get("count") or 10
+    idx = us_link.companies(cur)["by_ticker"]
+    co = lambda r: short_name((idx.get((r.get("ticker") or "").upper()) or {}).get("name") or r.get("ticker"))
+    top = ranked[:n]
+    behind = [r for r in ranked if r["tsr_value_of_100"] < r["peer_tsr_value_of_100"]]
+    if not behind:
+        return None
+    f = behind[0]
+    head = "The highest-paid S&P 500 CEO whose shares lagged their own peer group: %s of %s, paid %s, while $100 in the shares became $%s against $%s for the peers." % (
+        f["ceo"], co(f), money(f["ceo_total_pay_usd"]), num(f["tsr_value_of_100"], 0), num(f["peer_tsr_value_of_100"], 0))
+    lead = "Of the %d highest-paid, %d beat their peer group." % (len(top), sum(1 for r in top if r["tsr_value_of_100"] >= r["peer_tsr_value_of_100"]))
+    table = {"columns": ["Rank by pay", "CEO", "Ticker", "Fiscal year end", "Total pay as reported (USD)", "$100 in the shares became", "Peer group, $100 became"],
+             "rows": [[i + 1, r["ceo"], r["ticker"], _d(r["fiscal_year_end"]), r["ceo_total_pay_usd"], r["tsr_value_of_100"], r["peer_tsr_value_of_100"]] for i, r in enumerate(top)], "unit": "USD"}
+    return pkg("ceo_pay", q, head, lead, [fig("Total pay as reported", f["ceo_total_pay_usd"], "USD", f["fiscal_year_end"], calc["ceo_total_pay_usd"])], table, None, [src], calc,
+               {"metric": "ceo_total_pay_usd", "count": n}, {},
+               ["Returns run from each proxy's own start date, usually five years back, so compare a company with its peers rather than with another company."])
+
+
+def _pay_years(cur):
+    from . import us_pay_api
+    def build(c):
+        try:
+            return us_pay_api.all_years()
+        except Exception:                                         # noqa: BLE001 — no pay data
+            return []
+    return _memo(cur, "pay_years", build)
+
+
+def _pay_year_named(q):
+    m = re.search(r"\b((?:19|20)\d{2})\b", q or "")
+    return int(m.group(1)) if m else None
+
+
+def _pct_words(p):
+    return "%s %.1f%%" % ("up" if p > 0 else "down", abs(p))
+
+
+def _same_ceo(a, b):
+    return bool(a.get("sole_ceo") and b.get("sole_ceo") and a.get("ceo") and a.get("ceo") == b.get("ceo"))
+
+
+_PAY_RAISE_FLOOR = 1e6      # a rate on a token $1 salary means nothing: a raise's percentage needs at least this base
+
+
+def _pay_company_years(cur, rec, q, src, calc):
+    """One company's pay across years, when the question asks about a change, a
+    year or the history; None when it asks only for the latest figure."""
+    ql = (q or "").lower()
+    plain = _pay_text(ql)
+    rise, cut, change = _PAY_RISE.search(plain), _PAY_CUT.search(plain), _PAY_CHANGE.search(plain)
+    history, year = _PAY_HISTORY.search(ql), _pay_year_named(q)
+    if not (rise or cut or change or history or year):
+        return None
+    key = (rec.get("ticker") or "").upper().replace(".", "-")
+    ys = [y for y in _pay_years(cur) if (y["ticker"] or "").upper().replace(".", "-") == key and y.get("total_pay") is not None]
+    if not ys:
+        return None
+    name = short_name(rec["name"])
+    table = {"columns": ["Fiscal year end", "CEO", "Total pay as reported (USD)", "Compensation actually paid (USD)", "$100 in the shares became"],
+             "rows": [[_d(y["fiscal_year_end"]), y["ceo"], y["total_pay"], y["actually_paid"], y["tsr"]] for y in ys], "unit": "USD"}
+    chart = {"kind": "line", "title": "%s CEO total pay as reported" % name, "unit": "USD",
+             "series": [{"name": "Total pay", "points": [[_d(y["fiscal_year_end"]), y["total_pay"]] for y in reversed(ys)]}]} if len(ys) >= 2 else None
+    links = {"company": company_link(rec)} if rec.get("cik") else {}
+    notes = ["Pay is for the company's own fiscal year, from its proxy statements; stock and options count at grant value, so one large grant moves a year."]
+    if year and not (rise or cut or change or history):
+        hit = next((y for y in ys if str(y["fiscal_year_end"])[:4] == str(year)), None)
+        if hit is None:
+            raise HTTPException(404, "No proxy pay figures for %s's fiscal year ending in %d: the years on file end %s to %s." % (
+                name, year, date_words(ys[-1]["fiscal_year_end"]), date_words(ys[0]["fiscal_year_end"])))
+        head = "%s, %s's CEO, was paid %s in the year to %s (total pay as reported)." % (hit["ceo"], name, money(hit["total_pay"]), date_words(hit["fiscal_year_end"]))
+        return pkg("ceo_pay", q, head, "", [fig("Total pay as reported", hit["total_pay"], "USD", hit["fiscal_year_end"], calc["ceo_total_pay_usd"])],
+                   table, chart, [src], calc, {"company": rec, "ceo": hit["ceo"]}, links, notes)
+    if len(ys) < 2:
+        return None
+    new, old = ys[0], ys[1]
+    if not _same_ceo(new, old):
+        lead = "%s, %s's CEO, was paid %s in the year to %s; %s was paid %s the year before, so that is a change of person, not a raise." % (
+            new["ceo"], name, money(new["total_pay"]), date_words(new["fiscal_year_end"]), old["ceo"], money(old["total_pay"]))
+        head = lead if new["ceo"] != old["ceo"] else "%s, %s's CEO, was paid %s in the year to %s; the CEO role changed hands during one of the two latest years, so the years are not like for like." % (
+            new["ceo"], name, money(new["total_pay"]), date_words(new["fiscal_year_end"]))
+        return pkg("ceo_pay", q, head, "", [fig("Total pay as reported", new["total_pay"], "USD", new["fiscal_year_end"], calc["ceo_total_pay_usd"])],
+                   table, chart, [src], calc, {"company": rec, "ceo": new["ceo"]}, links, notes)
+    pct = (new["total_pay"] / old["total_pay"] - 1) * 100 if old["total_pay"] and old["total_pay"] > 0 else None
+    went = "rose" if new["total_pay"] > old["total_pay"] else "fell" if new["total_pay"] < old["total_pay"] else "was unchanged"
+    yes = ""
+    if re.match(r"\s*(did|has|have|was|is|does|do)\b", ql) and (rise or cut):
+        yes = "Yes. " if (bool(rise) == (new["total_pay"] > old["total_pay"])) else "No. "
+    head = "%s%s's pay as %s's CEO %s%s, from %s to %s, in the year to %s." % (
+        yes, new["ceo"], name, went, (" %.1f%%" % abs(pct)) if pct is not None and went != "was unchanged" else "",
+        money(old["total_pay"]), money(new["total_pay"]), date_words(new["fiscal_year_end"]))
+    if history:
+        first = ys[-1]
+        head += " The years on file begin with the year to %s, at %s." % (date_words(first["fiscal_year_end"]), money(first["total_pay"]))
+    return pkg("ceo_pay", q, head, "", [fig("Total pay, latest year", new["total_pay"], "USD", new["fiscal_year_end"], calc["ceo_total_pay_usd"]),
+                                        fig("The year before", old["total_pay"], "USD", old["fiscal_year_end"], calc["ceo_total_pay_usd"])],
+               table, chart, [src], dict(calc, change="(latest year \u00f7 the year before \u2212 1) \u00d7 100, for the same person in both years"),
+               {"company": rec, "ceo": new["ceo"]}, links, notes)
+
+
+def _pay_changes(cur, q, src, calc, e):
+    """The biggest raises or pay cuts: the same person, a whole year as CEO in both of the company's latest two years."""
+    plain = _pay_text((q or "").lower())
+    cut = bool(_PAY_CUT.search(plain)) and not (_PAY_RISE.search(plain) and re.search(r"\braises?\b|\brises?\b|\brose\b|\brisen\b", plain))
+    stock_fell = bool(_STOCK_FELL.search(q or ""))
+    by = {}
+    for y in _pay_years(cur):
+        if y.get("total_pay") is not None:
+            by.setdefault(y["ticker"], []).append(y)
+    moves = []
+    for t, ys in by.items():
+        if len(ys) < 2 or not _same_ceo(ys[0], ys[1]) or not ys[1]["total_pay"] or ys[1]["total_pay"] < _PAY_RAISE_FLOOR:
+            continue
+        ret = (ys[0]["tsr"] / ys[1]["tsr"] - 1) * 100 if ys[0].get("tsr") and ys[1].get("tsr") else None
+        if stock_fell and (ret is None or ret >= 0):
+            continue
+        moves.append({"new": ys[0], "old": ys[1], "diff": ys[0]["total_pay"] - ys[1]["total_pay"],
+                      "pct": (ys[0]["total_pay"] / ys[1]["total_pay"] - 1) * 100, "ret": ret})
+    moves = [m for m in moves if (m["diff"] < 0 if cut else m["diff"] > 0)]
+    moves.sort(key=lambda m: m["diff"], reverse=not cut)
+    if not moves:
+        raise HTTPException(404, "No S&P 500 CEO on file fits that: the same person, a whole year as CEO in both of the two latest years.")
+    n = e.get("count") or 10
+    top = moves[:n]
+    def who(m):
+        return "%s of %s" % (m["new"]["ceo"], short_name(m["new"]["name"]))
+    first = top[0]
+    which = "pay cut" if cut else "raise"
+    head = "Biggest %s among S&P 500 CEOs%s: %s, %s%s, from %s to %s in the year to %s." % (
+        which, " whose shares fell that year" if stock_fell else "", who(first), "\u2212" if cut else "+", money(abs(first["diff"])),
+        money(first["old"]["total_pay"]), money(first["new"]["total_pay"]), date_words(first["new"]["fiscal_year_end"]))
+    others = "; ".join("%s (%s) %s%s" % (m["new"]["ceo"], short_name(m["new"]["name"]), "\u2212" if cut else "+", money(abs(m["diff"]))) for m in top[1:5])
+    table = {"columns": ["Rank", "CEO", "Ticker", "Fiscal year end", "Total pay the year before (USD)", "Total pay (USD)", "Change (USD)", "Change (%)", "Shareholder return in the year (%)"],
+             "rows": [[i + 1, m["new"]["ceo"], m["new"]["ticker"], _d(m["new"]["fiscal_year_end"]), m["old"]["total_pay"], m["new"]["total_pay"], m["diff"],
+                       round(m["pct"], 1), round(m["ret"], 1) if m["ret"] is not None else None] for i, m in enumerate(top)], "unit": "USD"}
+    chart = {"kind": "bars", "title": "Biggest %ss among S&P 500 CEOs, change in total pay as reported" % which, "unit": "USD",
+             "series": [{"name": "Change in pay", "points": [[m["new"]["ticker"], m["diff"]] for m in top]}]}
+    return pkg("ceo_pay", q, head, ("Next: %s." % others) if others else "", [fig("CEOs with a %s" % which, len(moves), "count", None)], table, chart, [src],
+               dict(calc, change="total pay in the company's latest fiscal year \u2212 total pay the year before, same person, CEO for the whole of both years"),
+               {"metric": "change", "count": n}, {},
+               ["Pay counts stock and options at grant value, so one large award reads as a raise, and the next year as a cut. A new CEO's pay against the last one's is left out, and so is anyone paid under $1mn the year before."])
+
+
+def _pay_over_time(cur, q, src, calc):
+    """The median S&P 500 CEO's pay, by the calendar year each fiscal year ended in."""
+    import statistics
+    by = {}
+    for y in _pay_years(cur):
+        if y.get("total_pay") is not None and y.get("fiscal_year_end"):
+            by.setdefault(str(y["fiscal_year_end"])[:4], []).append(y["total_pay"])
+    years = sorted(k for k, v in by.items() if len(v) >= 200)
+    if len(years) < 2:
+        return None
+    meds = [(k, statistics.median(by[k]), len(by[k])) for k in years]
+    head = "The median S&P 500 CEO's total pay was %s for fiscal years ending in %s, against %s for those ending in %s." % (
+        money(meds[-1][1]), meds[-1][0], money(meds[0][1]), meds[0][0])
+    table = {"columns": ["Fiscal year ending in", "Median total pay (USD)", "CEOs on file"], "rows": [[k, m, n] for k, m, n in reversed(meds)], "unit": "USD"}
+    chart = {"kind": "bars", "title": "Median S&P 500 CEO total pay, by year", "unit": "USD", "series": [{"name": "Median", "points": [[k, m] for k, m, _ in meds]}]}
+    return pkg("ceo_pay", q, head, "", [fig("Median total pay, %s" % meds[-1][0], meds[-1][1], "USD", None)], table, chart, [src], calc, {"metric": "median"}, {},
+               ["Today's S&P 500 members, followed back through their proxy statements: the set of companies does not change with the year."])
+
+
+def _pay_two(cur, q, rows, src, calc):
+    """"Who was paid more, Tim Cook or Satya Nadella?": two CEOs named."""
+    parts = re.split(r"\s+(?:or|vs\.?|versus|and|against|than)\s+|,\s*", q or "")
+    hits = []
+    for p in parts:
+        h = _ceo_named(p, rows)
+        if h and h[0] not in [x[0] for x in hits]:
+            hits.append(h)
+    if len(hits) < 2:
+        return None
+    a, b = sorted(hits[:2], key=lambda h: h[0].get("ceo_total_pay_usd") or 0, reverse=True)
+    idx = us_link.companies(cur)["by_ticker"]
+    def co(h):
+        return short_name((idx.get((h[0].get("ticker") or "").upper()) or {}).get("name") or h[0].get("ticker"))
+    pa, pb = a[0].get("ceo_total_pay_usd"), b[0].get("ceo_total_pay_usd")
+    if pa is None or pb is None:
+        return None
+    head = "%s of %s was paid more: %s in the year to %s, against %s for %s of %s in the year to %s (total pay as reported)." % (
+        a[1], co(a), money(pa), date_words(a[0]["fiscal_year_end"]), money(pb), b[1], co(b), date_words(b[0]["fiscal_year_end"]))
+    table = {"columns": ["CEO", "Ticker", "Fiscal year end", "Total pay as reported (USD)", "Compensation actually paid (USD)", "$100 in the shares became"],
+             "rows": [[h[1], h[0]["ticker"], _d(h[0]["fiscal_year_end"]), h[0]["ceo_total_pay_usd"], h[0]["ceo_actually_paid_usd"], h[0]["tsr_value_of_100"]] for h in (a, b)], "unit": "USD"}
+    return pkg("ceo_pay", q, head, "", [fig(a[1], pa, "USD", a[0]["fiscal_year_end"], calc["ceo_total_pay_usd"]), fig(b[1], pb, "USD", b[0]["fiscal_year_end"], calc["ceo_total_pay_usd"])],
+               table, None, [src], calc, {"metric": "ceo_total_pay_usd"}, {}, ["Each company's own fiscal year, from its latest proxy statement."])
+
+
 def r_ceo_pay(cur, q, e):
-    """What a CEO was paid, from the company's latest proxy statement (S&P 500
-    members), by company or by the CEO's name; the highest-paid without one."""
+    """What a CEO was paid, from the company's proxy statements (S&P 500
+    members), by company or by the CEO's name, in the latest year, a year named,
+    or as a change; the highest-paid, the biggest raises or the median without one."""
     rows = _pay_rows(cur)
     if not rows:
         raise HTTPException(503, "CEO pay is not loaded on this server right now.")
@@ -1852,7 +2117,13 @@ def r_ceo_pay(cur, q, e):
             rec = idx.get((row.get("ticker") or "").upper()) or {"name": row.get("ticker"), "ticker": row.get("ticker"), "cik": None}
     ql = (q or "").lower()
     actual = bool(re.search(r"actually paid|realis|realiz", ql))
+    two = _pay_two(cur, q, rows, src, calc)
+    if two:
+        return two
     if row is not None:
+        across = _pay_company_years(cur, rec, q, src, calc)
+        if across:
+            return across
         total, paid, fy = row.get("ceo_total_pay_usd"), row.get("ceo_actually_paid_usd"), row.get("fiscal_year_end")
         lead = paid if actual else total
         headline = "%s, %s's CEO, was paid %s in the year to %s%s." % (
@@ -1892,12 +2163,53 @@ def r_ceo_pay(cur, q, e):
                    {"company": rec, "ceo": ceo}, {"company": company_link(rec)} if rec.get("cik") else {},
                    (["From the proxy statement filed %s; pay is for the company's own fiscal year." % date_words(row["proxy_filed"])] if row.get("proxy_filed") else []) +
                    ["Pay covers S&P 500 members, each company's latest proxy statement only."])
-    who = person_named(q)
+    who = [w for w in (person_named(q) or []) if not _PAY_READS.fullmatch(w)]
     if who and not re.search(r"(highest|best|top|lowest|worst).paid|most paid|paid (the )?most|\bceos\b", ql):
         raise HTTPException(404, "No proxy pay figures for %s are loaded: the pay table covers the S&P 500 members' latest proxy "
                                  "statements, and that name is not among their CEOs." % " ".join(who[:3]))
-    # no company and no name: the highest-paid
+    # no company and no name: a change, a year, the median, or the highest-paid
+    if _CEO_PAIRS.search(ql):
+        return _pay_co_ceos(cur, q, src, calc)
+    if _CEO_NEW.search(ql):
+        out = _pay_new_ceos(cur, q, src, calc)
+        if out:
+            return out
+    plain = _pay_text(ql)
+    if _PAY_RISE.search(plain) or _PAY_CUT.search(plain):
+        return _pay_changes(cur, q, src, calc, e)
+    if _PAY_VS.search(ql):
+        out = _pay_vs_return(cur, q, rows, src, calc, e)
+        if out:
+            return out
+    if _PAY_HISTORY.search(ql):
+        over = _pay_over_time(cur, q, src, calc)
+        if over:
+            return over
     key = "ceo_actually_paid_usd" if actual else "ceo_total_pay_usd"
+    if _PAY_MEDIAN.search(ql):
+        import statistics
+        vals = [r[key] for r in rows if r.get(key) is not None]
+        if vals:
+            med, avg = statistics.median(vals), sum(vals) / len(vals)
+            return pkg("ceo_pay", q, "The median S&P 500 CEO's %s is %s, and the average %s, across %d CEOs in each company's latest fiscal year." % (
+                           "compensation actually paid" if actual else "total pay", money(med), money(avg), len(vals)), "",
+                       [fig("Median", med, "USD", None, calc[key]), fig("Average", avg, "USD", None, calc[key])], None, None, [src],
+                       dict(calc, median="the middle CEO's pay when all are in order; average = their sum \u00f7 their number"), {"metric": key}, {},
+                       ["A few very large awards pull the average above the median."])
+    yr = _pay_year_named(q)
+    if yr:
+        pool = [y for y in _pay_years(cur) if y.get("total_pay") is not None and str(y["fiscal_year_end"])[:4] == str(yr)]
+        pool.sort(key=lambda y: y["total_pay"], reverse=True)
+        if not pool:
+            raise HTTPException(404, "No proxy pay figures for fiscal years ending in %d are on file." % yr)
+        n = e.get("count") or 10
+        f = pool[0]
+        head = "Highest-paid S&P 500 CEO for a fiscal year ending in %d: %s of %s, %s (total pay as reported)." % (yr, f["ceo"], short_name(f["name"]), money(f["total_pay"]))
+        others = "; ".join("%s (%s) %s" % (y["ceo"], short_name(y["name"]), money(y["total_pay"])) for y in pool[1:5])
+        table = {"columns": ["Rank", "CEO", "Ticker", "Fiscal year end", "Total pay as reported (USD)", "Compensation actually paid (USD)"],
+                 "rows": [[i + 1, y["ceo"], y["ticker"], _d(y["fiscal_year_end"]), y["total_pay"], y["actually_paid"]] for i, y in enumerate(pool[:n])], "unit": "USD"}
+        return pkg("ceo_pay", q, head, ("Next: %s." % others) if others else "", [fig("CEOs on file for %d" % yr, len(pool), "count", None)], table, None, [src], calc,
+                   {"metric": "ceo_total_pay_usd", "count": n}, {}, ["Today's S&P 500 members, each on its own fiscal year."])
     low = bool(re.search(r"lowest|least|worst.paid|cheapest", ql))
     ranked = sorted([r for r in rows if r.get(key) is not None], key=lambda r: r[key], reverse=not low)
     n = e.get("count") or 10
@@ -5069,7 +5381,7 @@ def _drop_near_names(rest, cos):
 # read ("rent inflation" once found American Homes 4 Rent).
 MACRO_WORDS = re.compile(
     r"\b(inflation|cpi|consumer prices?|price index|price indices|treasur(?:y|ies)|yield curve|2s10s|10s2s|unemployment|jobless|payrolls?|"
-    r"job openings|gdp|fed funds|federal funds|fomc|fed meeting|fed rate|interest rates?|mortgage rates?|wage growth|real wages|wages|"
+    r"job openings|gdp|fed funds|federal funds|fomc|fed meeting|fed rate|interest rates?|mortgages?|mortgage rates?|wage growth|real wages|wages|"
     r"hourly earnings|average hourly|pce|bank of japan|boj|jgbs?|monetary base|rents?|rent inflation|housing costs?|shelter|core inflation|headline inflation|"
     r"egg prices|gasoline prices|gas prices|food prices|rice prices|retail sales|trade deficit|trade balance|exports|imports|"
     r"milk|bread|coffee|chicken|beef|bacon|bananas|electricity|natural gas|utility bills?|grocery prices|used car prices|new car prices|"
@@ -5090,6 +5402,9 @@ _EVENT_FRAME = re.compile(r"\b(?:after|before|around|during|following|since|on|n
 
 def is_macro_question(cur, question):
     ql = (question or "").lower()
+    from .assistant import macro_read
+    if macro_read.matches(cur, question):                         # a price or a maturity named: "gasoline price", "the 30 year"
+        return True
     if not MACRO_WORDS.search(ql):
         return False
     if _EVENT_WORDS.search(ql) and _EVENT_FRAME.search(ql):
@@ -5156,15 +5471,27 @@ def answer(cur, question, prev=None, opts=None):
         if caps and not near and not re.search(r"\b(which|what|who|how many|largest|biggest|top|best|worst|cheapest|average|median|sold|sales|sell|bought|buy|insider|stake|owns?|portfolio|holdings?)\b", question.lower()):
             raise ask_miss.miss("No US-listed filer called %s is on file. The box covers companies that file with the SEC; a bank or company that was "
                                 "taken over or delisted no longer appears." % " ".join(caps[:3]), "not_held")
-    if not prev and _PAY_WORDS.search(question or "") and not us_link.find_companies(cur, _without_benchmarks(question)):
+    if re.search(r"\bpay ratio\b|\b(?:ceo|worker|employee|median employee).*\bratio\b", ql) and _PAY_WORDS.search(ql + " ceo pay"):
+        raise ask_miss.miss("The CEO-to-worker pay ratio isn't in Plover's data. It holds each S&P 500 CEO's pay, year by year, from the proxy statements.", "not_held")
+    # a raise or a pay cut across companies reads whole, whatever was asked before; "his raise" is a follow-up
+    pay_move = (_PAY_RISE.search(_pay_text(ql)) or _PAY_CUT.search(_pay_text(ql)) or _CEO_PAIRS.search(ql) or _CEO_NEW.search(ql) or _PAY_VS.search(ql) and re.search(r"\bceos?\b|\bpa(?:y|id)\b", ql) or
+                (_PAY_HISTORY.search(ql) and re.search(r"\bceos?\b.*\bpay\b", ql))) and not re.search(r"\b(his|her|its|it|he|she|they)\b", ql)
+    # "Did Bob Smith get a raise?" asks about a person, not A. O. Smith
+    if pay_move and not _ceo_named(question, _pay_rows(cur)):
+        pair = [w for w in (person_named(question) or []) if not _PAY_READS.fullmatch(w)]
+        if len(pair) >= 2 and not any(all(w.lower() in (c.get("name") or "").lower() for w in pair[:2])
+                                      for c in us_link.find_companies(cur, _without_benchmarks(question)) or []):
+            raise ask_miss.miss("No proxy pay figures for %s are loaded: the pay table covers the S&P 500 members' proxy statements, and that name is not among their CEOs." % " ".join(pair[:3]), "not_held")
+    if (not prev or pay_move) and (_PAY_WORDS.search(question or "") or pay_move) and not us_link.find_companies(cur, _without_benchmarks(question)) \
+            and (_ceo_named(question, _pay_rows(cur)) or not pay_unread(question)):
         e = entities(cur, question)
         named = _ceo_named(question, _pay_rows(cur))
-        if named or re.search(r"(highest|best|top|lowest|worst).paid|most paid|paid (the )?most|\bceos\b", ql):
+        if named or pay_move or _PAY_MEDIAN.search(ql) or _pay_year_named(question) or re.search(r"(highest|best|top|lowest|worst).paid|most paid|paid (the )?most|\bceos\b", ql):
             ask_progress.say(_doing(BY_ID["ceo_pay"], e))
             out = r_ceo_pay(cur, question, e)
             out["match"] = {"recipe": "ceo_pay", "label": "CEO pay", "score": None, "alternatives": [], "via": "quick", "read_as": None}
             return _finish(out, e)
-        who = person_named(question)
+        who = [w for w in (person_named(question) or []) if not _PAY_READS.fullmatch(w)]
         if who and _pay_rows(cur):
             raise ask_miss.miss("No proxy pay figures for %s are loaded: the pay table covers the S&P 500 members' latest proxy "
                                 "statements, and that name is not among their CEOs." % " ".join(who[:3]), "not_held")
@@ -5248,8 +5575,13 @@ def answer(cur, question, prev=None, opts=None):
                 and not _named_line(ql) and not re.search(r"\bquarter|\bq[1-4]\b|history|over time|each year|every year", ql):
             form = dict(form, shape="company_segment")
         if form.get("shape") in ("market_rank", "industry_rank", "company_figure", "company_value", "steps") and _PAY_WORDS.search(ql) \
-                and not re.search(r"\b(median|average|mean|how many|ratio|employee|over time|histor)\b", ql):
+                and not re.search(r"\b(how many|ratio|employee)\b", ql) \
+                and (form.get("companies") or not pay_unread(question)):
             form = dict(form, shape="ceo_pay")
+        # "highest paid bank CEOs": the ready-made list would drop "bank"; the step route reads it
+        if form.get("shape") == "ceo_pay" and not form.get("companies") and pay_unread(question) and not _ceo_named(question, _pay_rows(cur)):
+            us_steps.log(question, "ceo pay leaves words unread", " ".join(pay_unread(question)))
+            form = dict(form, shape="steps")
         # one line against another ("capex as a share of revenue over 5 years") is worked out step by step:
         # the history shape answered it with the capex alone
         if form.get("shape") in _FIGURE_SHAPES and _RATIO_ASK.search(ql) and not _named_ratio(ql):
@@ -5333,7 +5665,7 @@ _THRESHOLD_WORDS = re.compile(r"\b(above|below|over|under|more than|less than|at
 _SPAN_WORDS = re.compile(r"\bcagr\b|compound|a year on average|per year|annual(?:ised|ized)? growth|over (?:the )?(?:last|past) \d+ years|since (?:19|20)\d{2}|years ago")
 _STEPS_DATA = re.compile(r"\bquarter(ly|s)?\b|\bq[1-4]\b|"
                          r"\bsegments?\b|\bdivisions?\b|revenue from (china|europe|asia|the us|abroad|overseas)", re.I)
-_PAY_WORDS = re.compile(r"(?!.*(?:stock.based|share.based|equity comp|stock comp|unearned|deferred comp))(?:\bceos?\b.*\bpa(y|id)\b|\bpa(y|id)\b.*\bceos?\b|compensation|\bsalar(y|ies)\b|(highest|best|top|lowest).paid)", re.I)
+_PAY_WORDS = re.compile(r"(?!.*(?:stock.based|share.based|equity comp|stock comp|unearned|deferred comp))(?:\bceos?\b.*\b(?:pa(?:y|id)|raises?)\b|\b(?:pa(?:y|id)|raises?)\b.*\bceos?\b|compensation|\bsalar(y|ies)\b|(highest|best|top|lowest).paid)", re.I)
 
 GROWTH_BASE_USD = 5e7       # same floor as the step route's rule: revenue_prior_usd >= 5e7
 

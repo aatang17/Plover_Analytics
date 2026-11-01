@@ -233,6 +233,7 @@
     if (!carded) {
       carded = true;
       $("co-name").textContent = c.name;
+      pageAsk.company(c.name);
       coHead.load(c.ticker).then(function (d) { $("co-card").innerHTML = coHead.html(d, "pay"); coHead.reveal($("co-card")); })
         .catch(function () { /* the name stays; the pay figures do not depend on the card */ });
     }

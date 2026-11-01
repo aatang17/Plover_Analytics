@@ -6,6 +6,7 @@
 <title>US Treasury Yield Curve · Plover Analytics</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/page-ask.css">
 </head>
 <body data-curve="ust">
 
@@ -21,6 +22,8 @@
       <span class="metric-asof" id="page-asof"></span>
       <p class="metric-sub" id="page-sub"><span class="skeleton" style="display:inline-block;width:420px;height:14px"></span></p>
     </div>
+    <div data-page-ask data-on="treasury" data-label="Ask About Treasury Yields"
+         data-examples="Is the US yield curve inverted?|What is the 10-year Treasury yield?|What is the 2-year yield?"></div>
     <div class="strip">
       <div class="strip-grid cols-4" id="tiles">
         <div class="strip-cell skeleton" style="min-height:104px"></div>
@@ -145,6 +148,8 @@
 <script src="assets/format.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
+<script src="assets/us-format.js"></script>
+<script src="assets/page-ask.js"></script>
 <script src="assets/rates.js"></script>
 </body>
 </html>

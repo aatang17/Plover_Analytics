@@ -27,6 +27,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from .. import analysis, recipes, registry
+from . import macro_read
 
 router = APIRouter(prefix="/preview", tags=["assistant"])
 
@@ -88,7 +89,7 @@ CATALOGUE = {
         (r"core.core|less fresh food and energy|(?:ex|excluding) fresh food and energy|ex energy", "cpi-jp", "0178", "yoy"),
         (r"core (?:cpi|inflation)|less fresh food|(?:ex|excluding) fresh food", "cpi-jp", "0161", "yoy"),
         (r"tokyo", "cpi-tokyo", "0001", "yoy"),
-        (r"rice", "cpi-jp-items", "0004", "yoy"),
+        (r"\brice\b", "cpi-jp-items", "0004", "yoy"),
         (r"\bjgb|\b(?:10|ten)[- ]year|yield|bond", "jgb-yields", "10Y", "level"),
         (r"monetary base", "boj-assets", "MA03021001S", "level"),
         (r"\bboj\b|bank of japan|balance sheet|jgb holdings", "boj-assets", "MA03021034S", "level"),
@@ -130,11 +131,20 @@ _NOT_HELD_MACRO = re.compile(r"mortgage|fed funds|federal funds|fomc|fed meeting
                              r"\b(us|u\.s\.|american)\b.*\bgdp\b|trade (deficit|balance)|prime rate|sofr|libor|money supply|\bm2\b")
 
 
+# a country Plover holds no economy series for: US figures must not stand in for it ("Turkey inflation")
+_OTHER_COUNTRY = re.compile(r"\b(turkey|turkish|german[y]?|france|french|italy|italian|spain|spanish|britain|british|uk|u\.k\.|england|china|chinese|india|indian|korea|korean|taiwan|"
+                            r"canada|canadian|mexico|mexican|brazil|brazilian|australia|australian|russia|russian|europe|european|eurozone|euro area|argentina|singapore|switzerland|swiss)\b(?!.*\bprices? of\b)")
+# about companies, not the economy: "milk stocks" is not the price of milk
+_ABOUT_COMPANIES = re.compile(r"\b(stocks?|shares|etfs?|futures|companies|company|producers?)\b")
+
+
 def catalogue_hit(q):
     """(dataset, code, measure, market) for a question the catalogue answers, or None."""
     ql = (q or "").lower()
     m = market_of(q)
-    if m == "us" and _NOT_HELD_MACRO.search(ql):
+    if m == "us" and (_NOT_HELD_MACRO.search(ql) or _ABOUT_COMPANIES.search(ql)):
+        return None
+    if m == "us" and _OTHER_COUNTRY.search(ql) and not re.search(r"\bturkeys?\b.*\b(prices?|costs?)\b|\b(prices?|costs?)\b.*\bturkeys?\b", ql):
         return None
     if m == "us" and _METRO.search(ql) and re.search(r"cpi|inflation|prices", ql):
         return None                                               # the series search finds the metro table
@@ -415,6 +425,8 @@ def _macro(q):
     not cover falls to the series search, gated by topic."""
     ql = (q or "").lower()
     market = market_of(q)
+    if market == "us" and (_OTHER_COUNTRY.search(ql) or _ABOUT_COMPANIES.search(ql)):
+        return None
     try:
         if market == "us" and re.search(r"2s10s|10s2s|yield curve|inverted|inversion|10.year (?:minus|less|vs\.?|versus|against) (?:the )?2.year|spread between", ql):
             out = _curve(q)
@@ -509,7 +521,7 @@ def _macro(q):
     if not pct and unit in _BIG_UNITS:
         shown = _big(last, unit)
     elif not pct and unit.lower() in ("usd", "$"):
-        shown = "$" + _num(last, dp)
+        shown = "$" + _num(last, max(dp, 2))
     elif not pct and h.get("code") in _THOUSANDS:
         shown = "%s million" % _num(last / 1000.0, 2 if last < 20000 else 1)
         if len(rows) >= 2 and rows[-2][1] is not None:
@@ -518,7 +530,7 @@ def _macro(q):
     lead = ""
     if index and mom:
         headline = "%s, %s: %s on the month before in %s." % (
-            name, title, ("up " if last > 0 else "down " if last < 0 else "") + _num(last, 1) + "%", when)
+            name, title, ("up " if last > 0 else "down " if last < 0 else "") + _num(abs(last), 1) + "%", when)
         calc = "Month on month = (index this month ÷ index the month before − 1) × 100, from the published index (not seasonally adjusted unless the series is)."
     elif index and re.search(r"\bpeak|all.time high|record high|highest ever|highest since|when (?:was|did) .* (?:highest|peak)", ql) and not _year_in(q):
         top = max(rows, key=lambda r: r[1])
@@ -530,7 +542,7 @@ def _macro(q):
         calc = "Year on year = (index this period \u00f7 index a year earlier \u2212 1) \u00d7 100, from the published index; the series on file begins %s." % _when(rows[0][0], False)
     elif index:
         headline = "%s, %s: %s on a year earlier in %s." % (
-            name, title, ("up " if last > 0 else "down " if last < 0 else "") + _num(last, 1) + "%", when)
+            name, title, ("up " if last > 0 else "down " if last < 0 else "") + _num(abs(last), 1) + "%", when)
         calc = "Year on year = (index this period ÷ index a year earlier − 1) × 100, " \
                "from the published index; it can differ from the published rate by 0.1 pp."
         if re.search(r"rising|falling|trend|direction|accelerat|slowing|cooling|heating|going up|going down|coming down|picking up|easing", ql) and len(rows) >= 13:
@@ -598,12 +610,23 @@ def _cur():
 
 @router.get("")
 def preview(q: str = Query(..., min_length=1, max_length=300),
-            prev: str = Query("", max_length=300, description="the reader's previous question, for a follow-up")):
+            prev: str = Query("", max_length=300, description="the reader's previous question, for a follow-up"),
+            on: str = Query("", max_length=20, description="the page the box sits on: prices or treasury")):
     """The start of an answer for the front page: headline, up to two figures,
     the source, and what the full answer adds."""
     q = " ".join(q.split())
     prev = " ".join(prev.split()) if isinstance(prev, str) else ""          # called directly, the default is a Query
+    on = on if isinstance(on, str) else ""
     from .. import ask_log, ask_miss
+    # a price or a yield, read word by word: no model call, whatever was asked before
+    try:
+        out = macro_read.answer(q, prev, on, _cur())
+    except Exception:  # noqa: BLE001 — the routes below still get their turn
+        out = None
+    if out is not None:
+        ask_log.note("/api/v1/assistant/preview", q, True, out.get("kind"))
+        out.setdefault("question", q)
+        return out
     # a question about the economy goes to the economy answers first: no model
     # call, no company read ("rent inflation" once found a landlord)
     if not prev and _is_macro(q):

@@ -6,6 +6,7 @@
 <title>US Average Retail Prices · Plover Analytics</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/page-ask.css">
 </head>
 <body>
 
@@ -22,6 +23,8 @@
       <span class="metric-asof" id="page-asof"></span>
       <p class="metric-sub" id="page-sub"><span class="skeleton" style="display:inline-block;width:420px;height:14px"></span></p>
     </div>
+    <div data-page-ask data-on="prices" data-label="Ask About US Prices"
+         data-examples="How much do eggs cost?|Price of coffee|Price of electricity"></div>
     <div class="seg seg-flush" role="group" aria-label="Dataset" id="dataset-seg"></div>
     <div class="strip">
       <div class="strip-grid" id="tiles">
@@ -94,6 +97,8 @@
 <script src="assets/format.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
+<script src="assets/us-format.js"></script>
+<script src="assets/page-ask.js"></script>
 <script src="assets/us-series.js"></script>
 </body>
 </html>

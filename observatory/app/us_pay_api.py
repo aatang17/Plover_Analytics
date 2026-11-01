@@ -259,11 +259,12 @@ def _spelling(name, certs):
     s = _surname(name)
     words = [w for w in name.split() if w.lower().strip(".,") not in SUFFIXES]
     for end in sorted(certs, reverse=True):
-        for n, _ in certs[end]:
+        for n, title in certs[end]:
             given = [w for w in n.split()[:-1] if re.fullmatch(r"[^\W\d_][^\W\d_'’\-]+", w)]
             if _surname(n) != s or not given:
                 continue
-            if len(words) < 2 or n[:1] == name[:1] or given[0] in words:
+            # the person signing as CEO is the CEO: the proxy's own text also names relatives ("Arin Gassner" beside Peter P. Gassner)
+            if len(words) < 2 or n[:1] == name[:1] or given[0] in words or re.search(r"chief executive|principal executive", title or "", re.I):
                 return n
     return name
 
@@ -669,6 +670,45 @@ def index(basis: str = Query("latest", description="latest | first"),
         })
     return {"index": snap, "companies": rows, "count": len(rows), "coverage": counts,
             "basis": basis, "as_of": _d(ceiling), "calc": CALC, "provenance": PROVENANCE}
+
+
+def all_years():
+    """Every member's pay year by year, for questions about a change in pay:
+    [{ticker, name, fiscal_year_end, ceo, sole_ceo, total_pay, actually_paid, tsr}],
+    newest year first within a company. The figures are the CEO's own, as in
+    the list above; with co-CEOs at the year end they are blank, never added."""
+    cur = _require()
+    snap = _snapshot(cur)
+    members = sec_api._rows(cur, """
+        SELECT cik, ticker, name AS fund_name, weight_pct FROM us_index_members
+        WHERE snapshot_id = ? ORDER BY weight_pct DESC""", [snap["snapshot_id"]])
+    ciks = [m["cik"] for m in members]
+    years = _years(_picked(cur, ciks, "latest", None), _people(cur, ciks))
+    ret = _returns(cur, ciks, None)
+    for cik, cy in years.items():
+        _attach_returns(cy, ret, cik)
+    names = _names(cur, ciks)
+    out = []
+    for m in members:
+        cy = years.get(m["cik"], {})
+        for end in sorted(cy, reverse=True):
+            y = cy[end]
+            at_end = [c for c in y["ceos"] if c.get("at_year_end")]
+            values = dict(y["values"])
+            if len(at_end) == 1 and (len(y["ceos"]) > 1 or values.get("ceo_total_pay") is None):
+                values["ceo_total_pay"] = at_end[0].get("total_pay")
+                values["ceo_actually_paid"] = at_end[0].get("actually_paid")
+            who = y["year_end_ceos"]
+            multi = len(at_end) > 1 or (not at_end and len(who) > 1)
+            out.append({"ticker": m["ticker"], "name": _shown_name(cur, m["cik"], names.get(m["cik"]) or m["fund_name"]),
+                        "fiscal_year_end": y["fiscal_year_end"], "ceo": " / ".join(who) or None,
+                        # someone who left in the year shares it: not a whole year's pay for the one named
+                        "sole_ceo": len(who) == 1 and len(y["ceos"]) <= 1,
+                        "co_ceos": len(at_end) > 1,
+                        "total_pay": None if multi else values.get("ceo_total_pay"),
+                        "actually_paid": None if multi else values.get("ceo_actually_paid"),
+                        "tsr": values.get("tsr")})
+    return out
 
 
 # ---- 2. one company --------------------------------------------------------------

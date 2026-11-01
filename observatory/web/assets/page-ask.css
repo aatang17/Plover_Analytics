@@ -1,0 +1,71 @@
+/* The question box on a data page (page-ask.js). Tokens and components come from app.css. */
+.pa { margin: 14px 0 4px; }
+.pa-form { display: flex; align-items: flex-end; gap: 8px; }
+.pa-label { flex: 1 1 auto; min-width: 0; display: block; }
+.pa-label > span { display: block; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); margin-bottom: 4px; }
+.pa-form .pa-q { width: 100%; box-sizing: border-box; height: 36px; padding: 0 10px; font: inherit; font-size: 14px;
+  color: var(--obs-ink); background: var(--obs-surface); border: 1px solid var(--obs-text-faint); border-radius: 4px; }
+.pa-form .pa-q:focus { outline: 2px solid var(--obs-focus); outline-offset: 1px; }
+.pa-go { height: 36px; flex: 0 0 auto; }
+.pa-go:disabled { opacity: 0.55; cursor: default; }
+.pa-examples { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 13px; }
+.pa-examples a { color: var(--obs-primary); text-decoration: none; }
+.pa-examples a:hover { text-decoration: underline; }
+.pa-status { margin: 10px 0 0; font-size: 13px; color: var(--obs-text-muted); }
+
+.pa-result { margin-top: 12px; }
+.pa-result.pa-stale { opacity: 0.45; }
+.pa-card { padding: 14px 16px; background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; }
+.pa-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pa-asked { min-width: 0; font-size: 13px; color: var(--obs-text-muted); overflow-wrap: anywhere; }
+.pa-asked b { color: var(--obs-ink); font-weight: 600; }
+.pa-when { margin-left: 6px; }
+.pa-close, .pa-link { flex: 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 13px;
+  color: var(--obs-primary); cursor: pointer; }
+.pa-close:hover, .pa-link:hover { text-decoration: underline; }
+.pa-read { margin: 8px 0 0; font-size: 12.5px; color: var(--obs-text-muted); }
+.pa-read b { color: var(--obs-ink); font-weight: 600; }
+.pa-head { margin: 10px 0 0; font-size: 17px; font-weight: 600; line-height: 1.35; color: var(--obs-ink); text-wrap: pretty; }
+.pa-text { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--obs-text); text-wrap: pretty; }
+.pa-miss { margin: 10px 0 0; font-size: 15px; line-height: 1.4; color: var(--obs-ink); }
+.pa-retry { margin-top: 10px; }
+.pa-try-h { margin: 12px 0 0; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); }
+
+.pa-figs { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 12px 0 0; }
+.pa-figs div { margin: 0; }
+.pa-figs dt { font-size: 12px; color: var(--obs-text-muted); margin: 0 0 2px; }
+.pa-figs dd { margin: 0; font-size: 18px; font-weight: 600; color: var(--obs-ink); font-variant-numeric: tabular-nums; }
+.pa-figs small { display: block; font-size: 12px; font-weight: 400; color: var(--obs-text-muted); margin-top: 1px; }
+
+.pa-chart-wrap { margin-top: 14px; }
+.pa-chart, .pa-chart-wrap .chart-el { width: 100%; height: 320px; }
+.pa-chart-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-top: 4px;
+  font-size: 12px; color: var(--obs-text-muted); }
+.pa-acts { display: flex; gap: 14px; }
+
+.pa-card .table-wrap { margin-top: 14px; overflow-x: auto; }
+.pa-card .tbl-fin { width: 100%; border-collapse: collapse; }
+.pa-card .tbl-fin th, .pa-card .tbl-fin td { padding: 6px 10px; font-size: 13px; text-align: left;
+  border-bottom: 1px solid var(--obs-grid); white-space: nowrap; }
+.pa-card .tbl-fin thead th { font-size: 11px; font-weight: 600; color: var(--obs-text-muted);
+  letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 1px solid var(--obs-border); }
+.pa-card .tbl-fin .r, .pa-card .tbl-fin th.r { text-align: right; font-variant-numeric: tabular-nums; }
+.pa-card .tbl-fin td.txt { white-space: normal; min-width: 120px; }
+.pa-card .tbl-fin a { color: var(--obs-primary); text-decoration: none; }
+
+.pa-notes { margin: 12px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--obs-text-muted); }
+.pa-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: 12px; font-size: 12.5px; color: var(--obs-text-muted); }
+.pa-foot a { color: var(--obs-primary); text-decoration: none; }
+.pa-foot a:hover { text-decoration: underline; }
+.pa-more { font-size: 13.5px; font-weight: 600; }
+.pa-src { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--obs-text-muted); }
+.pa-gate { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--obs-border); }
+.pa-gate-h { margin: 0; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); }
+.pa-gate ul { margin: 6px 0 10px; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--obs-text); }
+.pa-signup { display: inline-block; text-decoration: none; }
+.pa-small { margin: 8px 0 0; font-size: 12px; color: var(--obs-text-muted); }
+
+@media (max-width: 700px) {
+  .pa-chart, .pa-chart-wrap .chart-el { height: 280px; }
+  .pa-head { font-size: 16px; }
+}

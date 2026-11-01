@@ -21,59 +21,10 @@
   function $(id) { return document.getElementById(id); }
   function esc(s) { return escapeHtml(String(s == null ? "" : s)); }
 
-  function getJSON(url) {
-    return fetch(url).then(function (r) {
-      if (!r.ok) {
-        return r.json().catch(function () { return {}; }).then(function (b) {
-          var e = new Error(typeof b.detail === "string" ? b.detail : "");
-          e.status = r.status;
-          e.miss = b.miss;            // what kind of miss, and questions that do answer (app/ask_miss.py)
-          e.tries = b.try;
-          throw e;
-        });
-      }
-      return r.json();
-    });
-  }
-
-  // The answer as a stream (/api/v1/us/ask/stream): onSay(text) hears each
-  // step as the server takes it (question read, company found, steps written,
-  // a check that sent it back), then the promise settles like getJSON's. A
-  // server without the stream answers through the plain endpoint.
-  function askStream(path, onSay) {
-    if (!window.ReadableStream || !window.TextDecoder) return getJSON(API + path);
-    return fetch(API + path.replace(/^\/ask/, "/ask/stream")).then(function (r) {
-      if (r.status === 404 || !r.body) return getJSON(API + path);
-      if (!r.ok) return getJSON(API + path);
-      var reader = r.body.getReader(), dec = new TextDecoder(), buf = "";
-      return new Promise(function (resolve, reject) {
-        function pump() {
-          reader.read().then(function (chunk) {
-            if (chunk.done) { reject(new Error("The answer was cut off. Ask again.")); return; }
-            buf += dec.decode(chunk.value, { stream: true });
-            var cut;
-            while ((cut = buf.indexOf("\n\n")) >= 0) {
-              var line = buf.slice(0, cut).replace(/^data: ?/, "");
-              buf = buf.slice(cut + 2);
-              var ev;
-              try { ev = JSON.parse(line); } catch (e) { continue; }
-              if (ev.say) onSay(ev.say);
-              else if (ev.answer) { resolve(ev.answer); return; }
-              else if (ev.error) {
-                var err = new Error(ev.error.detail || "");
-                err.status = ev.error.status;
-                err.miss = ev.error.miss;
-                err.tries = ev.error.try;
-                reject(err);
-                return;
-              }
-            }
-            pump();
-          }, reject);
-        }
-        pump();
-      });
-    });
+  // reading the box's answers and drawing their charts: us-format.js
+  var getJSON = usFmt.getJSON, askStream = usFmt.askStream;
+  function drawChart(el, chart, sourceLine) {
+    return usFmt.drawChart(el, chart, sourceLine, function (c) { charts.push(c); });
   }
 
   // number formatting, tables and the sources block: us-format.js
@@ -96,62 +47,6 @@
       return "<div class='hit'" + title + "><dt>" + esc(f.label) + "</dt><dd>" + shown + qual + "</dd></div>";
     });
     return cells.length ? "<section class='hp-panel'><dl class='an-figs'>" + cells.join("") + "</dl></section>" : "";
-  }
-
-  function drawChart(el, chart, sourceLine) {
-    if (!chart || !chart.series || !chart.series.length) return null;
-    // a column chart's points are plain values, one per category; other charts' are [x, value]
-    var hasPts = chart.series.some(function (s) {
-      return s.points && s.points.some(function (p) { return chart.kind === "cols" ? p != null : p[1] != null; });
-    });
-    if (!hasPts) return null;
-    var unit = chart.unit || "";
-    var isUsd = /USD/.test(unit);
-    // columns per period ("Sold" by month): a dollar axis in $mn or $bn
-    if (chart.kind === "cols") {
-      var top = 0;
-      chart.series.forEach(function (s) { s.points.forEach(function (v) { top = Math.max(top, Math.abs(v || 0)); }); });
-      var sc = isUsd ? (top >= 1e9 ? 1e9 : top >= 1e6 ? 1e6 : 1) : 1;
-      var sfx = isUsd ? (sc === 1e9 ? "$bn" : sc === 1e6 ? "$mn" : "$") : unit;
-      return obsChart(el, "cols", { categories: chart.categories, dp: 1, unitSuffix: sfx, yAxisName: sfx, trust: "derived", sourceLine: sourceLine,
-        series: chart.series.map(function (s, i) { return { name: s.name, slot: i + 1, points: s.points.map(function (v) { return v == null ? null : v / sc; }) }; }) });
-    }
-    if (chart.kind === "bars") {
-      var pts = chart.series[0].points;
-      var scale = 1, suffix = unit;
-      if (isUsd) {
-        var mx = Math.max.apply(null, pts.map(function (p) { return Math.abs(p[1] || 0); }));
-        scale = mx >= 1e9 ? 1e9 : mx >= 1e6 ? 1e6 : 1;
-        suffix = scale === 1e9 ? "$bn" : scale === 1e6 ? "$mn" : "$";
-      }
-      var items = pts.map(function (p) { return { name: String(p[0]), value: p[1] == null ? null : p[1] / scale }; });
-      var big = Math.max.apply(null, items.map(function (i) { return Math.abs(i.value || 0); })) >= 100;
-      return obsChart(el, "rank", { items: items, unit: isUsd ? suffix.replace("$", "") + " USD" : suffix, dp: unit === "pp" ? 2 : big ? 0 : 1, trust: "derived",
-        sourceLine: sourceLine, rows: items, columns: [{ key: "name", label: "name" }, { key: "value", label: "value (" + suffix + ")" }] });
-    }
-    var usdLine = isUsd && chart.series.every(function (s) { return !s.axis || s.axis === "left"; });
-    var cfg = {
-      unit: "", unitSuffix: usdLine ? " $" : (unit === "%" ? "%" : ""), dp: 2, trust: "official", sourceLine: sourceLine,
-      yAxisName: usdLine ? "USD" : (unit || ""), isoPeriods: true,
-      series: chart.series.map(function (s) { return { name: s.name, points: s.points.map(function (p) { return [p[0], p[1]]; }) }; }),
-    };
-    // Two series on different units (bank profits and a yield) are two small
-    // charts, never one axis — a rate and a dollar amount never share a scale.
-    if (chart.series.some(function (s) { return s.axis === "right"; })) {
-      cfg.xType = "category";
-      cfg.series = [cfg.series[0]];
-      cfg.unitSuffix = ""; cfg.yAxisName = chart.series[0].name;
-      var c1 = obsChart(el, "line", cfg);
-      var el2 = document.createElement("div");
-      el2.className = "chart-el"; el2.style.height = "260px";
-      el.parentElement.insertBefore(el2, el.nextSibling);
-      var right = chart.series.filter(function (s) { return s.axis === "right"; })[0];
-      charts.push(obsChart(el2, "line", { xType: "category", unit: "%", dp: 2, trust: "official", sourceLine: sourceLine,
-        yAxisName: right.name, series: [{ name: right.name, points: right.points }] }));
-      return c1;
-    }
-    if (chart.series[0].points.length && /^\d{4}$/.test(String(chart.series[0].points[0][0]))) cfg.xType = "category";
-    return obsChart(el, "line", cfg);
   }
 
   // Follow-ups stay on the question asked: the same question turned round, the same question
@@ -797,16 +692,7 @@
     });
   }
 
-  function previewValue(f) {
-    var v = f.value, u = f.unit || "";
-    if (v == null) return MISSING;
-    if (u === "USD") return money(v);
-    // as many decimals as the server sent (1 for a rate, 2 for a yield), so a figure matches its headline
-    if (u === "%" || u === "pct" || u === "percent") return pct(v, Math.min(2, Math.max(1, (String(v).split(".")[1] || "").length)));
-    if (u === "count") return fmtNum(v, 0);
-    if (u === "x" || u === "ratio" || u === "\u00d7") return mult(v);
-    return (typeof v === "number" ? fmtNum(v, Math.abs(v) < 100 ? 2 : 0) : esc(v)) + (u ? " " + esc(u) : "");
-  }
+  var previewValue = usFmt.previewValue;
 
   function renderPreview(p, q) {
     disposeCharts();

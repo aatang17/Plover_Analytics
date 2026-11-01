@@ -1654,7 +1654,11 @@
       code. The eight major groups must sum to 100 within 0.01 or the release is not published.</li>
       <li><b>us-avg-prices</b> are the BLS average prices in dollars per the unit in each item's
       name (per dozen, per lb., per gallon, per kWh). They are not quality-adjusted and are not a
-      substitute for the item index; two items' dollar levels are never charted on one axis.</li>
+      substitute for the item index; two items' dollar levels are never charted on one axis. An
+      answer about a change in one is <code>(price now ÷ price then − 1) × 100</code> in the dollars
+      of each date, not adjusted for inflation; a change in a Treasury yield is the difference in
+      percentage points. A year's figure is the mean of the readings published in it. A ranking of
+      items covers only those the BLS still publishes, and counts one grade of an item.</li>
       <li><b>us-wages</b> are average hourly and weekly earnings from the BLS payroll survey (CES),
       total private and its two halves, current and 1982-84 dollars. The real series are the
       BLS's own; nothing is deflated here. Each month is revised twice and the whole series is
