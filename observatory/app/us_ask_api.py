@@ -13,16 +13,19 @@ with one more word.
   GET /api/v1/us/ask/stream?q=...            the same answer as server-sent
                                              events: what it is doing at each
                                              step, then the answer
+  GET /api/v1/us/ask/free                    how many full answers a reader
+                                             without an account has left today
+                                             (app/free_answers.py)
 """
 import asyncio
 import json
 import threading
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from . import ask_log, ask_miss, ask_progress, sec_api, stock_recipes
+from . import ask_log, ask_miss, ask_progress, free_answers, sec_api, stock_recipes
 
 router = APIRouter(prefix="/api/v1/us/ask", tags=["US ask"])
 KEEPALIVE_SECONDS = 15
@@ -30,12 +33,14 @@ KEEPALIVE_SECONDS = 15
 
 @router.get("", openapi_extra={"x-example": "/api/v1/us/ask?q=who+owns+apple"})
 @router.get("/", include_in_schema=False)
-def ask(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
+def ask(request: Request,
+        q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
         prev: str = Query("", max_length=300, description="the reader's previous question, so a follow-up "
                                                             "(\"and Microsoft?\") is read whole"),
         opt: str = Query("", max_length=40, description="switches on a ranking's reading, comma-separated: sp500 (S&P 500 "
                                                          "members only), all (stocks under $2bn too), tech (Amazon, Tesla and "
-                                                         "other borderline names counted as tech)")):
+                                                         "other borderline names counted as tech)"),
+        via: str = Query("", max_length=20, description="example when the question is one of the page's own suggestions")):
     """Answer a stock question from the data, by code. A question it cannot
     answer gets {"detail": one plain sentence, "miss": its kind, "try":
     questions it does answer} (app/ask_miss.py), never a bare error."""
@@ -43,6 +48,8 @@ def ask(q: str = Query(..., min_length=1, max_length=300, description="a questio
     try:
         cur = sec_api._require()
         out = _noted("/api/v1/us/ask", q, lambda: stock_recipes.answer(cur, q.strip(), prev.strip() or None, opt))
+        # counted, not carried: this body is cached and served to other readers
+        free_answers.take(free_answers.reader(request, via))
         if (out or {}).get("recipe") == "web_news":
             # news dates by the hour: the response cache must not keep it until the next data refresh
             return JSONResponse(content=jsonable_encoder(out), headers={"Cache-Control": "no-store"})
@@ -70,14 +77,19 @@ def _noted(path, q, work):
 
 
 @router.get("/stream")
-async def ask_stream(q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
+async def ask_stream(request: Request,
+                     q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
                      prev: str = Query("", max_length=300, description="the reader's previous question"),
-                     opt: str = Query("", max_length=40, description="switches on a ranking's reading (see /api/v1/us/ask)")):
+                     opt: str = Query("", max_length=40, description="switches on a ranking's reading (see /api/v1/us/ask)"),
+                     via: str = Query("", max_length=20, description="example when the question is one of the page's own suggestions")):
     """The answer as server-sent events, so the page can say what is being
     done while it waits: `{"say": "..."}` at each step (app/ask_progress.py),
-    then one `{"answer": {...}}` or `{"error": {"status", "detail"}}`."""
+    then one `{"answer": {...}}` or `{"error": {"status", "detail"}}`. A
+    reader without an account gets `"free": {"free", "left"}` on the answer:
+    the day's allowance and what is left of it (app/free_answers.py)."""
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue()
+    who = free_answers.reader(request, via)     # read on the request thread, before it is gone
 
     def put(item):
         loop.call_soon_threadsafe(queue.put_nowait, item)
@@ -85,8 +97,10 @@ async def ask_stream(q: str = Query(..., min_length=1, max_length=300, descripti
     def work():
         ask_progress.listen(lambda text: put({"say": text}))
         try:
-            put({"answer": _noted("/api/v1/us/ask/stream", q,
-                                  lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None, opt))})
+            out = _noted("/api/v1/us/ask/stream", q,
+                         lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None, opt))
+            free = free_answers.take(who)
+            put({"answer": dict(out, free=free) if free is not None else out})
         except HTTPException as exc:
             cur = None
             try:
@@ -127,6 +141,15 @@ async def ask_stream(q: str = Query(..., min_length=1, max_length=300, descripti
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no",
                                       "Content-Encoding": "identity"})
+
+
+@router.get("/free")
+def free(request: Request):
+    """How many full answers this reader has left today without an account
+    (app/free_answers.py); both null when there is no limit (signed in, or
+    accounts off). Never cached: it is one reader's own count."""
+    out = free_answers.status(free_answers.reader(request)) or {"free": None, "left": None}
+    return JSONResponse(content=out, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/readings", openapi_extra={"x-example": "/api/v1/us/ask/readings?q=ford+debt"})

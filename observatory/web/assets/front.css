@@ -52,6 +52,9 @@
   font-weight: 600; text-decoration: none; color: var(--obs-surface); background: var(--obs-primary); }
 .fp-cta:hover { background: var(--obs-primary-dark); }
 .fp-small { margin: 8px 0 0 !important; font-size: 13px; color: var(--obs-text-muted); }
+/* over a free answer (us-stocks.js freeNote): what is left of the day's allowance, and the account that lifts it */
+.fp-free { margin: 0 0 12px; font-size: 13.5px; line-height: 1.5; color: var(--obs-text-muted); }
+.fp-free a { color: var(--obs-primary); font-weight: 600; }
 .fp-go:disabled { opacity: 0.6; cursor: default; }
 
 .fp-examples { list-style: none; margin: 24px 0 0; padding: 0; border-top: 1px solid var(--obs-border); }

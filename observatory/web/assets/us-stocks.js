@@ -551,6 +551,7 @@
         heard("Answered.");
         rememberQuestion(a.question || q);
         renderAnswer(a, trail);
+        freeNote(a);
       }, function (e) {
         // not a stock question the box answers: the US economy may (inflation, wages, Treasury yields)
         if (e.status !== 422 && e.status !== 404) throw e;
@@ -615,27 +616,62 @@
   }
 
   /* ---- who is reading: the start of an answer, or all of it ----------- */
-  // Signed out, a question shows the start of its answer and the rest is one
-  // sign-up away (agreed with the user, 2026-10-19). Signed in, or where
-  // accounts are off (no /api/v1/account here), the full answer shows.
-  var PREVIEW = "/api/v1/assistant/preview";
-  var me = { on: false, email: null }, previewOff = false;
+  // Signed out, the first few answers of the day show in full (the server
+  // counts them: app/free_answers.py); once they are used, a question shows
+  // the start of its answer and the rest is one sign-up away (2026-10-29;
+  // from 2026-10-19 every signed-out question was gated, and one visitor in
+  // four hundred signed up). Signed in, or where accounts are off (no
+  // /api/v1/account here), the full answer shows.
+  var PREVIEW = "/api/v1/assistant/preview", FREE = "/api/v1/us/ask/free";
+  var me = { on: false, email: null, free: null }, previewOff = false;
   var reader = fetch("/api/v1/account/me", { headers: { Accept: "application/json" } }).then(function (r) {
     if (r.status === 404) return null;
     me.on = true;
     return r.ok ? r.json() : null;
-  }).then(function (who) { me.email = (who && who.email) || null; account(); },
-           function () { account(); });
+  }).then(function (who) { me.email = (who && who.email) || null; return me.on && !me.email ? allowance() : null; },
+           function () {}).then(account, account);
 
-  function gated() { return me.on && !me.email && !previewOff; }
+  // the day's allowance and what is left of it; without an answer, no limit
+  function allowance() {
+    return getJSON(FREE).then(function (f) { me.free = f && f.free != null ? f : null; }, function () { me.free = null; });
+  }
+
+  function gated() { return me.on && !me.email && !previewOff && !!me.free && me.free.left <= 0; }
 
   // the sign-up panel under the examples; the bar's own account control is nav.js's
   function account() {
     var back = "signin.html?returnTo=" + encodeURIComponent("/" + location.search);
     if ($("gate-cta")) {
-      $("gate-cta").hidden = !gated();
+      $("gate-cta").hidden = !(me.on && !me.email);
       $("gate-cta-link").href = back;
+      if (me.free && me.free.free > 0 && $("gate-cta-text")) {
+        $("gate-cta-text").textContent = (me.free.left > 0 ? me.free.free + " full answers a day are free." :
+          "Today's " + me.free.free + " free answers are used.") +
+          " An account shows every answer in full: the chart, the table and the download.";
+      }
     }
+  }
+
+  // Over a free answer: what is left of the day's allowance, and the account
+  // that lifts it. The streamed answer carries the count; the plain answer
+  // (an old browser) does not, so it is asked for.
+  function freeNote(a) {
+    if (!(me.on && !me.email)) return;
+    var show = function () {
+      var f = me.free;
+      if (!f || !(f.free > 0)) return;
+      account();
+      var el = $("answer"), old = el.querySelector(".fp-free");
+      if (old) old.parentNode.removeChild(old);
+      var back = "signin.html?returnTo=" + encodeURIComponent("/" + location.search);
+      var p = document.createElement("p");
+      p.className = "fp-free";
+      p.innerHTML = (f.left > 0 ? esc(f.left + " of " + f.free + " free answers left today.") : "That was your last free answer today.") +
+        " <a href='" + esc(back) + "'>Create a free account</a> for every answer in full.";
+      el.insertBefore(p, el.firstChild);
+    };
+    if (a && a.free && a.free.free != null) { me.free = a.free; show(); }
+    else allowance().then(show);
   }
 
   // The box sits on the front band until something is asked, then in the
@@ -724,7 +760,8 @@
         (p.more || []).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ul>" +
         "<p><a class='fp-cta' href='" + esc(href) + "'>" +
         (signedIn ? "Open the Full Chart" : "Sign Up Free to See the Full Answer") + "</a></p>" +
-        (signedIn ? "" : "<p class='fp-small'>Your email is all it takes. No password, no card.</p>") + "</div>") +
+        (signedIn ? "" : "<p class='fp-small'>" + (me.free && me.free.free > 0 ? "Today's " + me.free.free + " free answers are used. " : "") +
+          "Your email is all it takes. No password, no card.</p>") + "</div>") +
       "</article>";
     $("home-note").hidden = true;
     document.title = String(p.headline || "").slice(0, 70) + " · Plover Analytics";
