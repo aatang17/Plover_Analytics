@@ -45,20 +45,44 @@
   // which of the company's tabs this page is: "price" or "owners"
   var stockView = params.get("view") === "owners" ? "owners" : "price";
 
+  // figures read off the share price: Market Data, not the annual report
+  var MARKET_METRICS = ["market_cap", "pe_x", "buyback_yield_pct", "dividend_yield_pct", "price_change_1y_pct", "price_change_1m_pct"];
+  // three columns of five rows each, so the panel closes level
+  var RATIO_COLUMNS = [
+    [["Profitability and Efficiency", ["operating_margin_pct", "net_margin_pct", "roe_pct", "roa_pct", "asset_turnover_x"]]],
+    [["Growth", ["revenue_growth_pct", "profit_growth_pct"]],
+     ["Cash Flow", ["fcf", "fcf_margin_pct", "cash_conversion_x"]]],
+    [["Balance Sheet", ["equity_ratio_pct", "cash_to_assets_pct"]],
+     ["Shareholder Returns", ["shareholder_return", "payout_ratio_pct", "buyback_ratio_pct"]]]
+  ];
+  var FILED_FIGURES = { revenue: "Revenue", operating_income: "Operating income", net_income: "Net income", total_assets: "Total assets",
+    equity: "Equity", cash: "Cash", cf_operating: "Operating cash flow", capex: "Capital expenditure", buybacks: "Buybacks", dividends_paid: "Dividends paid" };
+
+  // Show calculation for a panel. The wrapper keeps it inside that panel:
+  // panelize gives a details.calc standing on its own a panel of its own.
+  function calcBlock(defs, heading, tagRows) {
+    if (!defs.length) return "";
+    return "<div><details class='calc st-calc'><summary>Show calculation</summary><div class='calc-body'>" +
+      "<div class='table-wrap'><table class='tbl-fin' data-no-enhance><thead><tr><th>" + esc(heading) + "</th><th>Formula</th></tr></thead><tbody>" +
+      defs.map(function (d) { return "<tr><td>" + esc(d.label) + "</td><td class='txt'>" + esc(d.formula) + "</td></tr>"; }).join("") +
+      "</tbody></table></div>" +
+      (tagRows ? "<div class='table-wrap st-tags'><table class='tbl-fin' data-no-enhance><thead><tr><th>Filed Figure</th><th>Tag in the Filing</th></tr></thead><tbody>" + tagRows + "</tbody></table></div>" : "") +
+      "</div></details></div>";
+  }
+
   function renderStock(t, m, px, ins, hold) {
     var el = $("stock");
     var mt = m.metrics || {}, p = m.price || {}, ps = m.per_share || {}, mvb = m.market_value_basis || {};
     // a split read from prices in the last year that no filing confirms makes the one-year change doubtful
     var yearAgo = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
     var doubtfulSplit = !!(px && px.splits && px.splits.some(function (s) { return s.status && s.status !== "confirmed" && s.date >= yearAgo; }));
-    var html = "<p class='sec-note'>Latest annual report: year to " + dateWords(m.period_end) + ", filed " + dateWords(m.filed) + " · " +
-      "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>filing on EDGAR</a></p>" +
-      "<dl class='fact-row'>" +
+    var html = "<dl class='fact-row'>" +
       "<div><dt>Close</dt><dd>" + money(p.close, 2) + "<span class='qual'>" + (p.date ? dateWords(p.date) : "no price on file") + "</span></dd></div>" +
       "<div><dt>Market value</dt><dd>" + money(mt.market_cap) + "<span class='qual'>" +
         (mvb.note && mt.market_cap == null ? "not shown: see below" : mvb.caution ? "read with care: see below" : "close × shares outstanding") +
         "</span></dd></div>" +
       "<div><dt>P/E</dt><dd>" + mult(mt.pe_x) + "<span class='qual'>on diluted EPS " + (ps.eps_diluted == null ? MISSING : "$" + fmtNum(ps.eps_diluted, 2)) + "</span></dd></div>" +
+      "<div><dt>1-month change</dt><dd>" + pct(mt.price_change_1m_pct, 1, true) + "<span class='qual'>split-adjusted</span></dd></div>" +
       "<div><dt>1-year change</dt><dd>" + pct(mt.price_change_1y_pct, 1, true) + "<span class='qual'>" +
         (doubtfulSplit ? "read with care: see the note under the chart" : "split-adjusted") + "</span></dd></div>" +
       "<div><dt>Dividend yield</dt><dd>" + pct(mt.dividend_yield_pct, 2) + "<span class='qual'>last fiscal year ÷ value</span></dd></div>" +
@@ -70,6 +94,9 @@
     } else if (mvb.caution && mt.market_cap != null) {
       html += "<p class='sec-note value-note'>" + esc(mvb.caution) + (mvb.expect ? " " + esc(mvb.expect) : "") + "</p>";
     }
+    var defs = {};
+    (m.metric_defs || []).forEach(function (d) { defs[d.metric] = d; });
+    html += calcBlock(MARKET_METRICS.map(function (k) { return defs[k]; }).filter(Boolean), "Market Figure");
     // price
     html += "<h2>Share Price <span class='h2-note'>USD, daily close, since " + (px && px.bars.length ? dateWords(px.bars[0].date) : "—") + "</span></h2>" +
       "<div id='px-range'></div><div class='chart-foot'><span id='px-src'></span></div>";
@@ -79,21 +106,42 @@
           (s.ratio >= 1 ? fmtNum(s.ratio, 0) + "-for-1 split" : "1-for-" + fmtNum(1 / s.ratio, 0) + " reverse split") + ".";
       }).join(" ") + " The bars themselves are as delivered.</p>";
     }
-    // ratios
+    // the annual report: filed figures, then the ratios grouped as an analyst
+    // reads them; formulas and filed tags stay under Show calculation
     var fm = m.calc || {};
-    var ratioRows = (m.metric_defs || []).map(function (d) {
+    function ratioValue(d) {
       var v = mt[d.metric];
-      return [d.label, v == null ? null : (d.unit === "%" ? pct(v, 1) : d.unit === "×" ? mult(v) : d.unit === "USD" || d.unit === "unit" ? money(v) : fmtNum(v, 2)), d.formula];
+      if (v == null) return "<span title='Not filed, or withheld: see Show calculation'>" + MISSING + "</span>";
+      return d.unit === "%" ? pct(v, 1) : d.unit === "×" ? mult(v) : d.unit === "USD" || d.unit === "unit" ? money(v) : fmtNum(v, 2);
+    }
+    var placed = {};
+    var groups = RATIO_COLUMNS.map(function (col) {
+      return "<div>" + col.map(function (g) {
+        return "<h3 class='rt-label'>" + esc(g[0]) + "</h3><dl class='rt-list'>" + g[1].map(function (k) {
+          placed[k] = true;
+          return defs[k] ? "<div><dt>" + esc(defs[k].label) + "</dt><dd>" + ratioValue(defs[k]) + "</dd></div>" : "";
+        }).join("") + "</dl>";
+      }).join("") + "</div>";
     });
-    html += "<h2>Latest Annual Report <span class='h2-note'>" + esc(m.unit || "") + " · year to " + dateWords(m.period_end) + "</span></h2>" +
-      "<dl class='fact-row'>" +
-      [["Revenue", m.size.revenue], ["Operating income", m.size.operating_income], ["Net income", m.size.net_income], ["Total assets", m.size.total_assets], ["Equity", m.size.equity], ["Cash", m.size.cash], ["Operating cash flow", m.size.cf_operating], ["Buybacks", m.size.buybacks], ["Dividends paid", m.size.dividends_paid]]
-        .map(function (x) { return "<div><dt>" + x[0] + "</dt><dd>" + money(x[1]) + "</dd></div>"; }).join("") + "</dl>" +
-      "<p class='sec-note'>As filed. Tags: " + esc(Object.keys(m.tags || {}).filter(function (k) { return m.tags[k]; }).map(function (k) { return k.replace(/_/g, " ") + " = " + m.tags[k]; }).join("; ")) + "</p>" +
-      "<div class='table-wrap'><table class='tbl-fin' data-no-enhance><thead><tr><th>Ratio</th><th class='r'>Value</th><th>Formula</th></tr></thead><tbody>" +
-      ratioRows.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td class='r'>" + (r[1] == null ? MISSING : r[1]) + "</td><td class='txt quiet'>" + esc(r[2]) + "</td></tr>"; }).join("") +
-      "</tbody></table></div>" +
-      (m.flags && m.flags.length ? "<p class='sec-note' style='margin:8px 0 0'>Flags: " + esc(m.flags.join(", ").replace(/_/g, " ")) + ".</p>" : "");
+    // a ratio added on the server shows here until it is given a group
+    var other = (m.metric_defs || []).filter(function (d) { return !placed[d.metric] && MARKET_METRICS.indexOf(d.metric) < 0; });
+    if (other.length) {
+      groups.push("<div><h3 class='rt-label'>Other</h3><dl class='rt-list'>" + other.map(function (d) {
+        return "<div><dt>" + esc(d.label) + "</dt><dd>" + ratioValue(d) + "</dd></div>";
+      }).join("") + "</dl></div>");
+    }
+    var ratioDefs = (m.metric_defs || []).filter(function (d) { return MARKET_METRICS.indexOf(d.metric) < 0; });
+    var tagRows = Object.keys(m.tags || {}).filter(function (k) { return m.tags[k]; }).map(function (k) {
+      return "<tr><td>" + esc(FILED_FIGURES[k] || k.replace(/_/g, " ")) + "</td><td class='txt'><code>" + esc(m.tags[k]) + "</code></td></tr>";
+    }).join("");
+    html += "<h2>Latest Annual Report <span class='h2-note'>" + esc(m.unit || "") + " · year to " + dateWords(m.period_end) + " · " + esc(m.form || "annual report") + " filed " + dateWords(m.filed) + "</span></h2>" +
+      "<h3 class='rt-label rt-first'>As Filed</h3>" +
+      "<dl class='fs-strip'>" +
+      ["revenue", "operating_income", "net_income", "total_assets", "equity", "cash", "cf_operating", "buybacks", "dividends_paid"]
+        .map(function (k) { return "<div><dt>" + FILED_FIGURES[k] + "</dt><dd" + (m.size[k] == null ? " title='No figure read from this filing'" : "") + ">" + money(m.size[k]) + "</dd></div>"; }).join("") + "</dl>" +
+      "<div class='rt-grid'>" + groups.join("") + "</div>" +
+      (m.flags && m.flags.length ? "<p class='sec-note' style='margin:12px 0 0'>Flags: " + esc(m.flags.join(", ").replace(/_/g, " ")) + ".</p>" : "") +
+      calcBlock(ratioDefs, "Ratio", tagRows);
     // insiders
     if (ins) {
       var s = ins.summary || {}, b = s.open_market_buys || {}, sl = s.open_market_sells || {};
@@ -128,6 +176,15 @@
     html += "<div class='followups'>" + fu.map(function (f) { return "<a href='/?q=" + encodeURIComponent(f[1]) + "'>" + esc(f[0]) + "</a>"; }).join("") + "</div>";
     el.innerHTML = html;
     panelize(el, "Market Data");
+    if (m.source_url) {
+      Array.prototype.forEach.call(el.querySelectorAll(".cp-head"), function (head) {
+        if (head.querySelector("h2").textContent !== "Latest Annual Report") return;
+        var right = document.createElement("span");
+        right.className = "right";
+        right.innerHTML = "<a href='" + esc(m.source_url) + "' target='_blank' rel='noopener'>Filing on EDGAR</a>";
+        head.appendChild(right);
+      });
+    }
     // two tabs of the company's pages share this view: Price (the market data,
     // the price chart and the latest annual report's ratios) and Insiders and
     // holders; panels with no heading (sources, follow-ups) show on both

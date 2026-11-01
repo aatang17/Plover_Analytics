@@ -14,6 +14,36 @@
    header card are co-page.css, shared with the company's other tabs. */
 #stock { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
 #stock > .state-wait { margin: 0; }
+/* Latest Annual Report: one row of filed figures, then ratios in three columns */
+.rt-label { margin: 0 0 4px; padding: 0 0 6px; border-bottom: 1px solid var(--obs-border); font-size: 12px; font-weight: 600; color: var(--obs-ink); }
+.rt-list + .rt-label { margin-top: 18px; }
+.fs-strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 14px 16px; margin: 10px 0 0; }
+.fs-strip div { min-width: 0; }
+.fs-strip dt { font-size: 12px; color: var(--obs-text-muted); margin: 0 0 3px; white-space: nowrap; }
+.fs-strip dd { margin: 0; font-size: 18px; font-weight: 600; color: var(--obs-ink); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.rt-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; margin-top: 24px; }
+.rt-list { margin: 0; }
+.rt-list div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--obs-grid); }
+.rt-list dt { font-size: 13px; color: var(--obs-text); margin: 0; }
+.rt-list dd { margin: 0; font-size: 13px; font-weight: 600; color: var(--obs-ink); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-calc { margin-top: 14px; }
+.st-tags { margin-top: 14px; }
+.st-calc .table-wrap { border: 0; }
+.st-calc td:first-child { white-space: nowrap; width: 1%; }
+.st-calc code { white-space: normal; word-break: break-word; }
+@media (max-width: 1040px) {
+  .fs-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .rt-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .fs-strip div { display: flex; flex-direction: column; justify-content: space-between; }
+  .fs-strip dt { white-space: normal; }
+  .fs-strip dd { font-size: 16px; }
+  .st-calc .calc-body { padding: 8px 0 8px 8px; }
+  .st-calc td, .st-calc th { padding-left: 4px; padding-right: 8px; }
+  .st-calc td:first-child { white-space: normal; width: 30%; }
+  .st-calc td.txt { min-width: 0; }
+}
 .st-gate p { margin: 0 0 14px; max-width: 640px; color: var(--obs-text); line-height: 1.55; }
 </style>
 </head>
