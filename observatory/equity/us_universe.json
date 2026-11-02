@@ -261,7 +261,7 @@
     {"ticker": "AMP", "name": "Ameriprise Financial Inc.", "cik": 820027, "sector": "Financials", "added": "2026-10-29"},
     {"ticker": "FERG", "name": "Ferguson Enterprises Inc.", "cik": 2011641, "sector": "Industrials", "predecessors": [1832433], "added": "2026-10-29"},
     {"ticker": "OXY", "name": "Occidental Petroleum Corporation", "cik": 797468, "sector": "Energy", "added": "2026-10-29"},
-    {"ticker": "VMRK", "name": "Equity Residential", "cik": 906107, "sector": "Real Estate", "added": "2026-10-29"},
+    {"ticker": "VMRK", "name": "Vivmark Residential", "cik": 906107, "sector": "Real Estate", "added": "2026-10-29"},
     {"ticker": "EXC", "name": "Exelon Corp", "cik": 1109357, "sector": "Utilities", "added": "2026-10-29"},
     {"ticker": "WAT", "name": "Waters Corporation", "cik": 1000697, "sector": "Health Care", "added": "2026-10-29"},
     {"ticker": "CVNA", "name": "Carvana Co.", "cik": 1690820, "sector": "Consumer Discretionary", "added": "2026-10-29"},

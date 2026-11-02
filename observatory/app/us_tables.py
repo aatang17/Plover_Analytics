@@ -42,7 +42,7 @@ import json
 import re
 import threading
 
-from . import sec_api, us_figures
+from . import sec_api, sec_metrics, us_figures
 
 _LOCK = threading.Lock()
 _BUILD_LOCK = threading.Lock()     # one build at a time: a question during the warm-up waits for it, not a second build
@@ -274,12 +274,13 @@ def pay_year_rows(cur):
 
 # ---------------------------------------------------------------- quarters
 _Q_FIELDS = {
-    "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet",
-                "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueGoodsNet"],
+    "revenue": ["Revenues", "RegulatedAndUnregulatedOperatingRevenue", "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueGoodsNet"],
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "eps": ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted"],
 }
+_Q_PARTS = {f: ts for f, _, ts in sec_api.FIELDS if f in ("noninterest_income", "lease_income")}
 QUARTERS_KEPT = 8
 
 
@@ -289,19 +290,21 @@ def quarter_rows(cur, today=None):
     if not _has(cur, "sec_facts"):
         return []
     today = today or datetime.date.today()
-    tags = sorted({t for ts in _Q_FIELDS.values() for t in ts})
+    fields = dict(_Q_FIELDS, **_Q_PARTS)
+    tags = sorted({t for ts in fields.values() for t in ts})
     rows = cur.execute("""
-        SELECT s.cik, f.tag, f.ddate, f.qtrs, f.value, s.filed, s.fy, s.fp, s.period
+        SELECT s.cik, f.tag, f.ddate, f.qtrs, f.value, s.filed, s.fy, s.fp, s.period, s.sic
         FROM sec_facts f JOIN sec_filings s USING (adsh)
         WHERE s.form IN ('10-Q', '10-K', '10-Q/A', '10-K/A') AND s.status IN ('clean', 'partial')
           AND f.segment_id IS NULL AND f.coreg IS NULL AND f.qtrs IN (1, 4) AND f.uom IN ('USD', 'USD/shares')
           AND f.tag IN (%s) AND f.ddate >= ? AND f.ddate <= ?""" % ",".join("?" * len(tags)),
         tags + [today - datetime.timedelta(days=365 * 3 + 120), today]).fetchall()
-    rank = {t: i for ts in _Q_FIELDS.values() for i, t in enumerate(ts)}
-    field_of = {t: f for f, ts in _Q_FIELDS.items() for t in ts}
+    rank = {t: i for ts in fields.values() for i, t in enumerate(ts)}
+    field_of = {t: f for f, ts in fields.items() for t in ts}
     # (cik, ddate, qtrs) -> field -> (tag rank, filed, value): the best tag, as last filed
-    facts, label = {}, {}
-    for cik, tag, ddate, qtrs, value, filed, fy, fp, period in rows:
+    facts, label, sic_of = {}, {}, {}
+    for cik, tag, ddate, qtrs, value, filed, fy, fp, period, sic in rows:
+        sic_of[cik] = sic
         f = field_of[tag]
         key = (cik, ddate, qtrs)
         best = facts.setdefault(key, {}).get(f)
@@ -311,8 +314,13 @@ def quarter_rows(cur, today=None):
         if ddate == period and fy and fp:
             label[(cik, ddate)] = (int(fy), "Q4" if fp == "FY" else fp, filed)
     by_co = {}
-    for (cik, ddate, qtrs), fields in facts.items():
-        by_co.setdefault(cik, {}).setdefault(qtrs, {})[ddate] = {k: (v[2], v[3]) for k, v in fields.items()}
+    for (cik, ddate, qtrs), got in facts.items():
+        # a landlord's revenue, as on every other surface
+        values = {k: v[2] for k, v in got.items()}
+        used = {"revenue": _Q_FIELDS["revenue"][got["revenue"][0]] if "revenue" in got else None}
+        if "lease_income" in got and sec_metrics.landlord_revenue(values, used, sic_of.get(cik)):
+            got["revenue"] = (0, 0, values["revenue"], max(v[3] for k, v in got.items() if k in _Q_PARTS or k == "revenue"))
+        by_co.setdefault(cik, {}).setdefault(qtrs, {})[ddate] = {k: (v[2], v[3]) for k, v in got.items() if k not in _Q_PARTS}
     tickers = _tickers(cur)
     out = []
     for cik, parts in by_co.items():

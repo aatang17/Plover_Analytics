@@ -56,6 +56,7 @@ def _quarters_db():
         ye = D(fy, 6, 30)
         con.execute("INSERT INTO sec_filings VALUES (?, 1, '10-K', 'clean', ?, ?, 'FY', ?)", [adsh, ye + datetime.timedelta(days=60), fy, ye])
         con.execute("INSERT INTO sec_facts VALUES (?, 'Revenues', ?, 4, 'USD', ?, NULL, NULL)", [adsh, ye, 4 * base + 10])
+    con.execute("ALTER TABLE sec_filings ADD COLUMN sic INTEGER")
     return con
 
 
@@ -77,6 +78,24 @@ class Quarters(unittest.TestCase):
         self.assertEqual(sum(r["is_latest"] for r in rows), 1)
         q1 = by[D(2025, 9, 30)] if D(2025, 9, 30) in by else by[D(2024, 9, 30)]
         self.assertFalse(q1["q4_derived"])
+
+
+class LandlordQuarters(unittest.TestCase):
+    def _rows(self, sic):
+        con = _quarters_db()
+        con.execute("UPDATE sec_filings SET sic = ?", [sic])
+        # the company stops tagging Revenues in its latest quarter and files lease income instead
+        adsh = con.execute("SELECT adsh FROM sec_filings WHERE period = DATE '2026-03-31'").fetchone()[0]
+        con.execute("DELETE FROM sec_facts WHERE adsh = ? AND tag = 'Revenues'", [adsh])
+        con.execute("INSERT INTO sec_facts VALUES (?, 'OperatingLeaseLeaseIncome', DATE '2026-03-31', 1, 'USD', 130.0, NULL, NULL)", [adsh])
+        with mock.patch.object(us_tables, "_has", return_value=True):
+            return {r["quarter_end"]: r for r in us_tables.quarter_rows(con, today=D(2026, 10, 1))}
+
+    def test_lease_income_carries_a_property_companys_revenue(self):
+        self.assertEqual(self._rows(6798)[D(2026, 3, 31)]["revenue_usd"], 130.0)
+
+    def test_a_utilitys_small_lease_line_is_not_its_revenue(self):
+        self.assertIsNone(self._rows(4911)[D(2026, 3, 31)]["revenue_usd"])
 
 
 class FundGuards(unittest.TestCase):

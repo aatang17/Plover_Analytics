@@ -233,6 +233,26 @@ def _resolve(facts, period):
 BANK_SIC = tuple(range(6020, 6037)) + tuple(range(6099, 6200))
 
 
+# A filing's income statement covers three years. A figure for a year further back
+# that repeats the filing's newest figure exactly is that figure copied to the wrong
+# date: Equity Residential's FY2025 report also dates its 2025 lease income ($3.09bn)
+# to 2022 (filed before as $2.74bn), and three other FY2025 reports do the same.
+COPIED_YEAR_DAYS = 1000
+REVENUE_LINE_TAGS = sorted({t for f, _, ts in sec_api.FIELDS if f in (
+    "revenue", "interest_income", "noninterest_income", "lease_income") for t in ts})
+
+
+def drop_copied_years(rows):
+    """Annual (tag, period_end, value, filed, accn, ...) rows without those copies."""
+    newest = {}
+    for r in rows:
+        if r[0] in REVENUE_LINE_TAGS and r[1] is not None and r[2]:
+            key = (r[4], r[0], r[2])
+            newest[key] = max(newest.get(key, r[1]), r[1])
+    return [r for r in rows if not (r[0] in REVENUE_LINE_TAGS and r[1] is not None and r[2]
+                                    and (newest[(r[4], r[0], r[2])] - r[1]).days >= COPIED_YEAR_DAYS)]
+
+
 def composite_revenue(values, tags, sic, priors=None):
     """Revenue for the filers whose "revenue" tag is not their revenue, in
     place. A bank tags its fee income as revenue from contracts with
@@ -241,9 +261,13 @@ def composite_revenue(values, tags, sic, priors=None):
     2026-10-19); a REIT tags its rental income as lease income beside a small
     contract line. Banks (SIC 6020-6036, 6099-6199): total interest and
     dividend income plus non-interest income. Any filer whose lease income
-    exceeds the revenue line found: lease income plus that line. The tag
-    recorded names both parts; a filer's own "Revenues" line is never
-    replaced. Returns True when the revenue was composed."""
+    exceeds the revenue line found: lease income plus that line. With no
+    revenue line at all, lease income stands alone only for a property company
+    (SIC 65xx, 6798) that has no larger non-interest income: DTE Energy's $61mn
+    and Toyota Motor Credit's $6.5bn of leases are not their revenue, and
+    nothing is better than either. The tag recorded names both parts; a filer's
+    own "Revenues" line is never replaced. Returns True when the revenue was
+    composed."""
     tag = tags.get("revenue")
     if tag == "Revenues":
         return False
@@ -257,6 +281,8 @@ def composite_revenue(values, tags, sic, priors=None):
             pi, pn = priors.get("interest_income"), priors.get("noninterest_income")
             priors["revenue"] = (pi + (pn or 0)) if (pi is not None and (ni is None) == (pn is None)) else None
         return True
+    if tag is None and li is not None and not (sic is not None and (6500 <= int(sic) <= 6599 or int(sic) == 6798) and li >= (ni or 0)):
+        return False
     if li is not None and (tag is None or (tag or "").startswith("RevenueFromContract")) and li > (rev or 0):
         values["revenue"] = li + (rev or 0)
         tags["revenue"] = "OperatingLeaseLeaseIncome" + ((" + " + tag) if (tag and rev is not None) else "")
@@ -265,6 +291,14 @@ def composite_revenue(values, tags, sic, priors=None):
             priors["revenue"] = (pl + (pr or 0)) if (pl is not None and (rev is None) == (pr is None)) else None
         return True
     return False
+
+
+def landlord_revenue(values, tags, sic, priors=None):
+    """composite_revenue for the readers that go year by year or quarter by quarter,
+    leaving banks as they were."""
+    if sic is not None and int(sic) in BANK_SIC:
+        return False
+    return composite_revenue(values, tags, sic, priors)
 
 
 def compute_row(head, facts):

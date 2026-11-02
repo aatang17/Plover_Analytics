@@ -1145,6 +1145,13 @@
                  splits: d.splits || [], source: "Databento" };
       });
     }
+    if (m.how === "annual") {
+      // one value per fiscal year, as filed; companies line up on the year, whatever month theirs ends in
+      return chGet(US + "/build/figure?ticker=" + encodeURIComponent(s.ticker) + "&measure=" + encodeURIComponent(spec.measure)).then(function (d) {
+        var pts = (d.points || []).filter(function (p) { return p.period_end >= fetchFrom && (!spec.to || p.period_end <= spec.to); }).map(function (p) { return [p.fiscal_year + "-12-31", p.value]; });
+        return { name: name, ticker: s.ticker, points: pts, source: "SEC EDGAR", annual: true };
+      });
+    }
     if (m.how === "tag") {
       return chGet(US + "/financials/deep/" + encodeURIComponent(s.ticker) + "/series?tag=" + m.tag + "&freq=quarterly").then(function (d) {
         var pts = (d.values || []).map(function (v) { return [v.period_end, v.value]; }).sort(function (a, b) { return a[0] < b[0] ? -1 : 1; });
@@ -1189,13 +1196,14 @@
           return [p[0], (p[1] != null && prev != null && prev !== 0) ? (p[1] / prev - 1) * 100 : null];
         });
       }
-      pts = pts.filter(function (p) { return p[0] >= start && (!spec.to || p[0] <= spec.to); });
+      if (!s.annual) pts = pts.filter(function (p) { return p[0] >= start && (!spec.to || p[0] <= spec.to); });
+      else if (spec.display === "yoy") pts = pts.slice(1);              // the year before the window was read only to compare
       if (spec.display === "rebased") {
         var base = null;
         for (var k = 0; k < pts.length && base == null; k++) base = pts[k][1];
         pts = pts.map(function (p) { return [p[0], (p[1] != null && base) ? p[1] / base * 100 : null]; });
       }
-      return { name: s.name, ticker: s.ticker, slot: s.slot, points: pts, daily: s.daily, source: s.source, derived: s.derived, splits: s.splits, tag: s.tag };
+      return { name: s.name, ticker: s.ticker, slot: s.slot, points: pts, daily: s.daily, source: s.source, derived: s.derived, splits: s.splits, tag: s.tag, annual: s.annual };
     });
   }
   function chDescribe(spec) {
@@ -1207,6 +1215,7 @@
     if (idx.length) who += (who ? " against the " : "") + both(idx);
     return m + how + (who ? ": " + who : "");
   }
+  function chMeasureName(spec) { return (MEASURE_TEXT[spec.measure] || "").replace(/, yearly$/, ""); }
   function chCalc(spec, series) {
     var lines = [];
     if (spec.measure === "price") lines.push("Closes are Databento's end-of-day prices, adjusted for splits.");
@@ -1218,7 +1227,12 @@
     if (spec.measure === "fcf") lines.push("Free cash flow = cash from operations − capital spending, each quarter as filed.");
     if (spec.measure === "revenue_ttm") lines.push("Trailing 12 months = the sum of the last four quarters.");
     if (spec.measure === "rnd") lines.push("Research spending is the figure the company tags as research and development expense.");
-    if (spec.measure !== "price") lines.push("A fourth quarter is derived as the year less its three filed quarters, as the SEC does; per-share and balance-sheet figures are not derived.");
+    var how = MEASURE_HOW[spec.measure] || {};
+    if (how.how === "annual") {
+      if (how.ratio_to) lines.push(chMeasureName(spec) + " = the filed figure ÷ " + how.ratio_to + " × 100, each year, from each company's annual report (10-K, 20-F or 40-F) as last filed.");
+      else lines.push(chMeasureName(spec) + " is the figure each company filed in its annual report (10-K, 20-F or 40-F), as last filed.");
+      lines.push("Dollar filings only: a company reporting in another currency has no bars. A fiscal year is named by the calendar year it ends in. A year the company did not file the figure is left blank.");
+    } else if (spec.measure !== "price") lines.push("A fourth quarter is derived as the year less its three filed quarters, as the SEC does; per-share and balance-sheet figures are not derived.");
     series.forEach(function (s) {
       (s.splits || []).forEach(function (sp) { lines.push(s.ticker + ": " + sp.note); });
     });
@@ -1258,11 +1272,12 @@
       eventLines: (events || []).map(function (e) { return { x: e.date, label: e.ticker }; }),
       legendFloor: 640 };
     var kind = "line";
-    if (spec.chart_type === "bars" || (!series[0].daily && series.length === 1 && spec.display === "actual")) {
+    var annual = m.how === "annual";
+    if (annual || spec.chart_type === "bars" || (!series[0].daily && series.length === 1 && spec.display === "actual")) {
       var xs = [];
       series.forEach(function (s) { s.points.forEach(function (p) { if (xs.indexOf(p[0]) < 0) xs.push(p[0]); }); });
       xs.sort();
-      cfg.categories = xs.map(function (x) { return series[0].daily ? day(x).replace(/ \d{4}$/, "") : fmtPeriod(x); });
+      cfg.categories = xs.map(function (x) { return annual ? "FY" + x.slice(0, 4) : series[0].daily ? day(x).replace(/ \d{4}$/, "") : fmtPeriod(x); });
       cfg.series = cfg.series.map(function (s) {
         var mp = {}; s.points.forEach(function (p) { mp[p[0]] = p[1]; });
         return { name: s.name, slot: s.slot, points: xs.map(function (x) { return mp[x] === undefined ? null : mp[x]; }) };
@@ -1296,7 +1311,8 @@
     chEmpty("Loading…");
     var start = chStart(spec);
     var work = ss.map(function (s) { return chLoadSeries(s, spec).then(function (r) { r.slot = s.slot; return r; }); });
-    if (spec.mark_results) {
+    var marks = spec.mark_results && (MEASURE_HOW[spec.measure] || {}).how !== "annual";   // a results day has no place on a yearly axis
+    if (marks) {
       work.push(Promise.all(spec.series.slice(0, 6).map(function (s) {
         return chGet(US + "/events?kind=results&ticker=" + encodeURIComponent(s.ticker) + "&since=" + start).then(function (d) {
           return (d.events || []).filter(function (e) { return e.is_earnings; }).map(function (e) { return { date: e.date, ticker: s.ticker }; });
@@ -1305,9 +1321,14 @@
     }
     return Promise.all(work).then(function (res) {
       if (mine !== CH.seq) return;
-      var events = spec.mark_results ? res.pop().events : [];
+      var events = marks ? res.pop().events : [];
       var series = chTransform(res, spec, start).filter(function (s) { return s.points.some(function (p) { return p[1] != null; }); });
-      if (!series.length) { chEmpty("Nothing to draw: no " + (MEASURE_TEXT[spec.measure] || "").toLowerCase() + " is on file for this period."); return; }
+      if (!series.length) {
+        var yearly = (MEASURE_HOW[spec.measure] || {}).how === "annual";
+        chEmpty("Nothing to draw: no " + (yearly ? chMeasureName(spec) : MEASURE_TEXT[spec.measure] || "").toLowerCase() + " is on file for this period" +
+          (yearly ? " in US dollars. Try All History, or another figure from the menu." : "."));
+        return;
+      }
       chRender(series, events);
     }).catch(function (e) {
       if (mine !== CH.seq) return;
@@ -1335,7 +1356,9 @@
     $("#ch-display").value = spec.display;
     $("#ch-log").checked = !!spec.log;
     $("#ch-events").checked = !!spec.mark_results;
-    $("#ch-type").value = spec.chart_type || "line";
+    var yearly = (MEASURE_HOW[spec.measure] || {}).how === "annual";     // one bar a fiscal year, whatever the setting
+    $("#ch-type").value = yearly ? "bars" : (spec.chart_type || "line");
+    $("#ch-type").disabled = yearly;
     $("#ch-save").textContent = CH.id ? "Saved" : "Save to My Charts";
     $("#ch-save").disabled = false;
     history.replaceState(null, "", "#charts?" + chHash(spec));
@@ -1403,6 +1426,7 @@
   }
   function chChanged() {
     CH.id = null;                                  // an edit makes a new chart; Save keeps it
+    $("#ch-read").hidden = true;                   // it described the chart before this edit
     chLoad();
   }
   function chSetSpec(spec) {
@@ -1425,6 +1449,16 @@
     var url = US + "/build/chart?q=" + encodeURIComponent(q) + (CH.spec && CH.spec.series.length ? "&current=" + encodeURIComponent(JSON.stringify(CH.spec)) : "");
     fetch(url, { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }).then(function (d) {
       btn.disabled = false;
+      if (d && d.cannot) {                         // not on any chart: say so and offer what is; the chart on screen stays
+        read.textContent = d.cannot.text + " ";
+        (d.cannot.try || []).forEach(function (t, i) {
+          if (i) read.appendChild(document.createTextNode(" · "));
+          var b = document.createElement("button"); b.type = "button"; b.className = "my-link"; b.textContent = t;
+          b.onclick = function () { $("#ch-q").value = t; chFromWords(t); };
+          read.appendChild(b);
+        });
+        return;
+      }
       if (!d || !d.spec) throw new Error();
       CH.measures = d.measures || CH.measures; CH.benchmarks = d.benchmarks || CH.benchmarks;
       if (!d.spec.series.length && !(d.spec.benchmarks || []).length) {
@@ -1495,8 +1529,19 @@
   }
   function setupCharts() {
     $("#ch-measure").innerHTML = Object.keys(MEASURE_TEXT).map(function (k) { return '<option value="' + k + '">' + esc(MEASURE_TEXT[k]) + "</option>"; }).join("");
-    fetch(US + "/build/chart?q=S%26P%20500", { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }).then(function (d) {
+    CH.ready = fetch(US + "/build/measures", { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }).then(function (d) {
       CH.benchmarks = d.benchmarks || []; CH.measures = d.measures || [];
+      var groups = [];
+      CH.measures.forEach(function (m) {
+        MEASURE_TEXT[m.id] = m.label;
+        if (m.how === "annual") MEASURE_HOW[m.id] = { how: "annual", unit: m.unit, ratio_to: m.ratio_to };
+        var g = groups.filter(function (x) { return x.name === m.group; })[0];
+        if (!g) groups.push(g = { name: m.group, items: [] });
+        g.items.push(m);
+      });
+      $("#ch-measure").innerHTML = groups.map(function (g) {
+        return '<optgroup label="' + esc(g.name) + '">' + g.items.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.label) + "</option>"; }).join("") + "</optgroup>";
+      }).join("");
       if (CH.spec) chSync();
     }).catch(function () { /* the select stays short */ });
     $("#ch-ask").addEventListener("submit", function (e) { e.preventDefault(); chFromWords($("#ch-q").value); });
@@ -1897,9 +1942,12 @@
     }
     if (tab === "key") { var k = $("#my-key-in"); if (k && !k.disabled) k.focus(); }
     if (tab === "charts") {
-      var sp = qs ? chFromHash(qs) : null;
-      if (sp && (!CH.spec || chHash(sp) !== chHash(CH.spec))) chSetSpec(sp);
-      else if (CH.chart && !$("#ch-plot").hidden) CH.chart.render();   // drawn while hidden: size it now
+      // a link may name a yearly figure: the menu must be in before the link is read
+      Promise.resolve(CH.ready).then(function () {
+        var sp = qs ? chFromHash(qs) : null;
+        if (sp && (!CH.spec || chHash(sp) !== chHash(CH.spec))) chSetSpec(sp);
+        else if (CH.chart && !$("#ch-plot").hidden) CH.chart.render();   // drawn while hidden: size it now
+      });
     }
     if (tab === "screener" && qs && qs !== SC.lastQs) { SC.lastQs = qs; scFromHash(qs); }
   }

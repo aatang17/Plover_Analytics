@@ -43,7 +43,7 @@ import os
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import sec_api
+from . import sec_api, sec_metrics
 
 router = APIRouter(prefix="/api/v1/us/financials/deep", tags=["US deep coverage"])
 
@@ -314,8 +314,15 @@ def indicators(company: str,
         WHERE cik IN (%s) AND taxonomy = 'us-gaap' AND tag IN (%s)
           AND period_end IN (%s)
           AND (period_start IS NULL OR date_diff('day', period_start, period_end) BETWEEN %d AND %d)
-          AND (CAST(? AS DATE) IS NULL OR filed <= ?)""" % (
-        ",".join("?" * len(ciks)), ",".join("?" * len(tags)), ",".join("?" * len(ends)), lo, hi)
+          AND (CAST(? AS DATE) IS NULL OR filed <= ?)
+          AND NOT (tag IN (%s) AND value <> 0 AND EXISTS (
+              SELECT 1 FROM sec_cf_facts n WHERE n.cik = sec_cf_facts.cik AND n.accn = sec_cf_facts.accn
+                AND n.tag = sec_cf_facts.tag AND n.value = sec_cf_facts.value
+                AND date_diff('day', sec_cf_facts.period_end, n.period_end) >= %d))""" % (
+        ",".join("?" * len(ciks)), ",".join("?" * len(tags)), ",".join("?" * len(ends)), lo, hi,
+        ",".join("'%s'" % t for t in sec_metrics.REVENUE_LINE_TAGS), sec_metrics.COPIED_YEAR_DAYS)
+    sic = cur.execute("SELECT arg_max(sic, filed) FROM sec_filings WHERE cik IN (%s)" % ",".join("?" * len(ciks)),
+                      ciks).fetchone()[0] if sec_api._has(cur, "sec_filings") else None
     facts = {}
     for r in sec_api._rows(cur, _pick_sql(basis, picked),
                            ciks + tags + ends + [ceiling, ceiling]):
@@ -338,6 +345,10 @@ def indicators(company: str,
                                       "cik": hit["cik"]} if hit else None)
             if hit and kind == "duration" and start is None:
                 start = hit["period_start"]
+        # a landlord's revenue, as on every other surface; the source names both parts
+        used = {"revenue": (row["sources"]["revenue"] or {}).get("tag")}
+        if row["values"].get("lease_income") is not None and sec_metrics.landlord_revenue(row["values"], used, sic):
+            row["sources"]["revenue"] = dict(row["sources"]["lease_income"], tag=used["revenue"])
         row["period_start"] = _d(start)
         panel.append(row)
     return {"company": head, "registrants": group, "freq": freq, "basis": basis,

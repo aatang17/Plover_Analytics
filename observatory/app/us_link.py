@@ -312,6 +312,9 @@ _GENERIC_NAMES = {"TEN", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", 
                   "CLOUD", "DATA", "CENTER", "GAMING", "SEARCH", "VIDEO", "MUSIC", "MOBILE", "PAYMENTS", "ADVERTISING", "SERVICES",
                   "RETURNS", "HIGHEST", "LOWEST", "CHEAPEST", "FASTEST", "LARGEST", "BIGGEST", "RATE", "RATES", "RENT", "MARGIN", "MARGINS",
                   "FIRST", "LAST", "NEXT", "BIG", "LARGE", "MOST", "MARKET", "VALUE", "GLOBAL", "GENERAL",
+                  # a kind of business, not a name: "Equity Residential" was read as Armour Residential (2026-11-02)
+                  "RESIDENTIAL", "COMMUNITIES", "APARTMENT", "STORAGE", "MORTGAGE", "INDUSTRIAL", "LOGISTICS", "INFRASTRUCTURE",
+                  "HOSPITALITY", "PIPELINE", "BUILDERS", "STEEL", "PETROLEUM",
                   "AMERICAN", "UNITED", "NATIONAL", "CAPITAL", "FINANCIAL", "ENERGY", "HEALTH", "MEDICAL",
                   "DIGITAL", "TARGET", "GAP", "MATCH", "YIELD", "PRICE", "EARNINGS", "REPORT", "INSIDER",
                   "FUND", "BANK", "BANKS", "OIL", "GAS", "GOLD", "SILVER", "SUN", "STAR", "BOX", "SQUARE",
@@ -371,6 +374,36 @@ def _build_short_names(cur):
     return out
 
 
+def _build_former_names(cur):
+    """A name a company filed under before it was renamed -> the company, so
+    "Equity Residential" finds Vivmark Residential. Whole names of two words or
+    more only, and never one that two companies used or another company holds now."""
+    idx = companies(cur)
+    if not sec_api._has(cur, "sec_filings"):
+        return {}
+    seen = {}
+    for cik, name in cur.execute("SELECT DISTINCT cik, name FROM sec_filings WHERE name IS NOT NULL").fetchall():
+        rec = idx["by_cik"].get(int(cik))
+        n = norm_name(name)
+        if rec is None or " " not in n or n in idx["by_norm"] or n == norm_name(rec["name"]):
+            continue
+        seen.setdefault(n, set()).add(int(cik))
+    return {n: idx["by_cik"][next(iter(ciks))] for n, ciks in seen.items() if len(ciks) == 1}
+
+
+def current_names(cur, text):
+    """The text with any former company name replaced by today's, before anything
+    reads it: "Equity Residential revenue" must not be read as asking for equity."""
+    if cur is None or not text:
+        return text
+    qn = " " + norm_name(re.sub(r"(\w)['\u2019]s\b", r"\1", text)) + " "
+    for n, rec in _memo(cur, "former_names", _build_former_names).items():
+        if " " + n + " " in qn:
+            pat = r"\b" + r"[\s.,&'-]*".join(re.escape(w) for w in n.split()) + r"\b"
+            text = re.sub(pat, lambda m: company_name(rec["cik"], rec.get("name"), cur), text, flags=re.I)
+    return text
+
+
 # A company that moved to a new SEC filer number (a holding-company reorganisation) keeps its
 # history under the old one: {new cik: old cik}. Used wherever the latest annual report is looked up.
 PREDECESSOR_CIKS = {2115436: 34088}          # ExxonMobil Holdings Corp <- Exxon Mobil Corp (2026)
@@ -380,6 +413,7 @@ PREDECESSOR_CIKS = {2115436: 34088}          # ExxonMobil Holdings Corp <- Exxon
 # finds Alphabet without a model. Longest phrase wins; whole words only.
 ALIASES = {
     "exxon": "XOM", "exxonmobil": "XOM", "exxon mobil": "XOM", "google": "GOOGL", "alphabet": "GOOGL",
+    "vivmark": "VMRK", "eqr": "VMRK",                              # Equity Residential was renamed in August 2026
     "facebook": "META", "meta": "META", "berkshire": "BRK-B", "berkshire hathaway": "BRK-B", "jp morgan": "JPM",
     "jpmorgan": "JPM", "jpmorgan chase": "JPM", "j.p. morgan": "JPM", "goldman": "GS", "goldman sachs": "GS",
     "morgan stanley": "MS", "bank of america": "BAC", "bofa": "BAC", "wells": "WFC", "wells fargo": "WFC",
@@ -517,6 +551,11 @@ def find_companies(cur, question, limit=4):
             if pos >= 0 and not any(r is rec for _, r, _ in found) and not any(key in norm_name(r["name"]) for _, r, _ in found):
                 found.append((pos, rec, "name"))
     if len(found) < limit:
+        for n, rec in _memo(cur, "former_names", _build_former_names).items():
+            pos = qn.find(" " + n + " ")
+            if pos >= 0 and not any(r["cik"] == rec["cik"] for _, r, _ in found):
+                found.append((pos, rec, "former name"))
+    if len(found) < limit:
         short = _memo(cur, "short_names", _build_short_names)
         covered = " ".join(norm_name(r["name"]) for _, r, _ in found)
         # A short name is read only from a word written as a name (capitalised,
@@ -558,10 +597,11 @@ def _build_cusips(cur):
         SELECT n.cusip, n.issuer_name, n.n, t.value FROM names n JOIN totals t USING (cusip)
         ORDER BY n.cusip, n.n DESC""").fetchall()
     by_cusip, by_cik = {}, {}
+    former = _memo(cur, "former_names", _build_former_names)        # managers keep writing the old name for a while
     for cusip, name, n_mgrs, value in rows:
         if cusip in by_cusip:
             continue
-        rec = idx["by_norm"].get(norm_name(name))
+        rec = idx["by_norm"].get(norm_name(name)) or former.get(norm_name(name))
         if rec is None:
             continue
         by_cusip[cusip] = {"cik": rec["cik"], "name": rec["name"], "issuer_name": name, "value": value}

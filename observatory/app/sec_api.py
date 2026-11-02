@@ -109,7 +109,11 @@ FORM_FAMILY = {"10-K": ANNUAL_FORMS, "annual": ANNUAL_FORMS,
 # report, the quarter itself for a 10-Q).
 FIELDS = [
     ("revenue", "duration",
-     ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
+     ["Revenues",
+      # a utility's total: Xcel and DTE moved to it and their history stopped in 2017-18;
+      # Duke's contract revenue beside it is $31.7bn of its $32.2bn
+      "RegulatedAndUnregulatedOperatingRevenue",
+      "RevenueFromContractWithCustomerExcludingAssessedTax",
       "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax",
       "SalesRevenueGoodsNet", "TotalRevenuesAndOtherIncome",
       "InterestAndDividendIncomeOperating",

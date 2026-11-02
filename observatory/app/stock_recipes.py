@@ -1497,6 +1497,24 @@ def _manager_changes(cur, manager_cik):
     return rows
 
 
+def _by_issuer(rows):
+    """A manager's 13F lines per company, not per share class: Alphabet's Class A
+    and Class C are two CUSIPs and one company, and an answer that lists "Alphabet
+    Inc" twice reads as a mistake. Rows as _manager_changes, plus how many classes."""
+    out = {}
+    for r in rows:
+        out.setdefault((r[1] or "").upper(), []).append(r)
+    total = lambda rs, i: sum(x[i] for x in rs if x[i] is not None) if any(x[i] is not None for x in rs) else None  # noqa: E731
+    merged = [(rs[0][0], rs[0][1], total(rs, 2), total(rs, 3), total(rs, 4), total(rs, 5), rs[0][6], rs[0][7], len(rs)) for rs in out.values()]
+    return sorted(merged, key=lambda r: -(r[2] or 0))
+
+
+def _share_change(r, num):
+    """"+48,144,587 shares across 2 share classes", or "+1,000 shares" for one."""
+    change = (r[3] or 0) - (r[5] or 0)
+    return "%s%s shares%s" % ("+" if change > 0 else "", num(change), " across %d share classes" % r[8] if r[8] > 1 else "")
+
+
 def r_manager_portfolio(cur, q, e):
     mgr = e.get("manager")
     if not mgr:
@@ -1536,11 +1554,14 @@ def r_manager_portfolio(cur, q, e):
                    table, None, [F13_SOURCE], {"share_of_portfolio": "position value \u00f7 total reported value \u00d7 100"},
                    {"manager": {"cik": cik, "name": name}, "company": target}, {"company": company_link(target)},
                    ["Long positions only, as reported on Form 13F; values are as filed."])
-    new = [r for r in cur_rows if r[4] is None and prev_period]
-    dropped = [r for r in rows if r[2] is None and r[4] is not None]
-    bigger = sorted([r for r in cur_rows if r[5] and r[3] and r[3] > r[5] * 1.001], key=lambda r: -((r[3] or 0) - (r[5] or 0)) * ((r[2] or 0) / (r[3] or 1)))
-    smaller = sorted([r for r in cur_rows if r[5] and r[3] is not None and r[3] < r[5] * 0.999], key=lambda r: ((r[3] or 0) - (r[5] or 0)) * ((r[2] or 0) / (r[3] or 1)))
-    top = cur_rows[0]
+    # the words go company by company; the table keeps each filed line with its CUSIP
+    issuers = _by_issuer(rows)
+    held = [r for r in issuers if r[2] is not None]
+    new = [r for r in held if r[4] is None and prev_period]
+    dropped = [r for r in issuers if r[2] is None and r[4] is not None]
+    bigger = sorted([r for r in held if r[5] and r[3] and r[3] > r[5] * 1.001], key=lambda r: -((r[3] or 0) - (r[5] or 0)) * ((r[2] or 0) / (r[3] or 1)))
+    smaller = sorted([r for r in held if r[5] and r[3] is not None and r[3] < r[5] * 0.999], key=lambda r: ((r[3] or 0) - (r[5] or 0)) * ((r[2] or 0) / (r[3] or 1)))
+    top = held[0]
     headline = "%s reported %s across %d positions for the quarter to %s; the largest is %s at %s." % (
         name.title(), money(total), len(cur_rows), date_words(period), top[1].title(), pct(top[2] / total * 100 if total else None))
     bits = []
@@ -1549,33 +1570,33 @@ def r_manager_portfolio(cur, q, e):
     buys = bool(re.search(r"\b(bought|buy|buys|buying|added|adds|adding|new positions?|increased|raised|built)\b", ql))
     if prev_period and sells and not buys:
         drop_names = ", ".join(r[1].title() for r in sorted(dropped, key=lambda r: -(r[4] or 0))[:5]) or "none"
-        trim_names = ", ".join("%s (%s shares)" % (r[1].title(), num((r[3] or 0) - (r[5] or 0))) for r in smaller[:4]) or "none"
+        trim_names = ", ".join("%s (%s)" % (r[1].title(), _share_change(r, num)) for r in smaller[:4]) or "none"
         headline = "%s sold out of %d position%s and trimmed %d in the quarter to %s. Sold out: %s. Trimmed most: %s." % (
             name.title(), len(dropped), "" if len(dropped) == 1 else "s", len(smaller), date_words(period), drop_names, trim_names)
         bits.append("Against the quarter to %s. The portfolio held %s across %d positions at the quarter end; the largest is %s at %s." % (
             date_words(prev_period), money(total), len(cur_rows), top[1].title(), pct(top[2] / total * 100 if total else None)))
     elif prev_period and buys and not sells:
         new_names = ", ".join(r[1].title() for r in sorted(new, key=lambda r: -(r[2] or 0))[:5]) or "none"
-        add_names = ", ".join("%s (+%s shares)" % (r[1].title(), num((r[3] or 0) - (r[5] or 0))) for r in bigger[:4]) or "none"
+        add_names = ", ".join("%s (%s)" % (r[1].title(), _share_change(r, num)) for r in bigger[:4]) or "none"
         headline = "%s opened %d new position%s and added to %d in the quarter to %s. New: %s. Added most: %s." % (
             name.title(), len(new), "" if len(new) == 1 else "s", len(bigger), date_words(period), new_names, add_names)
         bits.append("Against the quarter to %s. The portfolio held %s across %d positions at the quarter end; the largest is %s at %s." % (
             date_words(prev_period), money(total), len(cur_rows), top[1].title(), pct(top[2] / total * 100 if total else None)))
     if prev_period:
-        bits.append("Against the quarter to %s: %d new positions (%s), %d dropped (%s)." % (
-            date_words(prev_period), len(new), ", ".join(r[1].title() for r in sorted(new, key=lambda r: -(r[2] or 0))[:4]) or "none",
+        bits.append("Against the quarter to %s: %d new position%s (%s), %d dropped (%s)." % (
+            date_words(prev_period), len(new), "" if len(new) == 1 else "s", ", ".join(r[1].title() for r in sorted(new, key=lambda r: -(r[2] or 0))[:4]) or "none",
             len(dropped), ", ".join(r[1].title() for r in sorted(dropped, key=lambda r: -(r[4] or 0))[:4]) or "none"))
         if bigger:
-            bits.append("Added to: " + ", ".join("%s (+%s shares)" % (r[1].title(), num((r[3] or 0) - (r[5] or 0))) for r in bigger[:3]) + ".")
+            bits.append("Added to: " + ", ".join("%s (%s)" % (r[1].title(), _share_change(r, num)) for r in bigger[:3]) + ".")
         if smaller:
-            bits.append("Trimmed: " + ", ".join("%s (%s shares)" % (r[1].title(), num((r[3] or 0) - (r[5] or 0))) for r in smaller[:3]) + ".")
+            bits.append("Trimmed: " + ", ".join("%s (%s)" % (r[1].title(), _share_change(r, num)) for r in smaller[:3]) + ".")
     else:
         bits.append("Only one quarter is loaded for this manager, so there is no quarter-on-quarter change yet.")
     table = {"columns": ["Issuer", "CUSIP", "Value", "Shares", "Share of portfolio", "Prior shares", "Change in shares"],
              "rows": [[r[1], r[0], r[2], r[3], round(r[2] / total * 100, 2) if total and r[2] is not None else None, r[5],
                        ((r[3] or 0) - (r[5] or 0)) if (r[3] is not None or r[5] is not None) else None] for r in rows[:60]], "unit": "USD"}
     chart = {"kind": "bars", "title": "%s: largest positions" % name.title(), "unit": "USD",
-             "series": [{"name": "Value", "points": [[r[1].title()[:26], r[2]] for r in cur_rows[:12]]}]}
+             "series": [{"name": "Value", "points": [[r[1].title()[:26], r[2]] for r in held[:12]]}]}
     return pkg("manager_portfolio", q, headline, " ".join(bits), [fig("Reported value", total, "USD", period), fig("Positions", len(cur_rows), "count", period)],
                table, chart, [F13_SOURCE], {"share_of_portfolio": "position value ÷ total reported value × 100"},
                {"manager": {"cik": cik, "name": name}}, {},
@@ -2824,7 +2845,7 @@ def _annual_part(cur, cik, tags, kind, fy_month_day):
     line, from both sources. Per year the first candidate tag the company used
     that year wins (companies switch tags over time); the latest filed value
     is shown and the first-reported one kept beside it."""
-    rows = _cf_rows(cur, cik, tags, kind) + _fsds_rows(cur, cik, tags, kind)
+    rows = sec_metrics.drop_copied_years(_cf_rows(cur, cik, tags, kind) + _fsds_rows(cur, cik, tags, kind))
     by_end = {}
     for tag, end, value, filed, accn, unit in rows:
         if value is None or end is None:
@@ -2850,6 +2871,30 @@ def _annual_part(cur, cik, tags, kind, fy_month_day):
     return out
 
 
+def _revenue_part(cur, cik, md):
+    """Revenue per year with a landlord's lease income: Equity Residential's "Revenues"
+    stops at 2019 and lease income carries on, Camden's sits beside a $13mn contract line."""
+    rev = _annual_part(cur, cik, _FIELD_TAGS["revenue"], "duration", md)
+    parts = {f: _annual_part(cur, cik, _FIELD_TAGS[f], "duration", md) for f in ("noninterest_income", "lease_income")}
+    if not parts["lease_income"]:
+        return rev
+    sic = cur.execute("SELECT arg_max(sic, filed) FROM sec_filings WHERE cik = ?", [cik]).fetchone()[0]
+    out = dict(rev)
+    for end in set(rev) | set(parts["lease_income"]):
+        at = {f: p[end] for f, p in parts.items() if end in p}
+        if end in rev:
+            at["revenue"] = rev[end]
+        values = {f: a["value"] for f, a in at.items()}
+        firsts = {f: a["first_value"] for f, a in at.items()}
+        tags = {"revenue": rev[end]["tag"] if end in rev else None}
+        if not sec_metrics.landlord_revenue(values, tags, sic, firsts):
+            continue
+        out[end] = {"value": values["revenue"], "tag": tags["revenue"], "filed": max(a["filed"] for a in at.values()),
+                    "accn": at["lease_income"]["accn"], "first_value": firsts.get("revenue"),
+                    "first_filed": min(a["first_filed"] for a in at.values())}
+    return out
+
+
 def _month_end(d):
     if d.day < 15:
         d = d.replace(day=1) - datetime.timedelta(days=1)
@@ -2861,6 +2906,8 @@ def annual_history(cur, cik, hf, latest_period):
     """[(period_end, value, detail)] oldest first for a history figure."""
     md = (latest_period.month, latest_period.day) if latest_period else None
     def part(field):
+        if field == "revenue":
+            return _revenue_part(cur, cik, md)
         return _annual_part(cur, cik, _FIELD_TAGS[field], _FIELD_KIND[field], md)
     fid = hf["id"]
     if fid.startswith("fig:"):
@@ -5468,6 +5515,7 @@ def _route(cur, question, prev=None, opts=None):
     on a ranking's reading (parse_opts: sp500, all, tech)."""
     from . import ask_miss, ask_progress, us_ask_model
     opts = opts if isinstance(opts, frozenset) else parse_opts(opts)
+    question = us_link.current_names(cur, question)
     ql = (question or "").lower()
     if _NOT_A_QUESTION.fullmatch(ql.strip(" ?!.,")):
         raise ask_miss.miss(ask_miss.UNCLEAR, "unclear")

@@ -74,6 +74,33 @@ class CompositeRevenueTest(unittest.TestCase):
         self.assertAlmostEqual(row["size"]["revenue"], 1586.4, places=3)
         self.assertEqual(row["tags"]["revenue"], "OperatingLeaseLeaseIncome + RevenueFromContractWithCustomerExcludingAssessedTax")
 
+    def test_lease_income_alone_is_revenue_only_for_a_property_company(self):
+        for sic, want in ((6798, 3094.0), (6512, 3094.0), (4911, None), (6141, None), (None, None)):
+            row = sec_metrics.compute_row(head(sic=sic), facts(OperatingLeaseLeaseIncome=(3094.0, 2980.0)))
+            self.assertEqual(row["size"]["revenue"], want, sic)
+        # a mortgage REIT: its leases are a side line
+        row = sec_metrics.compute_row(head(sic=6798), facts(OperatingLeaseLeaseIncome=(21.3, 7.2), NoninterestIncome=(272.2, 250.0)))
+        self.assertIsNone(row["size"]["revenue"])
+
+    def test_year_by_year_readers_leave_a_bank_alone(self):
+        values = {"revenue": 100.0, "lease_income": 150.0}
+        self.assertFalse(sec_metrics.landlord_revenue(values, {"revenue": "RevenueFromContractWithCustomerExcludingAssessedTax"}, 6021))
+        self.assertEqual(values["revenue"], 100.0)
+
+    def test_a_year_copied_from_the_newest_figure_is_dropped(self):
+        D = datetime.date
+        tag = "OperatingLeaseLeaseIncome"
+        rows = [(tag, D(2025, 12, 31), 3094.0, D(2026, 2, 13), "k25", "USD"),
+                (tag, D(2024, 12, 31), 2980.0, D(2026, 2, 13), "k25", "USD"),
+                (tag, D(2022, 12, 31), 3094.0, D(2026, 2, 13), "k25", "USD"),   # the slip
+                (tag, D(2022, 12, 31), 2735.0, D(2025, 2, 13), "k24", "USD"),
+                (tag, D(2023, 12, 31), 2980.0, D(2026, 2, 13), "k25", "USD"),   # a flat figure a year back is real
+                ("NetIncomeLoss", D(2022, 12, 31), 9.0, D(2026, 2, 13), "k25", "USD"),
+                ("NetIncomeLoss", D(2025, 12, 31), 9.0, D(2026, 2, 13), "k25", "USD")]
+        kept = sec_metrics.drop_copied_years(rows)
+        self.assertEqual(len(kept), len(rows) - 1)
+        self.assertNotIn(rows[2], kept)
+
     def test_a_filers_own_revenues_line_is_kept(self):
         row = sec_metrics.compute_row(head(sic=6021), facts(
             Revenues=(3000.0, 2800.0), InterestAndDividendIncomeOperating=(2420.7, 2300.0), NoninterestIncome=(499.1, 450.0)))

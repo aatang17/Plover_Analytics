@@ -49,6 +49,108 @@ def _cur():
         return None
 
 
+class ChartFigures(unittest.TestCase):
+    """Every filed figure can be charted, and what cannot be is said, not swapped
+    (2026-11-02: "Nvidia and Intel dividends" drew share prices, "Apple capex" free cash flow)."""
+
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(us_build_api.router)
+        self.c = TestClient(app)
+
+    def hit(self, q):
+        return us_build_api._measure_hits(q.lower())
+
+    def test_every_figure_is_on_the_menu(self):
+        from app import us_figures
+        for e in us_figures.catalogue():
+            mid = us_build_api._ALREADY.get(e["id"], e["id"])
+            self.assertIn(mid, us_build_api.MEASURES, e["id"])
+        menu = self.c.get("/api/v1/us/build/measures").json()["measures"]
+        self.assertEqual(len(menu), len(us_build_api.MEASURES))
+        self.assertTrue(all(m["group"] for m in menu))
+
+    def test_the_words_people_type(self):
+        for q, want in (("dividends", "dividends_paid"), ("dividends paid", "dividends_paid"), ("dividend per share", "dps"), ("capex", "capex"),
+                        ("capital spending", "capex"), ("capital expenditure", "capex"), ("buybacks", "buybacks"), ("share repurchases", "buybacks"),
+                        ("debt", "debt"), ("cash", "cash"), ("cash flow", "cf_operating"), ("free cash flow", "fcf"), ("operating cash flow", "cf_operating"),
+                        ("gross profit", "gross_profit"), ("gross margin", "gross_margin"), ("profit", "net_income"), ("net interest income", "nii"),
+                        ("retained earnings", "retained"), ("earnings per share", "eps"), ("total assets", "total_assets"), ("current assets", "current_assets"),
+                        ("research and development", "rnd"), ("R&D", "rnd"), ("revenue", "revenue"), ("operating margin", "operating_margin"),
+                        ("inventory", "inventory"), ("goodwill", "goodwill"), ("share count", "shares"), ("effective tax rate", "tax_rate")):
+            self.assertEqual(self.hit(q)[0], want, q)
+        self.assertIsNone(self.hit("this year")[0])
+
+    def test_two_figures_are_both_noticed(self):
+        hit, others = self.hit("revenue and capex")
+        self.assertEqual({hit} | set(others), {"revenue", "capex"})
+
+    def test_what_no_chart_holds_is_said(self):
+        for q in ("dividend yield", "market cap", "P/E ratio", "EBITDA", "return on equity", "employees", "price target", "short interest", "CEO pay"):
+            r = self.c.get("/api/v1/us/build/chart", params={"q": "Apple " + q}).json()
+            self.assertIsNone(r["spec"], q)
+            self.assertIn("can't chart", r["cannot"]["text"], q)
+            self.assertTrue(r["cannot"]["try"], q)
+            for t in r["cannot"]["try"]:                                     # what it offers must itself draw
+                again = self.c.get("/api/v1/us/build/chart", params={"q": t}).json()
+                self.assertIsNotNone(again["spec"], t)
+
+    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    def test_a_new_request_replaces_the_chart_a_change_edits_it(self):
+        import json
+        now = json.dumps({"series": [{"ticker": "NVDA", "name": "NVIDIA"}], "measure": "price", "period": "ytd", "benchmarks": ["sp500"], "display": "rebased"})
+        who = lambda q: [s["ticker"] for s in self.c.get("/api/v1/us/build/chart", params={"q": q, "current": now}).json()["spec"]["series"]]  # noqa: E731
+        self.assertEqual(who("Apple capex"), ["AAPL"])
+        self.assertEqual(who("Apple and Microsoft this year"), ["AAPL", "MSFT"])
+        self.assertEqual(who("add Apple"), ["NVDA", "AAPL"])
+        self.assertEqual(who("Apple too"), ["NVDA", "AAPL"])
+        self.assertEqual(who("make it dividends"), ["NVDA"])
+
+    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    def test_a_period_in_words_stands_and_weeks_do_not_suit_a_filed_figure(self):
+        import json
+        spec = self.c.get("/api/v1/us/build/chart", params={"q": "Microsoft buybacks last 10 years"}).json()["spec"]
+        self.assertTrue(spec["from"])
+        now = json.dumps({"series": [{"ticker": "NVDA", "name": "NVIDIA"}], "measure": "price", "period": "ytd", "benchmarks": ["sp500"], "display": "rebased"})
+        spec = self.c.get("/api/v1/us/build/chart", params={"q": "make it dividends", "current": now}).json()["spec"]
+        self.assertEqual((spec["measure"], spec["period"]), ("dividends_paid", "5y"))
+        self.assertIsNone(self.c.get("/api/v1/us/build/chart", params={"q": "Apple net debt"}).json()["spec"])
+
+    def test_a_ratio_names_one_figure_or_is_refused(self):
+        self.assertEqual(self.hit("r&d as a share of revenue"), ("rd_intensity", []))
+        r = self.c.get("/api/v1/us/build/chart", params={"q": "Apple capex as a share of revenue"}).json()
+        self.assertIsNone(r["spec"])
+        r = self.c.get("/api/v1/us/build/chart", params={"q": "Apple revenue per share"}).json()
+        self.assertIsNone(r["spec"])
+
+    def test_figure_rejects_what_it_does_not_hold(self):
+        self.assertEqual(self.c.get("/api/v1/us/build/figure", params={"ticker": "AAPL", "measure": "price"}).status_code, 404)
+
+    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    def test_chart_asks_draw_the_figure_named(self):
+        for q, want, unit in (("Nvidia and Intel dividends", "dividends_paid", "USD"), ("Apple capex for the last 10 years", "capex", "USD"),
+                              ("Microsoft buybacks last 10 years", "buybacks", "USD"), ("Equity Residential revenue", "revenue", "USD")):
+            r = self.c.get("/api/v1/us/build/chart", params={"q": q}).json()
+            self.assertEqual(r["spec"]["measure"], want, q)
+            self.assertEqual(r["spec"]["benchmarks"], [], q)
+            self.assertEqual(r["spec"]["display"], "actual", q)
+            self.assertIn(us_build_api.MEASURES[want]["label"], r["read_as"], q)
+        r = self.c.get("/api/v1/us/build/chart", params={"q": "Apple capex for the last 10 years"}).json()
+        self.assertTrue(r["spec"]["from"], "ten years is read")
+
+    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    def test_the_figure_is_the_ask_boxs_figure(self):
+        from app import us_figures, us_link
+        cur = _cur()
+        rec = us_link.companies(cur)["by_ticker"]["AAPL"]
+        whole = {r["fiscal_year"]: r for r in us_figures.annual_rows(cur, {rec["cik"]: "AAPL", -1: "X", **{-i: "X" for i in range(2, 15)}})}
+        body = self.c.get("/api/v1/us/build/figure", params={"ticker": "AAPL", "measure": "dividends_paid"}).json()
+        self.assertGreater(len(body["points"]), 3)
+        for p in body["points"]:
+            self.assertEqual(p["value"], whole[p["fiscal_year"]]["dividends_paid_usd"])
+        self.assertEqual([p["fiscal_year"] for p in body["points"]], sorted(p["fiscal_year"] for p in body["points"]))
+
+
 class ScreenWords(unittest.TestCase):
     """The screener box's own example and the obvious requests, read by words."""
 

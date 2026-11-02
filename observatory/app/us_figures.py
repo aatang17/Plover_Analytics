@@ -191,7 +191,8 @@ def _month_end_sql(col):
 
 def annual_rows(cur, tickers, today=None):
     """One row per company per fiscal year: every figure, as last filed, in dollars.
-    `tickers` is {cik: ticker}, the companies in `stocks`."""
+    `tickers` is {cik: ticker}, the companies in `stocks`; a chart's handful of
+    companies is read on its own, not the whole universe."""
     if not sec_api._has(cur, "sec_facts") or not sec_api._has(cur, "sec_filings"):
         return []
     today = today or datetime.date.today()
@@ -199,27 +200,35 @@ def annual_rows(cur, tickers, today=None):
     marks = ",".join("?" * len(tags))
     forms = list(sec_api.ANNUAL_FORMS)
     form_marks = ",".join("?" * len(forms))
+    few = list(tickers) if len(tickers) <= 12 else None
+    only = lambda col: ("AND %s IN (%s)" % (col, ",".join(str(int(c)) for c in few))) if few else ""  # noqa: E731
     parts = ["""
-        SELECT s.cik, f.tag, f.ddate AS d, f.qtrs = 4 AS is_duration, f.value, s.filed, 0 AS source
+        SELECT s.cik, f.tag, f.ddate AS d, f.qtrs = 4 AS is_duration, f.value, s.filed, 0 AS source, f.adsh AS accn
         FROM sec_facts f JOIN sec_filings s USING (adsh)
         WHERE s.form IN (%s) AND s.status IN ('clean', 'partial') AND f.segment_id IS NULL AND f.coreg IS NULL
-          AND f.qtrs IN (0, 4) AND f.uom IN ('USD', 'USD/shares', 'shares') AND f.tag IN (%s)""" % (form_marks, marks)]
+          AND f.qtrs IN (0, 4) AND f.uom IN ('USD', 'USD/shares', 'shares') AND f.tag IN (%s) %s""" % (form_marks, marks, only("s.cik"))]
     args = forms + tags
     if sec_api._has(cur, "sec_cf_facts"):
         parts.append("""
-        SELECT cik, tag, period_end AS d, period_start IS NOT NULL AS is_duration, value, filed, 1 AS source
+        SELECT cik, tag, period_end AS d, period_start IS NOT NULL AS is_duration, value, filed, 1 AS source, accn
         FROM sec_cf_facts
         WHERE fp = 'FY' AND form IN (%s) AND unit IN ('USD', 'USD/shares', 'shares') AND tag IN (%s)
-          AND (period_start IS NULL OR period_end - period_start BETWEEN 350 AND 380)""" % (form_marks, marks))
+          AND (period_start IS NULL OR period_end - period_start BETWEEN 350 AND 380) %s""" % (form_marks, marks, only("cik")))
         args += forms + tags
     rows = cur.execute("""
-        WITH raw AS (%s), clean AS (
+        WITH raw AS (%s), lines AS (
+            SELECT accn, tag, d, value, max(d) OVER (PARTITION BY accn, tag, value) AS newest FROM raw
+            WHERE is_duration AND value <> 0 AND tag IN (%s)
+        ), clean AS (
             SELECT cik, tag, %s AS end_d, is_duration, value, filed, source FROM raw
-            WHERE value IS NOT NULL AND d >= DATE '1990-01-01' AND d <= ?)
+            WHERE value IS NOT NULL AND d >= DATE '1990-01-01' AND d <= ?
+              AND NOT EXISTS (SELECT 1 FROM lines l WHERE l.accn = raw.accn AND l.tag = raw.tag AND l.d = raw.d
+                              AND l.value = raw.value AND date_diff('day', l.d, l.newest) >= %d))
         SELECT cik, end_d, tag, is_duration, arg_max(value, filed), max(filed), min(source) FROM clean
-        GROUP BY cik, end_d, tag, is_duration""" % (" UNION ALL ".join(parts), _month_end_sql("d")), args + [today]).fetchall()
+        GROUP BY cik, end_d, tag, is_duration""" % (" UNION ALL ".join(parts), ",".join("'%s'" % t for t in sec_metrics.REVENUE_LINE_TAGS),
+                                                    _month_end_sql("d"), sec_metrics.COPIED_YEAR_DAYS), args + [today]).fetchall()
     last = {cik: (p, sic) for cik, p, sic in cur.execute(
-        "SELECT cik, max(period), arg_max(sic, filed) FROM sec_filings WHERE form IN (%s) GROUP BY cik" % form_marks, forms).fetchall()}
+        "SELECT cik, max(period), arg_max(sic, filed) FROM sec_filings WHERE form IN (%s) %s GROUP BY cik" % (form_marks, only("cik")), forms).fetchall()}
     # A company's own statements name its revenue line. Company facts can carry a second, larger "Revenues"
     # (Republic Services' $19.0bn before intercompany sales, against the $16.6bn on its statements): the lines
     # the statement data sets use for the company come first, in every year (2026-10-30).
