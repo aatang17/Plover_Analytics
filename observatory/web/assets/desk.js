@@ -1076,8 +1076,8 @@ function renderImageBlock(c, b) {
     '<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-img="file">' +
     '<div class="dk-fig-fields">' +
     '<label>Caption <input type="text" data-f="caption" maxlength="200" placeholder="What the chart shows"></label>' +
-    '<label><span>Source <span class="req" aria-hidden="true">*</span></span><input type="text" data-f="source" maxlength="400" placeholder="e.g. Bank of Japan; PloverResearch calculations"></label>' +
-    '<label><span>Description for screen readers <span class="req" aria-hidden="true">*</span></span><input type="text" data-f="alt" maxlength="400" placeholder="One sentence: what a reader would see"></label>' +
+    '<label>Source <input type="text" data-f="source" maxlength="400" placeholder="e.g. Bank of Japan; PloverResearch calculations"></label>' +
+    '<label>Description for screen readers <input type="text" data-f="alt" maxlength="400" placeholder="One sentence: what a reader would see"></label>' +
     '<p class="dk-img-status" hidden></p></div>';
   $('[data-f="caption"]', c).value = b.caption || "";
   $('[data-f="source"]', c).value = b.source || "";

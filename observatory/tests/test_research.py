@@ -15,6 +15,7 @@ Content-Security-Policy; only people with the Writing permission can write.
 import json
 import os
 import pathlib
+import re
 import shutil
 import sqlite3
 import struct
@@ -250,7 +251,8 @@ class DeskTest(Base):
         problems = " ".join(r.json()["problems"])
         self.assertIn("summary", problems)
         self.assertIn("waiting for its image", problems)
-        self.assertIn("source line", problems)
+        self.assertNotIn("source line", problems)                  # optional on an image
+        self.assertNotIn("screen readers", problems)
         self.assertEqual(self.anon.get("/research/regional-banks-rate-path").status_code, 404)
 
     def publish(self, aid, note=""):
@@ -290,6 +292,16 @@ class DeskTest(Base):
         self.assertEqual(self.anon.get("/research/regional-banks-rate-path/v1").status_code, 200)
         self.assertEqual(self.anon.get("/research/regional-banks-rate-path/v9").status_code, 404)
         self.assertEqual(self.anon.get("/research/nope").status_code, 404)
+
+    def test_page_assets_carry_content_hashes(self):
+        # a browser holding the old stylesheet must not draw a new page with it
+        from app import prerender
+        before = prerender.WEB_DIR
+        prerender.WEB_DIR = REPO / "observatory" / "web"
+        self.addCleanup(setattr, prerender, "WEB_DIR", before)
+        html = self.anon.get("/research").text
+        for name in ("tokens.css", "app.css", "research.css", "nav.js", "charts.js", "research.js"):
+            self.assertRegex(html, r'/assets/%s\?v=[0-9a-f]{16}"' % re.escape(name))
 
     def test_versions_are_immutable(self):
         a = self.new_article()
@@ -415,6 +427,20 @@ class DeskTest(Base):
         for bad in ("<script", "onerror", "onclick", "onload", "javascript:", "<svg", "<img"):
             self.assertNotIn(bad, body)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;T", body)
+
+    def test_image_publishes_without_source_or_description(self):
+        info = self.w.post("/admin/api/research/media", content=png(5, 4),
+                           headers={"Content-Type": "image/png", "X-File-Name": "c.png"}).json()
+        a = self.new_article()
+        self.save(a["id"], self.complete_draft(blocks=[
+            {"id": "i1", "type": "image", "media": info["media"], "ext": "png", "alt": "",
+             "caption": "Yields since 1990", "source": ""},
+            {"id": "p1", "type": "p", "html": "Text."}]), a["revision"])
+        self.publish(a["id"])
+        html = self.anon.get("/research/regional-banks-rate-path").text
+        self.assertIn('alt="Yields since 1990"', html)                 # the caption stands in
+        fig = html.split('<figure class="rs-image"', 1)[1].split("</figure>", 1)[0]
+        self.assertNotIn("Source:", fig)                               # no empty source line
 
     def test_images_checked_by_content(self):
         r = self.w.post("/admin/api/research/media", content=png(5, 4),

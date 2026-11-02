@@ -567,10 +567,6 @@ def publish_problems(draft, author_names):
                 if not b["media"]:
                     problems.append("%s is waiting for its image to be uploaded%s."
                                     % (label, (" (" + b["pending"] + ")") if b["pending"] else ""))
-                if not b["source"]:
-                    problems.append("%s needs a source line." % label)
-                if not b["alt"]:
-                    problems.append("%s needs a text description for screen readers." % label)
         elif b["type"] == "table":
             n_table += 1
             if not b["source"]:
@@ -952,7 +948,7 @@ def _render_image(b, n, media_base):
         if b["width"] and b["height"]:
             dims = ' width="%d" height="%d"' % (b["width"], b["height"])
         parts.append('<img src="%s%s.%s" alt="%s"%s loading="lazy">'
-                     % (media_base, b["media"], b["ext"], esc(b["alt"]), dims))
+                     % (media_base, b["media"], b["ext"], esc(b["alt"] or b["caption"]), dims))
     else:
         parts.append('<p class="rs-chart-error">Image not uploaded yet%s.</p>'
                      % ((" (" + esc(b["pending"]) + ")") if b["pending"] else ""))
@@ -1108,7 +1104,7 @@ def render_markdown(doc, snapshots=None, site="", media_base="/research/media/",
             lines = ["**Chart %d%s**" % (n, (u" \u2014 " + b["caption"]) if b["caption"] else "")]
             if b["media"]:
                 lines.append("")
-                lines.append("![%s](%s%s%s.%s)" % (b["alt"], site, media_base, b["media"], b["ext"]))
+                lines.append("![%s](%s%s%s.%s)" % (b["alt"] or b["caption"], site, media_base, b["media"], b["ext"]))
             if b["source"]:
                 lines.append("")
                 lines.append("Source: " + b["source"])

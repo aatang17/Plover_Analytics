@@ -42,7 +42,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse,
                                RedirectResponse, Response)
 
-from . import newsletter, pub_profile, research, research_doc as rd, seo
+from . import newsletter, prerender, pub_profile, research, research_doc as rd, seo
 
 log = logging.getLogger(__name__)
 
@@ -198,7 +198,10 @@ def page(title, description, canonical, main, data=None, robots=None, ld=None,
              '<script src="/assets/charts.js"></script>',
              '<script src="/assets/research.js"></script>',
              "</body>", "</html>", ""]
-    return "\n".join(head + body)
+    # content hashes in the asset addresses, as every other page gets from
+    # prerender.inject: Cloudflare lets browsers keep a plain address for four
+    # hours, so a new page would otherwise run on the old stylesheet
+    return prerender._versioned_assets("\n".join(head + body))
 
 
 def _html(text, status=200, cache="public, max-age=60"):
