@@ -95,7 +95,7 @@ class ChartFigures(unittest.TestCase):
                 again = self.c.get("/api/v1/us/build/chart", params={"q": t}).json()
                 self.assertIsNotNone(again["spec"], t)
 
-    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    @unittest.skipUnless(_live(), "data/sec.duckdb not built")
     def test_a_new_request_replaces_the_chart_a_change_edits_it(self):
         import json
         now = json.dumps({"series": [{"ticker": "NVDA", "name": "NVIDIA"}], "measure": "price", "period": "ytd", "benchmarks": ["sp500"], "display": "rebased"})
@@ -106,7 +106,7 @@ class ChartFigures(unittest.TestCase):
         self.assertEqual(who("Apple too"), ["NVDA", "AAPL"])
         self.assertEqual(who("make it dividends"), ["NVDA"])
 
-    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    @unittest.skipUnless(_live(), "data/sec.duckdb not built")
     def test_a_period_in_words_stands_and_weeks_do_not_suit_a_filed_figure(self):
         import json
         spec = self.c.get("/api/v1/us/build/chart", params={"q": "Microsoft buybacks last 10 years"}).json()["spec"]
@@ -126,7 +126,7 @@ class ChartFigures(unittest.TestCase):
     def test_figure_rejects_what_it_does_not_hold(self):
         self.assertEqual(self.c.get("/api/v1/us/build/figure", params={"ticker": "AAPL", "measure": "price"}).status_code, 404)
 
-    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    @unittest.skipUnless(_live(), "data/sec.duckdb not built")
     def test_chart_asks_draw_the_figure_named(self):
         for q, want, unit in (("Nvidia and Intel dividends", "dividends_paid", "USD"), ("Apple capex for the last 10 years", "capex", "USD"),
                               ("Microsoft buybacks last 10 years", "buybacks", "USD"), ("Equity Residential revenue", "revenue", "USD")):
@@ -138,7 +138,7 @@ class ChartFigures(unittest.TestCase):
         r = self.c.get("/api/v1/us/build/chart", params={"q": "Apple capex for the last 10 years"}).json()
         self.assertTrue(r["spec"]["from"], "ten years is read")
 
-    @unittest.skipUnless(_live(), "needs data/sec.duckdb")
+    @unittest.skipUnless(_live(), "data/sec.duckdb not built")
     def test_the_figure_is_the_ask_boxs_figure(self):
         from app import us_figures, us_link
         cur = _cur()

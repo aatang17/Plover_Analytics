@@ -56,7 +56,7 @@ class ShareClasses(unittest.TestCase):
         self.assertEqual(stock_recipes._share_change(("x", "n", 1, 100.0, 1, 300.0, D, P, 1), fmt), "-200 shares")
 
 
-@unittest.skipUnless(_cur(), "needs data/sec.duckdb")
+@unittest.skipUnless(_cur(), "data/sec.duckdb not built")
 class Names(unittest.TestCase):
     def tickers(self, q):
         return [c["ticker"] for c in us_link.find_companies(_cur(), q, limit=3)]
