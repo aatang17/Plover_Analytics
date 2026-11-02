@@ -34,6 +34,7 @@ import html
 import json
 import logging
 import os
+import re
 import threading
 import urllib.parse
 
@@ -124,10 +125,8 @@ def _date_long(iso):
 
 
 def _authors_text(names):
-    names = [n for n in names if n]
-    if len(names) <= 1:
-        return "".join(names)
-    return ", ".join(names[:-1]) + " and " + names[-1]
+    """Names split by commas only: "Aaron and Rick Maeda" reads as two Maedas."""
+    return ", ".join(n for n in names if n)
 
 
 def _json_script(obj, element_id, kind="application/json"):
@@ -237,10 +236,13 @@ def _own_views(pub):
 
 
 _ICON = {
-    "x": '<path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-    "in": '<rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" '
-          'stroke-width="1.8"/><text x="12" y="16.6" text-anchor="middle" font-size="10.5" '
-          'font-weight="700" font-family="Arial, Helvetica, sans-serif" fill="currentColor">in</text>',
+    "x": '<path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 '
+         '21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>',
+    "in": '<path fill="currentColor" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 '
+          '0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 '
+          '4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 '
+          '2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 '
+          '24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>',
     "mail": '<rect x="3" y="5" width="18" height="14" rx="1.5" fill="none" stroke="currentColor" '
             'stroke-width="1.8"/><path d="M3.5 6l8.5 7 8.5-7" fill="none" stroke="currentColor" stroke-width="1.8"/>',
     "link": '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 '
@@ -251,27 +253,52 @@ _ICON = {
 
 
 def _svg(name):
-    return ('<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">%s'
+    return ('<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">%s'
             '</svg>' % _ICON[name])
 
 
 def share_bar(url, title):
-    """One quiet line of share links. Plain links — no third-party script, so
-    nothing on the page reports a reader to anyone."""
+    """One quiet line of share links, each an icon and a word. Plain links — no
+    third-party script, so nothing on the page reports a reader to anyone."""
     q = urllib.parse.quote
     links = [
-        ("X", "https://twitter.com/intent/tweet?url=%s&text=%s" % (q(url, ""), q(title, ""))),
-        ("LinkedIn", "https://www.linkedin.com/sharing/share-offsite/?url=%s" % q(url, "")),
-        ("Email", "mailto:?subject=%s&body=%s" % (q(title, ""), q(url, ""))),
+        ("x", "X", "Share on X", "https://twitter.com/intent/tweet?url=%s&text=%s" % (q(url, ""), q(title, ""))),
+        ("in", "LinkedIn", "Share on LinkedIn", "https://www.linkedin.com/sharing/share-offsite/?url=%s" % q(url, "")),
+        ("mail", "Email", "Share by email", "mailto:?subject=%s&body=%s" % (q(title, ""), q(url, ""))),
     ]
-    out = ['<p class="rs-share" role="group" aria-label="Share"><span class="rs-share-h">Share</span>']
-    for label, href in links:
-        out.append('<a href="%s" rel="noopener" target="_blank">%s</a>' % (esc(href), label))
-    out.append('<button type="button" class="linkish" id="rs-copy-link" data-url="%s">Copy link</button>'
-               % esc(url))
-    out.append('<button type="button" class="linkish" id="rs-print">Print</button>')
-    out.append("</p>")
+    out = ['<div class="rs-share" role="group" aria-label="Share"><span class="rs-share-h">Share</span>']
+    for icon, label, hint, href in links:
+        # an email link opens the mail program, so it needs no new tab
+        tab = "" if icon == "mail" else ' rel="noopener" target="_blank"'
+        out.append('<a href="%s"%s title="%s" aria-label="%s">%s<span class="rs-share-t">%s</span></a>'
+                   % (esc(href), tab, hint, hint, _svg(icon), label))
+    out.append('<button type="button" id="rs-copy-link" data-url="%s" title="Copy link" aria-label="Copy link">'
+               '%s<span class="rs-share-t">Copy link</span></button>' % (esc(url), _svg("link")))
+    out.append('<button type="button" id="rs-print" title="Print" aria-label="Print">'
+               '%s<span class="rs-share-t">Print</span></button>' % _svg("print"))
+    out.append("</div>")
     return "".join(out)
+
+
+def _read_minutes(body_html):
+    """Minutes to read the words of an article, at 220 a minute. Figures and
+    footnotes do not count."""
+    text = re.sub(r"<figure\b.*?</figure>|<section\b.*?</section>", " ", body_html or "", flags=re.S)
+    return max(1, round(len(re.sub(r"<[^>]+>", " ", text).split()) / 220.0))
+
+
+def _key_points(body_html):
+    """An article that opens with a bullet list opens with its key points, so
+    the list is shown as such. Done as the page is built: the stored version
+    is not touched, and articles already published get it too."""
+    body = (body_html or "").lstrip()
+    if not body.startswith("<ul>"):
+        return body_html
+    end = body.index("</ul>") + len("</ul>")
+    if body[:end].count("<li>") < 2:
+        return body_html
+    return ('<aside class="rs-keypoints" aria-label="Key points"><p class="rs-keypoints-h">Key Points</p>%s'
+            '</aside>%s' % (body[:end], body[end:]))
 
 
 def article_main(v, versions, current_version, notice="", preview=False, pub=None):
@@ -284,6 +311,7 @@ def article_main(v, versions, current_version, notice="", preview=False, pub=Non
     dateline = ['<time datetime="%s">%s</time>' % (esc(first[:10]), esc(_date_long(first)))]
     if v["version"] > 1:
         dateline.append("Version %d, updated %s" % (v["version"], esc(_date_long(v["published_at"]))))
+    dateline.append("%d min read" % _read_minutes(v["body_html"]))
     parts = [
         _trail(pub),
         notice,
@@ -300,11 +328,11 @@ def article_main(v, versions, current_version, notice="", preview=False, pub=Non
     if v["dek"]:
         parts.append('<p class="rs-dek">%s</p>' % esc(v["dek"]))
     parts.append('<div class="rs-byline">%s<p class="rs-dateline">%s</p></div>' % (
-        ('<p class="rs-author">%s</p>' % esc(_authors_text(v["authors"]))) if v["authors"] else "",
+        ('<p class="rs-author">By %s</p>' % esc(_authors_text(v["authors"]))) if v["authors"] else "",
         " \u00b7 ".join(dateline)))
     parts.append(share_bar(url, v["title"]))
     parts.append("</header>")
-    parts.append('<div class="rs-body">%s</div>' % v["body_html"])
+    parts.append('<div class="rs-body">%s</div>' % _key_points(v["body_html"]))
     if len(versions) > 1:
         parts.append('<section class="rs-versions" aria-label="Versions"><h2>Versions</h2><ol>')
         for item in versions:

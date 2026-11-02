@@ -386,14 +386,24 @@ var researchChart = (function () {
     apply();
   }
 
+  /* The clipboard, or, where the browser refuses it, the text in a box to copy by hand. */
+  function copyText(text, label, done) {
+    function byHand() { window.prompt("Copy this " + label + ":", text); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, byHand);
+    } else {
+      byHand();
+    }
+  }
+
   var link = document.getElementById("rs-copy-link");
   if (link) {
+    var linkWord = link.querySelector(".rs-share-t");
     link.addEventListener("click", function () {
-      if (!navigator.clipboard) return;
-      navigator.clipboard.writeText(link.getAttribute("data-url")).then(function () {
+      copyText(link.getAttribute("data-url"), "link", function () {
         link.classList.add("done");
-        link.setAttribute("title", "Link copied");
-        setTimeout(function () { link.classList.remove("done"); link.setAttribute("title", "Copy link"); }, 1600);
+        linkWord.textContent = "Link copied";
+        setTimeout(function () { link.classList.remove("done"); linkWord.textContent = "Copy link"; }, 1600);
       });
     });
   }
@@ -403,11 +413,10 @@ var researchChart = (function () {
   var copy = document.getElementById("rs-cite-copy");
   if (copy) {
     copy.addEventListener("click", function () {
-      var text = document.getElementById("rs-cite").textContent;
-      var done = function () { copy.textContent = "Copied"; };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, function () {});
-      }
+      copyText(document.getElementById("rs-cite").textContent, "citation", function () {
+        copy.textContent = "Copied";
+        setTimeout(function () { copy.textContent = "Copy Citation"; }, 1600);
+      });
     });
   }
 })();

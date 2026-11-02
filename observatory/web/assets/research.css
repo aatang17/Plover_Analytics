@@ -11,7 +11,7 @@
 
 .rs-wrap { max-width: 1240px; }
 .rs-article, .rs-trail, .rs-wrap > .rs-notice, .rs-wrap:not(.rs-home) > .rh-more,
-.rs-wrap:not(.rs-home) > .rh-subscribe { max-width: 760px; margin-left: auto; margin-right: auto; }
+.rs-wrap:not(.rs-home) > .rh-subscribe { max-width: 840px; margin-left: auto; margin-right: auto; }
 .rs-trail { font-size: 12.5px; margin: 8px auto 18px; }
 .rs-trail a { color: var(--obs-text-muted); text-decoration: none; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase; font-size: 11.5px; }
@@ -20,7 +20,16 @@
 /* ======================================================================
    article
    ====================================================================== */
+/* the article is one white panel on the grey page ground, with the navy rule
+   along its top like every box on the front page. Things inside it are set
+   apart by rules, not boxes: no box inside a box. */
+body:has(.rs-article) { background: var(--obs-ground); }
+.rs-article { background: var(--obs-surface); border: 1px solid var(--obs-border);
+  border-top: 3px solid var(--obs-band-bg); border-radius: 3px; padding: 36px 48px 40px; }
 .rs-head { margin-bottom: 28px; }
+.rs-head:has(+ .page-toc) { margin-bottom: 0; }
+/* the section picker sits under the share row and shares its rule */
+.rs-article .page-toc { margin: 0 0 28px; border-top-color: transparent; }
 .rs-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--obs-primary); margin: 0 0 12px; }
 .rs-head h1 { font-size: 36px; font-weight: 800; line-height: 1.16; letter-spacing: -0.7px;
@@ -30,15 +39,25 @@
 .rs-author { font-size: 14px; font-weight: 700; color: var(--obs-ink); margin: 0 0 2px; }
 .rs-dateline { font-size: 13px; color: var(--obs-text-muted); margin: 0; font-variant-numeric: tabular-nums; }
 
+/* an article that opens with a bullet list: its key points */
+.rs-keypoints { margin: 0 0 32px; padding: 16px 20px 6px; background: var(--obs-surface-subtle);
+  border-left: 3px solid var(--obs-band-bg); font-size: 16px; line-height: 1.6; }
+.rs-keypoints-h { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--obs-ink); margin: 0 0 10px !important; }
+.rs-keypoints ul { padding-left: 20px; margin: 0 0 10px !important; }
+
 /* share: one quiet line between two rules */
-.rs-share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0;
+.rs-share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 0;
   padding: 10px 0; border-top: 1px solid var(--obs-border); border-bottom: 1px solid var(--obs-border);
   font-size: 13.5px; }
 .rs-share-h { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--obs-text-muted); }
-.rs-share a, .rs-share .linkish { color: var(--obs-primary); font-weight: 600; font-size: 13.5px;
-  text-decoration: none; }
-.rs-share a:hover, .rs-share .linkish:hover { text-decoration: underline; }
+.rs-share a, .rs-share button { display: inline-flex; align-items: center; gap: 6px; font: inherit;
+  font-weight: 600; font-size: 13.5px; line-height: 1; color: var(--obs-text); background: none; border: 0;
+  padding: 4px 0; cursor: pointer; text-decoration: none; }
+.rs-share a:hover, .rs-share button:hover { color: var(--obs-primary); }
+.rs-share a:focus-visible, .rs-share button:focus-visible { outline: 2px solid var(--obs-primary); outline-offset: 2px; }
+.rs-share svg { flex: 0 0 auto; }
 .rs-share .done { color: var(--obs-trust-official); }
 
 .rs-body { font-size: 17.5px; line-height: 1.72; color: var(--obs-ink); }
@@ -90,13 +109,20 @@
   text-transform: none; letter-spacing: 0; border-radius: 0; padding: 0; margin: 0 0 12px;
   font-size: 16px; font-weight: 700; }
 .rs-notes h2::before { display: none; }
+/* the short navy rule (or the section's own rule) is the heading's only line */
+.rs-article h2 { border-bottom: 0; padding-bottom: 0; }
+/* inside the article panel: separated by a rule, no box of their own */
+.rs-article .rs-notes, .rs-article .rs-versions, .rs-article .rs-cite-box { padding: 20px 0 0; background: none;
+  border: 0; border-top: 1px solid var(--obs-border); border-radius: 0; }
+.rs-article .rs-chart, .rs-article .rs-table, .rs-article .rs-image { padding: 14px 0 12px; background: none;
+  border: 0; border-top: 2px solid var(--obs-band-bg); border-bottom: 1px solid var(--obs-border); border-radius: 0; }
 .rs-notes ol, .rs-versions ol { padding-left: 22px; font-size: 14px; line-height: 1.6; margin: 0; }
 .rs-notes li, .rs-versions li { margin-bottom: 8px; }
 .rs-fn-back { text-decoration: none; margin-left: 4px; }
 .rs-versions li[aria-current] > a { font-weight: 700; }
 .rs-v-date { color: var(--obs-text-muted); font-variant-numeric: tabular-nums; margin: 0 6px; }
 .rs-cite { font-size: 14px; line-height: 1.6; color: var(--obs-ink); padding: 12px 14px; margin: 0;
-  border: 1px solid var(--obs-border); border-radius: 3px; background: var(--obs-surface-subtle); }
+  background: var(--obs-surface-subtle); }
 .rs-cite-acts { display: flex; gap: 8px; margin: 12px 0 10px; }
 .rs-cite-acts .btn { text-decoration: none; }
 .rs-cite-note { font-size: 12.5px; color: var(--obs-text-muted); line-height: 1.5; margin: 0; }
@@ -202,6 +228,9 @@
 .rh-archive td:first-child, .rh-archive th:first-child { white-space: nowrap; width: 1%; }
 
 .rh-more { margin-top: 12px; }
+/* under an article the cards are the boxes: the platform's section panel would put boxes in a box */
+main.rs-wrap:not(.rs-home) > section.rh-more:has(> h2) { margin-top: 32px; padding: 0; background: none; border: 0; }
+main.rs-wrap:not(.rs-home) > section.rh-more:has(> h2) > h2 { margin: 0 0 12px; padding: 0 0 8px; }
 .rh-allrow { margin: 16px 0 0; }
 
 /* subscribe */
@@ -242,7 +271,14 @@
   .rh-hero-title { font-size: 24px; }
   .rh-cards, .rh-cards-3 { grid-template-columns: minmax(0, 1fr); }
   .rh-card-fig { height: 170px; }
+  .rs-article { padding: 22px 16px 26px; }
   .rs-head h1 { font-size: 28px; }
+  /* phones: icons only, large enough to tap; a copied link says so in words */
+  .rs-share { gap: 4px 6px; justify-content: space-between; }
+  .rs-share a, .rs-share button { padding: 10px; }
+  .rs-share svg { width: 18px; height: 18px; }
+  .rs-share-t { display: none; }
+  .rs-share .done .rs-share-t { display: inline; }
   .rs-dek { font-size: 16.5px; }
   .rs-body { font-size: 16.5px; }
   .rs-plot { height: 260px; }
@@ -251,8 +287,11 @@
 }
 
 @media print {
-  .site-header, .site-subnav, .rs-chart-acts, .rs-cite-acts, .rs-trail, .rs-share, .rh-more,
+  .site-header, .site-subnav, .page-toc, .rs-chart-acts, .rs-cite-acts, .rs-trail, .rs-share, .rh-more,
   .rh-subscribe { display: none !important; }
+  body:has(.rs-article) { background: none; }
+  .rs-article { border: 0; padding: 0; max-width: none; }
+  .rs-chart, .rs-table, .rs-image { break-inside: avoid; }
 }
 
 /* buttons that read as links (Copy link, Print, Show all notes) */

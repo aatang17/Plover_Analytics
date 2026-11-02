@@ -433,8 +433,7 @@ def message(pub, version, url, token):
     unsub = unsubscribe_link(pub, token)
     title, dek, summary = version["title"], version["dek"], version["summary"]
     authors = [a for a in version["authors"] if a]
-    byline = ("By " + (", ".join(authors[:-1]) + " and " + authors[-1] if len(authors) > 1
-                       else authors[0])) if authors else ""
+    byline = "By " + ", ".join(authors) if authors else ""
     postal = postal_line()
     why = ("You are receiving this because you subscribed to %s on Plover Analytics."
            % pub["name"])

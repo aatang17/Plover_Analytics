@@ -885,7 +885,7 @@ var NAV_SECTIONS = [
         '<div class="page-toc-menu" id="page-toc-menu" hidden></div></span>' +
         '<span class="page-toc-count"></span>';
       var after = main.querySelector(".page-tabs") || main.querySelector(".page-head") ||
-        main.querySelector("#stale-banner");
+        main.querySelector(".rs-head") || main.querySelector("#stale-banner");
       if (after) after.insertAdjacentElement("afterend", toc);
       else main.insertAdjacentElement("afterbegin", toc);
       btn = toc.querySelector(".page-toc-btn");

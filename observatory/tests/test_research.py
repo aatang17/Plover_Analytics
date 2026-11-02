@@ -271,7 +271,7 @@ class DeskTest(Base):
         self.assertIn("default-src 'self'", page.headers["content-security-policy"])
         html = page.text
         self.assertIn("Regional banks and the rate path", html)
-        self.assertIn('<p class="rs-author">Wren Writer</p>', html)
+        self.assertIn('<p class="rs-author">By Wren Writer</p>', html)
         self.assertIn('<base href="/">', html)
         self.assertIn("as_of=%s" % done["published_at"][:10], html)       # CSV link is frozen
         self.assertIn('id="rs-data"', html)
