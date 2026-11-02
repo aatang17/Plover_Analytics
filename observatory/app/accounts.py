@@ -57,7 +57,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from . import mailer
+from . import mailer, reddit_ads
 
 router = APIRouter(prefix="/api/v1/account", tags=["account"])
 
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_seen_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS sessions_account ON sessions (account_id);
-"""
+""" + reddit_ads.SCHEMA
 
 
 def _open(path):
@@ -432,9 +432,11 @@ def create_session(payload: SessionRequest, request: Request, response: Response
                    (now, _hash(token)))
         # The tag counts only for an account this link creates: a returning
         # reader signing in again is not a sign-up.
-        db.execute("INSERT OR IGNORE INTO accounts (email, created_at, source) VALUES (?, ?, ?)",
-                   (email, now, row["source"]))
+        created = db.execute("INSERT OR IGNORE INTO accounts (email, created_at, source) VALUES (?, ?, ?)",
+                             (email, now, row["source"])).rowcount == 1
         account_id = db.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()["id"]
+        if created:
+            reddit_ads.enqueue(db, account_id, request, now)
         db.execute("INSERT INTO sessions (token_hash, account_id, created_at, expires_at, last_seen_at) "
                    "VALUES (?, ?, ?, ?, ?)",
                    (_hash(session_token), account_id, now, now + SESSION_TTL_SECONDS, now))

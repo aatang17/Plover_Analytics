@@ -320,6 +320,34 @@ response.
   `app/prerender.py` (like the icons) so a new page cannot ship without it. What readers
   are told is on `/methodology.html#cookies`.
 
+### Optional Reddit signup attribution (`app/reddit_ads.py`)
+
+Off by default. On the server, set `REDDIT_ADS_ENABLED=1`,
+`REDDIT_ADS_PIXEL_ID` and a dedicated `REDDIT_ADS_ACCESS_TOKEN` from Reddit
+Events Manager. Never put the token in HTML, Git, logs or a browser script.
+Restart the web app after configuration. The consent script receives only an
+enabled flag; it loads no Reddit script or other external dependency.
+
+On a link carrying `rdt_cid`, the cookie panel offers a separate, unchecked
+Reddit measurement choice. Existing visit-counting consent does not grant it.
+The server validates the origin and signs an HttpOnly click cookie lasting
+30 days. Declining or Global Privacy Control prevents attribution; the footer
+reopens choices. Measurement needs the same browser to verify the email link.
+
+Only a newly inserted, email-verified account queues `SIGN_UP`; requesting a
+link or signing in again does not. The account SQLite store holds the outbox
+in the same transaction. A background worker retries every 30 seconds with
+backoff for up to seven days. Successful delivery deletes the queued record.
+Withdrawal deletes unsent records associated with that browser's click cookie;
+it cannot recall an event already sent. Payloads contain click ID, signup time,
+random conversion ID and a fixed public signup URL, without email, IP, user
+agent, account ID, question text or authentication tokens.
+
+Before enabling a campaign, verify a consented signup in Reddit Events Manager,
+check diagnostics, and select **Sign up** as the sales goal. API acceptance is
+not proof that Reddit attributed a signup or unlocked optimization. Test with
+`./.venv/bin/python -m unittest tests.test_reddit_ads tests.test_visits`.
+
 ### What machines are told (`app/seo.py`)
 
 `robots.txt`, `sitemap.xml` and **`llms.txt`** are generated from the registry and the

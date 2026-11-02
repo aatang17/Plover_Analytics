@@ -31,7 +31,7 @@ from .research_ai import router as research_ai_router  # noqa: E402
 from .ai_setup_api import router as ai_setup_router  # noqa: E402
 from .research_clips import router as research_clips_router  # noqa: E402
 from .writer_api import router as writer_router  # noqa: E402
-from . import accounts  # noqa: E402
+from . import accounts, reddit_ads  # noqa: E402
 from . import assistant  # noqa: E402
 from .assistant import api as assistant_api  # noqa: E402
 from .assistant import desk_mcp as assistant_desk_mcp  # noqa: E402
@@ -191,6 +191,8 @@ async def lifespan(app):
     # DigitalOcean server), so two copies of the site overlapping during a
     # deploy never back up twice.
     tasks = [task]
+    if accounts.enabled() and reddit_ads.enabled():
+        tasks.append(asyncio.ensure_future(reddit_ads.loop()))
     # What readers asked for under the copy before this one (cache.keep_warm
     # saves it): their pages first, then the deferred series lists. Without
     # it only the macro answers above were ready, and the first reader of
@@ -368,6 +370,7 @@ app.include_router(company_router)
 # /api/v1/visit/… is the page talking to the counter about itself, and sits
 # ahead of the core router for the same reason: /{dataset}/… would swallow it.
 app.include_router(visits_router)
+app.include_router(reddit_ads.router)
 app.include_router(catalog_router)
 # What the header's Data menu shows for each page (cached like /api/v1).
 app.include_router(nav_preview_router)

@@ -1661,7 +1661,11 @@ def _inject(html, page_name, canonical=None, query_string=""):
         html = _HEAD_END.sub(ICON_LINKS + "\n</head>", html, count=1)
 
     if not _HAS_CONSENT.search(html):
-        html = _HEAD_END.sub(CONSENT_SCRIPT + "\n</head>", html, count=1)
+        from . import reddit_ads
+        script = CONSENT_SCRIPT
+        if reddit_ads.enabled():
+            script = script.replace(" defer", ' data-reddit-ads="enabled" defer')
+        html = _HEAD_END.sub(script + "\n</head>", html, count=1)
 
     # Where this page's numbers can be read as data, and what the page is.
     # A company view states the company; a series view is still a view of its

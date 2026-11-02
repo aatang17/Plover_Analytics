@@ -1292,7 +1292,12 @@ table.data.tbl-bands td.trend-decel { color: var(--obs-trust-official); }
 }
 .consent-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
 .consent-bar .btn { padding: 6px 16px; }
-body.has-consent-bar .site-footer { margin-bottom: 76px; }
+body.has-consent-bar .site-footer { margin-bottom: var(--pa-consent-height, 76px); }
+.consent-options { min-width: 0; }
+.consent-options label { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5; margin-top: 8px; color: var(--obs-text); cursor: pointer; }
+.consent-options input { flex-shrink: 0; margin-top: 3px; accent-color: var(--obs-accent); }
+.consent-status:empty { display: none; }
+body.has-consent-bar[style] .my-chat:not(.is-empty) .my-composer { bottom: var(--pa-consent-height, 76px); }
 
 .consent-reopen { white-space: nowrap; }
 
@@ -1302,7 +1307,8 @@ body.has-consent-bar .site-footer { margin-bottom: 76px; }
   /* Full-width and finger-sized: on a phone these are the only two controls
      on the screen and a mis-tap records the opposite answer. */
   .consent-bar .btn { flex: 1; min-height: 44px; }
-  body.has-consent-bar .site-footer { margin-bottom: 168px; }
+  .consent-options label { min-height: 44px; padding: 8px 0; margin-top: 0; }
+  body.has-consent-bar .site-footer { margin-bottom: var(--pa-consent-height, 168px); }
 }
 
 /* ---------- prose (methodology) ---------- */

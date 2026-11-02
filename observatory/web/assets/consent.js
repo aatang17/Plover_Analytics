@@ -2,7 +2,8 @@
  *
  * Loaded on every page by the server (app/prerender.py), so it is written to
  * cost nothing: no dependencies, nothing drawn until the reader has to be
- * asked, and every request fire-and-forget. If any of it fails the page is
+ * asked. Measurement requests are fire-and-forget; consent saves wait for
+ * confirmation so the reader can retry a failed save. If counting fails the page is
  * unaffected — the server still counts the visit on its own.
  *
  * What is measured without asking: how long this page stayed open, and a
@@ -18,6 +19,19 @@
   var CONSENT = "/api/v1/visit/consent";
   var HEARTBEAT_MS = 60000;
   var METHODOLOGY = "methodology.html#cookies";
+  var ADS = !!document.querySelector('script[data-reddit-ads="enabled"]');
+  var ADS_COOKIE = "pa_reddit_consent";
+  var clickId = new URLSearchParams(location.search).get("rdt_cid") || "";
+  if (!/^[A-Za-z0-9_-]{1,512}$/.test(clickId)) clickId = "";
+
+  function saveAds(choice) {
+    return fetch("/api/v1/ads/reddit-consent", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ choice: choice, click_id: clickId })
+    }).then(function (response) {
+      if (!response.ok) throw new Error("Could not save advertising choice");
+    });
+  }
 
   /* The console and the research desk are not readership and never ask
      their reader anything; nor does the Send to Plover window. */
@@ -82,18 +96,33 @@
 
   /* ---------------- the banner ---------------- */
 
-  function choose(choice, banner) {
+  async function choose(choice, banner) {
+    var buttons = banner.querySelectorAll("button");
+    if (banner.dataset.saving) return;
+    banner.dataset.saving = "yes";
+    buttons.forEach(function (button) { button.disabled = true; });
+    banner.querySelector(".consent-status").textContent = "Saving choices…";
     try {
-      fetch(CONSENT, {
+      var analytics = ADS ? banner.querySelector('[name="returning-visits"]').checked : choice === "granted";
+      var response = await fetch(CONSENT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ choice: choice })
+        body: JSON.stringify({ choice: choice === "denied" ? "denied" : analytics ? "granted" : "denied" })
       });
-    } catch (e) { /* the banner still closes; the choice is simply not stored */ }
+      if (!response.ok) throw new Error("Could not save cookie choice");
+      if (ADS) await saveAds(choice !== "denied" && !navigator.globalPrivacyControl &&
+        banner.querySelector('[name="reddit-measurement"]').checked ? "granted" : "denied");
+    } catch (e) {
+      banner.querySelector(".consent-status").textContent = "Could not save. Please try again.";
+      delete banner.dataset.saving;
+      buttons.forEach(function (button) { button.disabled = false; });
+      return;
+    }
     if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
     document.body.classList.remove("has-consent-bar");
+    document.body.style.removeProperty("--pa-consent-height");
     var link = document.querySelector(".consent-reopen");
-    if (link) link.textContent = choice === "granted" ? "Cookies: on" : "Cookies: off";
+    if (link) link.textContent = ADS ? "Cookie settings" : choice === "granted" ? "Cookies: on" : "Cookies: off";
   }
 
   function ask() {
@@ -111,12 +140,38 @@
       '<button type="button" class="btn" data-choice="denied">Decline</button>' +
       '<button type="button" class="btn btn-primary" data-choice="granted">Accept</button>' +
       "</div></div>";
+    if (ADS) {
+      bar.innerHTML = '<div class="inner"><div class="consent-options">' +
+        '<p>Optional cookies. Your choice does not affect access. <a href="' + METHODOLOGY + '">Privacy details</a></p>' +
+        '<label><input type="checkbox" name="returning-visits"> Count returning visits with a random cookie.</label>' +
+        '<label><input type="checkbox" name="reddit-measurement"> Measure Reddit ads: share the ad click ID and a completed signup with Reddit. No email or research activity.</label>' +
+        '<p class="consent-status" role="status"></p></div><div class="consent-actions">' +
+        '<button type="button" class="btn" data-choice="denied">Decline all</button>' +
+        '<button type="button" class="btn btn-primary" data-choice="selected">Save choices</button></div></div>';
+      bar.querySelector('[name="returning-visits"]').checked = cookie(CONSENT_COOKIE) === "granted";
+      var adChoice = bar.querySelector('[name="reddit-measurement"]');
+      adChoice.checked = !navigator.globalPrivacyControl && cookie(ADS_COOKIE) === "granted";
+      adChoice.disabled = !!navigator.globalPrivacyControl;
+      if (navigator.globalPrivacyControl) bar.querySelector(".consent-status").textContent = "Reddit measurement is off because your browser sends Global Privacy Control.";
+    } else {
+      bar.querySelector("p").insertAdjacentHTML("afterend", '<p class="consent-status" role="status"></p>');
+    }
     bar.addEventListener("click", function (event) {
       var button = event.target.closest ? event.target.closest("button[data-choice]") : null;
       if (button) choose(button.getAttribute("data-choice"), bar);
     });
     document.body.appendChild(bar);
     document.body.classList.add("has-consent-bar");
+    function measure() {
+      document.body.style.setProperty("--pa-consent-height", Math.ceil(bar.getBoundingClientRect().height) + "px");
+    }
+    measure();
+    if (window.ResizeObserver) {
+      var observer = new ResizeObserver(function () {
+        if (bar.isConnected) measure(); else observer.disconnect();
+      });
+      observer.observe(bar);
+    }
   }
 
   /* A way back to the choice, in the place a reader looks for it. Added to the
@@ -127,7 +182,7 @@
     var link = document.createElement("a");
     link.className = "consent-reopen";
     link.href = "#";
-    link.textContent = cookie(CONSENT_COOKIE) === "granted" ? "Cookies: on" : "Cookies: off";
+    link.textContent = ADS ? "Cookie settings" : cookie(CONSENT_COOKIE) === "granted" ? "Cookies: on" : "Cookies: off";
     link.addEventListener("click", function (event) {
       event.preventDefault();
       if (!document.querySelector(".consent-bar")) ask();
@@ -142,8 +197,12 @@
     footerLink();
     /* A browser sending Global Privacy Control has already answered. Asking
        again would be asking someone to repeat themselves. */
-    if (navigator.globalPrivacyControl) return;
-    if (!cookie(CONSENT_COOKIE)) ask();
+    if (navigator.globalPrivacyControl) {
+      if (ADS && cookie(ADS_COOKIE) === "granted") saveAds("denied").catch(function () {});
+      return;
+    }
+    if (ADS && clickId && cookie(ADS_COOKIE) === "granted") saveAds("granted").catch(function () {});
+    if (!cookie(CONSENT_COOKIE) || (ADS && clickId && !cookie(ADS_COOKIE))) ask();
   }
 
   if (document.readyState === "loading") {
