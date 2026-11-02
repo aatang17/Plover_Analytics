@@ -514,9 +514,10 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
 .dk-block[data-type="snapshot"] { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px; line-height: 1.5; }
 .dk-title { font-weight: 800; font-size: 34px; letter-spacing: -0.7px; }
-.dk-h2::before { content: ""; display: block; width: 36px; height: 3px; background: var(--obs-band-bg);
-  margin-bottom: 14px; }
-.dk-h2 { font-size: 22px; font-weight: 800; }
+/* the short rule sits on ::after because an empty heading's "Heading" prompt uses ::before */
+.dk-h2 { position: relative; padding-top: 17px; font-size: 22px; font-weight: 800; }
+.dk-h2::after { content: ""; position: absolute; top: 0; left: 0; width: 36px; height: 3px;
+  background: var(--obs-band-bg); }
 
 /* ---------- plan → draft (desk-plan.js) ---------- */
 .dk-planbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border: 1px solid var(--obs-primary);
