@@ -20,7 +20,7 @@ import tempfile
 import pathlib
 
 from app import connectors, research, research_ai, skills, staff
-from app.assistant import mcp_client
+from app.assistant import mcp_client, store
 
 from tests.test_publications import PubBase
 
@@ -31,6 +31,13 @@ STARTERS = ["Brainstorm", "Plan", "Draft", "Find Charts", "Edit", "Review", "Fac
 class AssistantBase(PubBase):
     def setUp(self):
         PubBase.setUp(self)
+        # the writer's memory and past runs live here: never the real file, or
+        # one another test file left behind
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        old_store = store.DB_PATH
+        store.reset_for_tests(os.path.join(tmp.name, "workspace.db"))
+        self.addCleanup(store.reset_for_tests, old_store)
         self.app.include_router(research_ai.router)
         from app import ai_setup_api
         self.app.include_router(ai_setup_api.router)

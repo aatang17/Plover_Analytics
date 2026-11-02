@@ -487,7 +487,12 @@
       var runs = (st.runs || []).filter(function (r) { return r.question; }).reverse();
       $("#my-thread").innerHTML = headHtml(st);
       wireHead(st);
-      if (!runs.length) { addHtml('<p class="my-wait">This chat has no answer yet. Ask below.</p>'); return; }
+      if (!runs.length) {
+        // a study saved with no question (run by hand, or from Claude Code) still has its answer
+        if ((v.body.run || {}).rows_total) addAnswer(st, v.body.run);
+        else addHtml('<p class="my-wait">This chat has no answer yet. Ask below.</p>');
+        return;
+      }
       // the newest answer came with the study; the older ones are fetched in order
       Promise.all(runs.map(function (r) {
         return r.id === (v.body.run || {}).id ? Promise.resolve(v.body)

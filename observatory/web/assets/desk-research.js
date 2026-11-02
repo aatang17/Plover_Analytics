@@ -529,17 +529,17 @@ function renderStudiesPane() {
 }
 
 function drawStudies(box, d) {
-  var open = d.enabled ? '<a class="dk-mini" href="' + escapeHtml(d.link) + '" target="_blank" rel="noopener">Open Studies</a>' : "";
+  var open = d.enabled ? '<a class="dk-mini" href="' + escapeHtml(d.link) + '" target="_blank" rel="noopener">Ask in Your Plover</a>' : "";
   var list = d.studies.map(function (s, i) {
     return '<li data-study="' + i + '"><span class="dk-rs-name">' + escapeHtml(s.title) + '</span>' +
       '<span class="hint">Run ' + escapeHtml(s.ran_on) + ' · ' + Number(s.rows).toLocaleString("en") + (s.rows === 1 ? " row" : " rows") + '</span>' +
       '<span class="dk-rs-acts"><button type="button" class="dk-mini" data-st-insert>Insert Chart</button>' +
-      (d.enabled ? '<a class="dk-mini" href="' + escapeHtml(d.link + "/" + s.id) + '" target="_blank" rel="noopener">Open Study</a>' : "") + '</span></li>';
+      (d.enabled ? '<a class="dk-mini" href="' + escapeHtml(d.link + "/" + s.id) + '" target="_blank" rel="noopener">Open in Your Plover</a>' : "") + '</span></li>';
   }).join("");
   box.innerHTML = '<p class="hint">Charts from your own studies. Insert Chart puts the study\'s latest run in the draft at the cursor, with its sources. The numbers stay as they were on that run.</p>' +
     (d.studies.length ? '<p class="dk-rs-h">Your Studies</p><ul class="dk-rs-list">' + list + '</ul>'
       : '<p class="dk-rs-h">Your Studies</p><p class="muted">No studies with a chart yet. ' +
-        (d.enabled ? 'Ask a question in Studies; its chart can then go into any article.' : 'Studies are not switched on on this server.') + '</p>') +
+        (d.enabled ? 'Ask about the economy in Your Plover; its chart can then go into any article. Stock answers are not listed here.' : 'Studies are not switched on on this server.') + '</p>') +
     '<div class="dk-rs-acts dk-st-foot">' + open + '<button type="button" class="dk-mini" data-st-reload>Refresh List</button></div>';
   $("[data-st-reload]", box).addEventListener("click", renderStudiesPane);
   $all("[data-study]", box).forEach(function (row) {

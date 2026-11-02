@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""The editor's Studies tab: a writer's own studies (Investment Assistant ›
-Studies) put into an article as a chart.
+"""The editor's Studies tab: a writer's own studies (chats in Your Plover) put
+into an article as a chart.
 
 What is proved: the list holds only the signed-in writer's studies (found by
 email, as their data sources are), with the newest run that has rows; the
@@ -83,7 +83,7 @@ class StudiesTab(Base):
         self.assertEqual(got["studies"][0]["id"], mine)
         self.assertEqual(got["studies"][0]["rows"], 3)
         self.assertTrue(got["studies"][0]["ran_on"])
-        self.assertEqual(got["link"], "/assistant.html#/studies")
+        self.assertEqual(got["link"], "/my.html#chat")
         # the shared admin password is nobody; a writer with no account has an empty list
         self.assertEqual(self.admin.get("/admin/api/research/studies").status_code, 403)
         lone, _ = self.person("lone@example.com", ["writing"])

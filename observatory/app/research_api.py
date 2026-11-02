@@ -635,7 +635,7 @@ def market_rows(slug: str, request: Request, start: str = "", end: str = "",
 
 
 # ------------------------------------------------------------ studies
-# The writer's own studies (Investment Assistant › Studies) offered in the
+# The writer's own studies (a chat in Your Plover is one study) offered in the
 # editor's Studies tab. They belong to the person's account, found by email
 # like their data sources, so the shared admin password sees none. A study's
 # chart goes into the article as a datachart: its numbers frozen that day,
@@ -659,7 +659,7 @@ def writer_studies(request: Request):
     person = _writer(request)
     aid = _study_account(person)
     rows = ia_store.studies_with_charts(aid) if aid else []
-    return JSONResponse({"enabled": assistant.enabled(), "link": "/assistant.html#/studies",
+    return JSONResponse({"enabled": assistant.enabled(), "link": "/my.html#chat",
                          "studies": [dict(r, ran_on=_ran_on(r["ran_at"])) for r in rows]},
                         headers={"Cache-Control": "private, no-store"})
 

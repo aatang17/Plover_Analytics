@@ -239,7 +239,7 @@ def _call_desk(owner, name, args, run_id):
                 sid = store.add_study(aid, title)["id"]
             store.add_study_run(aid, int(sid), author, result, note=(args.get("note") or "").strip(),
                                 run_id=run_id)
-            out["study"] = {"id": int(sid), "url": "/assistant.html#/studies/%d" % int(sid)}
+            out["study"] = {"id": int(sid), "url": "/my.html#chat/%d" % int(sid)}
         return _j(out)
     if name == "list_studies":
         return _j({"studies": [dict((k, s[k]) for k in ("id", "title", "question", "runs", "last_run_at"))
