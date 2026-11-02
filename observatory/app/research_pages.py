@@ -175,6 +175,12 @@ def page(title, description, canonical, main, data=None, robots=None, ld=None,
         '<link rel="stylesheet" href="/assets/research.css">',
         extra_head,
     ]
+    if not preview:
+        # The site's banner and the page's report of how long it stayed open
+        # (prerender.CONSENT_SCRIPT). These pages do not pass through
+        # prerender.inject, so they must ask for it. A writer's preview is not
+        # readership.
+        head.append(prerender.CONSENT_SCRIPT)
     if canonical:
         head.append('<meta property="og:url" content="%s">' % esc(canonical))
     if ld:

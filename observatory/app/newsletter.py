@@ -312,6 +312,14 @@ def counts(publication_id):
     return out
 
 
+def new_followers(publication_id, since):
+    """Readers who signed up and confirmed since this time, still on the list.
+    Imported addresses are left out: nobody followed anything to get there."""
+    return conn().execute(
+        "SELECT count(*) AS n FROM subscribers WHERE publication_id = ? AND status = 'active' "
+        "AND source = 'signup' AND confirmed_at >= ?", (publication_id, since)).fetchone()["n"]
+
+
 def listing(publication_id):
     return [dict(r) for r in conn().execute(
         "SELECT email, status, source, created_at, confirmed_at, unsubscribed_at "

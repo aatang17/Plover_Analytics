@@ -36,17 +36,18 @@ publications rather than one article:
 It sits under /admin/api only so that the Plover team's staff session cookie
 (scoped to /admin) reaches it; nothing here is part of the admin console.
 """
+import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from . import (accounts, connectors, mailer, newsletter, research, seo, skills, staff, writers,
-               writing_style)
+from . import (accounts, connectors, mailer, newsletter, research, seo, skills, staff, visits,
+               writers, writing_style)
 from . import pub_coverage, pub_profile
 from .assistant import market_data, memory, store as ia_store
-from .admin_api import STAFF_COOKIE, _client_ip, audit
+from .admin_api import STAFF_COOKIE, _client_ip, _mark_team, audit
 
 router = APIRouter(prefix="/admin/api/write", include_in_schema=False)
 
@@ -80,7 +81,7 @@ def _pub_view(pub, role):
 # ------------------------------------------------------------------ who
 
 @router.get("/me")
-def me(request: Request):
+def me(request: Request, response: Response):
     """Never 401: the page uses this to choose between the sign-in screen and
     the desk, and says why someone signed in still cannot write."""
     sign_in = {"email_links": accounts.enabled(), "email_delivery": mailer.configured()}
@@ -90,6 +91,9 @@ def me(request: Request):
         return {"signed_in": bool(email), "writer": False, "email": email, "sign_in": sign_in}
     mine = writers.roles(person)
     pubs = [_pub_view(research.publication(pid), r) for pid, r in sorted(mine.items())]
+    # A writer checking their own article is not a reader of it.
+    if pubs and request.cookies.get(visits.TEAM_COOKIE) != "1":
+        _mark_team(request, response)
     return {"signed_in": True, "writer": bool(pubs), "email": person["email"],
             "person": {"id": person["id"], "name": person["name"], "email": person["email"]},
             "publications": pubs,
@@ -230,6 +234,65 @@ def remove(publication_id: int, request: Request, email: str = ""):
 #
 # The publication's own email list (app/newsletter.py). Its owner runs it:
 # nobody else on the publication, or on the platform, sees the addresses.
+
+# ---------------------------------------------------------------- statistics
+
+STAT_DAYS = (7, 30, 90, 365)
+FRONT_PAGE = "front"
+
+
+@router.get("/publications/{publication_id}/statistics")
+def statistics(publication_id: int, request: Request, days: int = 30,
+               article: Optional[int] = None):
+    """Views of this publication, from the site's own visit log. A person sees
+    the articles they can open: a writer their own, without the front page or
+    the followers, which belong to the whole publication."""
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "writer")
+    if days not in STAT_DAYS:
+        raise HTTPException(400, "Choose 7, 30, 90 or 365 days.")
+    shown = [a for a in research.list_articles(publication_id)
+             if a["published_version"] and a.get("slug") and writers.can(person, "view", a)]
+    if article is not None and not any(a["id"] == article for a in shown):
+        raise HTTPException(404, "That article is not published, or is not one you can open.")
+    whole = writers.at_least(person, publication_id, "editor")
+    bases = [pub["base"]]
+    if pub["home"]:
+        bases.append("/p/" + pub["slug"])    # the same articles at their other address
+    pages = {}
+    for a in shown:
+        if article is None or a["id"] == article:
+            for base in bases:
+                pages["%s/%s" % (base, a["slug"])] = a["id"]
+    if whole and article is None:
+        pages[pub["base"]] = FRONT_PAGE
+    out = visits.publication_stats(pages, days)
+    rows = out.pop("rows")
+
+    def row(key):
+        return rows.get(key) or {"views": 0, "readers": 0, "reading_median": None,
+                                 "reading_samples": 0}
+
+    out["articles"] = []
+    for a in shown:
+        if article is None or a["id"] == article:
+            out["articles"].append(dict(row(a["id"]), id=a["id"], title=a["title"], status=a["status"],
+                                        published_at=a.get("published_at"),
+                                        url="%s/%s" % (pub["base"], a["slug"])))
+    out["articles"].sort(key=lambda r: r["published_at"] or "", reverse=True)
+    out["articles"].sort(key=lambda r: -r["views"])
+    out["front_page"] = row(FRONT_PAGE) if whole and article is None else None
+    out["published"] = len(shown)
+    out["choices"] = list(STAT_DAYS)
+    out["article"] = article
+    out["followers"] = None
+    if writers.at_least(person, publication_id, "owner") and article is None:
+        start = datetime.datetime.strptime(out["from"], "%Y-%m-%d").replace(
+            tzinfo=datetime.timezone.utc).timestamp()
+        out["followers"] = {"active": newsletter.counts(publication_id)["active"],
+                            "new": newsletter.new_followers(publication_id, start)}
+    return out
+
 
 def _list_owner(request, publication_id):
     person = writers.require_writer(request)

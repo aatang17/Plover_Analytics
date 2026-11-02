@@ -564,6 +564,82 @@ class TaggedLinkTest(unittest.TestCase):
         self.assertEqual((rows["tg-tiktok"]["visitors"], rows["tg-tiktok"]["asked"]), (1, 0))
 
 
+class PublicationStatsTest(unittest.TestCase):
+    """The Writer Desk's figures. A reader who opens one article and leaves has
+    no script report, and must still count."""
+
+    def setUp(self):
+        visits.flush()
+        for path in visits.ANALYTICS_DIR.glob("visits-*.jsonl"):
+            path.unlink()
+        visits._reset_folds()
+        self.at = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+    def page(self, path, visitor="ps-a", **over):
+        event = {"at": self.at, "visitor": visitor, "path": path, "kind": "page", "status": 200,
+                 "ref": None, "internal": False, "country": "JP", "network": "NTT", "bot": False}
+        event.update(over)
+        visits._record(event)
+
+    def stats(self, days=7):
+        visits.flush()
+        return visits.publication_stats({"/research/a": 1, "/research": "front"}, days)
+
+    def test_a_reader_with_no_script_report_counts(self):
+        self.page("/research/a")
+        got = self.stats()
+        self.assertEqual((got["views"], got["readers"]), (1, 1))
+        self.assertIsNone(got["rows"][1]["reading_median"])
+
+    def test_robots_data_centres_and_failed_requests_do_not(self):
+        self.page("/research/a", bot=True)
+        self.page("/research/a", network="DigitalOcean, LLC")
+        self.page("/research/a", network="Google LLC")
+        self.page("/research/a", network=None)
+        self.page("/research/a", status=404)
+        self.page("/research/a", status=301)
+        self.assertEqual(self.stats()["views"], 0)
+
+    def test_old_versions_count_and_other_addresses_do_not(self):
+        self.page("/research/a/v2")
+        self.page("/research/a/")
+        self.page("/research/a.md")
+        self.page("/research/other")
+        self.page("/research/", visitor="ps-b")
+        got = self.stats()
+        self.assertEqual(got["rows"][1]["views"], 2)
+        self.assertEqual(got["rows"]["front"]["views"], 1)
+        self.assertEqual((got["views"], got["readers"]), (3, 2))
+        self.assertEqual(sum(d["views"] or 0 for d in got["daily"]), got["views"])
+
+    def test_one_reading_reported_three_times_is_one_reading(self):
+        self.page("/research/a")
+        for seconds in (10, 90, 40):
+            visits._record({"at": self.at, "visitor": "ps-a", "kind": "dwell", "path": "/research/a",
+                            "seconds": seconds, "view": "v1", "bot": False})
+        got = self.stats()["rows"][1]
+        self.assertEqual((got["reading_median"], got["reading_samples"]), (90, 1))
+
+    def test_sources_say_where_readers_came_from(self):
+        self.page("/research/a", ref="substack.com")
+        self.page("/research/a", ref="substack.com")
+        self.page("/research/a", internal=True)
+        self.page("/research/a")
+        got = dict((r["key"], r["views"]) for r in self.stats()["referrers"])
+        self.assertEqual(got, {"substack.com": 2, "site": 1, "direct": 1})
+
+    def test_the_traffic_page_is_unchanged_by_all_this(self):
+        self.page("/research/a")
+        self.assertEqual(self.stats()["views"], 1)
+        self.assertEqual(visits.summary(1)["pageviews"], 0)   # no script report: not a reader there
+
+    def test_a_day_before_counting_began_is_unknown_not_zero(self):
+        self.page("/research/a")
+        daily = self.stats(30)["daily"]
+        self.assertIsNone(daily[0]["views"])
+        self.assertEqual(daily[-1]["views"], 1)
+
+
 class TaggedSignupTest(unittest.TestCase):
     """The sign-in link request reads the tag; only the account it creates
     carries it."""

@@ -6,7 +6,8 @@
    /admin/api/research; the server decides what this person may see and do
    (app/writers.py) and the page only hides what would be refused anyway.
 
-   Routes (hash): #/p/<id> articles · #/p/<id>/members · #/p/<id>/assistant ·
+   Routes (hash): #/p/<id> articles · #/p/<id>/statistics[/<days>[/<article>]] ·
+   #/p/<id>/members · #/p/<id>/assistant ·
    #/p/<id>/settings · #/account · #/new (open a publication: one of your own,
    or for anyone if you are on the Plover team). */
 (function () {
@@ -96,7 +97,7 @@
 
   function route() {
     const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-    if (p[0] === "p" && p[1]) return { sec: "pub", id: Number(p[1]), tab: p[2] || "articles" };
+    if (p[0] === "p" && p[1]) return { sec: "pub", id: Number(p[1]), tab: p[2] || "articles", rest: p.slice(3) };
     if (p[0] === "account" || p[0] === "new") return { sec: p[0] };
     return { sec: "pub", id: null, tab: "articles" };
   }
@@ -202,9 +203,9 @@
     const pub = pubOf(r.id) || ME.publications[0];
     if (!r.id || !pubOf(r.id)) { history.replaceState(null, "", "#/p/" + pub.id); r.id = pub.id; }
     const owner = pub.role === "owner";
-    const known = ["articles", "coverage", "members", "assistant"].concat(owner ? ["subscribers"] : []).concat(owner && !pub.home ? ["settings"] : []);
+    const known = ["articles", "statistics", "coverage", "members", "assistant"].concat(owner ? ["subscribers"] : []).concat(owner && !pub.home ? ["settings"] : []);
     const tab = known.indexOf(r.tab) === -1 ? "articles" : r.tab;
-    const tabs = [["articles", "Articles"], ["coverage", "Coverage"], ["members", "Members"], ["assistant", "Assistant Settings"]]
+    const tabs = [["articles", "Articles"], ["statistics", "Statistics"], ["coverage", "Coverage"], ["members", "Members"], ["assistant", "Assistant Settings"]]
       .concat(owner ? [["subscribers", "Subscribers"]] : []).concat(owner && !pub.home ? [["settings", "Settings"]] : []);
     const actions = tab === "articles"
       ? `<button class="btn" id="wd-import" type="button">Import Markdown</button>
@@ -216,6 +217,7 @@
       '<div id="wd-body"></div>';
     shell(r, topbar([[pub.name, tab === "articles" ? null : "p/" + pub.id]].concat(tab === "articles" ? [] : [[tabs.find(t => t[0] === tab)[1]]])) + page(head));
     const body = $("#wd-body");
+    if (tab === "statistics") return statisticsTab(pub, body, r.rest);
     if (tab === "members") return membersTab(pub, body);
     if (tab === "coverage") return coverageTab(pub, body);
     if (tab === "settings") return settingsTab(pub, body);
@@ -359,6 +361,115 @@
     PENDING = null;
     api("/research/articles/" + p.id, { method: "DELETE", keepalive: true }).catch(() => {});
   });
+
+  /* ---- statistics ---- */
+
+  const STAT_PERIODS = { 7: "7 Days", 30: "30 Days", 90: "90 Days", 365: "1 Year" };
+  const SOURCE_NAMES = { direct: "No Link (Typed, Bookmark or Email)", site: "Other Plover Pages" };
+  let statChart = null;
+
+  /* Whole minutes and seconds, or the missing mark: no report is not zero. */
+  function readingTime(seconds) {
+    if (seconds == null) return '<span title="No reading time reported for this period">—</span>';
+    const s = Math.round(seconds);
+    return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + (s % 60) + " s";
+  }
+
+  function countryLabel(code) {
+    try { return new Intl.DisplayNames(["en"], { type: "region" }).of(code) || code; } catch (e) { return code; }
+  }
+
+  function saveText(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const csvCell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+
+  function statisticsTab(pub, body, rest) {
+    const days = STAT_PERIODS[rest[0]] ? Number(rest[0]) : 30;
+    const article = rest[1] ? Number(rest[1]) : null;
+    if (statChart) { statChart.dispose(); statChart = null; }
+    body.innerHTML = loading("the statistics");
+    const path = (d, a) => `p/${pub.id}/statistics/${d}` + (a ? "/" + a : "");
+    api(`/write/publications/${pub.id}/statistics?days=${days}` + (article ? "&article=" + article : "")).then(d => {
+      if (!d.published) {
+        body.innerHTML = '<p class="empty wd-empty">No published articles yet. Views show here once an article is published.</p>';
+        return;
+      }
+      const span = `${fmtDay(d.from)} to ${fmtDay(d.to)}`;
+      const one = article ? d.articles[0] : null;
+      const period = `<div class="wd-period" role="group" aria-label="Period">${d.choices.map(n =>
+        `<button type="button" class="btn sm${n === days ? " primary" : ""}" aria-pressed="${n === days}" data-go="${path(n, article)}">${STAT_PERIODS[n]}</button>`).join("")}</div>`;
+      const scope = one
+        ? `<p class="wd-scope"><b>${esc(one.title)}</b> <a href="${esc(one.url)}" target="_blank" rel="noopener">Open</a> <button type="button" class="linkbtn" data-go="${path(days)}">Show All Articles</button></p>` : "";
+      const tiles = [
+        ["Views", d.views.toLocaleString(), one ? "This article, " + span : span],
+        ["Readers", d.readers.toLocaleString(), "Different people, estimated"],
+        ["Median Reading Time", readingTime(d.reading_median), d.reading_samples ? d.reading_samples.toLocaleString() + " reports from readers" : "No reports in this period"],
+      ];
+      if (d.followers) tiles.push(["Followers", d.followers.active.toLocaleString(), `+${d.followers.new.toLocaleString()} in this period`]);
+      const stats = `<div class="stats${tiles.length === 3 ? " wd-stats3" : ""}">${tiles.map(t =>
+        `<div class="stat"><span class="lbl">${t[0]}</span><b>${t[1]}</b><small>${t[2]}</small></div>`).join("")}</div>`;
+
+      const num = n => `<td class="right">${n.toLocaleString()}</td>`;
+      const rowOf = (name, a) => `<tr><td>${name}</td><td>${a.published_at ? esc(fmtDay(a.published_at.slice(0, 10))) : "—"}</td>` +
+        num(a.views) + num(a.readers) +
+        `<td class="right" data-sort="${a.reading_median == null ? "" : a.reading_median}">${readingTime(a.reading_median)}</td></tr>`;
+      const front = d.front_page ? rowOf("Front Page", d.front_page) : "";
+      const table = one ? "" : band("Views by Article", span) + `<div class="calwrap"><table class="t" id="wd-stat-table"><thead><tr><th>Article</th><th>Last Published</th><th class="right">Views</th><th class="right">Readers</th><th class="right">Median Reading Time</th></tr></thead><tbody>` +
+        d.articles.map(a => rowOf(`<a href="#/${path(days, a.id)}">${esc(a.title || "Untitled")}</a>${a.status === "withdrawn" ? " (Withdrawn)" : ""}`, a)).join("") + front + "</tbody></table></div>";
+
+      const small = (title, label, list, name) => `<div>${band(title)}` + (list.length
+        ? `<table class="t" data-no-enhance><thead><tr><th>${label}</th><th class="right">Views</th></tr></thead><tbody>${list.map(r =>
+            `<tr><td>${esc(name(r.key))}</td>${num(r.views)}</tr>`).join("")}</tbody></table>`
+        : '<p class="empty wd-empty">No views in this period.</p>') + "</div>";
+
+      body.innerHTML = period + scope + (d.truncated
+        ? '<div class="notice wd-bad" role="alert">The log for this period is too long to read in one go, so these figures are short. Reload to read more.</div>' : "") + stats +
+        band("Views per Day", span) +
+        `<div id="wd-stat-chart" class="wd-stat-chart"></div>
+         <p class="wd-stat-foot"><button type="button" class="btn sm" id="wd-stat-png">Download PNG</button>
+         <button type="button" class="btn sm" id="wd-stat-csv">Download CSV</button></p>` +
+        table + `<div class="wd-stat-pair">${small("Where Readers Came From", "Source", d.referrers, k => SOURCE_NAMES[k] || k)}${small("Countries", "Country", d.countries, countryLabel)}</div>` +
+        `<p class="wd-stat-note">Source: this site's own visit log${d.counting_since ? ", kept since " + esc(fmtDay(d.counting_since)) : ""}. Not an official statistic. A view is one opening of a page in a browser. Robots, data centres and people who write for a publication here are left out. Someone who returns on another day counts as a new reader unless they accepted the cookie. Reading time is how long the page was on screen, and is available from November 2026.</p>`;
+
+      const stem = `${pub.slug || "publication"}-statistics-${d.from}-to-${d.to}`;
+      const known = d.daily.filter(r => r.views !== null).length;
+      statChart = obsChart($("#wd-stat-chart", body), "line", {
+        series: [{ name: "Views", slot: 1, points: d.daily.map(r => [r.date, r.views]) }],
+        dp: 0, yAxisDp: 0, yAxisMinInterval: 1, showPoints: known <= 14,
+        yAxisName: "Views per Day", isoPeriods: true, trust: "derived",
+        sourceLine: `${pub.name}: counted by the site from its own visit log, ${d.from} to ${d.to}. Not an official statistic.`,
+      });
+      $("#wd-stat-png", body).addEventListener("click", () => statChart.exportPNG(stem + ".png"));
+      $("#wd-stat-csv", body).addEventListener("click", () => {
+        const lines = [`# ${pub.name}: statistics, ${d.from} to ${d.to}`,
+          "# Source: the site's own visit log. Not an official statistic.",
+          "# A view is one opening of a page in a browser; robots, data centres and people who write here are left out.",
+          "# Median reading time is in seconds. An empty cell means no report, or a day before counting began; neither is zero.",
+          "",
+          "article,last_published,views,readers,median_reading_seconds"];
+        d.articles.concat(d.front_page ? [Object.assign({ title: "Front Page" }, d.front_page)] : []).forEach(a => {
+          lines.push([csvCell(a.title), (a.published_at || "").slice(0, 10), a.views, a.readers,
+            a.reading_median == null ? "" : a.reading_median].join(","));
+        });
+        lines.push("", "date,views");
+        d.daily.forEach(r => lines.push(r.date + "," + (r.views == null ? "" : r.views)));
+        saveText(stem + ".csv", lines.join("\n") + "\n");
+      });
+      $$("[data-go]", body).forEach(b => b.addEventListener("click", () => go(b.dataset.go)));
+    }).catch(err => {
+      if (err.status === 404 && article) return go(path(days));   // an old link to an article gone since
+      body.innerHTML = failed("the statistics", err);
+    });
+  }
 
   /* ---- members ---- */
 

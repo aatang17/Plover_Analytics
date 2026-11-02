@@ -13,6 +13,7 @@ PloverResearch's pages; the same address can be used in two publications;
 a publication always keeps an owner. Each publication's own skills, house
 style and connectors are proved in test_publication_assistant.py.
 """
+import datetime
 import os
 import pathlib
 import sqlite3
@@ -21,7 +22,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from app import accounts, research, staff, writer_api, writers
+from app import accounts, research, staff, visits, writer_api, writers
 from tests.test_research import Base
 
 
@@ -278,6 +279,88 @@ class PublicationTest(PubBase):
         self.open_pub()
         self.assertTrue(accounts._allowed("olive@example.com"))
         self.assertTrue(accounts._allowed("w@example.com"))           # PloverResearch via the Team page
+
+
+class StatisticsTest(PubBase):
+    """Who sees what on the Writer Desk's Statistics tab."""
+
+    def setUp(self):
+        PubBase.setUp(self)
+        root = tempfile.TemporaryDirectory()
+        self.addCleanup(root.cleanup)
+        saved = visits.ANALYTICS_DIR
+        visits.flush()
+        visits.ANALYTICS_DIR = pathlib.Path(root.name)
+        visits._reset_folds()
+
+        def restore():
+            visits.flush()
+            visits.ANALYTICS_DIR = saved
+            visits._reset_folds()
+        self.addCleanup(restore)
+        made = self.open_pub()
+        self.pub = made["publication"]
+        self.owner = self.sign_in(made["link"])
+        self.at = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        self.url = "/admin/api/write/publications/%d/statistics" % self.pub["id"]
+
+    def publish(self, client, slug, author_email):
+        a = client.post("/admin/api/research/articles", json={"publication_id": self.pub["id"]}).json()
+        author = staff.get_by_email(author_email)["id"]
+        client.put("/admin/api/research/articles/%d" % a["id"], json={
+            "draft": self.complete_draft(authors=[author], slug=slug), "base_revision": a["revision"]})
+        self.assertEqual(self.publish_as(self.owner, a["id"]).status_code, 200)
+        return a["id"]
+
+    def read(self, path):
+        visits._record({"at": self.at, "visitor": path, "path": path, "kind": "page", "status": 200,
+                        "ref": None, "internal": False, "country": "JP", "network": "NTT", "bot": False})
+        visits.flush()
+
+    def test_owner_writer_and_stranger_see_what_they_should(self):
+        link = self.owner.post("/admin/api/write/publications/%d/members" % self.pub["id"], json={
+            "email": "wes@example.com", "name": "Wes Writer", "role": "writer"}).json()["link"]
+        writer = self.sign_in(link)
+        theirs = self.publish(self.owner, "owners-piece", "olive@example.com")
+        mine = self.publish(writer, "writers-piece", "wes@example.com")
+        self.read("/p/asia-notes/owners-piece")
+        self.read("/p/asia-notes/writers-piece")
+        self.read("/p/asia-notes")
+        self.read("/p/other/owners-piece")
+
+        got = self.owner.get(self.url).json()
+        self.assertEqual(got["views"], 3)
+        self.assertEqual(got["front_page"]["views"], 1)
+        self.assertEqual(got["followers"], {"active": 0, "new": 0})
+        self.assertEqual(sum(a["views"] for a in got["articles"]) + got["front_page"]["views"], got["views"])
+
+        seen = writer.get(self.url).json()
+        self.assertEqual([a["id"] for a in seen["articles"]], [mine])
+        self.assertEqual(seen["views"], 1)
+        self.assertIsNone(seen["front_page"])
+        self.assertIsNone(seen["followers"])
+        self.assertEqual(writer.get(self.url + "?article=%d" % theirs).status_code, 404)
+
+        self.assertEqual(self.w.get(self.url).status_code, 404)
+        self.assertEqual(self.anon.get(self.url).status_code, 401)
+
+    def test_one_article_and_bad_requests(self):
+        aid = self.publish(self.owner, "owners-piece", "olive@example.com")
+        self.read("/p/asia-notes/owners-piece")
+        self.read("/p/asia-notes")
+        got = self.owner.get(self.url + "?article=%d" % aid).json()
+        self.assertEqual(got["views"], 1)
+        self.assertIsNone(got["front_page"])
+        self.assertEqual(self.owner.get(self.url + "?days=8").status_code, 400)
+
+    def test_a_published_page_reports_in_and_a_writer_is_not_a_reader(self):
+        self.publish(self.owner, "owners-piece", "olive@example.com")
+        self.assertIn("consent.js", self.anon.get("/p/asia-notes/owners-piece").text)
+        self.assertIn("consent.js", self.anon.get("/p/asia-notes").text)
+        fresh = TestClient(self.app, cookies=dict(self.owner.cookies))
+        fresh.cookies.delete(visits.TEAM_COOKIE)
+        self.assertEqual(fresh.get("/admin/api/write/me").cookies.get(visits.TEAM_COOKIE), "1")
+        self.assertIsNone(self.anon.get("/admin/api/write/me").cookies.get(visits.TEAM_COOKIE))
 
 
 class EmailedInviteTest(PubBase):

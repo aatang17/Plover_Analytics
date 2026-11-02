@@ -899,6 +899,11 @@ def _sessions(activity):
     return lengths, pages, single
 
 
+# Where publications live. The old versions of an article are the same article.
+PUBLICATION_PATHS = ("/research", "/p/")
+_VERSION_SUFFIX = re.compile(r"/v\d+$")
+
+
 # --- daily totals kept between loads -----------------------------------------
 #
 # The admin Traffic page used to re-read every line of the window on each load
@@ -939,6 +944,9 @@ def _new_day():
         # probe: visitor -> [script reported, network].
         "raw": {}, "probe": {}, "dirty": False, "settled": None,
         "first": None, "last": None,
+        # Publication pages for the Writer Desk (_fold_publication). Kept apart
+        # from the reader totals, which _settle rebuilds and these do not join.
+        "pub_pages": {}, "pub_dwell": {},
     })
     return d
 
@@ -975,6 +983,7 @@ def _fold(d, event, at):
     visitor = event.get("visitor")
     if not visitor:
         return  # nothing to test, so never shown as a reader
+    _fold_publication(d, event, at)
     probe = d["probe"].setdefault(visitor, [False, None])
     if event.get("kind") == "dwell":
         probe[0] = True
@@ -987,6 +996,41 @@ def _fold(d, event, at):
         return
     d["raw"].setdefault(visitor, []).append((event, at))
     d["dirty"] = True
+
+
+def _fold_publication(d, event, at):
+    """Add a read of a publication page to its day, for the Writer Desk.
+
+    Not the Traffic page's test. That one needs the page's own script to have
+    reported in, and these pages did not load the script before November 2026,
+    so a reader who opened one article and left would never pass it. Here a
+    view is a page served to a browser on a placed network that is not a data
+    centre, the same test for every month. Robots are already gone (_fold)."""
+    path = event.get("path") or ""
+    if not path.startswith(PUBLICATION_PATHS):
+        return
+    kind = event.get("kind")
+    if kind == "dwell":
+        seconds = event.get("seconds")
+        if isinstance(seconds, (int, float)) and seconds > 0:
+            key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
+            held = d["pub_dwell"].get(key)
+            if not held or seconds > held[1]:
+                d["pub_dwell"][key] = (path, seconds)
+        return
+    # A redirect is not a read: the page it leads to is counted when it loads.
+    if kind != "page" or event.get("status") not in (200, 304):
+        return
+    network = event.get("network")
+    if not network or is_hosting(network):
+        return
+    row = d["pub_pages"].setdefault(path, {"views": 0, "visitors": set(), "refs": {}, "countries": {}})
+    row["views"] += 1
+    row["visitors"].add(event["visitor"])
+    sender = event.get("ref") or ("site" if event.get("internal") else "direct")
+    row["refs"][sender] = row["refs"].get(sender, 0) + 1
+    if event.get("country"):
+        row["countries"][event["country"]] = row["countries"].get(event["country"], 0) + 1
 
 
 def _settle(d, final):
@@ -1342,4 +1386,77 @@ def summary(days=30, top=15):
         "lines_read": w["lines_read"],
         "unreadable_lines": w["unreadable"],
         "truncated": w["truncated"],
+    }
+
+
+def publication_stats(pages, days=30, top=15):
+    """Views of a publication's pages over the last `days` UTC days, for the
+    Writer Desk's Statistics tab. `pages` maps a page's address to the row it
+    counts towards, so the caller decides what this person may see."""
+    flush()
+    days = max(1, min(int(days), 365))
+    today = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).date()
+    start = today - datetime.timedelta(days=days - 1)
+    wanted = _months_in_window(start, today)
+    truncated = _window_totals(start, today, wanted)["truncated"]
+    began = counting_since()
+
+    rows, seen, seconds = {}, set(), {}
+    refs, countries, dwell = {}, {}, {}
+    series = []
+    cursor = start
+    with _FOLD_LOCK:
+        while cursor <= today:
+            key = cursor.isoformat()
+            cursor += datetime.timedelta(days=1)
+            d = _DAYS.get(key) or {}
+            views = 0
+            for path, row in (d.get("pub_pages") or {}).items():
+                target = pages.get(_VERSION_SUFFIX.sub("", path.rstrip("/")))
+                if target is None:
+                    continue
+                held = rows.setdefault(target, {"views": 0, "visitors": set()})
+                held["views"] += row["views"]
+                held["visitors"] |= row["visitors"]
+                seen |= row["visitors"]
+                views += row["views"]
+                for name, n in row["refs"].items():
+                    refs[name] = refs.get(name, 0) + n
+                for name, n in row["countries"].items():
+                    countries[name] = countries.get(name, 0) + n
+            for view, held in (d.get("pub_dwell") or {}).items():
+                if view not in dwell or held[1] > dwell[view][1]:
+                    dwell[view] = held
+            # A day before counting began is unknown, not zero.
+            series.append({"date": key, "views": None if began is None or key < began else views})
+    for path, secs in dwell.values():
+        target = pages.get(_VERSION_SUFFIX.sub("", path.rstrip("/")))
+        if target is not None:
+            seconds.setdefault(target, []).append(secs)
+
+    def ranked(source):
+        out = [{"key": k, "views": n} for k, n in source.items()]
+        out.sort(key=lambda r: (-r["views"], r["key"]))
+        return out[:top]
+
+    every = [s for held in seconds.values() for s in held]
+    return {
+        "from": start.isoformat(),
+        "to": today.isoformat(),
+        "counting_since": began,
+        "truncated": truncated,
+        "views": sum(r["views"] for r in rows.values()),
+        "readers": len(seen),
+        "reading_median": _median(every),
+        "reading_samples": len(every),
+        # A page can report reading time with no counted view: its view was on
+        # a day outside the window, or on a network the view test leaves out.
+        "rows": dict((k, {"views": rows[k]["views"] if k in rows else 0,
+                          "readers": len(rows[k]["visitors"]) if k in rows else 0,
+                          "reading_median": _median(seconds.get(k) or []),
+                          "reading_samples": len(seconds.get(k) or [])})
+                     for k in set(rows) | set(seconds)),
+        "daily": series,
+        "referrers": ranked(refs),
+        "countries": ranked(countries),
     }
