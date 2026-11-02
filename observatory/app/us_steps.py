@@ -56,6 +56,9 @@ LOOKS_MAX = 3
 LOOK_ROWS_SHOWN = 20
 
 
+_attempt = threading.local()
+
+
 class StepsError(Exception):
     """The model's steps could not be run."""
 
@@ -691,10 +694,20 @@ def other_market(question, cur=None):
     return None
 
 
+def not_tried():
+    _attempt.done = False
+
+
+def tried():
+    """Whether this thread's question has already been worked out step by step (app/ask_guard.py)."""
+    return getattr(_attempt, "done", False)
+
+
 def answer(cur, question):
     """Answer by steps, or raise StepsError (the model is off or failed) or
     HTTPException (it says the data cannot answer)."""
     from . import stock_recipes
+    _attempt.done = True
     if not sec_api._has(cur, "us_px_daily"):
         raise StepsError("no prices")
     last = us_prices_api.latest_date(cur)

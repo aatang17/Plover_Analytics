@@ -160,6 +160,7 @@
 
   function followupsFor(a) {
     var out = [];
+    if (a.recipe === "jp_cross_shareholdings") return out; // these follow-ups read US filings, not a Japanese filer's
     var co = a.entities && a.entities.company;
     var cos = (a.entities && a.entities.mentioned_companies) || [];
     var market = !co && MARKET_RECIPES.indexOf(a.recipe) >= 0;
@@ -170,7 +171,13 @@
         out.push({ label: label, q: q });
       }
     };
-    if (name) {
+    // a Japanese company read from its Japanese filings: only what those filings answer (app/jp_company_ask.py)
+    if (name && a.match && a.match.via === "japan") {
+      mk("How " + name + " has done", "How has " + name + " done this year?");
+      mk("Who owns " + name, "Who owns " + name + "?");
+      mk("Who is selling " + name, "Who is selling " + name + "?");
+      mk(name + " revenue", name + " revenue");
+    } else if (name) {
       if (a.recipe !== "company_value") mk("What is " + name + " worth?", "What is " + name + " worth?");
       if (a.recipe !== "company_holders") mk("Who owns " + name, "Who are the biggest holders of " + name + "?");
       if (a.recipe !== "company_insiders") mk("Insiders at " + name, "Have insiders at " + name + " bought or sold this year?");

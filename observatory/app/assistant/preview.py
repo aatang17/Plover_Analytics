@@ -617,6 +617,25 @@ def preview(q: str = Query(..., min_length=1, max_length=300),
     q = " ".join(q.split())
     prev = " ".join(prev.split()) if isinstance(prev, str) else ""          # called directly, the default is a Query
     on = on if isinstance(on, str) else ""
+    from .. import ask_language, ask_log
+    q = ask_language.country_as_us(q)
+    read = ask_language.read(q)
+    if not read or not read.get("english"):
+        return _preview(q, prev, on)
+    # another language: read in English, every route below as usual, answered in that language
+    english_prev = ((ask_language.read(prev) or {}).get("english") or prev) if prev else prev
+    out = _preview(read["english"], english_prev, on)
+    if isinstance(out, dict):
+        ask_log.note("/api/v1/assistant/preview", q, out.get("kind") != "none", out.get("miss") or out.get("kind"))
+        full = out.get("full_url")
+        out = ask_language.preview_in(read["language"], out)
+        out["question"] = q
+        if full:
+            out["full_url"] = "/?q=" + _quote(q)
+    return out
+
+
+def _preview(q, prev, on):
     from .. import ask_log, ask_miss
     # a price or a yield, read word by word: no model call, whatever was asked before
     try:

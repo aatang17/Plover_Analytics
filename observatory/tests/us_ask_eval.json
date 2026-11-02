@@ -472,5 +472,112 @@
  {
   "question": "best non-bank financial stocks",
   "route": "steps"
+ },
+ {
+  "question": "トヨタの政策保有株式が過去5年間でどう変化したか",
+  "route": "jp_cross_shareholdings",
+  "must_say": [
+   "政策保有株式",
+   "銘柄"
+  ],
+  "must_not_say": [
+   "revenue",
+   "$"
+  ],
+  "min_rows": 2
+ },
+ {
+  "question": "Toyota cross-shareholdings over the last 5 years",
+  "route": "jp_cross_shareholdings",
+  "must_say": [
+   "cross-shareholdings"
+  ],
+  "must_not_say": [
+   "revenue"
+  ]
+ },
+ {
+  "question": "Apple's carbon emissions in each of the last 5 annual reports",
+  "route": "refuse"
+ },
+ {
+  "question": "Apple employee turnover as filed in each annual report",
+  "route": "refuse"
+ },
+ {
+  "question": "Tesla's market share of EVs each year",
+  "route": "refuse"
+ },
+ {
+  "question": "Toyota revenue as filed in each annual report",
+  "route": "company_as_filed_history",
+  "must_say": [
+   "¥"
+  ],
+  "must_not_say": [
+   "$5",
+   "10-K"
+  ]
+ },
+ {
+  "question": "アップルの売上高",
+  "route": "company_history",
+  "must_say": [
+   "売上",
+   "$416bn"
+  ]
+ },
+ {
+  "question": "Quels sont les revenus d'Apple ?",
+  "route": "company_history",
+  "must_say": [
+   "Apple",
+   "chiffre"
+  ]
+ },
+ {
+  "question": "How has Kioxia done this year?",
+  "route": "jp_results",
+  "must_say": [
+   "revenue"
+  ],
+  "must_not_say": [
+   "No daily prices"
+  ]
+ },
+ {
+  "question": "who is selling Kioxia?",
+  "route": "jp_stakes",
+  "must_say": [
+   "Toshiba"
+  ],
+  "must_not_say": [
+   "CIK"
+  ]
+ },
+ {
+  "question": "Who owns Kioxia?",
+  "route": "jp_owners",
+  "must_say": [
+   "Toshiba"
+  ],
+  "must_not_say": [
+   "99.9%"
+  ]
+ },
+ {
+  "question": "who is selling Toyota?",
+  "route": "jp_stakes",
+  "must_not_say": [
+   "sold out of"
+  ]
+ },
+ {
+  "question": "who is buying Nvidia?",
+  "route": "company_holders",
+  "must_not_say": [
+   "sold out of",
+   "++"
+  ]
  }
 ]

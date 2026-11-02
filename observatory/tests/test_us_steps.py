@@ -213,7 +213,7 @@ class LiveTest(unittest.TestCase):
         self.assertEqual(d["match"]["via"], "steps")
         self.assertTrue(d["steps"] and d["query"])
         self.assertIn("S&P 500 members beat the index", d["headline"])
-        self.assertEqual(len(calls), 4, "reader, a failed query, the fix, the review")
+        self.assertEqual(len(calls), 5, "reader, a failed query, the fix, the review, the on-topic check")
         self.assertIn("query failed", calls[2][-1]["content"])
         # the headline's numbers are the query's own
         rows, cols = us_steps.run(self.cur, good["sql"], datetime.date(datetime.date.today().year, 1, 1))

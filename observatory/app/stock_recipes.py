@@ -943,29 +943,31 @@ def r_company_shareholder_return(cur, q, e):
     m, z = row["metrics"], row["size"]
     total = m.get("shareholder_return")
     fy = "the year to %s" % date_words(row["period_end"])
+    filed = lambda v: money_in(v, row["unit"])           # a filer's own currency; market value stays in dollars
     if total is None:
-        headline = "%s reports no dividends or buybacks in %s." % (rec["name"], fy)
+        # untagged is not unpaid: Sony's 20-F tags neither line, and it pays a dividend
+        headline = "%s's annual report tags no dividend or buyback line for %s, which doesn't mean it paid none." % (rec["name"], fy)
     else:
-        headline = "%s returned %s to shareholders in %s." % (rec["name"], money(total), fy)
+        headline = "%s returned %s to shareholders in %s." % (rec["name"], filed(total), fy)
     ql = (q or "").lower()
     if re.search(r"buyback yield|repurchase yield", ql) and m.get("buyback_yield_pct") is not None:
-        headline = "%s's buyback yield is %s: %s of buybacks in %s against today's market value." % (rec["name"], pct(m["buyback_yield_pct"], 2), money(z["buybacks"]), fy)
+        headline = "%s's buyback yield is %s: %s of buybacks in %s against today's market value." % (rec["name"], pct(m["buyback_yield_pct"], 2), filed(z["buybacks"]), fy)
     elif re.search(r"payout ratio|payout", ql) and m.get("payout_ratio_pct") is not None:
         headline = "%s's dividend payout ratio was %s in %s: dividends of %s against net income of %s." % (
-            rec["name"], pct(m["payout_ratio_pct"]), fy, money(z["dividends_paid"]), money(z["net_income"]))
+            rec["name"], pct(m["payout_ratio_pct"]), fy, filed(z["dividends_paid"]), filed(z["net_income"]))
     elif re.search(r"dividend", ql) and not re.search(r"buyback", ql) and z.get("dividends_paid") is not None:
-        headline = "%s paid %s in dividends in %s%s." % (rec["name"], money(z["dividends_paid"]), fy,
+        headline = "%s paid %s in dividends in %s%s." % (rec["name"], filed(z["dividends_paid"]), fy,
                                                          (", a yield of %s on today's value" % pct(m["dividend_yield_pct"], 2)) if m.get("dividend_yield_pct") is not None else "")
     elif re.search(r"buyback|repurchas", ql) and z.get("buybacks") is not None:
-        headline = "%s bought back %s of its shares in %s%s." % (rec["name"], money(z["buybacks"]), fy,
+        headline = "%s bought back %s of its shares in %s%s." % (rec["name"], filed(z["buybacks"]), fy,
                                                                  (", %s of today's market value" % pct(m["buyback_yield_pct"], 2)) if m.get("buyback_yield_pct") is not None else "")
-    bits = ["Buybacks were %s and dividends %s." % (money(z["buybacks"]), money(z["dividends_paid"]))]
+    bits = ["Buybacks were %s and dividends %s." % (filed(z["buybacks"]), filed(z["dividends_paid"]))]
     if m.get("market_cap"):
         bits.append("Against today's market value of %s that is a buyback yield of %s and a dividend yield of %s, %s in all."
                     % (money(m["market_cap"]), pct(m.get("buyback_yield_pct"), 2), pct(m.get("dividend_yield_pct"), 2),
                        pct((m.get("buyback_yield_pct") or 0) + (m.get("dividend_yield_pct") or 0), 2)))
     if m.get("payout_ratio_pct") is not None or m.get("buyback_ratio_pct") is not None:
-        bits.append("Relative to net income of %s: dividends %s, buybacks %s." % (money(z["net_income"]), pct(m.get("payout_ratio_pct")), pct(m.get("buyback_ratio_pct"))))
+        bits.append("Relative to net income of %s: dividends %s, buybacks %s." % (filed(z["net_income"]), pct(m.get("payout_ratio_pct")), pct(m.get("buyback_ratio_pct"))))
     figures = [fig("Buybacks", z["buybacks"], row["unit"], row["period_end"]), fig("Dividends paid", z["dividends_paid"], row["unit"], row["period_end"]),
                fig("Buyback yield", m.get("buyback_yield_pct"), "%", (row.get("price") or {}).get("date"), sec_metrics.PRICE_FORMULAS["buyback_yield_pct"]),
                fig("Dividend yield", m.get("dividend_yield_pct"), "%", (row.get("price") or {}).get("date"), sec_metrics.PRICE_FORMULAS["dividend_yield_pct"])]
@@ -1179,7 +1181,7 @@ def r_company_holders(cur, q, e):
         bits.insert(0, headline)
         headline = "Among %s's largest holders, %s added the most %s shares in the quarter to %s: %s." % (
             co, mgr(adds[0]), rec["ticker"], date_words(top["report_period"]),
-            "; ".join("%s +%s" % (mgr(r), share_words(r["shares_change"])) for r in adds))
+            "; ".join("%s %s" % (mgr(r), share_words(r["shares_change"])) for r in adds))
     elif cuts and re.search(r"\b(sold|selling|cut|trimmed|reduced|exited|dumped)\b", ql):
         bits.insert(0, headline)
         headline = "Among %s's largest holders, %s cut the most %s shares in the quarter to %s: %s." % (
@@ -1441,21 +1443,40 @@ def _person_in(question, rec, owner_names):
     return None
 
 
+_REVENUE_WORD = re.compile(r"\brevenues?\b|\bsales\b|\btop line\b")
+
+
 def r_company_as_filed_history(cur, q, e):
     rec = _need(e["companies"][0] if e["companies"] else None, "company")
+    # This table holds revenue only. Another filed figure has its own history, with a first-reported
+    # column; anything else is refused, never answered with revenue (2026-11-02: Toyota's cross-shareholdings).
+    if not _REVENUE_WORD.search((q or "").lower()):
+        try:
+            hist = e.get("history") or history_figure(q)
+        except HTTPException:
+            hist = None
+        if hist:
+            return r_company_history(cur, q, dict(e, history=hist))
+        from . import ask_miss
+        raise ask_miss.miss("That figure isn't in the annual-report data Plover holds. For one it does hold, try “%s revenue as filed”." % _short_for_refusal(rec), "not_held")
     d = call_api(sec_api.company_by_cik, cik="cik:%d" % rec["cik"], form="10-K", limit=5)
     panel = d["panel"]
     if not panel:
         raise HTTPException(404, "No annual reports loaded for %s." % rec["name"])
+    ccy = panel[0]["units"].get("revenue") or "USD"
     rows = [[p["period"], p["values"].get("revenue"), p["tags"].get("revenue"), p["filed"], p["adsh"]] for p in panel]
-    headline = "%s reported revenue of %s for the year to %s, in the 10-K filed %s." % (rec["name"], money(panel[0]["values"].get("revenue")), date_words(panel[0]["period"]), date_words(panel[0]["filed"]))
+    headline = "%s reported revenue of %s for the year to %s, in the annual report filed %s." % (rec["name"], money_in(panel[0]["values"].get("revenue"), ccy), date_words(panel[0]["period"]), date_words(panel[0]["filed"]))
     answer = ("Each figure below is the one printed in that year's own annual report, under the tag named, with the filing's accession number. Later restatements are not applied; a company that restated shows the original here and the restated figure in the later filing's comparative column.")
-    table = {"columns": ["Fiscal year end", "Revenue as filed", "Tag", "Filed", "Accession"], "rows": rows, "unit": d["panel"][0]["units"].get("revenue")}
-    chart = {"kind": "bars", "title": "%s revenue as filed, by annual report" % rec["ticker"], "unit": "USD",
+    table = {"columns": ["Fiscal year end", "Revenue as filed", "Tag", "Filed", "Accession"], "rows": rows, "unit": ccy}
+    chart = {"kind": "bars", "title": "%s revenue as filed, by annual report" % rec["ticker"], "unit": ccy,
              "series": [{"name": "Revenue", "points": [[p["period"][:4], p["values"].get("revenue")] for p in reversed(panel)]}]}
     return pkg("company_as_filed_history", q, headline, answer, [], table, chart, [SEC_SOURCE], {}, {"company": rec},
                {"company": company_link(rec), "filing": d["latest_filing"]["source_url"]},
-               ["Only the annual reports loaded on this server appear; the SEC's data sets run from 2009."])
+               ["Only the %d annual reports loaded on this server appear; the SEC's data sets run from 2009." % len(panel)])
+
+
+def _short_for_refusal(rec):
+    return (rec.get("name") or rec.get("ticker") or "Apple").split(" ")[0]
 
 
 # ---- recipes: managers -----------------------------------------------------
@@ -2680,7 +2701,8 @@ def r_compare_companies(cur, q, e):
         links["company_%d" % i] = company_link(c)
     return pkg("compare_companies", q, headline, answer, [], table, chart, [SEC_SOURCE, PRICE_SOURCE],
                {k: v for k, v in calc.items() if k in ("revenue_growth_pct", "operating_margin_pct", "net_margin_pct", "roe_pct", "market_cap", "pe_x", "dividend_yield_pct", "buyback_yield_pct", "fcf")},
-               {"companies": cos}, links, [compared])
+               {"companies": cos}, links, [compared] + ["%s reports in %s, so its filed figures are not set against dollars and show as —." % (c["name"], r["unit"])
+                                                        for c, r in zip(cos, rows) if r.get("unit") not in (None, "USD")])
 
 
 def _fmt_unit(v, unit):
@@ -5262,7 +5284,8 @@ def quick_match(cur, question):
             re.fullmatch(r"(?:its |their |the )?(?:holdings|portfolio|positions|top holdings|largest holdings?|biggest holdings?|13f|13f holdings)(?: last quarter| this quarter)?\??",
                          _strip_companies(q, cos)):
         mgr = us_link.manager_by_cik(cur, cos[0]["cik"], cos[0]["name"])
-    if mgr and not re.search(r"who (owns|holds)|holders|shareholders", q.lower()):
+    # "who is selling Nvidia?" asks who trades the stock, not what Nvidia's own fund arm sold
+    if mgr and not re.search(r"who (owns|holds)|holders|shareholders|\b(?:who|anyone|anybody|which \w+)\b.{0,20}\b(?:selling|sold|sells|buying|bought|buys|dumping|trimming)\b", q.lower()):
         rest_m = _strip_companies(q, cos) if cos else re.sub(r"\s+", " ", q).strip().lower()
         rest_m = re.sub(r"(?i)\b" + "|".join(re.escape(w) for w in us_link.norm_name(mgr[1]).split() if len(w) >= 3) + r"\b", " ", rest_m) if mgr[1] else rest_m
         rest_m = re.sub(r"(?i)\b(inc|llc|lp|ltd|corp|co|the|of|s)\b|['\u2019]s", " ", rest_m)
@@ -5275,6 +5298,9 @@ def quick_match(cur, question):
         return None
     rest = _strip_companies(_without_benchmarks(q), cos)
     rest = _drop_near_names(rest, cos)
+    # "who is selling Nvidia?", "who's buying Apple?": everyone reported, not only its insiders
+    if len(cos) == 1 and _WHO_TRADES.fullmatch(rest.strip(" ?.!")):
+        return BY_ID["company_holders"], entities(cur, q)
     # "is Nvidia in the S&P 500", "Apple's weight in the Dow": membership, by code
     ix = us_link.parse_index(q)
     if ix and len(cos) == 1 and re.search(r"\b(in|part of|member of|included in|belong to|weight|weighting)\b", q.lower()) and \
@@ -5400,6 +5426,9 @@ _EVENT_WORDS = re.compile(r"\b(?:fomc|fed (?:meetings?|decisions?|statements?|da
 _EVENT_FRAME = re.compile(r"\b(?:after|before|around|during|following|since|on|next|upcoming|when is)\b|\b(?:market|s&p|sp500|dow|nasdaq|stocks?|shares|index)\b")
 
 
+_WHO_TRADES = re.compile(r"(?:who|which (?:funds?|investors?|managers?)|anyone|anybody)(?:'?s| is| are| has been| have been| has| have)? (?:been )?(?:selling|sold|dumping|trimming|buying|bought|adding(?: to)?)(?: the)?(?: stock| shares)?", re.I)
+
+
 def is_macro_question(cur, question):
     ql = (question or "").lower()
     from .assistant import macro_read
@@ -5421,6 +5450,14 @@ def is_macro_question(cur, question):
 
 
 def answer(cur, question, prev=None, opts=None):
+    """The box's answer, through the last checks: another language put into English,
+    cross-shareholdings from their own data, and an answer that shows a different
+    thing from what was asked stopped (app/ask_guard.py)."""
+    from . import ask_guard
+    return ask_guard.answer(cur, question, prev, opts, _route)
+
+
+def _route(cur, question, prev=None, opts=None):
     """The quick lane first: a company plus a few words naming one shape is
     answered by code at once. Then the reader: a small model fills in the
     question's form (app/us_ask_model.py) and the shape it names runs on the

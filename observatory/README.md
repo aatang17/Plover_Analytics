@@ -1657,9 +1657,12 @@ many questions took each route and the median wait, so the split can be watched.
 | --- | --- | --- | --- |
 | Refusals and reasons | Word patterns for advice, forecasts, "why", figures not held, markets not covered, names that are not filers | Before anything else | 0 ms, no model |
 | Economy answers (`app/assistant/preview.py`) | A catalogue of US, Japan and Hong Kong series, then the series search, run by code | The question names an economy topic and no company | under 1 s, no model |
+| Japanese companies (`app/jp_company_ask.py`) | Results, figures, owners, 5% stake changes, shorts and buybacks from the Japanese filings, through the `/api/v1/equity` functions | A company with no US-exchange listing; who owns or trades any Japanese company; after a US refusal | under 1 s, no model |
 | Quick lane (`stock_recipes.quick_match`) | A company (or manager, industry, index) plus a few words that name one shape, read by a fixed grammar | The grammar matches the whole question | under 1 s, no model |
 | Reader (`app/us_ask_model.py`) | One short model call fills a form (shape, companies, period, ranking); code runs the shape | The quick lane did not match | 3–8 s, one call, cached per question per day |
 | Steps (`app/us_steps.py`) | The model writes the steps and one SQL query over the sandbox tables; code runs and checks it | The reader names no shape: counts, shares, screens with several conditions, custom maths | 10–30 s, two to four calls, plan cached per question per day |
+
+Every answer is then read against the question once (`ask_guard.on_topic`: about 0.8 s, one short model call, and it lets the answer through if the model is slow or off). An answer that shows something else, and a refusal, get one more try (`ask_guard.checked`, `_second_try`): the Japanese filings, then steps if steps has not run. If that fails too the reader is told; a different figure is never shown.
 
 Rules of thumb when adding something:
 

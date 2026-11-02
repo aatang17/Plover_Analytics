@@ -200,8 +200,27 @@ def suggestions(question, kind, text, cur=None, given=None):
         k = t.lower().strip(" ?")
         if k and k not in seen and k != ql.strip(" ?"):
             seen.add(k)
+            if co and co.lower() in k and not _answers(cur, t):
+                continue
             uniq.append(t)
-    return uniq[:3]
+            if len(uniq) == 3:
+                break
+    return uniq
+
+
+def _answers(cur, question):
+    """Whether the box answers a question it is about to offer, by code alone. On
+    2026-11-02 Kioxia's refusal offered "How has Kioxia done this year?", a reader
+    clicked it, and that was refused as well. Unknown counts as yes: a suggestion
+    is a bonus, and a failure here says nothing about the question."""
+    from . import stock_recipes, us_ask_model
+    try:
+        with us_ask_model.no_model():
+            return bool(stock_recipes.answer(cur, question).get("headline"))
+    except HTTPException:
+        return False
+    except Exception:                                             # noqa: BLE001
+        return True
 
 
 def reply(question, exc=None, cur=None, status=None):
@@ -216,4 +235,8 @@ def reply(question, exc=None, cur=None, status=None):
     text = exc.detail if isinstance(exc.detail, str) else NOTHING
     kind = getattr(exc, "miss", None) or classify(text)
     sentence = UNCLEAR if kind == "unclear" and not text else plain(text)
-    return {"detail": sentence, "miss": kind, "try": suggestions(question, kind, text, cur, getattr(exc, "tries", None))}
+    from . import ask_language                  # imported here: it reads the model, which reads this module
+    read = ask_language.read(question)
+    english = read["english"] if read and read.get("english") else question
+    return ask_language.reply_in(question, {"detail": sentence, "miss": kind,
+                                            "try": suggestions(english, kind, text, cur, getattr(exc, "tries", None))})
