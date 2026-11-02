@@ -337,7 +337,7 @@ class DeskTest(Base):
         listing = self.anon.get("/research")
         self.assertEqual(listing.status_code, 200)
         self.assertIn("No notes published yet", listing.text)
-        self.assertIn("substack.com/@ploverresearch", listing.text)
+        self.assertNotIn("substack.com", listing.text)
         made = []
         for n, (slug, market, topics) in enumerate((("zeroth-note", "global", ["growth"]),
                                                      ("first-note", "jp", ["banks"]),
@@ -367,7 +367,9 @@ class DeskTest(Base):
         self.assertIn("More From PloverResearch", art)
         self.assertIn("/research/third-note", art)
         self.assertNotIn('href="/research/first-note">Note', art.split("More From", 1)[1])
-        self.assertIn("Subscribe on Substack", art)
+        self.assertIn('action="/p/ploverresearch/email/subscribe"', art)   # our own Follow, not Substack
+        self.assertIn('data-follow>Follow</a>', art)
+        self.assertNotIn("substack.com", art)
         self.assertIn('<p class="rs-kicker">Japan <span aria-hidden="true">\u00b7</span> Banks</p>', art)
         self.assertIn('class="rs-share"', art)
 
@@ -441,6 +443,7 @@ class DeskTest(Base):
         self.assertIn('alt="Yields since 1990"', html)                 # the caption stands in
         fig = html.split('<figure class="rs-image"', 1)[1].split("</figure>", 1)[0]
         self.assertNotIn("Source:", fig)                               # no empty source line
+        self.assertIn('download="chart-1.png">Download PNG</a>', fig)  # the file as uploaded
 
     def test_images_checked_by_content(self):
         r = self.w.post("/admin/api/research/media", content=png(5, 4),

@@ -2522,11 +2522,10 @@ function openSubstack() {
 
 /* ---------------------------------------------------------------- email to subscribers */
 
-/* The publication's own list (app/newsletter.py): every publication except
-   PloverResearch, which posts through Substack. Editors and owners send. */
+/* The publication's own list (app/newsletter.py). Editors and owners send. */
 function emailable() {
   var a = S.article;
-  return !!(a && a.published_version && a.publication && !a.publication.home && canDo("publish"));
+  return !!(a && a.published_version && a.publication && canDo("publish"));
 }
 
 var EMAIL_POLL = null;

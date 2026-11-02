@@ -35,7 +35,8 @@ body:has(.rs-article) { background: var(--obs-ground); }
 .rs-head h1 { font-size: 36px; font-weight: 800; line-height: 1.16; letter-spacing: -0.7px;
   color: var(--obs-ink); margin: 0 0 14px; }
 .rs-dek { font-size: 18px; line-height: 1.5; color: var(--obs-text); margin: 0 0 20px; }
-.rs-byline { margin: 0 0 16px; }
+.rs-byline { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px; margin: 0 0 16px; }
+.rs-follow { flex: 0 0 auto; text-decoration: none; padding: 7px 18px; font-size: 13.5px; }
 .rs-author { font-size: 14px; font-weight: 700; color: var(--obs-ink); margin: 0 0 2px; }
 .rs-dateline { font-size: 13px; color: var(--obs-text-muted); margin: 0; font-variant-numeric: tabular-nums; }
 
@@ -94,6 +95,12 @@ body:has(.rs-article) { background: var(--obs-ground); }
 .rs-chart-error { font-size: 13px; color: var(--obs-trust-stale); margin: 8px 0; }
 .rs-chart-acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .rs-chart-acts .btn { text-decoration: none; }
+/* on an article, downloads are small quiet words under the figure, not buttons
+   competing with it. Stored versions get this too: it only restyles their .btn. */
+.rs-article .rs-chart-acts { gap: 14px; margin-top: 6px; }
+.rs-article .rs-chart-acts .btn { padding: 0; background: none; border: 0; border-radius: 0; min-height: 0;
+  font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--obs-text-muted); }
+.rs-article .rs-chart-acts .btn:hover { color: var(--obs-primary); background: none; text-decoration: underline; }
 .rs-image img { display: block; max-width: 100%; height: auto; }
 .rs-table .table-wrap { margin-top: 4px; }
 .rs-table table.data { font-size: 13.5px; }
@@ -247,6 +254,8 @@ main.rs-wrap:not(.rs-home) > section.rh-more:has(> h2) > h2 { margin: 0 0 12px; 
 .rh-subform .btn { text-decoration: none; padding: 8px 16px; font-size: 13.5px; }
 .rh-sub-msg { flex: 1 0 100%; margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--obs-ink); }
 .rh-sub-msg.bad { color: var(--obs-warn); }
+/* off the page, not display:none, which a form-filling program skips */
+.rh-sub-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 /* the confirm and unsubscribe pages */
 .rs-email { max-width: 760px; margin: 0 auto 40px; padding: 24px 26px; background: var(--obs-surface);
   border: 1px solid var(--obs-border); border-top: 3px solid var(--obs-band-bg); border-radius: 3px; }

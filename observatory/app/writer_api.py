@@ -235,7 +235,7 @@ def _list_owner(request, publication_id):
     person = writers.require_writer(request)
     pub = _need(person, publication_id, "owner")
     if not newsletter.can_collect(pub):
-        raise HTTPException(400, "PloverResearch's readers subscribe through its Substack.")
+        raise HTTPException(400, "This publication has no email list.")
     return person, pub
 
 

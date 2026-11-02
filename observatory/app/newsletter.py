@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """A publication's own email list: readers sign up, writers send each article.
 
-Every publication other than PloverResearch (which posts through its owner's
-Substack) can collect subscribers on its own pages and email each new article
-to them, under its own name, with replies going to the writer who sent it.
+Every publication, PloverResearch included, can collect subscribers on its own
+pages and email each new article to them, under its own name, with replies
+going to the writer who sent it.
 The list belongs to the publication: its owner sees it, imports it, downloads
 it and removes from it; nobody else on the platform does.
 
@@ -12,6 +12,12 @@ site sends (sign-in links included) into spam folders:
 
   * A reader who signs up on the page CONFIRMS by email before anything is
     sent to them. A typo or someone else's address never gets a newsletter.
+    The link opens a page with a button: mail scanners open every link in a
+    message, and would otherwise confirm addresses nobody confirmed.
+  * Bots: a hidden field only a form-filling program completes (the page
+    answers it as usual and nothing happens), and limits on confirmation
+    emails per network and in total, so a flood cannot spend the sending
+    reputation that sign-in links depend on.
   * An imported list (a Substack export, say) is taken as already confirmed,
     on the owner's word that these people asked for this newsletter. The
     import screen says so, and the owner ticks it.
@@ -89,7 +95,8 @@ BATCH = 100                         # Resend's batch endpoint takes up to 100 em
 PAUSE_SECONDS = 0.6                 # stays under Resend's default two requests a second
 STALE_SECONDS = 300                 # a send with no progress for this long was interrupted
 CONFIRM_COOLDOWN = 600          # one confirmation email per address per ten minutes
-SIGNUPS_PER_IP_HOUR = 20
+SIGNUPS_PER_IP_HOUR = 5
+CONFIRMATIONS_PER_HOUR = 200    # across the site; far above any real day, and it stops a flood
 IMPORT_MAX_ROWS = 50000
 IMPORT_MAX_BYTES = 8 * 1024 * 1024
 EMAIL_MAX = 254
@@ -98,6 +105,7 @@ _EMAIL = re.compile(r"^[^@\s,;<>\"]+@[^@\s,;<>\"]+\.[^@\s,;<>\"]+$")
 _schema_for = [None]
 _lock = threading.Lock()
 _ip_hits = {}
+_confirm_hits = []
 _running = set()                    # send ids with a live thread in this process
 
 
@@ -138,9 +146,8 @@ def normalise(email):
 
 
 def can_collect(pub):
-    """PloverResearch's readers subscribe through its Substack; every other
-    publication collects its own."""
-    return bool(pub) and not pub["home"]
+    """Every publication collects its own followers."""
+    return bool(pub)
 
 
 # --------------------------------------------------------------- links
@@ -189,6 +196,15 @@ def _ip_allowed(ip):
     return True
 
 
+def _confirmation_allowed():
+    now = time.monotonic()
+    _confirm_hits[:] = [t for t in _confirm_hits if t > now - 3600]
+    if len(_confirm_hits) >= CONFIRMATIONS_PER_HOUR:
+        return False
+    _confirm_hits.append(now)
+    return True
+
+
 def subscribe(pub, email, ip=""):
     """Start a sign-up. Returns 'confirm_sent', 'already' (active: nothing is
     sent, and the page says the same thing either way), or 'resend_later'
@@ -208,6 +224,8 @@ def subscribe(pub, email, ip=""):
     if row is not None and row["status"] == "pending" and row["confirm_sent_at"] \
             and row["confirm_sent_at"] > now - CONFIRM_COOLDOWN:
         return "resend_later"
+    if not _confirmation_allowed():
+        raise NewsletterError("Too many sign-ups right now. Try again in an hour.")
     token = row["token"] if row is not None and row["status"] == "pending" \
         else secrets.token_urlsafe(24)
     with _lock:
@@ -223,7 +241,7 @@ def subscribe(pub, email, ip=""):
     delivered = mailer.send_link(
         email, "Confirm your subscription to %s" % pub["name"],
         ["Someone, probably you, asked to receive %s by email on Plover Analytics." % pub["name"],
-         "Press the link to start receiving new articles. If you did not ask, ignore this "
+         "Press the link and then Confirm to start receiving new articles. If you did not ask, ignore this "
          "email and nothing more will be sent."],
         confirm_link(pub, token), "Confirm Subscription")
     if not delivered and mailer.configured():

@@ -356,6 +356,17 @@ var researchChart = (function () {
     setTimeout(function () { target.classList.remove("rs-flash"); }, 1200);
   });
 
+  // Follow, at the top of a page: to the box at the bottom, ready to type in.
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest("[data-follow]")) return;
+    var box = document.getElementById("subscribe");
+    if (!box) return;
+    e.preventDefault();
+    box.scrollIntoView({ block: "center" });
+    var input = box.querySelector("input[type=email]");
+    if (input) input.focus({ preventScroll: true });
+  });
+
   /* Market tabs on the homepage cards. The choice is kept in the address
      (?market=jp) so a filtered view can be shared. */
   function homeFilters() {
@@ -447,7 +458,7 @@ var researchChart = (function () {
     fetch(form.getAttribute("action"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email }),
+      body: JSON.stringify({ email: email, hp_note: form.elements.hp_note ? form.elements.hp_note.value : "" }),
     }).then(function (r) {
       return r.json().then(function (d) { return { ok: r.ok, d: d }; },
                            function () { return { ok: false, d: {} }; });

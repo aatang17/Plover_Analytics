@@ -202,10 +202,10 @@
     const pub = pubOf(r.id) || ME.publications[0];
     if (!r.id || !pubOf(r.id)) { history.replaceState(null, "", "#/p/" + pub.id); r.id = pub.id; }
     const owner = pub.role === "owner";
-    const known = ["articles", "coverage", "members", "assistant"].concat(owner && !pub.home ? ["subscribers", "settings"] : []);
+    const known = ["articles", "coverage", "members", "assistant"].concat(owner ? ["subscribers"] : []).concat(owner && !pub.home ? ["settings"] : []);
     const tab = known.indexOf(r.tab) === -1 ? "articles" : r.tab;
     const tabs = [["articles", "Articles"], ["coverage", "Coverage"], ["members", "Members"], ["assistant", "Assistant Settings"]]
-      .concat(owner && !pub.home ? [["subscribers", "Subscribers"], ["settings", "Settings"]] : []);
+      .concat(owner ? [["subscribers", "Subscribers"]] : []).concat(owner && !pub.home ? [["settings", "Settings"]] : []);
     const actions = tab === "articles"
       ? `<button class="btn" id="wd-import" type="button">Import Markdown</button>
          <button class="btn primary" id="wd-new" type="button">New Article</button>

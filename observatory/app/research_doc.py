@@ -954,9 +954,16 @@ def _render_image(b, n, media_base):
                      % ((" (" + esc(b["pending"]) + ")") if b["pending"] else ""))
     if b["source"]:
         parts.append('<p class="source-line">Source: %s</p>' % esc(b["source"]))
+    acts = []
+    if b["media"]:
+        # the file as uploaded; no script, so it works in every saved copy of the page
+        acts.append('<a class="btn" href="%s%s.%s" download="chart-%d.%s">Download %s</a>'
+                    % (media_base, b["media"], b["ext"], n, b["ext"],
+                       {"jpg": "JPEG"}.get(b["ext"], b["ext"].upper())))
     if b.get("link"):
-        parts.append('<div class="rs-chart-acts"><a class="btn" href="%s">View on Plover</a></div>'
-                     % esc(b["link"]))
+        acts.append('<a class="btn" href="%s">View on Plover</a>' % esc(b["link"]))
+    if acts:
+        parts.append('<div class="rs-chart-acts">%s</div>' % "".join(acts))
     parts.append("</figure>")
     return "".join(parts)
 

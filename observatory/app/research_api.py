@@ -315,6 +315,7 @@ def preview_article(article_id: int, request: Request):
     versions.append({"version": v["version"], "published_at": v["published_at"],
                      "change_note": "This preview."})
     main = rp.article_main(v, versions, v["version"], "", preview=True, pub=pub)
+    main += "\n" + rp._subscribe_panel(pub=pub)  # what the Follow button leads to
     text = rp.page("Preview · %s" % v["title"], v["summary"], None, main,
                    data=rp._chart_data(v), robots="noindex, nofollow", preview=True, pub=pub)
     headers = dict(rp.SECURITY_HEADERS)
@@ -436,7 +437,7 @@ def email_article(article_id: int, body: EmailBody, request: Request):
     a = _article_or_404(article_id, person, "publish")
     pub = research.publication(a["publication_id"])
     if not newsletter.can_collect(pub):
-        raise HTTPException(400, "PloverResearch posts through Substack; use Prepare Substack Post.")
+        raise HTTPException(400, "This publication has no email list.")
     if body.version != a["published_version"]:
         raise HTTPException(409, "A newer version is published. Reload the editor and send that one.")
     try:

@@ -41,6 +41,7 @@ class NewsletterTest(PubBase):
         mailer.configured = lambda: True
         newsletter.PAUSE_SECONDS = 0
         newsletter._ip_hits.clear()
+        del newsletter._confirm_hits[:]
         self._from = os.environ.get("RESEND_FROM")
         os.environ["RESEND_FROM"] = "Plover Analytics <hello@ploveranalytics.com>"
         self.addCleanup(self._restore_mail)
@@ -69,7 +70,7 @@ class NewsletterTest(PubBase):
 
     def confirm_last(self):
         token = self.links[-1][2].split("t=")[1]
-        return self.anon.get("/p/asia-notes/email/confirm?t=" + token)
+        return self.anon.post("/p/asia-notes/email/confirm?t=" + token)
 
     def published_article(self):
         a = self.olive.post("/admin/api/research/articles", json={"publication_id": self.pub["id"]}).json()
@@ -105,6 +106,40 @@ class NewsletterTest(PubBase):
         self.assertEqual(self.signup("not an address").status_code, 400)
         self.assertIn("Link No Longer Valid", self.anon.get("/p/asia-notes/email/confirm?t=nope").text)
 
+    def test_opening_the_link_does_not_confirm(self):
+        # a mail scanner opens every link; only the button confirms
+        self.signup("scanned@example.com")
+        token = self.links[-1][2].split("t=")[1]
+        page = self.anon.get("/p/asia-notes/email/confirm?t=" + token)
+        self.assertIn("Confirm Your Subscription", page.text)
+        self.assertEqual(newsletter.counts(self.pub["id"])["pending"], 1)
+        self.assertEqual(newsletter.counts(self.pub["id"])["active"], 0)
+        self.assertIn("You Are Subscribed", self.confirm_last().text)
+        self.assertEqual(newsletter.counts(self.pub["id"])["active"], 1)
+        self.assertIn("You Are Subscribed", self.anon.get("/p/asia-notes/email/confirm?t=" + token).text)
+
+    def test_hidden_field_stops_a_program_quietly(self):
+        sent = len(self.links)
+        for r in (self.anon.post("/p/asia-notes/email/subscribe", json={"email": "bot@example.com", "hp_note": "x"}),
+                  self.anon.post("/p/asia-notes/email/subscribe", data={"email": "bot@example.com", "hp_note": "x"})):
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("Check your inbox", r.text)
+        self.assertEqual(len(self.links), sent)
+        self.assertEqual(newsletter.counts(self.pub["id"])["pending"], 0)
+        self.assertIn('name="hp_note"', self.anon.get("/p/asia-notes").text)
+
+    def test_limits_on_a_network_and_on_the_whole_site(self):
+        for i in range(newsletter.SIGNUPS_PER_IP_HOUR):
+            self.assertEqual(self.signup("r%d@example.com" % i).status_code, 200)
+        over = self.signup("r9@example.com")
+        self.assertEqual(over.status_code, 400)
+        self.assertIn("Try again in an hour", over.json()["message"])
+        newsletter._ip_hits.clear()
+        newsletter._confirm_hits[:] = [time.monotonic()] * newsletter.CONFIRMATIONS_PER_HOUR
+        flood = self.signup("flood@example.com")
+        self.assertEqual(flood.status_code, 400)
+        self.assertIn("Too many sign-ups right now", flood.json()["message"])
+
     def test_a_refused_confirmation_says_so(self):
         mailer.send_link = lambda *a, **kw: False
         r = self.signup("reader@example.com")
@@ -120,13 +155,15 @@ class NewsletterTest(PubBase):
         self.assertIn("Almost Done", r.text)
         self.assertIn("noindex", r.text)
 
-    def test_page_has_the_box_and_plover_research_takes_no_signups(self):
+    def test_every_publication_has_the_box_plover_research_included(self):
         home = self.anon.get("/p/asia-notes").text
         self.assertIn('action="/p/asia-notes/email/subscribe"', home)
         self.assertIn('href="/p/asia-notes#subscribe"', home)
         self.assertEqual(self.anon.post("/p/ploverresearch/email/subscribe",
-                                        json={"email": "x@example.com"}).status_code, 404)
-        self.assertNotIn("email/subscribe", self.anon.get("/research").text)
+                                        json={"email": "x@example.com"}).status_code, 200)
+        front = self.anon.get("/research").text
+        self.assertIn('action="/p/ploverresearch/email/subscribe"', front)
+        self.assertNotIn("substack.com", front)
 
     def test_owner_imports_a_substack_export(self):
         url = "/admin/api/write/publications/%d/subscribers" % self.pub["id"]
@@ -156,7 +193,7 @@ class NewsletterTest(PubBase):
         # the Plover team member who opened it is not a member of it
         self.assertEqual(self.w.get(url).status_code, 404)
         self.assertEqual(self.anon.get(url).status_code, 401)
-        self.assertEqual(self.w.get("/admin/api/write/publications/1/subscribers").status_code, 400)
+        self.assertEqual(self.w.get("/admin/api/write/publications/1/subscribers").status_code, 200)   # PloverResearch has a list too
 
     def test_email_a_version_to_active_subscribers_once(self):
         self.signup("pending@example.com")                          # never confirmed

@@ -330,9 +330,10 @@ def article_main(v, versions, current_version, notice="", preview=False, pub=Non
     parts.append("<h1>%s</h1>" % esc(v["title"]))
     if v["dek"]:
         parts.append('<p class="rs-dek">%s</p>' % esc(v["dek"]))
-    parts.append('<div class="rs-byline">%s<p class="rs-dateline">%s</p></div>' % (
+    parts.append('<div class="rs-byline"><div>%s<p class="rs-dateline">%s</p></div>'
+                 '<a class="btn rs-follow" href="%s#subscribe" data-follow>Follow</a></div>' % (
         ('<p class="rs-author">By %s</p>' % esc(_authors_text(v["authors"]))) if v["authors"] else "",
-        " \u00b7 ".join(dateline)))
+        " \u00b7 ".join(dateline), esc(pub["base"] + "/" + v["slug"])))
     parts.append(share_bar(url, v["title"]))
     parts.append("</header>")
     parts.append('<div class="rs-body">%s</div>' % _key_points(v["body_html"]))
@@ -453,7 +454,6 @@ def _row_or_404(slug, pub=None):
 # ---------------------------------------------------------------------------
 # the homepage: lead story, Chart of the Week, latest notes, archive
 
-SUBSTACK_URL = os.environ.get("SUBSTACK_URL", "https://substack.com/@ploverresearch")
 LATEST_ROWS = 12
 MARKET_LABEL = dict(rd.MARKETS)
 TOPIC_LABEL = dict(rd.TOPICS)
@@ -592,31 +592,26 @@ def _chart_of_the_week(items, lead):
     return None, None, None
 
 
-def _subscribe_panel(title="Get New Notes by Email", pub=None):
+def _subscribe_panel(pub=None):
+    """Follow a publication: its own list (app/newsletter.py). The form works
+    with or without the script, which only keeps the reader on the page."""
     pub = pub or _home()
-    if not pub["home"]:
-        # the publication's own list (app/newsletter.py): the form works with
-        # or without the script, which only keeps the reader on the page
-        return ('<aside class="rh-subscribe" id="subscribe" aria-label="Subscribe">'
-                '<div><p class="rh-subscribe-title">Get New Articles by Email</p>'
-                '<p class="rh-subscribe-text">Each new article from %s, sent to your inbox. '
-                'Unsubscribe any time.</p></div>'
-                '<form class="rh-subform" method="post" action="%s/email/subscribe" '
-                'data-subscribe novalidate>'
-                '<label class="visually-hidden" for="rh-sub-email">Email address</label>'
-                '<input type="email" id="rh-sub-email" name="email" required maxlength="254" '
-                'autocomplete="email" placeholder="name@example.com">'
-                '<button class="btn btn-primary" type="submit">Subscribe</button>'
-                '<a class="btn" href="%s/feed.xml">RSS</a>'
-                '<p class="rh-sub-msg" role="status" aria-live="polite" hidden></p>'
-                '</form></aside>' % (esc(pub["name"]), esc(pub["base"]), esc(pub["base"])))
-    return ('<aside class="rh-subscribe" aria-label="Subscribe">'
-            '<div><p class="rh-subscribe-title">%s</p>'
-            '<p class="rh-subscribe-text">Every PloverResearch note is sent to Substack subscribers '
-            'the day it is published.</p></div>'
-            '<div class="rh-subscribe-acts"><a class="btn btn-primary" href="%s" rel="noopener">'
-            'Subscribe on Substack</a><a class="btn" href="/research/feed.xml">RSS Feed</a></div>'
-            '</aside>' % (esc(title), esc(SUBSTACK_URL)))
+    return ('<aside class="rh-subscribe" id="subscribe" aria-label="Follow">'
+            '<div><p class="rh-subscribe-title">Follow %s</p>'
+            '<p class="rh-subscribe-text">Each new article, sent to your inbox. '
+            'Unsubscribe any time.</p></div>'
+            '<form class="rh-subform" method="post" action="/p/%s/email/subscribe" '
+            'data-subscribe novalidate>'
+            '<label class="visually-hidden" for="rh-sub-email">Email address</label>'
+            '<input type="email" id="rh-sub-email" name="email" required maxlength="254" '
+            'autocomplete="email" placeholder="name@example.com">'
+            # people never see this; a form-filling program completes it
+            '<div class="rh-sub-trap" aria-hidden="true"><label>Leave this empty '
+            '<input type="text" name="%s" tabindex="-1" autocomplete="off"></label></div>'
+            '<button class="btn btn-primary" type="submit">Follow</button>'
+            '<a class="btn" href="%s/feed.xml">RSS</a>'
+            '<p class="rh-sub-msg" role="status" aria-live="polite" hidden></p>'
+            '</form></aside>' % (esc(pub["name"]), esc(pub["slug"]), SIGNUP_TRAP, esc(pub["base"])))
 
 
 def _section_head(title, extra="", note=""):
@@ -635,12 +630,8 @@ def render_home(pub=None):
     pub = pub or _home()
     items = research.published(pub["id"])
     data = {"figures": {}, "_snaps": {}}
-    if pub["home"]:
-        acts = ('<a class="btn btn-primary" href="%s" rel="noopener">Subscribe</a>'
-                '<a class="btn" href="/research/feed.xml">RSS</a>' % esc(SUBSTACK_URL))
-    else:
-        acts = ('<a class="btn btn-primary" href="%s#subscribe">Subscribe</a>'
-                '<a class="btn" href="%s/feed.xml">RSS</a>' % (esc(pub["base"]), esc(pub["base"])))
+    acts = ('<a class="btn btn-primary" href="%s#subscribe" data-follow>Follow</a>'
+            '<a class="btn" href="%s/feed.xml">RSS</a>' % (esc(pub["base"]), esc(pub["base"])))
     parts = ['<header class="rh-mast">%s<div><h1>%s</h1>%s%s</div>'
              '<div class="rh-mast-acts">%s</div></header>'
              % (_logo(pub, "rh-logo"), esc(pub["name"]),
@@ -649,9 +640,7 @@ def render_home(pub=None):
                 else "", acts)]
     if not items:
         parts.append(_section_head("Latest Notes"))
-        parts.append('<div class="rh-box rh-empty">%s</div>' % (
-            "No notes published yet. The first arrives here and on Substack together."
-            if pub["home"] else "No notes published yet."))
+        parts.append('<div class="rh-box rh-empty">No notes published yet.</div>')
         parts.append(_subscribe_panel(pub=pub))
         parts.append(_own_views(pub))
         data.pop("_snaps", None)
@@ -750,6 +739,14 @@ def more_from(current_slug, limit=3, pub=None):
             '<p class="rh-allrow"><a class="rh-read" href="%s">All notes'
             '<span aria-hidden="true"> \u2192</span></a></p></section>'
             % (esc(pub["name"]), esc(pub["name"]), cards, esc(pub["base"]))), data["figures"]
+
+
+def _list_pub_or_404(pub_slug):
+    """For the email list's addresses, which every publication has under /p."""
+    pub = research.publication_by_slug(pub_slug)
+    if pub is None:
+        raise HTTPException(404, "No such publication")
+    return pub
 
 
 def _pub_or_404(pub_slug):
@@ -916,6 +913,7 @@ def _back(pub):
     return '<p><a class="btn" href="%s">Go to %s</a></p>' % (esc(pub["base"]), esc(pub["name"]))
 
 
+SIGNUP_TRAP = "hp_note"    # the hidden field in the form: only a program fills it in
 SIGNUP_MESSAGES = {
     "confirm_sent": "Check your inbox: we sent a link to confirm your subscription.",
     "already": "Check your inbox: we sent a link to confirm your subscription.",
@@ -929,14 +927,21 @@ async def pub_subscribe(pub_slug: str, request: Request):
     """JSON from the page's script, or a plain form post without it. An
     address already subscribed gets the same reply as a new one, so the form
     cannot be used to find out who reads what."""
-    pub = _pub_or_404(pub_slug)
+    pub = _list_pub_or_404(pub_slug)
     raw = (await request.body())[:2000]
     wants_json = "json" in request.headers.get("content-type", "")
     try:
-        email = (json.loads(raw.decode("utf-8") or "{}").get("email", "") if wants_json else
-                 urllib.parse.parse_qs(raw.decode("utf-8", "replace")).get("email", [""])[0])
+        fields = json.loads(raw.decode("utf-8") or "{}") if wants_json else {
+            k: v[0] for k, v in urllib.parse.parse_qs(raw.decode("utf-8", "replace")).items()}
+        email, trap = fields.get("email", ""), fields.get(SIGNUP_TRAP, "")
     except (ValueError, AttributeError):
-        email = ""
+        email, trap = "", ""
+    if trap:
+        # the usual answer, so the program learns nothing; nothing is stored or sent
+        msg = SIGNUP_MESSAGES["confirm_sent"]
+        if wants_json:
+            return JSONResponse({"ok": True, "message": msg})
+        return _notice(pub, "Almost Done", [esc(msg)], _back(pub))
     from . import accounts
     try:
         status = newsletter.subscribe(pub, email, accounts._client_ip(request))
@@ -955,15 +960,38 @@ async def pub_subscribe(pub_slug: str, request: Request):
                    _back(pub))
 
 
+def _confirm_link_dead(pub):
+    return _notice(pub, "Link No Longer Valid", [
+        "This confirmation link has expired or was replaced by a newer one.",
+        'Sign up again on <a href="%s#subscribe">%s</a> and use the newest email.'
+        % (esc(pub["base"]), esc(pub["name"]))])
+
+
 @router.get("/p/{pub_slug}/email/confirm")
+def pub_confirm_page(pub_slug: str, t: str = ""):
+    """A page with a button, not a confirmation on GET: mail scanners open
+    every link in a message, and would confirm addresses nobody confirmed."""
+    pub = _list_pub_or_404(pub_slug)
+    row = newsletter.subscriber_by_token(pub, t)
+    if row is None or row["status"] == "unsubscribed":
+        return _confirm_link_dead(pub)
+    if row["status"] == "active":
+        return _notice(pub, "You Are Subscribed", [
+            "New articles from %s will arrive at <strong>%s</strong>." % (esc(pub["name"]), esc(row["email"]))],
+            _back(pub))
+    return _notice(pub, "Confirm Your Subscription", [
+        "Send new articles from %s to <strong>%s</strong>?" % (esc(pub["name"]), esc(row["email"]))],
+        '<form method="post" action="/p/%s/email/confirm?t=%s">'
+        '<button class="btn btn-primary" type="submit">Confirm</button></form>'
+        % (esc(pub["slug"]), esc(urllib.parse.quote(t))))
+
+
+@router.post("/p/{pub_slug}/email/confirm")
 def pub_confirm(pub_slug: str, t: str = ""):
-    pub = _pub_or_404(pub_slug)
+    pub = _list_pub_or_404(pub_slug)
     email = newsletter.confirm(pub, t)
     if email is None:
-        return _notice(pub, "Link No Longer Valid", [
-            "This confirmation link has expired or was replaced by a newer one.",
-            'Sign up again on <a href="%s#subscribe">%s</a> and use the newest email.'
-            % (esc(pub["base"]), esc(pub["name"]))])
+        return _confirm_link_dead(pub)
     return _notice(pub, "You Are Subscribed", [
         "New articles from %s will arrive at <strong>%s</strong>." % (esc(pub["name"]), esc(email)),
         "Every email has a link to unsubscribe."], _back(pub))
@@ -973,7 +1001,7 @@ def pub_confirm(pub_slug: str, t: str = ""):
 def pub_unsubscribe_page(pub_slug: str, t: str = ""):
     """A page with a button, not an unsubscribe on GET: mail scanners open
     every link in a message, and would unsubscribe readers who never asked."""
-    pub = _pub_or_404(pub_slug)
+    pub = _list_pub_or_404(pub_slug)
     row = newsletter.subscriber_by_token(pub, t)
     if row is None:
         return _notice(pub, "Link Not Recognised", [
@@ -997,7 +1025,7 @@ def pub_unsubscribe_page(pub_slug: str, t: str = ""):
 def pub_unsubscribe(pub_slug: str, t: str = ""):
     """The page's button, and mail providers' one-click unsubscribe
     (List-Unsubscribe-Post, RFC 8058), which posts here with no cookie."""
-    pub = _pub_or_404(pub_slug)
+    pub = _list_pub_or_404(pub_slug)
     email = newsletter.unsubscribe(pub, t)
     if email is None:
         return _notice(pub, "Link Not Recognised", [
