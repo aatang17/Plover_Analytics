@@ -83,6 +83,10 @@ PARTIAL = {
         "python equity/us_prices_databento.py and equity/us_index_members.py",
     "data/sec.duckdb without the full US set":
         "the universe, prices, index members, insider and 13F slices above",
+    "data/sec.duckdb without US events and prices":
+        "python equity/us_events.py, then equity/us_prices_databento.py",
+    "data/sec.duckdb without the sector funds' holdings":
+        "python equity/us_index_members.py --db data/sec.work.duckdb --funds sectors  (then swap it in)",
 }
 
 # Every reason a skip may carry for want of data. Add a string here only if it

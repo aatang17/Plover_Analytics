@@ -25,10 +25,13 @@ class Endpoint(unittest.TestCase):
     def setUpClass(cls):
         from fastapi.testclient import TestClient
         from app.main import app
+        from app import sec_api
+        if not sec_api.DB_PATH.exists():
+            raise unittest.SkipTest("data/sec.duckdb not built")
         cls.client = TestClient(app)
         r = cls.client.get("/api/v1/us/insiders/buying?days=400&limit=50")
         if r.status_code == 503:
-            raise unittest.SkipTest("no insider filings on this machine")
+            raise unittest.SkipTest("data/sec.duckdb without insider, 13F and universe tables")
         cls.d = r.json()
 
     def test_largest_first_and_listed(self):

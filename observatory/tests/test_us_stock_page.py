@@ -35,7 +35,8 @@ class Moved(unittest.TestCase):
     def test_the_page_exists_and_is_titled_per_company(self):
         self.assertTrue((WEB / "us-stock.html").exists())
         self.assertIn("us-stock.html", prerender.ENTITY_PAGES)
-        self.assertNotIn("index.html", prerender.ENTITY_PAGES)
+        # the front page titles only its Earnings Preview (?task=earnings&c=); an old ?t= link is not its subject
+        self.assertIsNone(prerender.entity_meta("index.html", "t=SBUX&view=owners"))
 
     def test_no_link_still_points_at_the_front_page(self):
         for path in list((WEB / "assets").glob("*.js")) + list((WEB.parent / "app").glob("*.py")):

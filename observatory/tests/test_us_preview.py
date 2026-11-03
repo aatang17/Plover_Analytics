@@ -73,10 +73,13 @@ class Endpoints(unittest.TestCase):
     def setUpClass(cls):
         from fastapi.testclient import TestClient
         from app.main import app
+        from app import sec_api
+        if not sec_api.DB_PATH.exists():
+            raise unittest.SkipTest("data/sec.duckdb not built")
         cls.client = TestClient(app)
         r = cls.client.get("/api/v1/us/preview/upcoming?days=30")
         if r.status_code == 503:
-            raise unittest.SkipTest("no US events or prices on this machine")
+            raise unittest.SkipTest("data/sec.duckdb without US events and prices")
         cls.upcoming = r.json()
 
     def test_upcoming(self):

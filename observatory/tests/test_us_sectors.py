@@ -57,12 +57,14 @@ class Endpoints(unittest.TestCase):
         from fastapi.testclient import TestClient
         from app import sec_api
         from app.main import app
+        if not sec_api.DB_PATH.exists():
+            raise unittest.SkipTest("data/sec.duckdb not built")
         try:
             members, _ = us_sectors.members(sec_api._cur())
         except Exception:  # noqa: BLE001
             members = {}
         if not members:
-            raise unittest.SkipTest("the sector funds' holdings are not loaded on this machine")
+            raise unittest.SkipTest("data/sec.duckdb without the sector funds' holdings")
         cls.client = TestClient(app)
 
     def test_screener_keeps_to_the_sector(self):
