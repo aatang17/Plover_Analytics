@@ -1973,22 +1973,6 @@
   /* ---------------------------------------------------------------- start */
   function gate(html) { $("#my-gate").innerHTML = html; $("#my-gate").hidden = false; $("#my-app").hidden = true; }
 
-  function start() {
-    if (typeof initThemeToggle === "function") {
-      initThemeToggle(redrawCharts);
-    }
-    // a question from the front page (index.html: my.html?q=…), kept through sign-in
-    var sp = new URLSearchParams(location.search);
-    var asked = (sp.get("q") || "").trim().slice(0, 600);
-    // from a data page's question box (page-ask.js): the question before it, and the way back
-    var before = asked ? (sp.get("prev") || "").trim().slice(0, 600) : "";
-    var back = safeBack(sp.get("back")), backName = (sp.get("from") || "").replace(/\s+/g, " ").trim().slice(0, 80);
-    if (asked) history.replaceState(null, "", "my.html" + location.hash);
-    api("GET", A + "/status").then(function (r) {
-      if (r.status === 404) {
-        gate("<p>Plover accounts are not switched on for this server yet. The data pages are free to read without an account.</p>");
-        return;
-      }
   // The page a reader came from (a data page's question box): a path on this
   // site only, never another site, never Your Plover itself.
   function safeBack(raw) {
@@ -2006,6 +1990,23 @@
     el.hidden = false;
   }
 
+  function start() {
+    if (typeof initThemeToggle === "function") {
+      initThemeToggle(redrawCharts);
+    }
+    // a question from the front page (index.html: my.html?q=…), kept through sign-in
+    var sp = new URLSearchParams(location.search);
+    var asked = (sp.get("q") || "").trim().slice(0, 600);
+    // from a data page's question box (page-ask.js): the question before it, and the way back
+    var before = asked ? (sp.get("prev") || "").trim().slice(0, 600) : "";
+    var back = safeBack(sp.get("back")), backName = (sp.get("from") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (asked) history.replaceState(null, "", "my.html" + location.hash);
+    if (back) showBack(back, backName);
+    api("GET", A + "/status").then(function (r) {
+      if (r.status === 404) {
+        gate("<p>Plover accounts are not switched on for this server yet. The data pages are free to read without an account.</p>");
+        return;
+      }
       if (!r.ok) { gate('<p class="my-err">' + esc(detail(r, "This page could not be loaded")) + ' <a href="my.html">Try again</a>.</p>'); return; }
       if (!r.body.signed_in) {
         var again = "my.html" + (asked ? "?q=" + encodeURIComponent(asked) +
@@ -2015,7 +2016,6 @@
             "<p>Sign in to get the answer. It comes straight back to this question.</p>"
           : "<p>Sign in to ask questions about stocks and the economy, and keep a list of the companies you follow.</p>") +
           '<p><a class="btn btn-primary" href="signin.html?returnTo=' + encodeURIComponent(again) + '">Sign In</a></p>');
-    if (back) showBack(back, backName);
         return;
       }
       $("#my-gate").hidden = true;
