@@ -1108,9 +1108,33 @@ def r_company_price_performance(cur, q, e):
     return out
 
 
+# A question about the filing itself (the 10-Q or 10-K) gets the filing calendar; any other
+# "when does X report" gets the results announcement, estimated from past results days, the
+# same date the company page, Your Plover and the Earnings Preview show (app/us_preview_api.py).
+_FILING_WORDS = re.compile(r"10-?[kq]\b|\bfil(?:e|es|ed|ing)\b|annual report|quarterly report", re.I)
+RESULTS_NOTE = ("An expected results date is an estimate: a year after the company's results for the same quarter "
+                "(its 8-K under Item 2.02), not a date the company has announced.")
+
+
 def r_company_calendar(cur, q, e):
+    from . import us_preview_api
     rec = _need(e["companies"][0] if e["companies"] else None, "company")
     ql = (q or "").lower()
+    filing = bool(_FILING_WORDS.search(ql))
+    if len(e.get("companies") or []) >= 2 and re.search(r"before|after|earlier|later|first|same (day|week)", ql) and not filing:
+        known = [(c, us_preview_api.results_next(cur, c["cik"])) for c in e["companies"][:3]]
+        known = [(c, r) for c, r in known if r and r["expected_date"]]
+        if len(known) >= 2:
+            known.sort(key=lambda cr: cr[1]["expected_date"])
+            a, b = known[0], known[1]
+            headline = "%s is expected to report results first, around %s; %s around %s." % (
+                short_name(a[0]["name"]), date_words(a[1]["expected_date"]), short_name(b[0]["name"]), date_words(b[1]["expected_date"]))
+            table = {"columns": ["Company", "Results expected", "Based on results of"],
+                     "rows": [[c["name"], r["expected_date"], r["based_on"]] for c, r in known]}
+            return pkg("company_calendar", q, headline, RESULTS_NOTE,
+                       [fig("%s results expected" % short_name(c["name"]), r["expected_date"], "date", None) for c, r in known], table, None, [SEC_SOURCE],
+                       {"results_expected_date": us_preview_api.CALC["expected_date"]},
+                       {"companies": e["companies"][:3]}, {"company": company_link(a[0]), "company_2": company_link(b[0])})
     if len(e.get("companies") or []) >= 2 and re.search(r"before|after|earlier|later|first|same (day|week)", ql):
         # "does Microsoft report before Apple": both next dates, side by side
         parts = []
@@ -1141,6 +1165,23 @@ def r_company_calendar(cur, q, e):
                  "rows": [[x["form"], x["period"], x["filed"], x["lag_days"]] for x in d["filings"][:8]]}
         return pkg("company_calendar", q, headline, answer, [fig("Last filed", f["filed"], "date", None), fig("Next expected", up["expected_date"] if up else None, "date", None)],
                    table, None, [SEC_SOURCE], sec_calendar_api.CALC, {"company": rec}, {"company": company_link(rec), "filing": f["source_url"]})
+    res = d.get("results") or {}
+    if not filing and res.get("expected_date"):
+        if res["overdue"]:
+            headline = "%s's results were expected around %s and are not on file yet." % (rec["name"], date_words(res["expected_date"]))
+        else:
+            headline = "%s is expected to report results around %s." % (rec["name"], date_words(res["expected_date"]))
+        answer = ("An estimate: a year after its results for the same quarter, on %s. Its latest results came on %s." % (
+            date_words(res["based_on"]), date_words(res["last_results"])) +
+            (" The %s it files with the SEC is due about %s." % (up["report"], date_words(up["expected_date"])) if up else ""))
+        table = {"columns": ["Form", "Period end", "Filed", "Days after period end"],
+                 "rows": [[f["form"], f["period"], f["filed"], f["lag_days"]] for f in d["filings"][:8]]}
+        return pkg("company_calendar", q, headline, answer,
+                   [fig("Results expected", res["expected_date"], "date", None, us_preview_api.CALC["expected_date"]),
+                    fig("Latest results", res["last_results"], "date", None)], table, None, [SEC_SOURCE],
+                   dict(sec_calendar_api.CALC, results_expected_date=us_preview_api.CALC["expected_date"]),
+                   {"company": rec}, {"company": company_link(rec), "preview": "/?task=earnings&c=%s" % rec["ticker"] if rec.get("ticker") else None},
+                   [RESULTS_NOTE])
     if up:
         headline = "%s is expected to file its next %s around %s." % (rec["name"], up["report"], date_words(up["expected_date"]))
         answer = ("That rests on last year's filing of the same report on %s. The most recent filing was a %s for the period to %s, filed %s, %d days after the period end."
@@ -4106,10 +4147,11 @@ def r_insider_buying_market(cur, q, e):
     days = max(1, (datetime.date.today() - since).days + 1)
     floor = e.get("money") or 0
     # summed per company over the whole window, a jointly filed trade once
-    d = call_api(sec_insiders_api.recent_companies, code="P", min_value=floor, days=days, limit=200)
+    # companies listed on a US exchange, as the front page's Insider Buying task counts them
+    d = call_api(sec_insiders_api.recent_companies, code="P", min_value=floor, days=days, limit=200, listed=True)
     ranked, tot = d["companies"], d["totals"]
     above = (" above %s" % money(floor)) if floor else ""
-    api = "/api/v1/us/insiders/recent/companies?code=P&min_value=%d&days=%d" % (floor, days)
+    api = "/api/v1/us/insiders/recent/companies?code=P&min_value=%d&days=%d&listed=true" % (floor, days)
     if not ranked:
         headline = "No open-market insider purchases%s %s in the loaded filings." % (above, _since_words(since))
         return pkg("insider_buying_market", q, headline, "", [], None, None, [INSIDER_SOURCE], {}, {"since": _d(since), "floor": floor}, {},
@@ -4134,6 +4176,8 @@ def r_insider_buying_market(cur, q, e):
               table, chart, [INSIDER_SOURCE], {"value": "shares × the price the filer reported"}, {"since": _d(since), "floor": floor},
               {"api": api},
               ["Only open-market purchases (Form 4 code P) count. Share awards and option exercises are left out.",
+               "Companies listed on a US exchange only. Insiders here include holders of over 10%, often funds; "
+               "the front page's Insider Buying task can show company bosses alone.",
                "A trade filed jointly by several owners (a fund and its managers) counts once. A line priced above $1mn a share or worth over $20bn is left out as a typing error."] +
               (["The table lists the 200 companies with the most bought; the totals count all %s." % num(tot["companies"])] if tot["companies"] > len(ranked) else []),
               period={"text": "%s to today" % date_words(since)})
@@ -4149,6 +4193,8 @@ def r_calendar_window(cur, q, e):
     for name in ("nasdaq", "nyse", "otc", "cboe"):
         if name in q.lower():
             ex = name
+    if not _FILING_WORDS.search(q or ""):
+        return _results_window(cur, q, days, day, ex)
     rep = "annual" if re.search(r"annual|10-k", q.lower()) else ("quarterly" if re.search(r"quarter|10-q", q.lower()) else "")
     d = call_api(sec_calendar_api.calendar, days=days, exchange=ex, report=rep, limit=2000)
     rows = [r for r in d["rows"] if r["status"] != "filed"]
@@ -4166,6 +4212,35 @@ def r_calendar_window(cur, q, e):
              "rows": [[r["expected_date"], r["ticker"], r["name"], r["report"], r["fiscal_period"], r["exchange"], r["basis"]["filed"]] for r in rows[:300]]}
     return pkg("calendar_window", q, headline, answer, [fig("Expected filings", len(rows), "count", None)], table, None, [SEC_SOURCE], sec_calendar_api.CALC,
                {"days": days, "exchange": ex or None, "report": rep or None}, {"api": "/api/v1/us/earnings/calendar?days=%d" % days})
+
+
+def _results_window(cur, q, days, day, ex):
+    """Companies expected to report results in a window (or on one day), from past
+    results days: the same estimate as the Earnings Preview's reporting-soon list."""
+    from . import us_preview_api
+    today = datetime.date.today()
+    start, end = (day, day) if day else (today, today + datetime.timedelta(days=days - 1))
+    soon, _ = us_preview_api.expected_results(cur, start, end)
+    meta = {r[0]: (r[1], r[2], r[3]) for r in cur.execute("SELECT cik, ticker, name, exchange FROM sec_companies").fetchall()} \
+        if sec_api._has(cur, "sec_companies") else {}
+    rows = []
+    for when, cik, base in soon:
+        t, nm, exch = meta.get(cik, (None, None, None))
+        if ex and (exch or "").lower() != ex:
+            continue
+        rows.append({"cik": cik, "ticker": t, "name": us_link.display_name(nm) if nm else "CIK %d" % cik, "exchange": exch,
+                     "expected_date": when, "based_on": base})
+    where = (" on %s" % ex.upper()) if ex else ""
+    span = ("on %s %s" % (day.strftime("%A"), date_words(day))) if day else ("between %s and %s" % (date_words(start), date_words(end)))
+    big = sorted([r for r in rows if r["ticker"]], key=lambda r: ((row_for(cur, r["cik"]) or {}).get("metrics", {}).get("market_cap") or 0), reverse=True)
+    headline = "%d companies%s are expected to report results %s." % (len(rows), where, span)
+    answer = "Largest by market value: %s. %s" % (
+        ", ".join("%s (%s)" % (r["ticker"], date_words(r["expected_date"])) for r in big[:8]) or "none with a price on file", RESULTS_NOTE)
+    table = {"columns": ["Results expected", "Ticker", "Company", "Exchange", "Based on results of"],
+             "rows": [[r["expected_date"], r["ticker"], r["name"], r["exchange"], r["based_on"]] for r in rows[:300]]}
+    return pkg("calendar_window", q, headline, answer, [fig("Companies expected to report", len(rows), "count", None)], table, None, [SEC_SOURCE],
+               {"results_expected_date": us_preview_api.CALC["expected_date"]},
+               {"days": days, "exchange": ex or None}, {"preview": "/?task=earnings"})
 
 
 def r_holders_increase_industry(cur, q, e):

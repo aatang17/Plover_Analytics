@@ -81,15 +81,19 @@ async def ask_stream(request: Request,
                      q: str = Query(..., min_length=1, max_length=300, description="a question in plain words"),
                      prev: str = Query("", max_length=300, description="the reader's previous question"),
                      opt: str = Query("", max_length=40, description="switches on a ranking's reading (see /api/v1/us/ask)"),
-                     via: str = Query("", max_length=20, description="example when the question is one of the page's own suggestions")):
+                     via: str = Query("", max_length=20, description="example when the question is one of the page's own suggestions"),
+                     chat: int = Query(0, ge=0, description="a signed-in reader's Your Plover chat this question continues")):
     """The answer as server-sent events, so the page can say what is being
     done while it waits: `{"say": "..."}` at each step (app/ask_progress.py),
     then one `{"answer": {...}}` or `{"error": {"status", "detail"}}`. A
     reader without an account gets `"free": {"free", "left"}` on the answer:
-    the day's allowance and what is left of it (app/free_answers.py)."""
+    the day's allowance and what is left of it (app/free_answers.py). A
+    signed-in reader's answer is kept in their chats in Your Plover, and
+    carries `"saved": {"chat", "url", "title"}` saying where."""
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue()
     who = free_answers.reader(request, via)     # read on the request thread, before it is gone
+    keeper = _signed_in(request)
 
     def put(item):
         loop.call_soon_threadsafe(queue.put_nowait, item)
@@ -100,7 +104,9 @@ async def ask_stream(request: Request,
             out = _noted("/api/v1/us/ask/stream", q,
                          lambda: stock_recipes.answer(sec_api._require(), q.strip(), prev.strip() or None, opt))
             free = free_answers.take(who)
-            put({"answer": dict(out, free=free) if free is not None else out})
+            saved = _keep(keeper, chat, q.strip(), out) if keeper else None
+            out = dict(out, free=free) if free is not None else out
+            put({"answer": dict(out, saved=saved) if saved else out})
         except HTTPException as exc:
             cur = None
             try:
@@ -141,6 +147,35 @@ async def ask_stream(request: Request,
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no",
                                       "Content-Encoding": "identity"})
+
+
+def _signed_in(request):
+    """The signed-in account where Your Plover is on, else None."""
+    try:
+        from . import accounts
+        from .assistant import enabled
+        return accounts.current_account(request) if enabled() else None
+    except Exception:  # noqa: BLE001 — no account machinery here: nothing to keep
+        return None
+
+
+def _keep(account, chat, q, out):
+    """A signed-in reader's front-page answer, kept as a chat in Your Plover
+    (the same "stocks" run a question asked there makes, app/assistant/api.py
+    ask_for), so the conversation can carry on there. A follow-up joins the
+    chat the page names when it is the reader's own stock chat; anything else
+    starts a new one. Keeping never stops the answer: a failure keeps nothing."""
+    try:
+        from .assistant import api as ia, store
+        aid = account["id"]
+        st = store.study(aid, chat) if chat else None
+        if not st or st.get("spec") or st.get("archived_at"):
+            st = store.add_study(aid, ia._title_from(q), question=q)
+        store.add_study_run(aid, st["id"], "stocks", {"stock": out, "spec": {}, "rows": [], "columns": []},
+                            question=q, note=out.get("headline") or "")
+        return {"chat": st["id"], "url": "/my.html#chat/%d" % st["id"], "title": st["title"]}
+    except Exception:  # noqa: BLE001
+        return None
 
 
 @router.get("/free")

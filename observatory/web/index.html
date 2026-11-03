@@ -59,6 +59,13 @@
         <button type="submit" id="ask-btn">Ask</button>
       </form>
     </div>
+    <nav class="hp-tasks" aria-label="Tasks">
+      <a href="/?task=earnings" data-task="earnings">Earnings Preview</a>
+      <a href="/?task=chart" data-task="chart">Draw Charts</a>
+      <a href="/?task=screen" data-task="screen">Screen Stocks</a>
+      <a href="/?task=insiders" data-task="insiders">Insider Buying</a>
+    </nav>
+    <p class="hp-ex-h">Or ask, for example:</p>
     <ul class="hp-chips" id="examples" aria-label="Example questions">
       <li><a href="/?q=How%20did%20the%20S%26P%20500%20do%20on%20CPI%20days%3F">How did the S&amp;P 500 do on CPI days?</a></li>
       <li><a href="/?q=Which%20companies%20does%20Berkshire%20Hathaway%20own%3F">Which companies does Berkshire Hathaway own?</a></li>
@@ -72,16 +79,37 @@
   </div>
 </section>
 
-<!-- filled from the CPI and Treasury APIs (us-stocks.js strip()); empty if they fail -->
-<div class="hp-strip" id="strip" aria-label="US inflation and Treasury yields" hidden></div>
 
 <main class="hp-main ask-main">
   <div id="stale-banner"></div>
 
   <div id="status" class="state-wait" aria-live="polite" hidden></div>
+  <!-- a task's steps (home-tasks.js): Earnings Preview, Draw Charts, Screen Stocks, Insider Buying -->
+  <section class="hp-panel tk" id="task" aria-live="polite" hidden></section>
   <section id="answer" hidden></section>
 
   <section id="home-note">
+    <!-- each task playing its steps through (home-demos.js); Try It opens the task itself -->
+    <section class="hp-panel hp-demo" id="demo" aria-label="Task demonstrations">
+      <div class="hp-panel-head"><h2>How Each Task Works</h2></div>
+      <div class="dm-grid">
+        <div class="dm-list" role="group" aria-label="Choose a demonstration">
+          <button type="button" data-demo="chart" aria-pressed="false"><b>Draw Charts</b><span>Pick what to chart, the companies and the period</span><i class="dm-bar"></i></button>
+          <button type="button" data-demo="screen" aria-pressed="false"><b>Screen Stocks</b><span>Pick a size and what to look for</span><i class="dm-bar"></i></button>
+          <button type="button" data-demo="earnings" aria-pressed="false"><b>Earnings Preview</b><span>Pick a company before its results</span><i class="dm-bar"></i></button>
+          <button type="button" data-demo="insiders" aria-pressed="false"><b>Insider Buying</b><span>See who is buying their own shares</span><i class="dm-bar"></i></button>
+        </div>
+        <div class="dm-main">
+          <div class="dm-stage"></div>
+          <div class="dm-foot">
+            <a class="hp-btn dm-try" href="/?task=chart" data-task="chart">Try Draw Charts</a>
+            <button type="button" class="an-link dm-replay">Play Again</button>
+            <span>Real figures, prices to 29 October 2026. Try it to see today's.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="hp-sec-head"><h2>Example Answers</h2></div>
     <!-- Figures as the live answers gave them on 2026-10-25; Open Answer asks again on today's data. -->
     <div class="hp-cards">
@@ -178,6 +206,8 @@
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
 <script src="assets/us-format.js"></script>
+<script src="assets/home-tasks.js"></script>
+<script src="assets/home-demos.js"></script>
 <script src="assets/us-stocks.js"></script>
 </body>
 </html>

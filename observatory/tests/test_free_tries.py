@@ -3,7 +3,8 @@
 server's own AI key for someone who has not added theirs.
 
 What is proved: a summary without a key runs on the server's key and uses one
-try; the tries stop at FREE_TRIES with a message that says to add a key; a
+try; the tries stop at FREE_TRIES for the day, come back the next day, and are
+counted for good as demand; the message says when they come back; a
 failed summary gives its try back; the day's cap across everyone holds; a
 person with their own key uses it and no try; with no server key the old
 "add your own key" message stands; /settings reports the count and never the
@@ -74,7 +75,7 @@ class FreeTries(unittest.TestCase):
         os.environ["DEEPSEEK_API_KEY"] = "sk-house-key"
         db = store.conn()
         reading._conn()
-        for t in ("ia_reading", "ia_desks", "ia_free_uses", "ia_free_days"):
+        for t in ("ia_reading", "ia_desks", "ia_free_uses", "ia_free_days", "ia_free_account_days"):
             db.execute("DELETE FROM " + t)
         db.commit()
         self.calls = []
@@ -100,11 +101,24 @@ class FreeTries(unittest.TestCase):
         self.assertEqual(self.summarise().status_code, 200)
         r = self.summarise()
         self.assertEqual(r.status_code, 400)
-        self.assertIn("free tries are used up", r.json()["detail"])
+        self.assertIn("come back tomorrow", r.json()["detail"])
         self.assertEqual(len(self.calls), 2)
         s = self.client().get("/api/v1/assistant/settings").json()
         self.assertEqual((s["free"]["on"], s["free"]["used"], s["free"]["left"]), (True, 2, 0))
         self.assertNotIn("sk-house-key", str(s))
+
+    def test_a_new_day_brings_them_back_and_the_total_keeps_counting(self):
+        self.assertEqual(self.summarise().status_code, 200)
+        self.assertEqual(self.summarise().status_code, 200)
+        self.assertEqual(self.summarise().status_code, 400)
+        real = free._today
+        free._today = lambda: "2999-01-01"
+        try:
+            self.assertEqual(self.summarise().status_code, 200)
+            s = self.client().get("/api/v1/assistant/settings").json()["free"]
+            self.assertEqual((s["used"], s["left"], s["ever"]), (1, 1, 3))
+        finally:
+            free._today = real
 
     def test_a_failed_summary_gives_its_try_back(self):
         def broken(*a, **k):
@@ -118,7 +132,7 @@ class FreeTries(unittest.TestCase):
         self.assertEqual(self.summarise().status_code, 200)
         r = self.summarise()
         self.assertEqual(r.status_code, 400)
-        self.assertIn("try again tomorrow", r.json()["detail"])
+        self.assertIn("come back tomorrow", r.json()["detail"])
         self.assertEqual(free.used(self.aid), 1)
 
     def test_own_key_is_used_and_no_try_taken(self):

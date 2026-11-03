@@ -27,7 +27,8 @@
                  "When was the JGB 10-year yield last above 3%?"]],
   ];
   var state = { hasKey: false, keyForSummaries: false, free: { on: false, left: 0, limit: 0 }, covered: {} };
-  function triesText(n) { return n + (n === 1 ? " free try" : " free tries"); }
+  // Plover pays for a person's questions, a number a day (app/assistant/free.py)
+  function triesText(n) { return n + (n === 1 ? " question" : " questions"); }
 
   function $(s, r) { return (r || document).querySelector(s); }
   function esc(s) {
@@ -649,6 +650,13 @@
             el.textContent = n;
             if (img) el.insertBefore(img, el.firstChild);
           }).catch(function () { /* the filed name stays */ });
+        // the results announcement first, as every page shows it; the 10-Q/10-K filing when no results are on file
+        var res = b.results && b.results.expected_date ? b.results : null;
+        if (res) {
+          cell.textContent = (res.overdue ? "Results were expected about " : "Results expected about ") + day(res.expected_date);
+          cell.title = "Estimated: a year after its results for the same quarter";
+          return;
+        }
         var next = (b.upcoming || []).filter(function (u) { return u.status === "expected" && u.expected_date; })[0];
         if (!next) { cell.textContent = "No filing date expected"; return; }
         var what = /annual/i.test(next.report || "") ? "Annual report" : "Quarterly report";
@@ -720,7 +728,12 @@
       $(".ov-meta", tr).textContent = tk;
       tr.dataset.tk = tk; tr.dataset.name = c.shown || c.name || tk;     // the Compare button reads these
       var next = (e.upcoming || []).filter(function (u) { return u.status === "expected" && u.expected_date; })[0];
-      if (next) {
+      var res = e.results && e.results.expected_date && !e.results.overdue ? e.results : null;
+      if (res) {
+        // the results announcement, as the Earnings Preview and the company page show it
+        $(".ov-next", tr).innerHTML = esc(day(res.expected_date)) + ' <span class="ov-faint">about</span>';
+        ovSoon.push({ date: res.expected_date, co: c, name: c.name || tk, what: "Results expected about this day, a year after the same quarter's" });
+      } else if (next) {
         $(".ov-next", tr).innerHTML = esc(day(next.expected_date)) + ' <span class="ov-faint">about</span>';
         ovSoon.push({ date: next.expected_date, co: c, name: c.name || tk, what: (/annual/i.test(next.report) ? "Annual report" : "Quarterly report") + " due about this day, estimated from last year" });
       } else $(".ov-next", tr).textContent = MISSING;
@@ -978,9 +991,8 @@
     if (state.hasKey) { note.hidden = true; return; }
     var f = state.free;
     note.innerHTML = f.on && f.left > 0
-      ? "Stock questions are free. " + USES + " You have " + triesText(f.left) + " left on Plover's key. " +
-        '<a href="#key">Add your own key</a> to keep going after that.'
-      : f.on ? 'Stock questions are free. Your free tries for other questions are used up: <a href="#key">add your own AI key</a> to keep asking them.'
+      ? "Stock questions are free. Plover also covers " + triesText(f.limit) + " a day on other topics: " + f.left + " left today. " + USES
+      : f.on ? "Stock questions are free. Today's " + triesText(f.limit) + ' on other topics are used; they come back tomorrow, or <a href="#key">add your own AI key</a> to keep asking now.'
       : 'Stock questions are free. Other questions run on your own AI key: <a href="#key">add your key</a>. It takes a minute.';
     note.hidden = false;
   }
@@ -1006,9 +1018,9 @@
         : state.keyForSummaries ? "<p>Your " + esc(label(s.model_provider)) + " key is stored, ending <strong>" + esc(s.model_key_last4 || "····") +
           "</strong>. Paste a new key to replace it.</p>"
         : "<p>" + (state.free.on ? (state.free.left > 0
-            ? "Your first " + triesText(state.free.limit) + " run on Plover's key, and you have " + state.free.left + " left. "
-            : "You have used your " + triesText(state.free.limit) + ". ") : "") +
-          (READING_ON ? "Answers and article summaries" : "Answers") + " run on your own key from Anthropic, OpenAI or DeepSeek. " +
+            ? "Plover covers " + triesText(state.free.limit) + " a day for you on its own key, and you have " + state.free.left + " left today. You do not need a key. "
+            : "You have used today's " + triesText(state.free.limit) + " on Plover; they come back tomorrow. ") : "") +
+          "With a key of your own, " + (READING_ON ? "answers and article summaries" : "answers") + " run on it with no daily limit: Anthropic, OpenAI or DeepSeek. " +
           "The key is stored encrypted on your account and used only for your own questions.</p>";
       if (!s.keychain) {
         box.innerHTML = status + '<p class="my-err">Keys cannot be stored on this server yet. Nothing is wrong on your side.</p>';

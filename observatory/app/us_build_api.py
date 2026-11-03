@@ -28,7 +28,7 @@ from collections import OrderedDict
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import sec_api, us_ask_model, us_benchmarks, us_figures, us_link
+from . import sec_api, us_ask_model, us_benchmarks, us_figures, us_link, us_sectors
 
 router = APIRouter(prefix="/api/v1/us/build", tags=["US build"])
 
@@ -722,9 +722,13 @@ def _screen_by_words(cur, q):
         add("profit_growth_min", float(m.group(1)))
     if re.search(r"\bprofitable\b|making (?:a )?profit|in profit", ql):
         add("net_margin_min", 0.0)
-    m = re.search(r"(?:operating )?margins?\s*(?:over|above|of at least|more than)\s*([\d.]+)\s*%", ql)
+    # the word before "margin" names which one: "net margin above 15%" is not an operating margin
+    m = re.search(r"(net |profit |free cash flow |fcf |cash |operating )?margins?\s*(?:over|above|of at least|more than)\s*([\d.]+)\s*%", ql)
     if m:
-        add("operating_margin_min", float(m.group(1)))
+        which = (m.group(1) or "").strip()
+        key = ("net_margin_min" if which in ("net", "profit") else
+               "fcf_margin_min" if which in ("free cash flow", "fcf", "cash") else "operating_margin_min")
+        add(key, float(m.group(2)))
     elif re.search(r"high.?margin", ql):
         add("operating_margin_min", 20.0)
     m = re.search(r"dividend(?: yield)?s?\s*(?:over|above|of at least|more than|of)\s*([\d.]+)\s*%", ql)
@@ -750,7 +754,7 @@ def _screen_by_words(cur, q):
     hit = us_link.industry_match(cur, q) if cur is not None else None
     if hit:
         industry = {"sic": hit[0], "label": hit[1]}
-    elif re.search(r"\btech(nology)?\b", ql):
+    elif re.search(r"\btech(nology)?\b", ql) and not us_sectors.read(q):
         industry = {"sic": TECH_SIC, "label": "technology (SIC 357, 366, 367, 737)"}
     if re.search(r"cheapest|lowest (?:p/?e|multiple)", ql):
         sort_key, sort_order = "pe_x", "asc"
@@ -795,12 +799,31 @@ def _screen_from_form(cur, form):
             "sp500": bool(form.get("sp500")), "exchanges": ex, "sort_key": sk, "sort_order": so}
 
 
+def _with_sectors(spec, q, industry_words=None):
+    """The S&P's sectors a request names (app/us_sectors.py), read from its own
+    words so no reading drops them: "technology companies growing over 20%"
+    kept only the growth filter before (2026-11-04). A sector word read as an
+    industry as well ("technology" as SIC codes) gives way to the sector."""
+    keys = us_sectors.read(q)
+    if keys:
+        spec["sectors"] = keys
+        ind = spec.get("industry")
+        if ind and (us_sectors.read(industry_words or "") or us_sectors.read(ind.get("label") or "")):
+            spec["industry"] = None
+    return spec
+
+
 def _finish_screen(spec):
     """The chips a reader sees and the screener's query string."""
     chips, params = [], {}
     for f in spec["filters"]:
         chips.append({"id": f["key"], "text": filter_text(f["key"], f["value"]), "key": f["key"], "value": f["value"]})
         params[f["key"]] = ("%d" % f["value"]) if float(f["value"]).is_integer() else ("%g" % f["value"])
+    keys = [k for k in (spec.get("sectors") or []) if k in us_sectors.NAMES]
+    if keys:
+        chips.append({"id": "sector", "text": "Sector: %s (S&P 500 companies)" % ", ".join(us_sectors.NAMES[k] for k in keys),
+                      "key": "sector", "value": keys})
+        params["sector"] = ",".join(keys)
     if spec.get("industry"):
         chips.append({"id": "industry", "text": "Industry: " + spec["industry"]["label"], "key": "industry",
                       "value": spec["industry"]["label"]})
@@ -853,8 +876,10 @@ def screen(q: str = Query(..., min_length=1, max_length=300, description="what t
                                                  for k, v in FILTERS.items())}
     form = _read_form("screen", q, rules, SCREEN_FORM_KEYS)
     spec, how = (_screen_from_form(cur, form), "model") if form else (None, "words")
-    if spec is None or not (spec["filters"] or spec.get("industry") or spec.get("sp500") or spec.get("exchanges")):
+    if spec is None or not (spec["filters"] or spec.get("industry") or spec.get("sp500") or spec.get("exchanges")
+                            or us_sectors.read(q)):
         spec, how = _screen_by_words(cur, q), "words"
+    spec = _with_sectors(spec, q, (form or {}).get("industry") if isinstance((form or {}).get("industry"), str) else None)
     chips, params = _finish_screen(spec)
     read_as = (form or {}).get("read_as") if form else None
     return {"question": q, "spec": spec, "chips": chips, "params": params, "how": how,
@@ -875,5 +900,7 @@ def chips(filters: str = Query("", max_length=2000, description="JSON: the spec'
     ind = spec.get("industry")
     if isinstance(ind, dict) and isinstance(ind.get("sic"), list) and ind.get("label"):
         clean["industry"] = {"sic": [str(s) for s in ind["sic"] if str(s).isdigit()], "label": str(ind["label"])[:80]}
+    if isinstance(spec.get("sectors"), list):
+        clean["sectors"] = [k for k in spec["sectors"] if k in us_sectors.NAMES]
     ch, params = _finish_screen(clean)
     return {"spec": clean, "chips": ch, "params": params}

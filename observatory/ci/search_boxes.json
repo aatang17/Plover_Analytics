@@ -290,6 +290,19 @@
       "hits": "#table-wrap tbody tr",
       "ready": "#table-wrap tbody tr",
       "extra": []
+    },
+    {
+      "key": "home-tasks.js#tk-co",
+      "url": "/?task=earnings",
+      "input": "#tk-co",
+      "ready": "#tk-co",
+      "area": "#tk-co-list",
+      "hits": "#tk-co-list li[data-i]",
+      "extra": [
+        "Apple",
+        "NVDA",
+        "Microsoft"
+      ]
     }
   ],
   "elsewhere": {
@@ -298,7 +311,9 @@
     "desk.js#data-f=q": "The search box on a chart in the signed-in desk. An empty chart runs the desk's data search, and tests/test_search_examples.py types the box's own examples into it.",
     "my.html#my-co-q": "The Add a company box on the Companies tab of Plover (my.html), behind a sign-in. It searches Japan (app/assistant/api.find_companies, as the Writer Desk's coverage box) and US listed companies (find_us_companies) together; tests/test_search_examples.py types the box's own examples and the obvious company queries into it.",
     "my.html#ch-q": "The Describe-the-chart box on the Charts tab of Your Plover (my.html), behind a sign-in. It sends its sentence to /api/v1/us/build/chart (app/us_build_api.py); tests/test_us_build.py types the box's own example and the obvious requests into that endpoint and requires a company to come back.",
-    "my.html#sc-q": "The Describe-what-you-are-looking-for box on the Screener tab of Your Plover (my.html), behind a sign-in. It sends its sentence to /api/v1/us/build/screen (app/us_build_api.py); tests/test_us_build.py types the box's own example and the obvious requests into that endpoint and requires filters to come back."
+    "my.html#sc-q": "The Describe-what-you-are-looking-for box on the Screener tab of Your Plover (my.html), behind a sign-in. It sends its sentence to /api/v1/us/build/screen (app/us_build_api.py); tests/test_us_build.py types the box's own example and the obvious requests into that endpoint and requires filters to come back.",
+    "home-tasks.js#tk-own-q": "The Something-else box on Screen Stocks' second step (front page, /?task=screen), for a signed-in reader only. It sends its words to /api/v1/us/build/screen (app/us_build_api.py), the same reader as Your Plover's Screener box; tests/test_us_build.py ScreenWords types the box's own example and the margin and industry examples its messages offer.",
+    "home-tasks.js#tk-ownc-q": "The Something-else box on Draw Charts' first step (front page, /?task=chart), for a signed-in reader only. It sends its words to /api/v1/us/build/chart (app/us_build_api.py), the same reader as Your Plover's Charts box; tests/test_us_build.py ChartWords types the box's own example into it."
   },
   "not_run": {
     "desk-tabs.js#class=dk-at-q": "Filters the writer's own articles, already listed under + Open Article in the desk; there is nothing to fetch.",

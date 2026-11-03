@@ -319,6 +319,13 @@ CREATE TABLE IF NOT EXISTS ia_free_days (
   day TEXT PRIMARY KEY,
   used INTEGER NOT NULL DEFAULT 0
 );
+-- one person's questions on the server's key, per day (free.py: the daily allowance)
+CREATE TABLE IF NOT EXISTS ia_free_account_days (
+  account_id INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (account_id, day)
+);
 """
 
 APPROVAL_TTL_SECONDS = 7 * 24 * 60 * 60

@@ -493,6 +493,8 @@
         wireDym(el);
       }, function () { /* no other readings: the answer stands as it is */ });
     }
+    // a task that asked this question (home-tasks.js) adds its Next Step bar
+    document.dispatchEvent(new CustomEvent("plover:answer", { detail: { question: asked, asked: lastAsked } }));
   }
 
   // A question first asked by clicking an example stays an example when this
@@ -516,6 +518,7 @@
   // so the ask log can tell a click from a question somebody typed (app/ask_log.py)
   var lastOpt = "";
   function ask(q, push, via, opt) {
+    if (window.ploverTasks) ploverTasks.hide();
     via = exampleVia(q, via);
     opt = opt || "";
     placeBox(true);
@@ -550,7 +553,8 @@
     // ("and Microsoft?") is read as a whole question; the answer shows that reading.
     var prev = prevQuestion();
     var tail = (prev && prev !== q ? "&prev=" + encodeURIComponent(prev) : "") +
-      (via ? "&via=" + encodeURIComponent(via) : "") + (opt ? "&opt=" + encodeURIComponent(opt) : "");
+      (via ? "&via=" + encodeURIComponent(via) : "") + (opt ? "&opt=" + encodeURIComponent(opt) : "") +
+      (me.email && keptChat().chat ? "&chat=" + keptChat().chat : "");
     function full() {
       return askStream("/ask?q=" + encodeURIComponent(q) + tail, function (text) {
         if (lastAsked === q) heard(text);
@@ -560,6 +564,7 @@
         rememberQuestion(a.question || q);
         renderAnswer(a, trail);
         freeNote(a);
+        savedNote(a);
       }, function (e) {
         // not a stock question the box answers: the US economy may (inflation, wages, Treasury yields)
         if (e.status !== 422 && e.status !== 404) throw e;
@@ -654,8 +659,8 @@
       $("gate-cta").hidden = !(me.on && !me.email);
       $("gate-cta-link").href = back;
       if (me.free && me.free.free > 0 && $("gate-cta-text")) {
-        $("gate-cta-text").textContent = (me.free.left > 0 ? me.free.free + " full answers a day are free." :
-          "Today's " + me.free.free + " free answers are used.") +
+        $("gate-cta-text").textContent = (me.free.left > 0 ? (me.free.free === 1 ? "One full answer a day is free." : me.free.free + " full answers a day are free.") :
+          usedText(me.free.free)) +
           " An account shows every answer in full: the chart, the table and the download.";
       }
     }
@@ -664,6 +669,30 @@
   // Over a free answer: what is left of the day's allowance, and the account
   // that lifts it. The streamed answer carries the count; the plain answer
   // (an old browser) does not, so it is asked for.
+  // Signed in, every answer here is kept as a chat in Your Plover (app/us_ask_api.py
+  // _keep), and this tab's later questions join that chat. The note over the answer
+  // says where it went and invites the reader to carry on there, where the
+  // watchlist, charts and screens are.
+  function usedText(n) { return n === 1 ? "Today's free answer is used." : "Today's " + n + " free answers are used."; }
+  var CHAT_KEY = "plover-chat";
+  function keptChat() {
+    try { return JSON.parse(sessionStorage.getItem(CHAT_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function savedNote(a) {
+    if (!a || !a.saved) return;
+    var k = keptChat(), n = k.chat === a.saved.chat ? (k.n || 0) + 1 : 1;
+    try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ chat: a.saved.chat, n: n })); } catch (e) { /* no memory: each question its own chat */ }
+    var el = $("answer"), old = el.querySelector(".fp-saved");
+    if (old) old.parentNode.removeChild(old);
+    var box = document.createElement("div");
+    box.className = "hp-panel fp-saved";
+    box.innerHTML = "<p>" + (n > 1
+      ? "This conversation is saved in Your Plover: " + n + " questions so far, in “" + esc(a.saved.title) + "”. Your watchlist, charts and screens are there too."
+      : "Saved to Your Plover, as a chat you can come back to: “" + esc(a.saved.title) + "”.") + "</p>" +
+      "<a class='hp-btn' href='" + esc(a.saved.url) + "'>Continue in Your Plover</a>";
+    el.insertBefore(box, el.firstChild);
+  }
+
   function freeNote(a) {
     if (!(me.on && !me.email)) return;
     var show = function () {
@@ -675,7 +704,7 @@
       var back = "signin.html?returnTo=" + encodeURIComponent("/" + location.search);
       var p = document.createElement("p");
       p.className = "fp-free";
-      p.innerHTML = (f.left > 0 ? esc(f.left + " of " + f.free + " free answers left today.") : "That was your last free answer today.") +
+      p.innerHTML = (f.left > 0 ? esc(f.left + " of " + f.free + " free answers left today.") : f.free === 1 ? "That was today's free answer." : "That was your last free answer today.") +
         " <a href='" + esc(back) + "'>Create a free account</a> for every answer in full.";
       el.insertBefore(p, el.firstChild);
     };
@@ -691,51 +720,7 @@
     if (f && slot && f.parentNode !== slot) slot.appendChild(f);
   }
 
-  // The strip under the front band: US CPI and core CPI on the year, the 2- and
-  // 10-year Treasury yields and the gap between them, each linked to its page.
-  // A rate's change is in pp, warm when rising and cool when falling. If either
-  // source fails its half is left out; if both fail the strip stays hidden.
-  function strip() {
-    var el = $("strip");
-    if (!el) return;
-    var since = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
-    var quiet = function (p) { return p.catch(function () { return null; }); };
-    Promise.all([quiet(getJSON("/api/v1/cpi-us/overview")),
-                 quiet(getJSON("/api/v1/ust-yields/observations?series=2Y,10Y&start=" + since))]).then(function (r) {
-      var parts = [], when = [];
-      var pp = function (v) { return (v > 0 ? "▲ +" : v < 0 ? "▼ " + MINUS : "") + fmtNum(Math.abs(v), 2) + "pp"; };
-      var ov = r[0];
-      if (ov && ov.tiles) {
-        var month = ov.release && ov.release.latest_period ? MONTHS[+ov.release.latest_period.slice(5, 7) - 1] : "";
-        [["headline_yoy", "US CPI"], ["core_yoy", "Core CPI"]].forEach(function (k) {
-          var t = ov.tiles.filter(function (x) { return x.key === k[0]; })[0];
-          if (!t || t.value == null) return;
-          parts.push("<a href='us-inflation.html' title='" + esc(t.calc || "") + "'>" + k[1] + " <b>" + fmtNum(t.value, 1) + "%</b> " + esc(month) +
-            (t.delta_pp != null ? " <span class='" + (t.delta_pp > 0 ? "rise" : "fall") + "'>" + pp(t.delta_pp) + "</span>" : "") + "</a>");
-        });
-        if (ov.release && ov.release.latest_period) when.push("CPI data through " + MONTHS[+ov.release.latest_period.slice(5, 7) - 1] + " " + ov.release.latest_period.slice(0, 4));
-      }
-      var ys = r[1] && r[1].series;
-      if (ys) {
-        var last = function (code) {
-          var s = ys.filter(function (x) { return x.code === code; })[0];
-          var pts = s ? s.points.filter(function (p) { return p[1] != null; }) : [];
-          return pts.length ? pts[pts.length - 1] : null;
-        };
-        var y2 = last("2Y"), y10 = last("10Y");
-        if (y2) parts.push("<a href='us-treasury.html'>2Y <b>" + fmtNum(y2[1], 2) + "%</b></a>");
-        if (y10) parts.push("<a href='us-treasury.html'>10Y <b>" + fmtNum(y10[1], 2) + "%</b></a>");
-        if (y2 && y10 && y2[0] === y10[0]) {
-          var gap = y10[1] - y2[1];
-          parts.push("<a href='us-treasury.html' title='10-year yield − 2-year yield'>10Y − 2Y <b>" + (gap > 0 ? "+" : gap < 0 ? MINUS : "") + fmtNum(Math.abs(gap), 2) + "pp</b></a>");
-        }
-        if (y10) when.unshift("Yields " + dateWords(y10[0]));
-      }
-      if (!parts.length) return;
-      el.innerHTML = "<div class='hp-strip-in'>" + parts.join("") + "<span class='when'>" + esc(when.join(" · ")) + "</span></div>";
-      el.hidden = false;
-    });
-  }
+
 
   var previewValue = usFmt.previewValue;
 
@@ -770,7 +755,7 @@
         (p.more || []).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ul>" +
         "<p><a class='fp-cta' href='" + esc(href) + "'>" +
         (signedIn ? "Open the Full Chart" : "Sign Up Free to See the Full Answer") + "</a></p>" +
-        (signedIn ? "" : "<p class='fp-small'>" + (me.free && me.free.free > 0 ? "Today's " + me.free.free + " free answers are used. " : "") +
+        (signedIn ? "" : "<p class='fp-small'>" + (me.free && me.free.free > 0 ? usedText(me.free.free) + " " : "") +
           "Your email is all it takes. No password, no card.</p>") + "</div>") +
       "</article>";
     $("home-note").hidden = true;
@@ -801,6 +786,9 @@
   function route(push) {
     var u = new URL(location.href);
     var q = (u.searchParams.get("q") || "").trim();
+    // a task (home-tasks.js): Earnings Preview, Draw Charts or Screen Stocks, at the step the address names
+    if (u.searchParams.get("task") && window.ploverTasks && ploverTasks.route(u) !== false) return;
+    if (window.ploverTasks) ploverTasks.hide();
     if (q) {
       // a bare ticker typed into the box opens the company page
       if (/^[A-Za-z]{1,5}([.-][A-Za-z])?$/.test(q) && q.toUpperCase() === q) return openStock(q, false);
@@ -838,7 +826,12 @@
       ask(q, true, "example");
     });
   });
+  // the tasks (home-tasks.js) open over the page, ask through this box and go home through it
+  window.ploverHome = {
+    enterTask: function () { placeBox(true); $("status").hidden = true; document.title = "Plover Analytics"; },
+    home: function () { route(false); },
+    ask: function (q) { ask(q, true); },
+  };
   // who is reading decides how much of an answer shows, so the page waits for that first
   reader.then(function () { route(false); });
-  strip();
 })();

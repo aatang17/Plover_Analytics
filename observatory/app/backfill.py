@@ -1011,6 +1011,39 @@ def refresh_us_events():
         log("US events: exit %s" % rc)
 
 
+def refresh_us_sectors(max_age_days=7):
+    """The S&P's sectors (app/us_sectors.py): the eleven Select Sector SPDR
+    funds' holdings, plus SPY and DIA, through equity/us_index_members.py on
+    a copy of data/sec.duckdb swapped in when the loader exits cleanly. A
+    sector's members change a few times a year and each copy of the database
+    is gigabytes, so this runs only when the newest sector holdings on file
+    are over a week old. A fund that fails keeps its previous holdings."""
+    if not LIVE_SEC.exists():
+        return
+    try:
+        con = duckdb.connect(str(LIVE_SEC), read_only=True)
+        try:
+            newest = con.execute("SELECT max(as_of) FROM us_index_snapshots "
+                                 "WHERE index_name LIKE 'S&P 500 % (XL% holdings)'").fetchone()[0]
+        except duckdb.Error:                                     # no snapshots table yet: load them
+            newest = None
+        finally:
+            con.close()
+    except Exception:                                            # noqa: BLE001 — held by a writer: try next night
+        return
+    if newest and (datetime.date.today() - newest).days <= max_age_days:
+        return
+    work = DATA_DIR / "sec.sectors.duckdb"
+    if fresh_copy(LIVE_SEC, work) is None:
+        record_check("us-sectors", "failed", "no working copy of sec.duckdb")
+        return
+    rc = _run([sys.executable, str(ROOT / "equity" / "us_index_members.py"), "--db", str(work),
+               "--funds", "sp500,dow,sectors"], dict(os.environ), ROOT)
+    swap(work, LIVE_SEC)          # a failed fund keeps its last holdings; the others are new
+    record_check("us-sectors", "published" if rc == 0 else "failed", "us_index_members.py exited %s" % rc)
+    log("US sectors and index members: exit %s" % rc)
+
+
 def refresh_us_shares(limit=300):
     """Shares outstanding from 10-K and 10-Q covers, every cycle.
 
@@ -1161,6 +1194,7 @@ def main():
     if os.environ.get("BACKFILL_US_PRICES", "1") not in ("", "0") and not _stopping:
         _phase("US prices", refresh_us_prices)
         _phase("US events", refresh_us_events)
+        _phase("US sectors", refresh_us_sectors)
     # Shares outstanding from filing covers, for market value: a few minutes.
     if os.environ.get("BACKFILL_US_SHARES", "1") not in ("", "0") and not _stopping:
         _phase("US share counts", refresh_us_shares)

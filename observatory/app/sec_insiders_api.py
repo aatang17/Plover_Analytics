@@ -220,6 +220,7 @@ def recent_companies(code: str = Query("P", description="transaction code; P = o
                      min_value: float = Query(0, ge=0, description="count only trades of shares × price at least this, in dollars"),
                      days: int = Query(30, ge=1, le=400),
                      relationship: str = Query("", description="director | officer | ten_percent"),
+                     listed: bool = Query(False, description="only issuers listed on a US exchange (Nasdaq, NYSE, CBOE, TXSE), as /buying counts them"),
                      limit: int = Query(100, ge=1, le=1000)):
     """Every trade of one code across every issuer in the window, summed per
     issuer, largest value first. Unlike /recent this is never cut to the
@@ -241,6 +242,9 @@ def recent_companies(code: str = Query("P", description="transaction code; P = o
         if not col:
             raise HTTPException(400, "relationship must be director, officer or ten_percent")
         where += " AND EXISTS (SELECT 1 FROM sec_ins_owners o WHERE o.accession = t.accession AND %s)" % col
+    if listed and sec_api._has(cur, "sec_companies"):
+        where += " AND f.issuer_cik IN (SELECT cik FROM sec_companies WHERE ticker IS NOT NULL AND exchange IN (%s))" % (
+            ",".join("'%s'" % x for x in EXCHANGES))
     sql = """
         WITH tx AS (
             SELECT t.accession, f.issuer_cik, f.issuer_name, f.issuer_symbol, f.filed, t.trans_date,
@@ -268,9 +272,137 @@ def recent_companies(code: str = Query("P", description="transaction code; P = o
         r["latest_trade"] = _d(r["latest_trade"])
         r["value"] = round(r["value"], 2) if r["value"] is not None else None
     return {"code": c, "meaning": CODES[c], "days": days, "since": since.isoformat(), "min_value": min_value,
-            "relationship": rel or None, "companies": rows,
+            "relationship": rel or None, "listed": listed, "companies": rows,
             "totals": {"trades": totals["trades"], "value": totals["value"], "companies": totals["companies"], "insiders": people["insiders"]},
             "provenance": PROVENANCE}
+
+
+EXCHANGES = ("Nasdaq", "NYSE", "CBOE", "TXSE")
+BUYING_CALC = {
+    "value": "shares × the price the insider reported, for each open-market purchase (code P); a filing made jointly by several owners counts once",
+    "price_since": ("(latest close ÷ close on the last trading day on or before the first purchase in the window − 1) × 100, "
+                    "split-adjusted, before dividends"),
+    "sp500_since": "the same calculation on SPY, the fund that tracks the S&P 500, over the same days",
+}
+
+
+def _person(name):
+    """A filer's name as filed, out of capitals: 'HUANG JEN HSUN' -> 'Huang Jen Hsun'."""
+    n = (name or "").strip()
+    return n.title() if n.isupper() else n
+
+
+def _role(title, director, officer, ten_percent):
+    if officer and title:
+        return title.strip()
+    return "Officer" if officer else "Director" if director else "10% owner" if ten_percent else "Other filer"
+
+
+@router.get("/buying", openapi_extra={"x-example": "/api/v1/us/insiders/buying?days=30&who=bosses"})
+def buying(days: int = Query(30, ge=1, le=400),
+           min_value: float = Query(0, ge=0, description="count only purchases of shares × price at least this, in dollars"),
+           who: str = Query("bosses", description="bosses: directors and officers | all: every filer, 10% owners included"),
+           sp500: bool = Query(False, description="members of the S&P 500 only"),
+           limit: int = Query(25, ge=1, le=200), offset: int = Query(0, ge=0)):
+    """Companies whose insiders bought their own shares on the open market
+    (code P) in the last `days` days, largest total first, among companies
+    listed on a US exchange (over-the-counter and unlisted issuers are left out): how many insiders
+    bought, how much, the biggest buyer, and the share price since the first
+    purchase. The front page's Insider Buying task reads this
+    (web/assets/home-tasks.js). Same exclusions as /recent/companies:
+    amendments, and lines whose price or value is a typing error."""
+    from . import us_benchmarks, us_link, us_prices_api
+    cur = _require()
+    w = (who or "bosses").strip().lower()
+    if w not in ("bosses", "all"):
+        raise HTTPException(400, "who must be bosses or all")
+    since = datetime.date.today() - datetime.timedelta(days=days)
+    where = ("t.trans_code = 'P' AND NOT t.derivative AND NOT f.amendment AND t.trans_date >= ? "
+             "AND t.shares IS NOT NULL AND t.price IS NOT NULL AND t.price > 0 AND t.price <= 1e6 "
+             "AND t.shares * t.price >= ? AND t.shares * t.price <= 2e10")
+    params = [since, min_value]
+    boss = "(o.is_director OR o.is_officer)"
+    if w == "bosses":
+        where += " AND EXISTS (SELECT 1 FROM sec_ins_owners o WHERE o.accession = t.accession AND %s)" % boss
+    where += asof.clause("filed", "f")
+    lines = cur.execute("""
+        SELECT t.accession, f.issuer_cik, f.issuer_symbol, f.issuer_name, f.filed, t.trans_date, t.shares * t.price
+        FROM sec_ins_transactions t JOIN sec_ins_filings f ON f.accession = t.accession WHERE %s""" % where, params).fetchall()
+    owners = {}
+    for acc, ocik, name, title, d, o, ten in cur.execute("""
+            SELECT o.accession, o.owner_cik, o.owner_name, o.title, o.is_director, o.is_officer, o.is_ten_percent
+            FROM sec_ins_owners o WHERE o.accession IN (
+                SELECT t.accession FROM sec_ins_transactions t JOIN sec_ins_filings f ON f.accession = t.accession WHERE %s)""" % where,
+            params).fetchall():
+        if w == "bosses" and not (d or o):
+            continue
+        owners.setdefault(acc, []).append((ocik, name, _role(title, d, o, ten)))
+    members, weights, _ = us_benchmarks.members(cur, "sp500") if sp500 else (None, None, None)
+    if sp500 and not members:
+        raise HTTPException(503, "The S&P 500 member list is not loaded on this server yet")
+
+    # companies a reader can buy: listed on a US exchange, not over the counter or unlisted
+    listed = {cik: t for cik, t, ex in cur.execute(
+        "SELECT cik, ticker, exchange FROM sec_companies WHERE ticker IS NOT NULL").fetchall()
+        if ex in EXCHANGES} if sec_api._has(cur, "sec_companies") else {}
+    cos = {}
+    for acc, cik, sym, iname, filed, day, value in lines:
+        if members is not None and cik not in members:
+            continue
+        if cik not in listed:
+            continue
+        c = cos.setdefault(cik, {"cik": int(cik), "symbol": sym, "issuer_name": iname, "filed": filed,
+                                 "value": 0.0, "trades": 0, "first": day, "latest": day, "people": {}})
+        if filed >= c["filed"]:
+            c.update(symbol=sym or c["symbol"], issuer_name=iname or c["issuer_name"], filed=filed)
+        c["value"] += value
+        c["trades"] += 1
+        c["first"], c["latest"] = min(c["first"], day), max(c["latest"], day)
+        for ocik, name, role in owners.get(acc, []):
+            p = c["people"].setdefault(ocik, {"name": _person(name), "role": role, "value": 0.0})
+            p["value"] += value                       # a joint filing credits each of its owners
+    ranked = sorted(cos.values(), key=lambda c: -c["value"])
+    everyone = set()
+    for c in ranked:
+        everyone |= set(c["people"])
+
+    spy = us_benchmarks.BENCHMARKS["sp500"]["etf"]
+    spy_px = [(d, a) for d, _, a in us_prices_api.clean_closes(cur, spy, since - datetime.timedelta(days=10), None)[0] if a]
+
+    def change(series, day):
+        before = [a for d, a in series if d <= day]
+        if not before or not series or series[-1][0] <= day:
+            return None
+        return (series[-1][1] / before[-1] - 1) * 100
+
+    out = []
+    for c in ranked[offset:offset + limit]:
+        cik = c["cik"]
+        tk = listed.get(cik) or c["symbol"]
+        rec = us_link.company_by_cik(cur, cik) or {}
+        name = us_link.company_name(cik, rec.get("sec_name") or c["issuer_name"], cur) or c["issuer_name"]
+        top = max(c["people"].values(), key=lambda p: p["value"]) if c["people"] else None
+        px = []
+        if tk and sec_api._has(cur, "us_px_daily"):
+            try:
+                px = [(d, a) for d, _, a in us_prices_api.clean_closes(cur, tk, c["first"] - datetime.timedelta(days=10), None)[0] if a]
+            except HTTPException:
+                px = []
+        out.append({
+            "cik": cik, "ticker": tk, "name": name, "logo": us_link.logo(cik),
+            "value": round(c["value"], 2), "trades": c["trades"], "insiders": len(c["people"]),
+            "first_trade": _d(c["first"]), "latest_trade": _d(c["latest"]),
+            "top_buyer": {"name": top["name"], "role": top["role"], "value": round(top["value"], 2)} if top else None,
+            "price_since_pct": change(px, c["first"]), "sp500_since_pct": change(spy_px, c["first"]),
+            "price_date": _d(px[-1][0]) if px else None,
+            "sp500_weight_pct": (weights or {}).get(cik),
+        })
+    return {"days": days, "since": since.isoformat(), "min_value": min_value, "who": w, "sp500": sp500,
+            "companies": out, "offset": offset, "limit": limit,
+            "totals": {"companies": len(ranked), "value": round(sum(c["value"] for c in ranked), 2),
+                       "trades": sum(c["trades"] for c in ranked), "insiders": len(everyone)},
+            "latest_filed": _d(cur.execute("SELECT max(filed) FROM sec_ins_filings").fetchone()[0]),
+            "calc": BUYING_CALC, "provenance": PROVENANCE}
 
 
 @router.get("/owner/{owner_cik}", openapi_extra={"x-example": "/api/v1/us/insiders/owner/1214128"})

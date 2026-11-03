@@ -1750,6 +1750,15 @@
       times the price the filer reported; an award or exercise with no price has no value,
       never zero. Form 4 is due within two business days of the trade and is read the day
       after it is filed. Amendments keep their own row; the original is not changed.</li>
+      <li><b>Insider Buying (the front page's task).</b> Open-market purchases (code P) summed
+      per company over the period, largest total first, among companies listed on a US
+      exchange; over-the-counter and unlisted issuers are left out. "Company bosses" are filers
+      who are directors or officers; "anyone who files" adds holders of over 10%, often funds.
+      A filing made jointly by several owners counts once in the total and is credited to each
+      of them when the biggest buyer is picked. Amendments, and lines whose price is above $1mn
+      a share or whose value is above $20bn, are left out as typing errors. Share price since =
+      (latest close ÷ close on the day of the company's first purchase in the period − 1) × 100,
+      split-adjusted, before dividends; the S&amp;P 500 figure is the same on SPY.</li>
       <li><b>13F holdings.</b> Long positions of managers over $100m, reported up to 45 days
       after the quarter ends. A share of reported 13F value is not a share of the company. The
       filings identify a security by CUSIP, not by company, and each manager spells the issuer's
@@ -1858,8 +1867,15 @@
   </details>
 
   <details class="ds" id="calc-us-sectors">
-    <summary><span>Sectors in US Rankings</span><span class="ds-note">SEC industry codes, switches</span></summary>
+    <summary><span>Sectors in US Rankings</span><span class="ds-note">the S&amp;P's sectors, SEC industry codes, switches</span></summary>
     <div class="ds-body">
+    <p><b>The S&amp;P's sectors.</b> A screen or chart by sector (Screen Stocks, Draw Charts, the
+    screener's <code>sector</code> filter) uses the S&amp;P's own eleven sectors (GICS). A company's
+    sector is the Select Sector SPDR fund that holds it (XLK, XLV, XLF, XLY, XLC, XLI, XLP, XLE, XLU,
+    XLRE, XLB): each fund holds exactly the S&amp;P 500 companies in its sector, and its holdings are
+    read weekly. Only S&amp;P 500 members have a sector this way, so a sector keeps a screen to them. A
+    sector chart draws each fund's daily closes against SPY's, each set to 100 at its first close in
+    the period.</p>
     <p>A ranking that keeps or leaves out a sector ("tech stocks", "non-tech stocks") reads each
     company's sector from its SEC industry code, grouped into eleven broad sectors. Technology means
     software, chips, computers, communications equipment and IT services. The grouping is not the
@@ -1895,6 +1911,36 @@
     results, in its tagged financial statements, its description, its file names, its exhibit
     list or its headline. A quarter with no such 6-K is left blank rather than guessed, so a
     foreign company can show fewer results days than it has quarters.</p>
+    </div>
+  </details>
+  <details class="ds" id="calc-us-preview">
+    <summary><span>Earnings Preview</span><span class="ds-note">the front page's Earnings Preview task</span></summary>
+    <div class="ds-body">
+    <p>The preview puts together figures Plover already holds; nothing in it is collected for it
+    alone (<code>/api/v1/us/preview</code>).</p>
+    <ul>
+      <li><b>Expected date.</b> An estimate, never a date the company has announced: the day the
+      company filed its results for the same quarter a year earlier (its 8-K under Item 2.02),
+      plus 364 days, so it falls on the same weekday. A company needs four results days on file
+      before a date is estimated. Companies move their dates; when the estimated day passes with
+      no results on file, the preview says so rather than moving the estimate.</li>
+      <li><b>Move around results.</b> (close N trading days after the results day ÷ close on the
+      last trading day before it − 1) × 100, split-adjusted, before dividends, for each of the
+      last eight results days. The reader picks N: 1 (the day after, the default), 5 (a week) or
+      21 (a month). A results day too recent for the chosen window shows —. The window holds the news whether results came out
+      before the open or after the close. The S&amp;P 500 column is the same calculation on SPY,
+      the fund that tracks it.</li>
+      <li><b>Typical move.</b> The median of the size of those moves, ignoring direction; shown
+      only when at least four are on file.</li>
+      <li><b>Since the last results.</b> (latest close ÷ close on the last trading day before the
+      latest results day − 1) × 100.</li>
+      <li><b>Quarters.</b> The last eight quarters as last filed in 10-Qs and 10-Ks. A fourth
+      quarter that no filing reports on its own is the full year less the first three quarters;
+      earnings per share is not derived that way, so it shows —. Operating margin is operating
+      income ÷ revenue × 100 for the quarter.</li>
+      <li><b>Reporting soon.</b> S&amp;P 500 members whose expected date falls in the next two
+      weeks, soonest first and, on one day, by their weight in the index.</li>
+    </ul>
     </div>
   </details>
 

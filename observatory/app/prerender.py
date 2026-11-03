@@ -1266,6 +1266,29 @@ def _us_stock_view(values):
     return {"title": title, "description": sentence, "noscript": sentence + " Source: SEC EDGAR."}
 
 
+def _home_view(values):
+    """The front page's Earnings Preview for one US company (home-tasks.js,
+    /?task=earnings&c=AMD). The other tasks pick nothing that is a page's subject."""
+    if values.get("task") != "earnings":
+        return None
+    t = (values.get("c") or "").strip().upper().replace(".", "-")
+    if not t:
+        return None
+    if not _US_TICKER.match(t):
+        return NOINDEX
+    row = _cached(("us-stock", t), _sec_version, lambda: _sec_one("""
+        SELECT name, ticker, exchange, industry FROM sec_companies
+        WHERE ticker = ? OR list_contains(string_split(tickers, ','), ?)
+        ORDER BY (ticker = ?) DESC LIMIT 1""", [t, t, t]))
+    if not row or not row[0]:
+        return NOINDEX
+    name, ticker = _clean(row[0]), row[1] or t
+    sentence = ("%s (%s): when its next results are expected, its last eight quarters, and how its "
+                "share price moved around each results day, from SEC filings and daily closes." % (name, ticker))
+    return {"title": "%s (%s) — Earnings Preview · %s" % (name, ticker, SITE), "description": sentence,
+            "noscript": sentence + " Source: SEC EDGAR."}
+
+
 # The nine data pages built on us-series.js: one <main data-datasets="slug:Label,…">
 # each, a ?dataset= picking one (the first by default) and ?series= naming
 # one or more codes in it. A chart of one series is that series' page.
@@ -1342,6 +1365,7 @@ ENTITY_PAGES = {
     "financials.html": _financials_company,
     "governance.html": _governance_company,
     "us-stock.html": _us_stock_view,
+    "index.html": _home_view,
 }
 for _page in ("hk-economy.html", "hk-prices.html", "labour.html", "us-cpi-areas.html",
               "us-explorer.html", "us-labour.html", "us-prices.html", "us-wages.html",

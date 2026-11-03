@@ -604,6 +604,11 @@ def health():
         except Exception:                                    # noqa: BLE001
             pass
         try:
+            from . import us_sectors       # the S&P's sectors, from the sector funds' holdings
+            equity = equity + us_sectors.health()
+        except Exception:                                    # noqa: BLE001
+            pass
+        try:
             from . import us_pay_api
             equity = equity + us_pay_api.health()
         except Exception:                                    # noqa: BLE001

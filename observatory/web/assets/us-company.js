@@ -315,8 +315,14 @@
   function calendar(cal) {
     if (!cal || !(cal.filings || []).length) return;
     var up = (cal.upcoming || []).filter(function (u) { return u.status === "expected" && u.expected_date; })[0];
-    $("cal-body").innerHTML = (up ? "<p class='cal-next'><span>Next</span> <b>" + esc(/annual/i.test(up.report) ? "Annual report" : "Quarterly report") +
-      "</b> due about <b>" + esc(coHead.dayShort(up.expected_date)) + "</b></p><p class='cal-why'>Estimated from the same filing a year earlier; not an announced date.</p>" : "") +
+    // the results announcement (estimated from past results days, as the Earnings Preview shows it), then the filing
+    var res = cal.results && cal.results.expected_date ? cal.results : null;
+    $("cal-body").innerHTML = (res ? "<p class='cal-next'><span>Next</span> <b>Results</b> " + (res.overdue ? "were expected about" : "expected about") +
+      " <b>" + esc(coHead.dayShort(res.expected_date)) + "</b> · <a href='/?task=earnings&amp;c=" + encodeURIComponent(cal.ticker || "") + "'>Earnings Preview</a></p>" : "") +
+      (up ? "<p class='cal-next'><span>" + (res ? "Then" : "Next") + "</span> <b>" + esc(/annual/i.test(up.report) ? "Annual report" : "Quarterly report") +
+      "</b> due about <b>" + esc(coHead.dayShort(up.expected_date)) + "</b></p>" : "") +
+      (res || up ? "<p class='cal-why'>" + (res ? "Results: a year after the same quarter's results. " : "") +
+        (up ? "Report: a year after the same filing. " : "") + "Estimates, not announced dates.</p>" : "") +
       "<table class='cp-table cal-table' data-no-enhance><thead><tr><th>Form</th><th>Period to</th><th>Filed</th><th>Days</th></tr></thead><tbody>" +
       cal.filings.slice(0, 4).map(function (f) {
         return "<tr><td>" + (f.source_url ? "<a href='" + esc(f.source_url) + "' rel='noopener'>" + esc(f.form) + "</a>" : esc(f.form)) + "</td><td>" +

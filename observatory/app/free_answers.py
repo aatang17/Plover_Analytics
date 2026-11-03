@@ -38,7 +38,7 @@ public by URL, as they were.
 
 Settings
 --------
-FREE_ANSWERS (default 3): full answers a day before the email is asked for.
+FREE_ANSWERS (default 1, from 2026-11-03; 3 before): full answers a day before the email is asked for.
 0 switches the allowance off and the page gates every question as before.
 """
 import datetime
@@ -47,7 +47,7 @@ import threading
 
 from . import accounts, visits
 
-DEFAULT = 3
+DEFAULT = 1
 _lock = threading.Lock()
 _counts = {}          # (day, visitor code) -> answers taken
 _day = [None]         # the day the counts are for; another day empties them

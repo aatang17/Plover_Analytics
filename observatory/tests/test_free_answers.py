@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Free answers for a reader without an account (app/free_answers.py).
 
-The allowance is per reader per day: three full answers (FREE_ANSWERS), then
-the page gates. Signed in, or with accounts off, nothing is counted. A click
+The allowance is per reader per day: FREE_ANSWERS full answers (one by
+default since 2026-11-03; the counting tests below set three), then the page gates. Signed in, or with accounts off, nothing is counted. A click
 on the page's own examples is reported but not taken. The count is kept in
 memory and read through /api/v1/us/ask/free, which must never be cached.
 
@@ -37,7 +37,7 @@ class FreeAnswers(unittest.TestCase):
     def setUp(self):
         self.env = {k: os.environ.get(k) for k in ("ACCOUNTS_ENABLED", "FREE_ANSWERS")}
         os.environ["ACCOUNTS_ENABLED"] = "1"
-        os.environ.pop("FREE_ANSWERS", None)
+        os.environ["FREE_ANSWERS"] = "3"             # three, so the counting shows
         free_answers._counts.clear()
         free_answers._day[0] = None
         self.c = TestClient(_app())
@@ -48,6 +48,11 @@ class FreeAnswers(unittest.TestCase):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+    def test_one_a_day_by_default(self):
+        os.environ.pop("FREE_ANSWERS", None)
+        self.assertEqual(self.c.get("/status", headers=UA).json(), {"free": 1, "left": 1})
+        self.assertEqual(self.c.get("/take", headers=UA).json(), {"free": 1, "left": 0})
 
     def test_three_then_none(self):
         self.assertEqual(self.c.get("/status", headers=UA).json(), {"free": 3, "left": 3})
@@ -90,7 +95,7 @@ class FreeAnswers(unittest.TestCase):
         os.environ["FREE_ANSWERS"] = "0"
         self.assertEqual(self.c.get("/status", headers=UA).json(), {"free": 0, "left": 0})
         os.environ["FREE_ANSWERS"] = "lots"
-        self.assertEqual(self.c.get("/status", headers=UA).json()["free"], 3)
+        self.assertEqual(self.c.get("/status", headers=UA).json()["free"], free_answers.DEFAULT)
 
     def test_a_new_day_starts_clean(self):
         self.c.get("/take", headers=UA)

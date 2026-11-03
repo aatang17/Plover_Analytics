@@ -168,6 +168,16 @@ class ScreenWords(unittest.TestCase):
         self.assertIn("Market value over $20bn", texts)
         self.assertIn("Sorted: cheapest first", texts)
 
+    def test_which_margin(self):
+        # the front page's own-condition box (home-tasks.js) offers these as examples
+        self.assertEqual(self.chips("net margin above 15%")[1].get("net_margin_min"), "15")
+        self.assertEqual(self.chips("profit margin over 10%")[1].get("net_margin_min"), "10")
+        self.assertEqual(self.chips("free cash flow margin above 20%")[1].get("fcf_margin_min"), "20")
+        texts, params = self.chips("semiconductor companies with operating margin above 30%")
+        self.assertEqual(params.get("operating_margin_min"), "30")
+        self.assertEqual(params.get("sic"), "3674")
+        self.assertEqual(self.chips("margins above 25%")[1].get("operating_margin_min"), "25")
+
     def test_down_this_month(self):
         texts, params = self.chips("stocks down 10% this month under 20x earnings")
         self.assertEqual(params["price_change_1m_max"], "-10")
@@ -202,6 +212,12 @@ class ChartWords(unittest.TestCase):
 
     def spec(self, q, current=None):
         return us_build_api._chart_by_words(_cur(), q, current)
+
+    def test_the_front_pages_own_chart_example(self):
+        # Draw Charts' Something-else box (home-tasks.js) offers this one
+        s = self.spec("Apple share price since 2020 with results days marked")
+        self.assertEqual([x["ticker"] for x in s["series"]], ["AAPL"])
+        self.assertEqual((s["measure"], s["from"], s["mark_results"]), ("price", "2020-01-01", True))
 
     def test_period_measure_benchmark_words(self):
         s = self.spec("Tesla operating margin by quarter since 2020")

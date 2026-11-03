@@ -38,6 +38,21 @@ FUNDS = {
     "sp500": ("spy", "S&P 500 (SPY holdings)", 450),
     "dow": ("dia", "Dow Jones Industrial Average (DIA holdings)", 28),
 }
+# The S&P's own sectors (GICS), one Select Sector SPDR fund each: a fund holds
+# exactly the S&P 500 companies in its sector, so membership is the official
+# sector (SPY's own file leaves its Sector column blank). The names must match
+# app/us_sectors.py SECTORS; tests/test_us_sectors.py checks they do.
+SECTOR_FUNDS = (
+    ("tech", "xlk", "Information Technology", 40), ("health", "xlv", "Health Care", 35),
+    ("financials", "xlf", "Financials", 40), ("consumer_disc", "xly", "Consumer Discretionary", 30),
+    ("communication", "xlc", "Communication Services", 12), ("industrials", "xli", "Industrials", 45),
+    ("staples", "xlp", "Consumer Staples", 20), ("energy", "xle", "Energy", 12),
+    ("utilities", "xlu", "Utilities", 18), ("real_estate", "xlre", "Real Estate", 18),
+    ("materials", "xlb", "Materials", 14),
+)
+for _key, _fund, _name, _least in SECTOR_FUNDS:
+    FUNDS["sector_" + _key] = (_fund, "S&P 500 %s (%s holdings)" % (_name, _fund.upper()), _least)
+SECTOR_KEYS = ",".join("sector_" + k for k, _, _, _ in SECTOR_FUNDS)
 
 _spec = importlib.util.spec_from_file_location("sec_proxy_pay", os.path.join(HERE, "sec_proxy_pay.py"))
 _spp = importlib.util.module_from_spec(_spec)
@@ -110,12 +125,13 @@ def store(con, key, body):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=DB_PATH)
-    ap.add_argument("--funds", default="dow,sp500", help="comma-separated index keys: " + ", ".join(FUNDS))
+    ap.add_argument("--funds", default="dow,sp500", help="comma-separated index keys: " + ", ".join(FUNDS) +
+                    "; 'sectors' for the eleven sector funds")
     args = ap.parse_args(argv)
     con = duckdb.connect(args.db)
     failed = []
     try:
-        for key in [k.strip() for k in args.funds.split(",") if k.strip()]:
+        for key in [k.strip() for k in args.funds.replace("sectors", SECTOR_KEYS).split(",") if k.strip()]:
             if key not in FUNDS:
                 print("unknown index %r" % key)
                 failed.append(key)

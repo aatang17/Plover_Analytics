@@ -204,6 +204,11 @@ def company(sec_code: str):
                 if r["cik"] == cik and r["status"] != "filed"]
     upcoming.sort(key=lambda r: r["expected_date"])
     m = meta.get(cik) or {}
+    # the results announcement, estimated from past results days (8-K Item 2.02): the date every
+    # page shows as "results"; `upcoming` stays the 10-Q/10-K filing, which comes days or weeks later
+    from . import us_preview_api
+    results = us_preview_api.results_next(cur, cik, today)
     return {"cik": cik, "sec_code": "cik:%d" % cik, "name": hist[0] and sec_api._filings(cur, cik, FORMS)[0]["name"],
             "ticker": m.get("ticker"), "exchange": m.get("exchange"), "industry": m.get("industry"),
-            "filings": hist, "upcoming": upcoming, "calc": CALC, "provenance": PROVENANCE}
+            "filings": hist, "upcoming": upcoming, "results": results,
+            "calc": dict(CALC, results_expected_date=us_preview_api.CALC["expected_date"]), "provenance": PROVENANCE}

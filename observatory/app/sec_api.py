@@ -792,6 +792,9 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
              price_change_1y_min: str = Query(""), price_change_1y_max: str = Query(""),
              price_change_1m_min: str = Query(""), price_change_1m_max: str = Query(""),
              sp500: bool = Query(False, description="members of the S&P 500 only"),
+             sector: str = Query("", description="the S&P's sectors (GICS), comma-separated keys: tech, health, financials, "
+                                                 "consumer_disc, communication, industrials, staples, energy, utilities, "
+                                                 "real_estate, materials; S&P 500 members only (app/us_sectors.py)"),
              sort: str = Query("roe_pct", description="a metric or a size field to rank on"),
              order: str = Query("desc", description="desc | asc"),
              current_only: bool = Query(True, description="leave out filers whose latest annual report "
@@ -834,6 +837,12 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
     if sp500:
         from . import us_benchmarks
         sp_members = us_benchmarks.members(cur, "sp500")[0] or set()
+    from . import us_sectors
+    sec_keys = [s.strip().lower() for s in (sector or "").split(",") if s.strip()]
+    if any(k not in us_sectors.NAMES for k in sec_keys):
+        raise HTTPException(400, "sector must be one or more of %s" % ", ".join(us_sectors.NAMES))
+    sector_of = us_sectors.members(cur)[0]
+    in_sector = us_sectors.ciks(cur, sec_keys) if sec_keys else None
     want = {t.strip().upper().replace(".", "-") for t in (tickers or "").split(",") if t.strip()}
     name_q = " ".join((q or "").split()).lower()
     u = (unit or "USD").strip().upper()
@@ -858,6 +867,8 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
         if ex_set and (r.get("exchange") or "").lower() not in ex_set:
             continue
         if sp_members is not None and r["cik"] not in sp_members:
+            continue
+        if in_sector is not None and r["cik"] not in in_sector:
             continue
         if want and (r.get("ticker") or "") not in want:
             continue
@@ -903,6 +914,8 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
             "display_name": us_link.company_name(r["cik"], r["name"], cur), "logo": us_link.logo(r["cik"]),
             "ticker": r.get("ticker"), "exchange": r.get("exchange"), "sic": r.get("sic"),
             "industry": r.get("industry"), "country": r.get("country"), "form": r["form"],
+            # the S&P's sector, for an S&P 500 member (app/us_sectors.py); None otherwise
+            "sector": us_sectors.NAMES.get(sector_of.get(r["cik"])),
             "period_end": r["period_end"], "fy": r["fy"], "filed": r["filed"], "status": r["status"],
             "unit": r["unit"], "size": r["size"], "per_share": r.get("per_share"), "price": r.get("price"),
             "metrics": r["metrics"], "tags": r["tags"],
@@ -912,11 +925,13 @@ def screener(sic: str = Query("", description="SIC code (e.g. 3674) or a 2-digit
     return {"sort": sort, "order": "asc" if asc else "desc",
             "filters": {"sic": sic_q or None, "industry": ind_q or None, "exchange": ex_q or None, "q": name_q or None,
                         "tickers": sorted(want) or None, "unit": u, "sp500": sp500 or None,
+                        "sector": ",".join(sec_keys) or None,
                         **{k: v for k, v in f.items() if v is not None}},
             "universe": len(rows), "matched": len(kept), "ranked": len(ranked),
             "excluded_missing_sort": missing, "offset": offset, "limit": limit,
             "rows": page, "metric_defs": sec_metrics.metric_defs(prices=priced),
-            "calc": dict(sec_metrics.FORMULAS, **(sec_metrics.PRICE_FORMULAS if priced else {})),
+            "calc": dict(sec_metrics.FORMULAS, **(sec_metrics.PRICE_FORMULAS if priced else {}),
+                         **({"sector": us_sectors.CALC} if sec_keys else {})),
             "provenance": DERIVED_PROVENANCE,
             "price_provenance": us_prices_api.PROVENANCE if priced else None}
 
