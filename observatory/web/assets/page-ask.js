@@ -345,11 +345,17 @@
       }).join(" · ") + "</p>" : "") + foot);
   };
 
+  // "your free answer", or "your 3 free answers": the allowance is a server setting
+  function freeWords() {
+    var n = me.free && me.free.free;
+    return n > 1 ? "your " + usFmt.count(n) + " free answers" : "your free answer";
+  }
+
   // The free answer is used: this question goes to Your Plover after a free sign-up.
   Box.prototype.drawHandOff = function (q, before) {
     this.show(topLine(q) +
       "<p class='pa-head'>Sign up free to keep asking</p>" +
-      "<p class='pa-text'>You have used today's free answer. Sign up with your email and Plover answers this question " +
+      "<p class='pa-text'>You have used " + freeWords() + " for today. Sign up with your email and Plover answers this question " +
       "straight away" + (before ? ", in the same chat as your last one" : "") + ". A link there brings you back to this page.</p>" +
       "<div class='pa-gate'><a class='btn btn-primary pa-signup' href='signin.html?returnTo=" + attr(encodeURIComponent(ploverHref(q, before))) +
       "'>Sign Up Free and Ask</a><p class='pa-small'>Your email is all it takes. No password, no card.</p></div>");
@@ -359,7 +365,7 @@
   Box.prototype.noteFree = function () {
     var foot = this.result.querySelector(".pa-card");
     if (!foot || !me.free || me.free.left > 0 || this.result.querySelector(".pa-free-note")) return;
-    foot.insertAdjacentHTML("beforeend", "<p class='pa-small pa-free-note'>That was today's free answer. " +
+    foot.insertAdjacentHTML("beforeend", "<p class='pa-small pa-free-note'>That was your last free answer today. " +
       "Your next question carries on in Plover after a free sign-up, and you can come back here.</p>");
   };
 
