@@ -1,5 +1,8 @@
 /* The question box on a data page (page-ask.js). Tokens and components come from app.css. */
-.pa { margin: 14px 0 4px; }
+/* its own tinted panel, so the box and its answer never read as the page's own figures */
+.pa { margin: 16px 0 24px; padding: 16px 18px; background: var(--obs-surface-subtle);
+  border: 1px solid var(--obs-border); border-radius: 4px; }
+@media (max-width: 600px) { .pa { padding: 12px; } }
 .pa-form { display: flex; align-items: flex-end; gap: 8px; }
 .pa-label { flex: 1 1 auto; min-width: 0; display: block; }
 .pa-label > span { display: block; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); margin-bottom: 4px; }
