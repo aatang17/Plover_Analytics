@@ -153,7 +153,7 @@ function renderResults() {
     box.innerHTML = matches.map(function (c, i) {
       return '<li role="option" data-code="' + escapeHtml(c.sec_code) + '" aria-selected="' +
         (i === sel) + '"><span class="co-code">' + escapeHtml(c.sec_code) + "</span>" +
-        escapeHtml(c.name_en || c.name || "") + delistedTag(c) +
+        escapeHtml(displayName(c.name_en) || displayNameJa(c.name) || "") + delistedTag(c) +
         '<span class="co-ja">' + escapeHtml(c.name || "") + "</span></li>";
     }).join("");
   }
@@ -279,9 +279,9 @@ function renderIdentity() {
   $("co-name").innerHTML = (c.logo ? '<img class="co-logo" src="' + escapeHtml(c.logo) +
       '" alt="" width="32" height="32">' : "") +
     '<span class="co-tick">' + escapeHtml(c.sec_code) + "</span>" +
-    escapeHtml(c.display_name || c.name_en || c.name || c.sec_code) + delistedTag(c);
+    escapeHtml(c.display_name || displayName(c.name_en) || displayNameJa(c.name) || c.sec_code) + delistedTag(c);
   $("page-asof").textContent = "FY to " + day(f.period) + " · filed " + day(f.filed);
-  $("page-sub").textContent = [c.name, c.industry, edinet ? "EDINET " + edinet : "",
+  $("page-sub").textContent = [displayNameJa(c.name), c.industry, edinet ? "EDINET " + edinet : "",
     fin.accounting_standard ? fin.accounting_standard +
       (fin.consolidated ? ", consolidated" : ", parent") : ""].filter(Boolean).join(" · ");
 
@@ -327,25 +327,26 @@ function filingRows() {
            "segments", "financials"].indexOf(id) >= 0) read.push(DATASET_LABEL[id]);
     });
     out.push({ filed: f.filed, doc: f.doc_id, type: "Annual securities report",
-               by: (CO.company || {}).name_en || (CO.company || {}).name,
+               by: displayName((CO.company || {}).name_en) || displayNameJa((CO.company || {}).name),
                summary: read.join(" · ") });
   }
   const months = rows("buybacks", "months");
   if (months.length) {
     out.push({ filed: months[0].submitted, doc: months[0].doc_id,
                type: "Buyback monthly report",
-               by: (CO.company || {}).name_en || (CO.company || {}).name,
+               by: displayName((CO.company || {}).name_en) || displayNameJa((CO.company || {}).name),
                summary: "Month to " + day(months[0].month) + " · treasury and cancellations" });
   }
   rows("large-shareholdings", "reports").forEach(function (r) {
     out.push({ filed: r.filed_date, doc: r.doc_id,
                type: "5% report — " + (REPORT_TYPE[r.report_type] || r.report_type || "report"),
-               by: r.filer_name_en || r.filer_name, by_ja: r.filer_name_en ? r.filer_name : "",
+               by: displayName(r.filer_name_en) || displayNameJa(r.filer_name),
+               by_ja: r.filer_name_en ? displayNameJa(r.filer_name) : "",
                summary: "A holder's stake in this issuer" });
   });
   rows("agm-votes", "meetings").forEach(function (m) {
     out.push({ filed: m.filed_date, doc: m.doc_id, type: "AGM vote result",
-               by: m.issuer_name_en || m.issuer_name,
+               by: displayName(m.issuer_name_en) || displayNameJa(m.issuer_name),
                summary: count(m.proposals) + " proposal" + (m.proposals === 1 ? "" : "s") +
                         " and their counted votes" });
   });
@@ -624,7 +625,7 @@ function ownPane() {
     const holders = rows("shareholder-register", "holders");
     if (!holders.length) return '<p class="table-empty">No shareholder register is held for this company.</p>';
     const body = holders.map(function (h) {
-      return "<tr><td>" + count(h.rank) + "</td><td>" + escapeHtml(h.name_raw || "") + "</td><td>" +
+      return "<tr><td>" + count(h.rank) + "</td><td>" + escapeHtml(displayNameJa(h.name_raw) || "") + "</td><td>" +
         escapeHtml(HOLDER_KIND[h.holder_kind] || h.holder_kind || MISSING) + '</td><td class="num">' +
         count(h.shares) + '</td><td class="num">' + pct(h.ratio_pct, 2) + "</td></tr>";
     }).join("");
@@ -650,7 +651,7 @@ function ownPane() {
     const body = holds.map(function (h) {
       return "<tr><td>" + (h.held_sec_code ? '<span class="co-code">' +
         escapeHtml(h.held_sec_code) + "</span>" : "") +
-        escapeHtml(h.held_name_en || h.held_name_raw || "") + '</td><td class="num">' +
+        escapeHtml(displayName(h.held_name_en) || displayNameJa(h.held_name_raw) || "") + '</td><td class="num">' +
         count(h.shares) + '</td><td class="num">' + yenScale(h.book_value_yen) + '</td><td class="num">' +
         (total && h.book_value_yen ? pct((h.book_value_yen / total) * 100) : MISSING) + "</td></tr>";
     }).join("");
@@ -678,7 +679,7 @@ function ownPane() {
       held.map(function (h) {
         return "<tr><td>" + (h.holder_sec_code ? '<span class="co-code">' +
           escapeHtml(h.holder_sec_code) + "</span>" : "") +
-          escapeHtml(h.holder_name_en || h.holder_name || "") + '</td><td class="num">' +
+          escapeHtml(displayName(h.holder_name_en) || displayNameJa(h.holder_name) || "") + '</td><td class="num">' +
           count(h.shares) + '</td><td class="num">' + yenScale(h.book_value_yen) + "</td></tr>";
       }).join("")) +
       '<p class="table-foot">' + count(nrows("cross-shareholdings", "holders")) +
@@ -691,7 +692,7 @@ function ownPane() {
   return table("<th>Filed</th><th>Filer</th><th>Report</th><th>Document</th>",
     reports.map(function (r) {
       return "<tr><td>" + day(r.filed_date) + "</td><td>" +
-        escapeHtml(r.filer_name_en || r.filer_name || "") + "</td><td>" +
+        escapeHtml(displayName(r.filer_name_en) || displayNameJa(r.filer_name) || "") + "</td><td>" +
         escapeHtml((REPORT_TYPE[r.report_type] || r.report_type || "") +
           (r.change_no ? ", no. " + r.change_no : "")) + '</td><td><span class="co-code">' +
         escapeHtml(r.doc_id) + "</span></td></tr>";
@@ -755,7 +756,7 @@ function renderGovernance() {
          MISSING : fmtNum(f.avg_director_age, 1),
          count(f.directors_70_plus) + " aged 70 or over") +
     cell("Highest paid", top ? yenScale(top.consolidated_pay_yen) : MISSING,
-         top ? escapeHtml(top.name_en || "") + ", consolidated" : "no individually named pay");
+         top ? escapeHtml(displayName(top.name_en) || "") + ", consolidated" : "no individually named pay");
 
   const board = rows("boards-and-pay", "board");
   const payOf = {};
@@ -766,7 +767,7 @@ function renderGovernance() {
       '<th class="num">Age</th><th class="num">Pay, ¥ mn</th>',
       board.map(function (b) {
         return "<tr><td>" + count(b.seat_no) + '</td><td><span class="co-nm">' +
-          escapeHtml(b.name_en || b.name_ja || "") + "</span>" +
+          escapeHtml(displayName(b.name_en) || displayNameJa(b.name_ja) || "") + "</span>" +
           "</td><td>" + escapeHtml(b.title_ja || "") + '</td><td class="num">' +
           count(b.age_at_period_end) + '</td><td class="num">' +
           (payOf[b.person_key] === undefined ? MISSING : fmtNum(payOf[b.person_key] / 1e6, 0)) +

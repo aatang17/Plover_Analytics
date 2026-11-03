@@ -9,6 +9,18 @@
 (function () {
   "use strict";
 
+  // The company the server wrote this page for, and its name as written there
+  // ("Toyota Motor Corporation"; filings often file it in capitals), read
+  // before any script replaces the heading.
+  var SERVED = (function () {
+    var h = document.getElementById("co-name");
+    var c = new URLSearchParams(location.search).get("c");
+    return { name: h ? h.textContent.trim() : "", code: c ? c.trim().toUpperCase() : "" };
+  })();
+  function servedName(code, fallback) {
+    return (SERVED.name && code && String(code).toUpperCase() === SERVED.code) ? SERVED.name : fallback;
+  }
+
   var tapeState = { filter: "all" };
   var filerState = { activist: "", by: "group", type: "", group: "" };
 
@@ -50,7 +62,7 @@
   }
 
   function nameCell(en, ja, href) {
-    var primary = en || ja || MISSING;
+    var primary = displayName(en) || displayNameJa(ja) || MISSING;
     var link = href ? "<a href='" + href + "'>" + esc(primary) + "</a>" : esc(primary);
     return "<div class='cell-item'><div class='en'>" + link + "</div></div>";
   }
@@ -335,16 +347,16 @@
     var groups = d.groups || [];
     var nameJa = groups.length && groups[0].issuer_name_raw
       ? groups[0].issuer_name_raw : d.issuer_name;
-    var name = d.issuer_name_en || nameJa;
+    var name = displayName(d.issuer_name_en) || displayNameJa(nameJa);
     // The server's title already names this company, spelled for reading
     // ("Toyota Motor Corporation", not "TOYOTA MOTOR CORPORATION"): keep it.
     if (document.title.indexOf("(" + d.issuer_sec_code + ")") < 0) {
       document.title = name + " (" + (d.issuer_sec_code || "") + ") · 5% Shareholders · Plover Analytics";
     }
-    $("co-name").textContent = name;
+    $("co-name").textContent = servedName(d.issuer_sec_code, name);
     $("co-code").textContent = d.issuer_sec_code || "";
     if (d.issuer_name_en && nameJa) {
-      $("co-name-ja").textContent = nameJa;
+      $("co-name-ja").textContent = displayNameJa(nameJa);
       $("co-name-ja").hidden = false;
     }
     $("co-meta").innerHTML = count(d.reports.length) + " reports archived · " +
@@ -371,7 +383,7 @@
           "</td></tr>";
       }).join("");
       return "<div class='group" + (g.is_current ? " is-current" : "") + "'>" +
-        "<h3>" + esc(g.filer_name || MISSING) + "</h3>" +
+        "<h3>" + esc(displayNameJa(g.filer_name) || MISSING) + "</h3>" +
         "<p class='grp-meta'>" + (g.is_current
             ? "Holds <b>" + pct(g.ratio_pct) + "%</b>"
             : "Exited — latest report shows " + pct(g.ratio_pct) + "%") +

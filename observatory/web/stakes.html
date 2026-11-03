@@ -54,8 +54,8 @@
 .tbl-formula { font-size: 12px; line-height: 1.55; color: var(--obs-text-muted);
   margin: 10px 0 0; text-wrap: pretty; }
 
-.fact-row { display: flex; flex-wrap: wrap; gap: 10px 44px; margin: 14px 0 4px;
-  padding-left: 14px; border-left: 2px solid var(--obs-border); }
+.fact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px 24px; margin: 16px 0 4px; padding: 14px 0 0; border-top: 1px solid var(--obs-border); }
 .fact-row div { margin: 0; }
 .fact-row dt { font-size: 12px; font-weight: 600; color: var(--obs-text-muted);
   text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 3px; }
@@ -155,29 +155,33 @@
 
   <!-- company view -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="stakes.html">← All filings</a></p>
+    <p class="back-row"><a class="btn btn-back" href="stakes.html">← All filings</a></p>
     <div class="co-head"><h1 id="co-name"></h1><span class="co-code" id="co-code"></span></div>
     <p class="co-name-ja" id="co-name-ja" hidden></p>
     <p class="filing-meta" id="co-meta"></p>
     <dl class="fact-row" id="co-facts"></dl>
 
     <h2>Disclosed Holders <span class="h2-note" id="grp-count"></span></h2>
-    <p class="sec-note">Each holding group's latest report. Share counts, ratios and the
+    <details class="how-to-read"><summary>How to read this table</summary>
+        <p>Each holding group's latest report. Share counts, ratios and the
       stated purpose are <b>official statistics</b> as filed. A group that has fallen below
       5% files once more and then stops — it is shown as exited, not removed.</p>
+      </details>
     <div id="groups"></div>
 
     <h2>All Reports for This Company <span class="h2-note" id="rep-count"></span></h2>
     <div class="sec-actions">
-      <p class="sec-note" style="flex:1">One row per report, newest trigger date first.</p>
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>One row per report, newest trigger date first.</p>
+      </details>
       <button type="button" class="btn" id="rep-csv">Download CSV</button>
     </div>
-    <div class="table-wrap"><table class="tbl-stk wide" id="rep-table"></table></div>
+    <div class="table-wrap"><table class="tbl-stk wide" id="rep-table" data-no-table-csv></table></div>
   </section>
 
   <!-- holder view -->
   <section id="holder-view" hidden>
-    <p style="margin:16px 0 0"><a href="stakes.html">← All filings</a></p>
+    <p class="back-row"><a class="btn btn-back" href="stakes.html">← All filings</a></p>
     <div class="co-head"><h1 id="ho-name"></h1><span class="co-code" id="ho-code"></span></div>
     <p class="filing-meta" id="ho-meta"></p>
     <p class="filing-meta" id="ho-profile"></p>

@@ -9,13 +9,16 @@ to each page's market view and drop the company. Google read 20,000 such
 pages in October 2026 and sent about ten people a week, most of whom left
 after one page.
 
-So each one-company page now opens with:
+So each one-company page now carries:
 
-  * two or three plain sentences carrying the figures a reader searched for
-    (the largest shareholder and its stake, revenue and profit, the board,
-    CEO pay), each as filed, with the year it is for; and
-  * one line of links to the same company's other pages, and one to the same
-    page for up to five companies in its industry.
+  * under the company header, one short sentence with the fact a reader
+    searched for that the page's own tiles do not already show (the largest
+    holder that is not a custody account, the largest 5% holder, the largest
+    cross-shareholding, the highest-paid officer, revenue and profit, CEO
+    pay), as filed, with the year it is for; and
+  * at the foot of the page, the same company's other pages and the same
+    page for up to five companies in its industry. (2026-11-03: the user
+    found two link lines under the header too messy.)
 
 Every figure comes from the function that serves the page's own API, so the
 lead and the tables under it cannot disagree. Nothing here is calculated:
@@ -109,14 +112,17 @@ def _year_to(period_end):
 
 
 def _holder_name(row):
-    name = row.get("holder_name_en") or row.get("name_raw") or ""
-    return _SPACE.sub(" ", _PROXY.sub("", name)).strip()
+    from .jp_names import display_name, display_name_ja
+    if row.get("holder_name_en"):
+        return display_name(_PROXY.sub("", row["holder_name_en"]))
+    return display_name_ja(_PROXY.sub("", row.get("name_raw") or "")) or ""
 
 
 def _filer_name(raw):
+    from .jp_names import display_name, display_name_ja
     raw = _SPACE.sub(" ", raw or "").strip()
     m = _ENGLISH_IN_BRACKETS.search(raw)
-    return m.group(1).strip() if m else raw
+    return display_name(m.group(1).strip()) if m else (display_name_ja(raw) or "")
 
 
 def _yen(value):
@@ -167,25 +173,34 @@ def _holder_clause(row):
     return "%s, with %s of shares" % (who, _pct(row.get("ratio_pct")))
 
 
-def _register_sentences(name, code, lead_with_total, subject=None):
+def _company_name(sec_code, fallback, edinet_code=None):
+    """A listed company's name as its own page writes it ("Toyota Industries
+    Corporation"), rather than the capitals a register files. A register row
+    often carries only the holder's EDINET code, so that is looked up too."""
+    if not sec_code and edinet_code:
+        from . import equity_api
+        row = equity_api._cur().execute(
+            "SELECT sec_code FROM eq_filings WHERE edinet_code = ? AND sec_code IS NOT NULL "
+            "ORDER BY filed_date DESC NULLS LAST LIMIT 1", [edinet_code]).fetchone()
+        sec_code = row[0] if row else None
+    if sec_code:
+        from . import prerender
+        meta = prerender.company_meta(str(sec_code).strip())
+        if meta and meta.get("name"):
+            return meta["name"]
+    return _SPACE.sub(" ", fallback or "").strip()
+
+
+def _ownership_lead(name, code):
     top, owner, head = _largest_holders(code)
-    if not top:
-        return []
-    period = _year_to(head.get("period_end"))
-    out = []
-    if lead_with_total and head.get("majors_ratio_filed_pct") is not None:
-        out.append("The %d largest shareholders of %s own %s of its shares, as filed for %s."
-                   % (len(head.get("holders") or []), name,
-                      _pct(head["majors_ratio_filed_pct"]), period))
-        out.append("The largest is %s." % _holder_clause(top))
-    else:
-        out.append("%s largest shareholder is %s, as filed for %s."
-                   % (subject or name + "'s", _holder_clause(top), period))
-    if owner and owner is not top:
-        out.append("The largest that is not a custody account is %s." % _holder_clause(owner))
-    if lead_with_total and head.get("foreign_pct") is not None:
-        out.append("Foreign investors hold %s of all shares." % _pct(head["foreign_pct"]))
-    return out
+    if owner:
+        return ["Largest holder that is not a custody account: %s, %s of shares." % (
+            _company_name(owner.get("holder_sec_code"), _holder_name(owner),
+                          owner.get("holder_edinet_code")),
+            _pct(owner.get("ratio_pct")))]
+    if top:
+        return ["Largest holder: %s." % _holder_clause(top)]
+    return []
 
 
 def _financial_sentence(name, code):
@@ -202,38 +217,20 @@ def _financial_sentence(name, code):
                 1 if row.get("basis") == "consolidated" else 0)
         if fy not in best or rank > best[fy][0]:
             best[fy] = (rank, row)
-    years = [best[fy][1] for fy in sorted(best)]
-    if not years:
+    if not best:
         return None
-    now = years[-1].get("values") or {}
+    latest = best[max(best)][1]
+    now = latest.get("values") or {}
     if now.get("revenue") is None or now.get("profit") is None:
         return None
-    text = "In %s, %s reported revenue of %s and profit of %s" % (
-        _year_to(years[-1]["fiscal_year_end"]), name,
-        _yen(now["revenue"]), _yen(now["profit"]))
-    if len(years) > 1:
-        before = years[-2].get("values") or {}
-        if before.get("revenue") is not None and before.get("profit") is not None:
-            text += ", against %s and %s a year earlier" % (
-                _yen(before["revenue"]), _yen(before["profit"]))
-    return text + "."
+    period = _year_to(latest["fiscal_year_end"])
+    return "%s: revenue %s, profit %s." % (
+        period[0].upper() + period[1:], _yen(now["revenue"]), _yen(now["profit"]))
 
 
 def _company_lead(name, code):
-    out = []
     fin = _financial_sentence(name, code)
-    if fin:
-        out.append(fin)
-    try:
-        out.extend(_register_sentences(name, code, lead_with_total=False,
-                                       subject="Its" if fin else None))
-    except Exception:  # noqa: BLE001 — no register filing: the figures above stand
-        pass
-    return out
-
-
-def _ownership_lead(name, code):
-    return _register_sentences(name, code, lead_with_total=True)
+    return [fin] if fin else []
 
 
 def _stakes_lead(name, code):
@@ -244,18 +241,11 @@ def _stakes_lead(name, code):
         return []
     over = [g for g in groups if g.get("is_current")]
     if not over:
-        latest = max(groups, key=lambda g: str(g.get("filed_date") or ""))
-        return ["No holder reports 5%% or more of %s in its latest filing. The most recent "
-                "report on it was filed by %s on %s." % (
-                    name, _filer_name(latest.get("filer_name")), _day(latest.get("filed_date")))]
+        return ["No holder reports 5% or more in its latest filing."]
     top = max(over, key=lambda g: g.get("ratio_pct") or 0)
-    count = len(over)
-    first = ("%d holder%s report%s 5%% or more of %s in %s latest filing%s." % (
-        count, "" if count == 1 else "s", "s" if count == 1 else "", name,
-        "its" if count == 1 else "their", "" if count == 1 else "s"))
-    second = "The largest is %s, with %s of shares, filed %s." % (
-        _filer_name(top.get("filer_name")), _pct(top.get("ratio_pct")), _day(top.get("filed_date")))
-    return [first, second]
+    return ["Largest 5%% holder: %s, %s of shares, filed %s." % (
+        _filer_name(top.get("filer_name")), _pct(top.get("ratio_pct")),
+        _day(top.get("filed_date")))]
 
 
 def _day(value):
@@ -265,41 +255,28 @@ def _day(value):
 
 def _holdings_lead(name, code, entity):
     from . import equity_api
-    out = [entity["description"]] if entity and entity.get("description") else []
     doc = equity_api.company(code)
     held = [h for h in doc.get("holdings") or [] if h.get("book_value_yen") is not None]
-    if held:
-        big = max(held, key=lambda h: float(h["book_value_yen"]))
-        holding = big.get("held_name_en") or big.get("held_name_raw")
-        if holding:
-            out.append("The largest is %s, at %s book value." % (
-                _SPACE.sub(" ", holding).strip(), _yen(big["book_value_yen"])))
-    return out
+    if not held:
+        return []
+    big = max(held, key=lambda h: float(h["book_value_yen"]))
+    holding = _company_name(big.get("held_sec_code"),
+                            big.get("held_name_en") or big.get("held_name_raw"))
+    if not holding:
+        return []
+    return ["Largest cross-shareholding: %s, %s at book value." % (
+        holding, _yen(big["book_value_yen"]))]
 
 
 def _governance_lead(name, code):
     from . import governance_api
     g = governance_api.company(code, year="")
-    out = []
-    period = _year_to(g.get("period_end"))
-    if g.get("board_size"):
-        text = "%s has %d directors and officers" % (name, g["board_size"])
-        if g.get("female_officers") is not None:
-            text += ", %d of them women" % g["female_officers"]
-        if g.get("avg_director_age") is not None:
-            text += ", with an average age of %s" % readable.fmt(g["avg_director_age"], 1)
-        out.append(text + ", as filed for %s." % period)
-    if g.get("pay_category_total_yen") is not None:
-        text = "It paid its officers %s in total" % _yen(g["pay_category_total_yen"])
-        named = [p for p in g.get("pay_named") or [] if p.get("consolidated_pay_yen")]
-        if named:
-            top = max(named, key=lambda p: p["consolidated_pay_yen"])
-            text += ("; %d %s disclosed at ¥100mn or more, the highest %s at %s"
-                     % (len(named), "person was" if len(named) == 1 else "people were",
-                        top.get("name_en") or top.get("person_key"),
-                        _yen(top["consolidated_pay_yen"])))
-        out.append(text + ".")
-    return out
+    named = [p for p in g.get("pay_named") or [] if p.get("consolidated_pay_yen")]
+    if not named:
+        return []
+    top = max(named, key=lambda p: p["consolidated_pay_yen"])
+    return ["Highest-paid officer: %s, %s." % (
+        top.get("name_en") or top.get("person_key"), _yen(top["consolidated_pay_yen"]))]
 
 
 def _us_pay_lead(name, ticker):
@@ -309,17 +286,8 @@ def _us_pay_lead(name, ticker):
     if not years:
         return []
     y = max(years, key=lambda r: r.get("fiscal_year_end") or "")
-    v = y["values"]
-    text = ("%s paid its chief executive %s in total pay for its fiscal %s, as "
-            "reported in its proxy statement" % (
-                name, _usd(v["ceo_total_pay"]), _year_to(y["fiscal_year_end"])[4:]))
-    out = [text + "."]
-    if v.get("ceo_actually_paid") is not None:
-        out.append("Compensation actually paid, the SEC's measure with equity awards at fair "
-                   "value, was %s." % _usd(v["ceo_actually_paid"]))
-    if v.get("neo_avg_total_pay") is not None:
-        out.append("Its other named executives averaged %s." % _usd(v["neo_avg_total_pay"]))
-    return out
+    return ["%s paid its chief executive %s in total pay for its fiscal %s." % (
+        name, _usd(y["values"]["ceo_total_pay"]), _year_to(y["fiscal_year_end"])[4:])]
 
 
 # ---------------------------------------------------------------------------
@@ -477,41 +445,63 @@ def build(page_name, query, entity):
     return prerender._cached(("lead", page_name, value), version, make)
 
 
-def html(lead):
-    if not lead:
+def _links(pairs):
+    return "".join('<a href="%s">%s</a>' % (_esc(h), _esc(t)) for t, h in pairs)
+
+
+def top_html(lead):
+    """The one sentence under the company header."""
+    if not lead or not lead["sentences"]:
         return ""
-    parts = ['<div class="entity-lead" data-entity-lead data-keys="%s" data-value="%s">'
-             % (_esc(lead["keys"]), _esc(lead["value"]))]
-    if lead["sentences"]:
-        parts.append('<p class="entity-lead-text">%s</p>'
-                     % _esc(" ".join(lead["sentences"])))
+    return ('<p class="entity-lead" data-entity-lead data-keys="%s" data-value="%s">%s</p>'
+            % (_esc(lead["keys"]), _esc(lead["value"]), _esc(" ".join(lead["sentences"]))))
+
+
+def foot_html(lead):
+    """The company's other pages and its peers, as a panel at the foot of the
+    page: the same white panel with a titled rule every section here uses."""
+    if not lead or not (lead["links"] or lead["peers"]):
+        return ""
+    rows = []
     if lead["links"]:
-        parts.append('<p class="entity-lead-links"><span class="entity-lead-label">More on %s</span>%s</p>'
-                     % (_esc(lead["name"]), "".join('<a href="%s">%s</a>' % (_esc(h), _esc(t))
-                                                    for t, h in lead["links"])))
+        rows.append('<dt>This company</dt><dd>%s</dd>' % _links(lead["links"]))
     if lead["peers"]:
-        label = "Same industry" + (" (%s)" % lead["peer_label"] if lead.get("peer_label") else "")
-        parts.append('<p class="entity-lead-links"><span class="entity-lead-label">%s</span>%s</p>'
-                     % (_esc(label), "".join('<a href="%s">%s</a>' % (_esc(h), _esc(t))
-                                             for t, h in lead["peers"])))
-    parts.append("</div>")
-    return "".join(parts)
+        label = "Same industry"
+        if lead.get("peer_label"):
+            label += '<span class="entity-more-note">%s</span>' % _esc(lead["peer_label"])
+        rows.append('<dt>%s</dt><dd>%s</dd>' % (label, _links(lead["peers"])))
+    return ('<section class="entity-more" data-entity-lead data-keys="%s" data-value="%s">'
+            '<h2>Related Pages <span class="h2-note">%s</span></h2><dl>%s</dl></section>'
+            % (_esc(lead["keys"]), _esc(lead["value"]), _esc(lead["name"]), "".join(rows)))
+
+
+_PAGE_FOOT = re.compile(r'<footer class="page-foot"')
+_MAIN_CLOSE = re.compile(r"</main>", re.I)
 
 
 def inject(page, page_name, query, entity):
-    """The page with its lead written in, or the page unchanged. Never raises."""
+    """The page with its sentence and links written in, or the page unchanged.
+    Never raises."""
     try:
         anchor = _ANCHORS.get(page_name)
         if not anchor:
             return page
-        block = html(build(page_name, query, entity))
-        if not block:
+        lead = build(page_name, query, entity)
+        if not lead:
             return page
+        top, foot = top_html(lead), foot_html(lead)
         pattern, where = anchor
         m = pattern.search(page)
-        if not m:
-            return page
-        at = m.start() if where == "before" else m.end()
-        return page[:at] + block + page[at:]
+        if top and m:
+            at = m.start() if where == "before" else m.end()
+            page = page[:at] + top + page[at:]
+        if foot:
+            # Straight after the page's content: before its source note where
+            # it has one, else at the close of <main>.
+            ends = list(_PAGE_FOOT.finditer(page)) or list(_MAIN_CLOSE.finditer(page))
+            if ends:
+                at = ends[-1].start()
+                page = page[:at] + foot + page[at:]
+        return page
     except Exception:  # noqa: BLE001 — a page without its lead beats no page
         return page

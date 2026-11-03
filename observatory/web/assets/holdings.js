@@ -4,6 +4,18 @@
 (function () {
   "use strict";
 
+  // The company the server wrote this page for, and its name as written there
+  // ("Toyota Motor Corporation"; filings often file it in capitals), read
+  // before any script replaces the heading.
+  var SERVED = (function () {
+    var h = document.getElementById("co-name");
+    var c = new URLSearchParams(location.search).get("c");
+    return { name: h ? h.textContent.trim() : "", code: c ? c.trim().toUpperCase() : "" };
+  })();
+  function servedName(code, fallback) {
+    return (SERVED.name && code && String(code).toUpperCase() === SERVED.code) ? SERVED.name : fallback;
+  }
+
   var MINUS = "−";
   var chart = null;
 
@@ -206,7 +218,7 @@
   // it as the record — and where no English name exists anywhere, show the
   // Japanese one alone rather than an empty cell.
   function nameCell(en, ja, href) {
-    var primary = en || ja || MISSING;
+    var primary = displayName(en) || displayNameJa(ja) || MISSING;
     var link = href
       ? "<a href='" + href + "'>" + esc(primary) + "</a>" : esc(primary);
     return "<div class='cell-item'><div class='en'>" + link + "</div></div>";
@@ -302,7 +314,7 @@
     var out = [];
     holdings.forEach(function (h, i) {
       var d = (h.shares != null && h.prior_shares != null) ? h.shares - h.prior_shares : null;
-      var name = nameCell(h.held_name_en, h.held_name_raw,
+      var name = nameCell(h.held_display_name || h.held_name_en, h.held_name_raw,
         h.held_sec_code ? "holdings.html?c=" + esc(h.held_sec_code) : null);
       out.push("<tr><td>" + name +
         (h.match_status === "foreign" ? " <span class='h2-note'>overseas</span>" : "") +
@@ -500,7 +512,7 @@
       "<th class=r>Shares</th><th class=r>Book value (¥bn)</th><th>Reason</th>" +
       "</tr></thead><tbody>" +
       rows.map(function (r, i) {
-        var name = nameCell(r.held_name_en, r.held_name_raw,
+        var name = nameCell(r.held_display_name || r.held_name_en, r.held_name_raw,
           r.held_sec_code ? "holdings.html?c=" + esc(r.held_sec_code) : null);
         return "<tr><td>" + name +
           (r.implausible
@@ -564,12 +576,14 @@
                    (d.holders[0] && d.holders[0].holder_name_en) || "";
       // Matches the title the server already sent for this address, so the
       // tab does not change wording when the fetch lands. See app/prerender.py.
-      document.title = (nameEn || name) + " (" + code +
-        ") \u2014 Cross-Shareholdings \u00b7 Plover Analytics";
-      $("co-name").textContent = nameEn || name;
+      if (document.title.indexOf("(" + code + ")") < 0) {
+        document.title = (displayName(nameEn) || displayNameJa(name)) + " (" + code +
+          ") \u2014 Cross-Shareholdings \u00b7 Plover Analytics";
+      }
+      $("co-name").textContent = servedName(code, displayName(nameEn) || displayNameJa(name));
       // the Japanese name is the one on the filing — keep it on the page, under
       // the English heading, not hidden behind a hover
-      $("co-name-ja").textContent = nameEn ? name : "";
+      $("co-name-ja").textContent = nameEn ? displayNameJa(name) : "";
       $("co-name-ja").hidden = !nameEn;
       $("co-code").textContent = code;
       // sector is recorded in Japanese only; show the standard English name of
@@ -583,11 +597,10 @@
         : "No extracted filing";
 
       if (d.filing) {
-        $("co-filing").innerHTML = "Filing: <span class=mono>" + esc(d.filing.doc_id) +
+        $("co-filing").innerHTML = "Filing: <span class=mono title='SHA-256 of the archived filing: " +
+          esc(d.filing.sha256 || MISSING) + "'>" + esc(d.filing.doc_id) +
           "</span> · FY end " + periodShort(d.filing.period_end) +
           " · filed " + esc(d.filing.filed_date) +
-          " · archived SHA-256 <span class=mono>" +
-          (d.filing.sha256 ? esc(String(d.filing.sha256).slice(0, 12)) + "…" : MISSING) + "</span>" +
           (d.filing.status !== "clean"
             ? " · <b>extraction status: " + esc(d.filing.status) + "</b> (disclosed, see methodology)"
             : "") +

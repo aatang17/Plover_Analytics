@@ -164,6 +164,62 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/* Company and holder names as people write them, for display only — the same
+   rules as app/jp_names.py, which writes the server's titles and headings.
+   Filings type English names every which way ("TOYOTA MOTOR CORPORATION",
+   "suzuki motor corporation", full-width "ＭＯＸＬＥＹ ＆ ＣＯ ＬＬＣ"); a page
+   showing them as filed reads as shouting beside "Toyota Motor Corporation".
+   displayName() only changes how a name is written, never which name it is:
+   wide letters become ordinary ones, spaces and commas are tidied, and a word
+   in capitals gets a capital first letter unless it is a short abbreviation
+   (NTT, TDK) or a brand written in capitals (KDDI, ITOCHU). A name already in
+   mixed case keeps its words. displayNameJa() evens out a Japanese name's
+   letter widths and spaces (ＮＴＴ → NTT, ㈱ → (株)). Every CSV keeps the name
+   exactly as filed. */
+var NAME_KEEP_UPPER = {};
+["KDDI", "ITOCHU", "FUJIFILM", "TOPPAN", "ENEOS", "OMRON", "LIXIL", "JTEKT", "JVCKENWOOD",
+ "SCSK", "ALSOK", "EXEO", "TOTO", "AEON", "ORIX", "HOYA", "SUBARU", "ROHM", "SUMCO", "TOWA",
+ "IHI", "NTT", "TDK", "NEC", "AGC", "ANA", "JAL", "NSK", "NTN", "NOK", "NGK", "SMC", "DIC",
+ "TIS", "SBI", "JFE", "JR", "JT", "NHK", "UT", "DY", "NH", "LY", "SG", "TEC", "KYB", "THK",
+ "JSR", "GMO", "HIS", "MUFG", "SMBC", "UFJ", "USS", "ZOZO", "LINE", "PALTAC", "SCREEN",
+ "JUKI", "DMG", "MORI", "NIPRO"].forEach(function (w) { NAME_KEEP_UPPER[w] = 1; });
+var NAME_SHORT_WORDS = {};
+["CO", "LTD", "INC", "THE", "AND", "OF", "FOR", "GAS", "OIL", "ONE", "NEW", "SUN", "BAY",
+ "CAR", "ART", "BIO", "SKY", "AIR", "TOP", "BIG", "RED", "WAY", "KAI", "SHA", "DEN"]
+  .forEach(function (w) { NAME_SHORT_WORDS[w] = 1; });
+var NAME_SMALL = { AND: 1, OF: 1, THE: 1, FOR: 1, IN: 1 };
+var NAME_KEEP_LOWER = { transcosmos: 1 };   // brands written in lower case by the company
+
+function nameWord(w, first) {
+  if (w.indexOf("-") > -1) {
+    return w.split("-").map(function (p, i) { return nameWord(p, first && i === 0); }).join("-");
+  }
+  var core = w.replace(/^[,.()]+|[,.()]+$/g, "");
+  var letters = core.replace(/[^A-Za-z]/g, "");
+  if (!letters || letters !== letters.toUpperCase()) return w;
+  if (NAME_KEEP_UPPER[core] || core.indexOf("&") > -1 ||
+      /^(?:I{1,3}|IV|V|VI{1,3}|IX|X)$/.test(core) || /\d/.test(core)) return w;
+  if (letters.length <= 3 && !NAME_SHORT_WORDS[core]) return w;
+  if (!first && NAME_SMALL[core]) return w.replace(core, core.toLowerCase());
+  return w.replace(core, core.charAt(0) + core.slice(1).toLowerCase());
+}
+
+function displayName(name) {
+  if (!name) return name;
+  var n = String(name).normalize ? String(name).normalize("NFKC") : String(name);
+  // A name typed all in lower case is written as if in capitals, then re-cased.
+  if (/[a-z]/.test(n) && !/[A-Z]/.test(n) &&
+      !NAME_KEEP_LOWER[n.split(" ")[0].replace(/[,.]+$/, "")]) n = n.toUpperCase();
+  n = n.replace(/\s*,\s*/g, ", ").split(/\s+/).join(" ").replace(/^[ ,]+|[ ,]+$/g, "");
+  return n.split(" ").map(function (w, i) { return nameWord(w, i === 0); }).join(" ");
+}
+
+function displayNameJa(name) {
+  if (!name) return name;
+  var n = String(name).normalize ? String(name).normalize("NFKC") : String(name);
+  return n.split(/\s+/).join(" ").trim();
+}
+
 /* A company no longer listed (app/listing.py): plain words beside its name, on
    the row of any search feed. Its filings stay reachable. */
 function delistedTag(c) {

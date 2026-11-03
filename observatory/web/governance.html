@@ -61,8 +61,8 @@
 
 /* The company's headline facts. A definition list, not a table: these are one
    record's attributes, and each needs its own qualifier underneath. */
-.fact-row { display: flex; flex-wrap: wrap; gap: 10px 44px; margin: 14px 0 4px;
-  padding-left: 14px; border-left: 2px solid var(--obs-border); }
+.fact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px 24px; margin: 16px 0 4px; padding: 14px 0 0; border-top: 1px solid var(--obs-border); }
 .fact-row div { margin: 0; }
 .fact-row dt { font-size: 12px; font-weight: 600; color: var(--obs-text-muted);
   text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 3px; }
@@ -157,7 +157,7 @@
 
   <!-- company view -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="governance.html" id="back-link">← All companies</a></p>
+    <p class="back-row"><a class="btn btn-back" href="governance.html" id="back-link">← All companies</a></p>
     <div class="co-head">
       <h1 id="co-name"></h1>
       <span class="co-code" id="co-code"></span>
@@ -170,49 +170,58 @@
 
     <h2>Board of Directors <span class="h2-note" id="board-count"></span></h2>
     <div class="sec-actions">
-      <p class="sec-note" style="flex:1">Directors as tagged in the filing's 役員の状況 table.
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>Directors as tagged in the filing's 役員の状況 table.
         <b>Official statistics</b> as filed; age is calculated from the filed date of birth.
         English names are the <b>filer's own romanisation</b> from its filing, not a translation
         by this platform. Missing values are shown as —, never as zero.</p>
+      </details>
       <button type="button" class="btn" id="board-csv">Download CSV</button>
     </div>
-    <div class="table-wrap"><table class="tbl-gov wide" id="board-table"></table></div>
+    <div class="table-wrap"><table class="tbl-gov wide" id="board-table" data-no-table-csv></table></div>
     <p class="disclose" id="board-note"></p>
 
     <h2>Officer Remuneration <span class="h2-note" id="pay-count"></span></h2>
     <div class="sec-actions">
-      <p class="sec-note" style="flex:1">The filing's own 役員区分ごとの報酬等 table.
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>The filing's own 役員区分ごとの報酬等 table.
         The <b>total is the filed, published figure</b>; the components beside it are also
         as filed and need not sum to it.</p>
+      </details>
       <button type="button" class="btn" id="pay-csv">Download CSV</button>
     </div>
-    <div class="table-wrap"><table class="tbl-gov wide" id="pay-table"></table></div>
+    <div class="table-wrap"><table class="tbl-gov wide" id="pay-table" data-no-table-csv></table></div>
     <p class="disclose" id="pay-note"></p>
 
     <div id="named-sec" hidden>
       <h2>Individually Disclosed Remuneration <span class="h2-note" id="named-count"></span></h2>
       <div class="sec-actions">
-        <p class="sec-note" style="flex:1">Officers whose 連結報酬等 the company discloses.
+        <details class="how-to-read"><summary>How to read this table</summary>
+        <p>Officers whose 連結報酬等 the company discloses.
           <b>Official statistics</b> as filed.</p>
+      </details>
         <button type="button" class="btn" id="named-csv">Download CSV</button>
       </div>
-      <div class="table-wrap"><table class="tbl-gov" id="named-table"></table></div>
+      <div class="table-wrap"><table class="tbl-gov" id="named-table" data-no-table-csv></table></div>
       <p class="disclose" id="named-note"></p>
     </div>
 
     <h2>Five-Year History <span class="h2-note" id="hist-count"></span></h2>
     <div class="sec-actions">
-      <p class="sec-note" style="flex:1">The same company against itself, one row per filing.
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>The same company against itself, one row per filing.
         A missing year means that filing was not extractable, not that the company stopped filing.</p>
+      </details>
       <button type="button" class="btn" id="hist-csv">Download CSV</button>
     </div>
-    <div class="table-wrap"><table class="tbl-gov wide" id="hist-table"></table></div>
+    <div class="table-wrap"><table class="tbl-gov wide" id="hist-table" data-no-table-csv></table></div>
   </section>
 
   <footer class="page-foot" id="page-foot">
     <p>Source: 有価証券報告書 (annual securities reports) via EDINET, Financial Services Agency.
     Every figure links to its filing; every raw file is archived with its SHA-256.
-    Company names are as filed in both languages; director names in English are the filer's own
+    Company names are the filed names in both languages, written evenly on screen (capitals
+    and letter widths tidied); every CSV keeps them exactly as filed. Director names in English are the filer's own
     romanisation taken from its filing, never a translation by this platform.
     Extraction status is stated per filing — gaps are disclosed, never filled.</p>
   </footer>

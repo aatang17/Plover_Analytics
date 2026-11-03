@@ -218,6 +218,23 @@ def companies(q: str = Query("", description="name or code substring"),
         "limit": limit, "offset": offset, "names_note": NAMES_NOTE}
 
 
+def _display_names(cur, holders):
+    u"""holder_display_name: a listed holder's name as its own company page
+    writes it ("Toyota Industries Corporation"), where the register's English
+    is the filing's capitals. A label for reading only; name_raw and
+    holder_name_en stay exactly as filed and as matched."""
+    from . import prerender
+    for h in holders:
+        code = h.get("holder_sec_code")
+        if not code and h.get("holder_edinet_code"):
+            row = cur.execute(
+                "SELECT sec_code FROM eq_filings WHERE edinet_code = ? AND sec_code IS NOT NULL "
+                "ORDER BY filed_date DESC NULLS LAST LIMIT 1", [h["holder_edinet_code"]]).fetchone()
+            code = row[0] if row else None
+        meta = prerender.company_meta(str(code).strip()) if code else None
+        h["holder_display_name"] = meta["name"] if meta else None
+
+
 @router.get("/company/{sec_code}")
 def company(sec_code: str,
             year: str = Query("", description="fiscal year; default the latest filing")):
@@ -247,6 +264,7 @@ def company(sec_code: str,
         LEFT JOIN en_scode es ON es.sec_code = h.holder_sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = h.holder_edinet_code
         WHERE h.doc_id = ? ORDER BY h.rank""", [doc])
+    _display_names(cur, head["holders"])
     head["categories"] = _rows(cur, """
         SELECT share_class, category, category_en, shareholders, units, pct
         FROM eq_own_category WHERE doc_id = ?

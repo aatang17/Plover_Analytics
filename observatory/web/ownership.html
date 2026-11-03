@@ -23,6 +23,7 @@
 .tbl-own th, .tbl-own td { padding: 9px 12px; font-size: 13.5px; border-bottom: 1px solid var(--obs-grid); }
 .tbl-own thead th { font-size: 12px; font-weight: 600; color: var(--obs-text-muted);
   text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--obs-border); }
+.tbl-own th { text-align: left; }
 .tbl-own .r, .tbl-own th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl-own tbody tr:hover td { background: var(--obs-surface-subtle); }
 .tbl-own a { color: var(--obs-primary); text-decoration: none; }
@@ -55,6 +56,12 @@
   font-size: 12px; color: var(--obs-text-faint); margin-top: 4px; }
 .chart-foot .grow { flex: 1; }
 .sec-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+/* The address is reference, not what a reader scans for: narrower and quieter. */
+.tbl-own td.addr { max-width: 280px; font-size: 12.5px; color: var(--obs-text-muted); line-height: 1.45; }
+/* Share of issued shares, drawn in the row beside its number. */
+.mix-bar-h, .mix-bar-c { width: 32%; }
+.mix-bar { display: block; height: 10px; background: var(--obs-series-1); border-radius: 1px; }
+@media (max-width: 600px) { .mix-bar-h, .mix-bar-c { display: none; } }
 .tbl-formula { font-size: 12px; line-height: 1.55; color: var(--obs-text-muted);
   margin: 10px 0 0; text-wrap: pretty; }
 .sec-note { font-size: 12.5px; line-height: 1.6; color: var(--obs-text-muted);
@@ -63,8 +70,8 @@
 
 /* The company's headline facts. A definition list, not a table: one record's
    attributes, each needing its own qualifier underneath. */
-.fact-row { display: flex; flex-wrap: wrap; gap: 10px 44px; margin: 14px 0 4px;
-  padding-left: 14px; border-left: 2px solid var(--obs-border); }
+.fact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px 24px; margin: 16px 0 4px; padding: 14px 0 0; border-top: 1px solid var(--obs-border); }
 .fact-row div { margin: 0; }
 .fact-row dt { font-size: 12px; font-weight: 600; color: var(--obs-text-muted);
   text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 3px; }
@@ -148,7 +155,7 @@
 
   <!-- company view -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="ownership.html" id="back-link">← All companies</a></p>
+    <p class="back-row"><a class="btn btn-back" href="ownership.html" id="back-link">← All companies</a></p>
     <div class="co-head">
       <h1 id="co-name"></h1>
       <span class="co-code" id="co-code"></span>
@@ -161,45 +168,45 @@
 
     <h2>Shareholder Register <span class="h2-note" id="reg-count"></span></h2>
     <div class="sec-actions">
-      <p class="sec-note" style="flex:1">The filing's own 大株主の状況 table.
-        Names, addresses, share counts and percentages are <b>official statistics</b> as filed.
-        The percentage is of shares in issue <b>excluding treasury</b> — the filing's own
-        denominator. Holder type is <b>our reading of the name</b>, not a filed field.</p>
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>The filing's own 大株主の状況 table. Names, addresses, share counts and percentages
+        are <b>official statistics</b> as filed. The percentage is of shares in issue
+        <b>excluding treasury</b> — the filing's own denominator. Holder type is <b>our reading
+        of the name</b>, not a filed field.</p>
+      </details>
       <button type="button" class="btn" id="reg-csv">Download CSV</button>
     </div>
     <div class="table-wrap">
-      <table class="tbl-own wide" id="reg-table" data-no-enhance-sort></table>
+      <table class="tbl-own wide" id="reg-table" data-no-enhance-sort data-no-table-csv></table>
     </div>
     <p class="tbl-formula" id="reg-formula"></p>
     <p class="disclose" id="reg-note"></p>
 
     <h2>Register Composition by Investor Type <span class="h2-note" id="mix-count"></span></h2>
-    <div class="controls">
-      <span class="spacer"></span>
-      <button type="button" class="btn" id="mix-png">Download PNG</button>
+    <div class="sec-actions">
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>The filing's 所有者別状況 table: every shareholder on the register, not only the
+        largest. Percentages here are of <b>all issued shares</b> — a different denominator
+        from the register above, and the two are never netted. Official statistics as filed.</p>
+      </details>
       <button type="button" class="btn" id="mix-csv">Download CSV</button>
     </div>
-    <p class="sec-note">The filing's 所有者別状況 table: every shareholder on the register,
-      not only the largest. Percentages here are of <b>all issued shares</b> — a different
-      denominator from the table above, and the two are never netted.</p>
-    <div class="chart-block">
-      <div id="mix-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
-      <div class="chart-foot"><span id="mix-source"></span><span class="grow"></span></div>
-    </div>
-    <div class="table-wrap"><table class="tbl-own" id="mix-table"></table></div>
+    <div class="table-wrap"><table class="tbl-own" id="mix-table" data-no-table-csv></table></div>
 
     <h2>Annual History <span class="h2-note" id="hist-count"></span></h2>
     <div class="sec-actions">
-      <p class="sec-note" style="flex:1">The same company against itself, one row per filing.
-        A missing year means that filing was not extractable, not that the company stopped filing.</p>
+      <details class="how-to-read"><summary>How to read this table</summary>
+        <p>The same company against itself, one row per filing. A missing year means that
+        filing was not extractable, not that the company stopped filing.</p>
+      </details>
       <button type="button" class="btn" id="hist-csv">Download CSV</button>
     </div>
-    <div class="table-wrap"><table class="tbl-own wide" id="hist-table"></table></div>
+    <div class="table-wrap"><table class="tbl-own wide" id="hist-table" data-no-table-csv></table></div>
   </section>
 
   <!-- holder view -->
   <section id="holder-view" hidden>
-    <p style="margin:16px 0 0"><a href="ownership.html">← All companies</a></p>
+    <p class="back-row"><a class="btn btn-back" href="ownership.html">← All companies</a></p>
     <div class="co-head"><h1 id="ho-name"></h1><span class="co-code" id="ho-code"></span></div>
     <p class="filing-meta" id="ho-meta"></p>
     <h2>Registers This Holder Appears On <span class="h2-note" id="ho-count"></span></h2>
@@ -213,7 +220,8 @@
   <footer class="page-foot" id="page-foot">
     <p>Source: 有価証券報告書 (annual securities reports) via EDINET, Financial Services Agency.
     Every figure links to its filing; every raw file is archived with its SHA-256.
-    Company names are as filed in both languages. Holder type, nominee totals and every
+    Company names are the filed names in both languages, written evenly on screen (capitals
+    and letter widths tidied); every CSV keeps them exactly as filed. Holder type, nominee totals and every
     average on this page are calculated by the platform and carry their formula.
     Extraction status is stated per filing — gaps are disclosed, never filled.</p>
   </footer>

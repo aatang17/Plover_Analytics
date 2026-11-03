@@ -206,6 +206,10 @@ def cycle(deadline=None):
     rc = _run([sys.executable, "-m", "app.backfill"], env=env, deadline=deadline)
     log("backfill exited %s" % rc)
     if not _stopping:
+        # Stored holder types brought up to the current rules (app/reclassify.py).
+        log("reclassify exited %s" % _run([sys.executable, "-m", "app.reclassify"],
+                                          env=dict(os.environ), deadline=deadline))
+    if not _stopping:
         write_state("busy", step="backups")
         backups()
 

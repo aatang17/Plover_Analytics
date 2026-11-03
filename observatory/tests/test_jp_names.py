@@ -35,5 +35,23 @@ class DisplayNameTests(unittest.TestCase):
         self.assertEqual(display_name(""), "")
 
 
+
+
+class LowerCaseAndWidthTest(unittest.TestCase):
+    """2026-11-03: the registry spells Suzuki in lower case, registers file
+    custodians in full-width letters and ㈱ as one glyph."""
+
+    def test_a_name_typed_in_lower_case_is_re_cased(self):
+        self.assertEqual(display_name("suzuki motor corporation"), "Suzuki Motor Corporation")
+
+    def test_mixed_case_is_left_alone(self):
+        self.assertEqual(display_name("Nomura Securities Co.,Ltd."), "Nomura Securities Co., Ltd.")
+
+    def test_japanese_widths_even_out(self):
+        from app.jp_names import display_name_ja
+        self.assertEqual(display_name_ja("㈱日本カストディ銀行"), "(株)日本カストディ銀行")
+        self.assertEqual(display_name_ja("株式会社　ミスミグループ本社"), "株式会社 ミスミグループ本社")
+
+
 if __name__ == "__main__":
     unittest.main()

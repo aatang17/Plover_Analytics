@@ -5,6 +5,18 @@
 (function () {
   "use strict";
 
+  // The company the server wrote this page for, and its name as written there
+  // ("Toyota Motor Corporation"; filings often file it in capitals), read
+  // before any script replaces the heading.
+  var SERVED = (function () {
+    var h = document.getElementById("co-name");
+    var c = new URLSearchParams(location.search).get("c");
+    return { name: h ? h.textContent.trim() : "", code: c ? c.trim().toUpperCase() : "" };
+  })();
+  function servedName(code, fallback) {
+    return (SERVED.name && code && String(code).toUpperCase() === SERVED.code) ? SERVED.name : fallback;
+  }
+
   var trendChart = null;
   var trendData = null;
   var screenState = { metric: "oldest_boards", listed: "true" };
@@ -46,7 +58,7 @@
   }
 
   function nameCell(en, ja, href) {
-    var primary = en || ja || MISSING;
+    var primary = displayName(en) || displayNameJa(ja) || MISSING;
     var link = href ? "<a href='" + href + "'>" + esc(primary) + "</a>" : esc(primary);
     return "<div class='cell-item'><div class='en'>" + link + "</div></div>";
   }
@@ -332,19 +344,20 @@
   };
 
   function renderCompany(d) {
-    document.title = (d.filer_name_en || d.filer_name) + " — Boards & Pay · Plover Analytics";
-    $("co-name").textContent = d.filer_name_en || d.filer_name;
+    if (!d.sec_code || document.title.indexOf("(" + d.sec_code + ")") < 0) {
+      document.title = (displayName(d.filer_name_en) || displayNameJa(d.filer_name)) + " — Boards & Pay · Plover Analytics";
+    }
+    $("co-name").textContent = servedName(d.sec_code, displayName(d.filer_name_en) || displayNameJa(d.filer_name));
     $("co-code").textContent = d.sec_code || "";
     $("co-industry").textContent = d.industry_en || d.industry || "";
     if (d.filer_name_en && d.filer_name) {
-      $("co-name-ja").textContent = d.filer_name;
+      $("co-name-ja").textContent = displayNameJa(d.filer_name);
       $("co-name-ja").hidden = false;
     }
-    $("co-filing").innerHTML = "Filing: <span class=mono>" + esc(d.doc_id) +
+    $("co-filing").innerHTML = "Filing: <span class=mono title='SHA-256 of the archived filing: " +
+      esc(d.sha256 || MISSING) + "'>" + esc(d.doc_id) +
       "</span> · FY end " + periodShort(d.period_end) +
       " · filed " + esc(d.filed_date) +
-      " · archived SHA-256 <span class=mono>" +
-      (d.sha256 ? esc(String(d.sha256).slice(0, 12)) + "…" : MISSING) + "</span>" +
       (d.status !== "clean"
         ? " · <b>extraction status: " + esc(d.status) + "</b> — " + esc(d.detail || "") +
           " (disclosed, see methodology)"

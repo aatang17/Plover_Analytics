@@ -535,7 +535,11 @@ function enhanceTable(target, opts) {
       '<span class="table-count num"></span>' +
       '<span class="table-export-group">' +
       '<button type="button" class="table-export" data-export-do="copy">Copy table</button>' +
-      '<button type="button" class="table-export" data-export-do="csv">Download CSV</button>' +
+      // A section that already offers its own Download CSV (a richer file,
+      // with codes and the filing's header) marks the table data-no-table-csv,
+      // so the reader is not shown two buttons that look the same.
+      (table.hasAttribute("data-no-table-csv") ? "" :
+        '<button type="button" class="table-export" data-export-do="csv">Download CSV</button>') +
       "</span>";
     anchor.parentNode.insertBefore(bar, anchor);
     state.bar = bar;

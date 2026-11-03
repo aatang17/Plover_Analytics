@@ -832,6 +832,17 @@ def companies(q: str = Query("", description="name or code substring")):
         "names_note": NAMES_NOTE}
 
 
+def _display_names(rows, code_key, out_key):
+    """A listed company's name as its own page writes it ("KDDI Corporation"),
+    where the filing's English is often capitals. A reading label only: the
+    filed and matched names on each row are left exactly as they are."""
+    from . import prerender
+    for r in rows or []:
+        code = r.get(code_key)
+        meta = prerender.company_meta(str(code).strip()) if code else None
+        r[out_key] = meta["name"] if meta else None
+
+
 @router.get("/company/{sec_code}")
 def company(sec_code: str):
     """Both directions for one company: what it holds, and who holds it."""
@@ -1016,6 +1027,8 @@ def company(sec_code: str):
     if not ent and not filing and not holders:
         raise HTTPException(404, "no data for securities code %s" % sec_code)
     period_end = filing[0]["period_end"] if filing else None
+    _display_names(holdings, "held_sec_code", "held_display_name")
+    _display_names(reclassified, "held_sec_code", "held_display_name")
     return {"entity": ent[0] if ent else None,
             "names_note": NAMES_NOTE,
             "filing": filing[0] if filing else None,

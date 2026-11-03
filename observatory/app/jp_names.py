@@ -25,6 +25,8 @@ _KEEP_UPPER = {"KDDI", "ITOCHU", "FUJIFILM", "TOPPAN", "ENEOS", "OMRON", "LIXIL"
                "TIS", "SBI", "JFE", "JR", "JT", "NHK", "UT", "DY", "NH", "LY", "SG", "TEC", "KYB", "THK",
                "JSR", "GMO", "HIS", "MUFG", "SMBC", "UFJ", "USS", "ZOZO", "LINE", "PALTAC", "SCREEN",
                "JUKI", "DMG", "MORI", "NIPRO"}
+# Brands the companies write in lower case in their own English text.
+_KEEP_LOWER = {"transcosmos"}
 # Words of three letters or fewer that are words, not abbreviations.
 _SHORT_WORDS = {"CO", "LTD", "INC", "THE", "AND", "OF", "FOR", "GAS", "OIL", "ONE", "NEW", "SUN", "BAY",
                 "CAR", "ART", "BIO", "SKY", "AIR", "TOP", "BIG", "RED", "WAY", "KAI", "SHA", "DEN"}
@@ -56,6 +58,17 @@ def display_name(name):
     if not name:
         return name
     n = unicodedata.normalize("NFKC", name)
+    if (re.search(r"[a-z]", n) and not re.search(r"[A-Z]", n)
+            and n.split(" ")[0].strip(",.") not in _KEEP_LOWER):
+        n = n.upper()                               # "suzuki motor corporation": as if in capitals
     n = re.sub(r"\s*,\s*", ", ", n)                 # "Co.,Ltd." and "Co.,  Ltd."
     n = " ".join(n.split()).strip(" ,")
     return " ".join(_word(w, i == 0) for i, w in enumerate(n.split(" ")))
+
+
+def display_name_ja(name):
+    u"""A Japanese name with its letter widths and spaces evened out:
+    '㈱日本カストディ銀行' -> '(株)日本カストディ銀行', 'ＮＴＴ' -> 'NTT'."""
+    if not name:
+        return name
+    return " ".join(unicodedata.normalize("NFKC", name).split())

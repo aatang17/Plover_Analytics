@@ -882,8 +882,7 @@ var NAV_SECTIONS = [
         '<span class="page-toc-pick">' +
         '<button type="button" class="page-toc-btn" aria-haspopup="true" aria-expanded="false"' +
         ' aria-controls="page-toc-menu" aria-describedby="page-toc-label"></button>' +
-        '<div class="page-toc-menu" id="page-toc-menu" hidden></div></span>' +
-        '<span class="page-toc-count"></span>';
+        '<div class="page-toc-menu" id="page-toc-menu" hidden></div></span>';
       var after = main.querySelector(".page-tabs") || main.querySelector(".page-head") ||
         main.querySelector(".rs-head") || main.querySelector("#stale-banner");
       if (after) after.insertAdjacentElement("afterend", toc);
@@ -976,9 +975,6 @@ var NAV_SECTIONS = [
       ? '<span class="t">Jump to a section</span><span class="caret" aria-hidden="true">▾</span>'
       : '<span class="n">' + num(idx) + '</span><span class="t">' + esc(label(heads[idx])) +
         '</span><span class="caret" aria-hidden="true">▾</span>';
-    toc.querySelector(".page-toc-count").textContent = idx < 0
-      ? heads.length + " sections"
-      : (idx + 1) + " of " + heads.length;
   }
   var ticking = false;
   window.addEventListener("scroll", function () {
@@ -1157,10 +1153,10 @@ var NAV_SECTIONS = [
     return "";
   }
   function check() {
-    var el = document.querySelector("[data-entity-lead]");
-    if (!el) return;
-    var keys = (el.getAttribute("data-keys") || "c").split(" ");
-    el.hidden = subject(keys) !== (el.getAttribute("data-value") || "").toUpperCase();
+    Array.prototype.forEach.call(document.querySelectorAll("[data-entity-lead]"), function (el) {
+      var keys = (el.getAttribute("data-keys") || "c").split(" ");
+      el.hidden = subject(keys) !== (el.getAttribute("data-value") || "").toUpperCase();
+    });
   }
   ["pushState", "replaceState"].forEach(function (name) {
     var original = history[name];

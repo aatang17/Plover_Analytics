@@ -174,7 +174,7 @@ CUSTODY_BANKS = (u"日本マスタートラスト信託銀行", u"日本カス�
 # Global custodians and street-name accounts, as filers spell them. Matched on
 # the normalised name, so spacing and full/half width do not matter.
 FOREIGN_NOMINEES = (u"STATESTREET", u"SSBTC", u"JPMORGANCHASEBANK", u"JPMORGANSECURITIES",
-                    u"CHASEMANHATTANBANK", u"MOXLEYANDCO", u"OMNIBUSACCOUNT",
+                    u"CHASEMANHATTANBANK", u"MOXLEYANDCO", u"MOXLEYCO", u"OMNIBUSACCOUNT",
                     u"NOMINEESLIMITED", u"NOMINEESLTD",
                     u"JPMSPLC", u"BANKOFNEWYORK", u"BNYM", u"BNYGCM", u"BNYMELLON",
                     u"MELLONBANK", u"CITIBANK", u"HSBC", u"BNPPARIBAS",
@@ -190,7 +190,10 @@ FOREIGN_NOMINEES_KANA = (u"ステートストリート", u"ビーエヌワイエ
                          u"ジェーピーモルガン", u"ジェイピーモルガン",
                          u"シティバンク", u"エイチエスビーシー", u"バークレイズ",
                          u"ノーザントラスト", u"ブラウンブラザーズハリマン",
-                         u"メロンバンク", u"ビーエヌピーパリバ")
+                         u"メロンバンク", u"ビーエヌピーパリバ",
+                         # JPMorgan's ADR depositary nominee: Honda, Sony and others
+                         # file it in katakana (2026-11-03: 21 rows read as a company).
+                         u"モックスレイ")
 # 退職給付信託: a company parks its own cross-holdings in a pension trust. The
 # settlor is named inside the account ("退職給付信託　丸紅口"), and that is the
 # economic holder — the one fact in this table nobody else assembles.
@@ -593,6 +596,39 @@ def build(doc_id, majors, categories, facts, resolve):
     return rows, cat_rows, agg, problems
 
 
+RECLASSIFY_MAX = 300
+
+
+def stale_classifications(db_path, limit=RECLASSIFY_MAX):
+    u"""docIDs whose stored holder_kind differs from what classify_holder now
+    says for the same filed name. holder_kind is OUR reading of the name, so a
+    better rule (2026-11-03: Moxley, the ADR depositary nominee, read as a
+    company) should reach the filings already read, not only the next ones.
+    Only the derived columns change on a re-read; every filed value is read
+    again from the same archived file and comes out the same."""
+    if not os.path.exists(db_path):
+        return []
+    con = duckdb.connect(db_path, read_only=True)
+    try:
+        names = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables()").fetchall()}
+        if "eq_major_shareholders" not in names:
+            return []
+        rows = con.execute(
+            "SELECT doc_id, name_raw, name_base, account_raw, holder_kind "
+            "FROM eq_major_shareholders").fetchall()
+    finally:
+        con.close()
+    out = []
+    for doc_id, name_raw, base, account, kind in rows:
+        if doc_id in out:
+            continue
+        if classify_holder(name_raw, base, account)[0] != kind:
+            out.append(doc_id)
+            if len(out) >= limit:
+                break
+    return sorted(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="every archived filer")
@@ -601,6 +637,10 @@ def main():
     ap.add_argument("--limit", type=int)
     ap.add_argument("--db", default=DB_PATH)
     ap.add_argument("--docs", help="comma-separated docIDs — re-extract just these")
+    ap.add_argument("--reclassify", action="store_true",
+                    help="re-extract the filings whose stored holder types this "
+                         "version of classify_holder would now read differently "
+                         "(at most RECLASSIFY_MAX); exit 3 when there are none")
     ap.add_argument("--new-only", action="store_true",
                     help="extract only filings archived since the last "
                          "recorded run (plus a lookback); what the nightly "
@@ -615,6 +655,14 @@ def main():
                          "own history a slice at a time. 0 (default) is "
                          "forward only.")
     args = ap.parse_args()
+    if args.reclassify:
+        docs = stale_classifications(args.db)
+        if not docs:
+            print("reclassify: every stored holder type matches the current rules")
+            sys.exit(3)
+        print("reclassify: %d filings carry a holder type the current rules read "
+              "differently" % len(docs))
+        args.docs = ",".join(docs)
 
     src = S3Source(args.workers) if args.source == "s3" else LocalSource()
     codelist = load_codelist()
@@ -646,6 +694,9 @@ def main():
     if args.docs:
         want = {d.strip() for d in args.docs.split(",") if d.strip()}
         targets = [t for t in targets if t[0] in want]
+        if args.reclassify and not targets:
+            print("reclassify: none of those filings is in this archive; nothing re-read")
+            sys.exit(3)
     if args.limit:
         targets = targets[:args.limit]
     years = sorted({(m.get("periodEnd") or "?")[:4] for _, _, m in targets})
@@ -743,8 +794,12 @@ def main():
                                 cat_rows)
                 tot_cat += len(cat_rows)
     con.close()
-    record_run(args.db, "shareholder-register", through, len(filings), PARSER_VERSION,
-               back_to=catch_up_floor)
+    # A re-read of named filings is not a pass over the archive: recording one
+    # would move the watermark to the newest archived file and let the next
+    # nightly run skip every filing between the old mark and that one.
+    if not args.docs:
+        record_run(args.db, "shareholder-register", through, len(filings), PARSER_VERSION,
+                   back_to=catch_up_floor)
     if not args.no_compact:
         compact(args.db)
     print("filings: %s" % dict(stats))

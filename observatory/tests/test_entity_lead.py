@@ -14,7 +14,8 @@ from app import entity_lead
 from app.main import app
 from tests import _data
 
-LEAD = re.compile(r'<div class="entity-lead"[^>]*>.*?</div>', re.S)
+LEAD = re.compile(r'<p class="entity-lead"[^>]*>.*?</p>', re.S)
+MORE = re.compile(r'<section class="entity-more"[^>]*>.*?</section>', re.S)
 
 
 class WordingTest(unittest.TestCase):
@@ -52,32 +53,33 @@ class WordingTest(unittest.TestCase):
 
 
 class InjectTest(unittest.TestCase):
-    """Where the block goes, and that a failure leaves the page as it was."""
+    """Where the two blocks go, and that a failure leaves the page as it was."""
 
-    LEAD = {"sentences": ["One <b>.", "Two."], "links": [("Board & Pay", "governance.html?c=9962")],
+    LEAD = {"sentences": ["One <b>."], "links": [("Board & Pay", "governance.html?c=9962")],
             "peers": [("Sojitz", "ownership.html?c=2768")], "peer_label": "Wholesale Trade",
             "name": "Misumi", "value": "9962", "keys": "c"}
-    PAGE = ('<div class="co-head"><h1 id="co-name"></h1></div>'
-            '<p class="filing-meta" id="co-filing"></p><dl class="fact-row"></dl>')
+    PAGE = ('<main><div class="co-head"><h1 id="co-name"></h1></div>'
+            '<p class="filing-meta" id="co-filing"></p><dl class="fact-row"></dl></main>')
 
-    def test_written_after_the_company_header_and_escaped(self):
+    def test_sentence_under_the_header_links_at_the_foot(self):
         with patch.object(entity_lead, "build", return_value=self.LEAD):
             out = entity_lead.inject(self.PAGE, "ownership.html", {"c": "9962"}, {"h1": "Misumi"})
-        self.assertIn('<p class="filing-meta" id="co-filing"></p><div class="entity-lead"', out)
-        self.assertIn("One &lt;b&gt;. Two.", out)
-        self.assertIn('data-value="9962"', out)
+        self.assertIn('<p class="filing-meta" id="co-filing"></p><p class="entity-lead"', out)
+        self.assertIn("One &lt;b&gt;.", out)
+        self.assertRegex(out, r'<section class="entity-more"[^>]*data-value="9962".*</section></main>$')
         self.assertIn('<a href="governance.html?c=9962">Board &amp; Pay</a>', out)
-        self.assertIn("Same industry (Wholesale Trade)", out)
+        self.assertIn("Same industry", out)
 
     def test_a_failure_serves_the_page_unchanged(self):
         with patch.object(entity_lead, "build", side_effect=RuntimeError("database mid-swap")):
             self.assertEqual(entity_lead.inject(self.PAGE, "ownership.html", {"c": "9962"}, {}),
                              self.PAGE)
 
-    def test_a_page_without_its_anchor_is_unchanged(self):
+    def test_a_page_without_its_anchor_still_gets_its_links(self):
         with patch.object(entity_lead, "build", return_value=self.LEAD):
-            self.assertEqual(entity_lead.inject("<main></main>", "ownership.html", {"c": "9962"}, {}),
-                             "<main></main>")
+            out = entity_lead.inject("<main></main>", "ownership.html", {"c": "9962"}, {})
+        self.assertNotIn('class="entity-lead"', out)
+        self.assertIn('class="entity-more"', out)
 
     def test_no_company_no_lead(self):
         self.assertIsNone(entity_lead.build("ownership.html", {}, {"h1": "x"}))
@@ -94,24 +96,27 @@ class ServedTest(unittest.TestCase):
     def setUpClass(cls):
         cls.client = TestClient(app)
 
+    def _blocks(self, path):
+        page = self.client.get(path).text
+        lead, more = LEAD.search(page), MORE.search(page)
+        return (lead.group(0) if lead else None), (more.group(0) if more else None)
+
     def _lead(self, path):
-        m = LEAD.search(self.client.get(path).text)
-        return m.group(0) if m else None
+        return self._blocks(path)[0]
 
-    def test_company_page_opens_with_its_figures_and_links(self):
-        lead = self._lead("/company.html?code=7203")
-        self.assertIsNotNone(lead)
-        self.assertRegex(lead, r"reported revenue of ¥[\d.,]+(tn|bn)")
-        self.assertIn("largest shareholder is", lead)
-        self.assertIn('href="ownership.html?c=7203"', lead)
-        self.assertNotIn('href="company.html?code=7203"', lead)  # not a link to itself
+    def test_company_page_opens_with_its_figures_and_links_at_the_foot(self):
+        lead, more = self._blocks("/company.html?code=7203")
+        self.assertRegex(lead, r"revenue \u00a5[\d.,]+(tn|bn), profit")
+        self.assertIn('href="ownership.html?c=7203"', more)
+        self.assertNotIn('href="company.html?code=7203"', more)  # not a link to itself
 
-    def test_register_figures_match_the_register_api(self):
+    def test_register_names_the_largest_holder_the_tiles_do_not(self):
         lead = self._lead("/ownership.html?c=7203")
         head = self.client.get("/api/v1/equity/ownership/company/7203").json()
-        self.assertIn("own %.2f%% of its shares" % head["majors_ratio_filed_pct"], lead)
-        top = head["holders"][0]
-        self.assertIn("with %.2f%% of shares" % top["ratio_pct"], lead)
+        owner = next(r for r in head["holders"]
+                     if r["holder_kind"] not in ("trust_bank_nominee", "foreign_nominee", "treasury"))
+        self.assertIn("Largest holder that is not a custody account", lead)
+        self.assertIn("%.2f%% of shares" % owner["ratio_pct"], lead)
 
     def test_market_view_and_unknown_codes_get_no_lead(self):
         self.assertIsNone(self._lead("/ownership.html"))
@@ -131,7 +136,7 @@ class UsPayTest(unittest.TestCase):
         latest = max((y for y in years if y["values"].get("ceo_total_pay") is not None),
                      key=lambda y: y["fiscal_year_end"])
         self.assertIn(entity_lead._usd(latest["values"]["ceo_total_pay"]), lead.group(0))
-        self.assertIn('href="us-company.html?t=AAPL"', lead.group(0))
+        self.assertIn('href="us-company.html?t=AAPL"', MORE.search(page).group(0))
 
 
 if __name__ == "__main__":

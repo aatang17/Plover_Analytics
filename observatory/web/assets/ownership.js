@@ -7,9 +7,15 @@
 (function () {
   "use strict";
 
-  var mixChart = null;
   var company = null;
   var holderState = { nominees: "" };
+  // The company the server wrote this page for, and its name as written there,
+  // read before any script replaces the heading.
+  var SERVED = (function () {
+    var h = document.getElementById("co-name");
+    var c = new URLSearchParams(location.search).get("c");
+    return { name: h ? h.textContent.trim() : "", code: c ? c.trim().toUpperCase() : "" };
+  })();
   var screenState = { metric: "foreign_pct", order: "desc" };
 
   function $(id) { return document.getElementById(id); }
@@ -43,7 +49,7 @@
   }
 
   function nameCell(en, ja, href) {
-    var primary = en || ja || MISSING;
+    var primary = displayName(en) || displayNameJa(ja) || MISSING;
     var link = href ? "<a href='" + href + "'>" + esc(primary) + "</a>" : esc(primary);
     return "<div class='cell-item'><div class='en'>" + link + "</div></div>";
   }
@@ -265,16 +271,18 @@
   // ---- company view --------------------------------------------------------
   function renderCompany(d) {
     company = d;
-    var name = d.filer_name_en || d.filer_name;
+    var name = displayName(d.filer_name_en) || displayNameJa(d.filer_name);
     // The server's title already names this company, spelled for reading: keep it.
     if (!d.sec_code || document.title.indexOf("(" + d.sec_code + ")") < 0) {
       document.title = name + (d.sec_code ? " (" + d.sec_code + ")" : "") +
         " · Major Shareholders · Plover Analytics";
     }
-    $("co-name").textContent = name;
+    // The server wrote this company's name spelled for reading ("Toyota Motor
+    // Corporation"); the filing's own English name is often all capitals.
+    $("co-name").textContent = (SERVED.name && d.sec_code === SERVED.code) ? SERVED.name : name;
     $("co-code").textContent = d.sec_code || d.edinet_code || "";
     if (d.filer_name_en && d.filer_name) {
-      $("co-name-ja").textContent = d.filer_name;
+      $("co-name-ja").textContent = displayNameJa(d.filer_name);
       $("co-name-ja").hidden = false;
     }
     $("co-filing").innerHTML =
@@ -282,9 +290,8 @@
       " · filed " + esc(d.filed_date || MISSING) +
       " · <span class='badge badge-official'>Official statistic</span>" +
       " · <a href='https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?" +
-      "S100=" + esc(d.doc_id) + "'>filing " + esc(d.doc_id) + "</a>" +
-      " · <span class='mono' title='SHA-256 of the archived filing'>" +
-      esc(String(d.sha256 || "").slice(0, 12)) + "…</span>";
+      "S100=" + esc(d.doc_id) + "' title='SHA-256 of the archived filing: " +
+      esc(d.sha256 || MISSING) + "'>filing " + esc(d.doc_id) + "</a>";
 
     var nomineeShare = d.nominee_ratio_pct;
     $("co-facts").innerHTML =
@@ -341,12 +348,12 @@
         if (r.ratio_pct != null) cumulative += r.ratio_pct;
         return "<tr><td class=rank>" + count(r.rank) + "</td><td" +
           (sub ? " title='" + esc(sub) + "'" : "") + ">" +
-          nameCell(r.holder_name_en, r.name_raw, href) +
+          nameCell(r.holder_display_name || r.holder_name_en, r.name_raw, href) +
           "</td><td>" + kindBadge(r.holder_kind) +
           "</td><td class=r>" + count(r.shares) +
           "</td><td class=r>" + pct(r.ratio_pct) +
           "</td><td class='r cum'>" + (r.ratio_pct == null ? MISSING : pct(cumulative)) +
-          "</td><td>" + esc(r.address_raw || MISSING) + "</td></tr>";
+          "</td><td class=addr>" + esc(displayNameJa(r.address_raw) || MISSING) + "</td></tr>";
       }).join("") + "</tbody></table>";
     $("reg-formula").textContent = rows.length
       ? "Cumulative is the running sum of the filed percentages down the "
@@ -399,38 +406,27 @@
     $("mix-count").textContent = ordered.length
       ? ordered.length + " investor categories" : "not tagged in this filing";
     if (!ordered.length) {
-      $("mix-chart").innerHTML = "<p class='sec-note'>This filing does not tag the " +
-        "所有者別状況 table, so the whole-register split is not available for it.</p>";
-      $("mix-table").innerHTML = "";
+      $("mix-table").innerHTML = "<tbody><tr><td class='sec-note'>This filing does not tag the " +
+        "所有者別状況 table, so the whole-register split is not available for it.</td></tr></tbody>";
       return;
     }
-    var source = "Source: " + (d.filer_name_en || d.filer_name) +
-      " annual securities report, FY ended " + (d.period_end || "") +
-      " · via EDINET · Plover Analytics";
-    // Composition of one total at one point in time: columns on a zero
-    // baseline, never a pie.
-    var cfg = {
-      categories: ordered.map(function (c) {
-        return CATEGORY_SHORT[c.category] || c.category_en;
-      }),
-      series: [{ name: "Share of issued shares", slot: 1,
-                 points: ordered.map(function (c) { return c.pct; }) }],
-      dp: 2, unitSuffix: "%", yAxisName: "% of issued shares",
-      trust: "official", sourceLine: source,
-    };
-    if (mixChart) mixChart.dispose();
-    mixChart = obsChart($("mix-chart"), "cols", cfg);
-    $("mix-source").textContent = source;
-    $("mix-png").onclick = function () {
-      mixChart.exportPNG("register-mix-" + (d.sec_code || d.doc_id) + ".png");
-    };
+    // Composition of one total at one point in time: a bar in each row on a
+    // zero baseline, beside the number it draws, so the table and its picture
+    // are one thing instead of a chart repeating the table under it.
+    var top = Math.max.apply(null, ordered.map(function (c) { return c.pct || 0; })) || 1;
     $("mix-table").innerHTML =
       "<thead><tr><th>Investor type</th><th class=r>Shareholders</th>" +
-      "<th class=r>Units held</th><th class=r>Share of issued (%)</th></tr></thead><tbody>" +
+      "<th class=r>Units held</th><th class=r>Share of issued (%)</th>" +
+      "<th class=mix-bar-h><span class=visually-hidden>Share of issued, drawn</span></th>" +
+      "</tr></thead><tbody>" +
       ordered.map(function (c) {
+        var w = c.pct == null ? 0 : Math.max(0, c.pct) / top * 100;
         return "<tr><td>" + esc(c.category_en) + "</td><td class=r>" + count(c.shareholders) +
-          "</td><td class=r>" + count(c.units) + "</td><td class=r>" + pct(c.pct) + "</td></tr>";
-      }).join("") + "</tbody></table>";
+          "</td><td class=r>" + count(c.units) + "</td><td class=r>" + pct(c.pct) +
+          "</td><td class=mix-bar-c>" + (c.pct == null ? "" :
+            "<span class=mix-bar style='width:" + w.toFixed(1) + "%'></span>") +
+          "</td></tr>";
+      }).join("") + "</tbody>";
     $("mix-csv").onclick = function () {
       csvDownload("register-mix-" + (d.sec_code || d.doc_id) + ".csv",
         ["Plover Analytics — register by investor category (所有者別状況)",

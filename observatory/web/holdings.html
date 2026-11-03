@@ -39,6 +39,11 @@
   font-size: 12px; color: var(--obs-text-faint); margin-top: 4px; }
 .chart-foot .grow { flex: 1; }
 .sec-actions { display: flex; gap: 10px; align-items: baseline; }
+/* One company's view sits in a white panel, as on the register, 5% and board
+   pages, whose sections are panels by their shape. */
+#company-view:not([hidden]) { background: var(--obs-surface); border: 1px solid var(--obs-border);
+  border-radius: 4px; padding: 0 16px 16px; margin-top: 24px; }
+@media (max-width: 700px) { #company-view:not([hidden]) { padding: 0 12px 12px; } }
 /* The formula that a derived column carries instead of a trust badge. */
 .tbl-formula { font-size: 12px; line-height: 1.55; color: var(--obs-text-muted);
   margin: 10px 0 0; text-wrap: pretty; }
@@ -150,7 +155,7 @@
 
   <!-- company view -->
   <section id="company-view" hidden>
-    <p style="margin:16px 0 0"><a href="holdings.html" id="back-link">← All filers</a></p>
+    <p class="back-row"><a class="btn btn-back" href="holdings.html" id="back-link">← All filers</a></p>
     <div class="co-head">
       <h1 id="co-name"></h1>
       <span class="co-code" id="co-code"></span>
@@ -166,18 +171,22 @@
          they belong here and not in a column that would repeat one divisor a
          hundred times. -->
     <div class="strip" id="co-scale" hidden></div>
-    <p class="tbl-formula" id="co-scale-formula" hidden></p>
+    <details class="how-to-read"><summary>How these are calculated</summary>
+      <p class="tbl-formula" id="co-scale-formula" hidden></p>
+    </details>
 
     <div id="holdings-sec">
       <h2>Disclosed Holdings <span class="h2-note" id="holdings-count"></span></h2>
       <div class="sec-actions">
-        <p class="table-meta" style="flex:1">Named policy holdings from the governance section
+        <details class="how-to-read"><summary>How to read this table</summary>
+        <p>Named policy holdings from the governance section
           (株式の保有状況) of the filing named above. <b>Official statistics</b> as filed.
           Missing values are shown as —, never as zero.
-          Names in English and Japanese are both as filed.</p>
+          Names are the filed ones in English and Japanese, written evenly on screen; the CSV keeps them exactly as filed.</p>
+      </details>
         <button type="button" class="btn" id="holdings-csv">Download CSV</button>
       </div>
-      <div class="table-wrap"><table class="tbl-hold" id="holdings-table"></table></div>
+      <div class="table-wrap"><table class="tbl-hold" id="holdings-table" data-no-table-csv></table></div>
       <p class="tbl-formula" id="holdings-formula"></p>
 
       <div class="filing-notes" id="filing-notes" hidden>
@@ -194,26 +203,30 @@
     <div id="reclass-sec" hidden>
       <h2>Holdings Whose Purpose Changed <span class="h2-note" id="reclass-count"></span></h2>
       <div class="sec-actions">
-        <p class="table-meta" style="flex:1">Holdings this filer moved between a policy
+        <details class="how-to-read"><summary>How to read this table</summary>
+        <p>Holdings this filer moved between a policy
           shareholding and 純投資目的 (pure investment), from the annual report's own
           保有目的を変更した投資株式 table. <b>Official statistics</b> as filed. A holding
           moved to pure investment leaves the table above without necessarily being sold.</p>
+      </details>
         <button type="button" class="btn" id="reclass-csv">Download CSV</button>
       </div>
       <div class="reclass-summary" id="reclass-vs-sold"></div>
-      <div class="table-wrap"><table class="tbl-hold" id="reclass-table"></table></div>
+      <div class="table-wrap"><table class="tbl-hold" id="reclass-table" data-no-table-csv></table></div>
       <p class="tbl-formula" id="reclass-formula"></p>
     </div>
 
     <div id="holders-sec">
       <h2>Disclosed Holders <span class="h2-note" id="holders-count"></span></h2>
       <div class="sec-actions">
-        <p class="table-meta" style="flex:1">Every filer whose own annual
+        <details class="how-to-read"><summary>How to read this table</summary>
+        <p>Every filer whose own annual
           report names this company among its policy holdings. This view exists only
           because every filer's table is in one database — no single filing shows it.</p>
+      </details>
         <button type="button" class="btn" id="holders-csv">Download CSV</button>
       </div>
-      <div class="table-wrap"><table class="tbl-hold" id="holders-table"></table></div>
+      <div class="table-wrap"><table class="tbl-hold" id="holders-table" data-no-table-csv></table></div>
       <p class="tbl-formula" id="holders-formula"></p>
     </div>
   </section>
@@ -221,7 +234,8 @@
   <footer class="page-foot" id="page-foot">
     <p>Source: 有価証券報告書 (annual securities reports) via EDINET, Financial Services Agency.
     Every figure links to its filing; every raw file is archived with its SHA-256.
-    Company names are as filed in both languages: a filing names its holdings in Japanese,
+    Company names are the filed names in both languages, written evenly on screen (capitals
+    and letter widths tidied; every CSV keeps them exactly as filed): a filing names its holdings in Japanese,
     and each company's own annual report states its English name on the cover page. Where a
     company files no annual report, EDINET's filer registry is used instead; where neither
     states one, the Japanese name is shown alone, never blank.
