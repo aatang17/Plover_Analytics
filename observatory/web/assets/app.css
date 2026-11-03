@@ -117,6 +117,18 @@ h1 { font-size: 22px; color: var(--obs-ink); font-weight: 700; }
 .page-sub { font-size: 13px; color: var(--obs-text-muted); margin-top: 4px; }
 .page-sub .sep { margin: 0 6px; }
 
+/* A one-company page's opening lines, written by the server (app/entity_lead.py):
+   the figures a reader searched for, then the company's other pages and its
+   peers. Plain text under the company header, no panel. */
+.entity-lead { margin: 12px 0 4px; max-width: 78ch; }
+.entity-lead[hidden] { display: none; }
+.entity-lead-text { font-size: 14.5px; line-height: 1.6; color: var(--obs-ink);
+  font-variant-numeric: tabular-nums; margin: 0 0 8px; }
+.entity-lead-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+  font-size: 13px; line-height: 1.5; margin: 0 0 4px; }
+.entity-lead-label { color: var(--obs-text-muted); font-weight: 600; }
+.entity-lead-links a:hover { text-decoration: underline; }
+
 section { margin-top: 32px; }
 
 /* Section headers are a quiet label over a rule (the finance redesign,

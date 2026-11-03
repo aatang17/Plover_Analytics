@@ -1141,3 +1141,35 @@ var NAV_SECTIONS = [
     }).observe(main, { childList: true, subtree: true });
   });
 })();
+
+/* A one-company page's opening lines are written by the server for the company
+   in the address it was asked for (app/entity_lead.py). The page can switch to
+   another company, or back to the market view, without reloading; the lines
+   then belong to a company no longer on screen and are hidden, so one
+   company's figures never sit above another's tables. */
+(function entityLead() {
+  function subject(keys) {
+    var q = new URLSearchParams(location.search);
+    for (var i = 0; i < keys.length; i++) {
+      var v = q.get(keys[i]);
+      if (v) return v.trim().toUpperCase().replace(/\./g, "-");
+    }
+    return "";
+  }
+  function check() {
+    var el = document.querySelector("[data-entity-lead]");
+    if (!el) return;
+    var keys = (el.getAttribute("data-keys") || "c").split(" ");
+    el.hidden = subject(keys) !== (el.getAttribute("data-value") || "").toUpperCase();
+  }
+  ["pushState", "replaceState"].forEach(function (name) {
+    var original = history[name];
+    if (typeof original !== "function") return;
+    history[name] = function () {
+      var out = original.apply(this, arguments);
+      try { check(); } catch (e) { /* never break navigation */ }
+      return out;
+    };
+  });
+  window.addEventListener("popstate", check);
+})();

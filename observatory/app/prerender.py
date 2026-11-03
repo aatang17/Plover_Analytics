@@ -1723,6 +1723,13 @@ def _inject(html, page_name, canonical=None, query_string=""):
             html = _HEAD_END.sub(node + "\n</head>", html, count=1)
         return html
 
+    # A one-company page opens with its key figures and links to the same
+    # company's other pages and its peers (app/entity_lead.py).
+    if entity:
+        from . import entity_lead
+        html = entity_lead.inject(html, page_name,
+                                  dict(parse_qsl(query_string, keep_blank_values=True)), entity)
+
     # The page's own numbers, readable without a script.
     markdown_path = markdown_path_for(page_name, query_string)
     if markdown_path:
