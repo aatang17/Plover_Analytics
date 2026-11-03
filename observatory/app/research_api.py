@@ -62,7 +62,9 @@ def _decorate(person, a):
     a["can"] = writers.permissions_for(person, a)
     a["role"] = writers.role(person, a["publication_id"])
     a["publication"] = {"id": pub["id"], "name": pub["name"], "base": pub["base"],
-                        "home": pub["home"]}
+                        "home": pub["home"],
+                        # what the editor checks an uploaded chart against
+                        "chart_colours": pub_profile.chart_colours()}
     return a
 
 

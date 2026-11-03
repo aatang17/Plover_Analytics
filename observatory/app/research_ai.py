@@ -788,6 +788,8 @@ def _system(article, person, skill=None, length=None, memory_text="", follow_up=
     pid = article["publication_id"]
     menu = skills.list_skills(enabled_only=True, publication_id=pid)
     extra = "House style for everything you write in the draft:\n" + skills.house_style(pid) + "\n\n"
+    extra += ("Chart style for every chart you add, propose or check (titles, subtitles, "
+              "colours, source lines):\n" + pub_profile.chart_style(pid) + "\n\n")
     extra += writing_style.prompt(person)
     extra += ("Arithmetic: work out every number you put in the draft that no tool returned as "
               "is (a change, a growth rate, a ratio, a share, a difference) with calculate, never "
@@ -955,7 +957,7 @@ a broker). Rebuild it from the public data behind it:
    your web search) and build a chart of numbers from outside Plover with the numbers as
    that agency publishes them, and a Source line naming the agency and the table.
 4. Never take numbers from the picture itself, and never copy the other publisher's chart
-   or wording. Title the chart with its message, in our house style.
+   or wording. Title the chart with its message, following the chart style.
 5. If you cannot find the data, change nothing: reply with what the chart shows and where
    the data is published, so the writer can fetch it.
 """

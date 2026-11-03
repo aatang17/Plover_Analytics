@@ -440,6 +440,126 @@ function lastParagraph() {
 
 function clip(text, n) { return text.length > n ? text.slice(0, n - 1) + "…" : text; }
 
+/* ---------------------------------------------------------------- chart colours */
+
+/* The colours in a chart picture that are not in the chart style: each
+   publication's Chart Style (Writer Desk, Assistant Settings) lists the six the
+   live charts use (app/pub_profile.py, CHART_COLOURS). A colour passes when it
+   is grey, near black, or one of the six or a paler tint of one (a shaded band,
+   a thin background line, the soft edge of a line). Only colours covering at
+   least 0.1% of the picture count, so a stray pixel where two lines cross does
+   not. A picture whose colours are spread too thin to be a chart (a photo) is
+   not judged. Resolves {photo, off: [{hex, share, near}]}. */
+function chartColourCheck(src, colours) {
+  var pal = (colours || []).map(function (c) {
+    var h = c.hex.replace("#", "");
+    return { label: c.label, rgb: [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16); }) };
+  });
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
+    img.onload = function () { resolve(img); };
+    img.onerror = function () { reject(new Error("The picture could not be read.")); };
+    img.src = src;
+  }).then(function (img) {
+    var scale = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight, 1));
+    var w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+    var cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff";                     // a transparent PNG reads as on white
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    var px = ctx.getImageData(0, 0, w, h).data;
+    var counts = new Uint32Array(32768), n = w * h;
+    for (var i = 0; i < px.length; i += 4) counts[(px[i] >> 3) << 10 | (px[i + 1] >> 3) << 5 | (px[i + 2] >> 3)]++;
+    var keys = [];
+    for (var k = 0; k < counts.length; k++) if (counts[k]) keys.push(k);
+    keys.sort(function (a, b) { return counts[b] - counts[a]; });
+    var top = 0;
+    keys.slice(0, 24).forEach(function (key) { top += counts[key]; });
+    if (top / n < 0.8) return { photo: true, off: [] };
+    var off = [];
+    keys.forEach(function (key) {
+      if (counts[key] / n < 0.001) return;
+      var c = [(key >> 10) * 8 + 4, ((key >> 5) & 31) * 8 + 4, (key & 31) * 8 + 4];
+      var hi = Math.max(c[0], c[1], c[2]);
+      if (hi - Math.min(c[0], c[1], c[2]) < 24 || hi < 80) return;   // grey, or near black
+      var best = null;
+      pal.forEach(function (p) {
+        // how far c is from the nearest tint of p (p mixed with white)
+        var d = c.map(function (x) { return 255 - x; }), q = p.rgb.map(function (x) { return 255 - x; });
+        var a = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) / Math.max(1, q[0] * q[0] + q[1] * q[1] + q[2] * q[2]);
+        a = Math.max(0, Math.min(1, a));
+        var r = Math.max(Math.abs(d[0] - a * q[0]), Math.abs(d[1] - a * q[1]), Math.abs(d[2] - a * q[2]));
+        if (!best || r < best.r) best = { r: r, label: p.label };
+      });
+      if (best && best.r <= 22) return;
+      // shades of one colour count once, under the commonest
+      var same = off.filter(function (o) {
+        return Math.max(Math.abs(o.rgb[0] - c[0]), Math.abs(o.rgb[1] - c[1]), Math.abs(o.rgb[2] - c[2])) <= 24;
+      })[0];
+      if (same) { same.count += counts[key]; return; }
+      off.push({ rgb: c, count: counts[key], near: best ? best.label : "" });
+    });
+    return {
+      photo: false,
+      off: off.map(function (o) {
+        return { hex: "#" + o.rgb.map(function (x) { return ("0" + x.toString(16)).slice(-2); }).join(""),
+                 share: o.count / n, near: o.near };
+      }),
+    };
+  });
+}
+
+/* One line for a picture with colours outside the chart style. The swatch is
+   the picture's own colour, so the writer can see which one is meant. */
+function colourWords(res) {
+  return res.off.slice(0, 3).map(function (o) {
+    return '<span class="dk-ck-sw" style="background:' + o.hex + '"></span>' + o.hex;
+  }).join(", ") + (res.off.length > 3 ? " and " + (res.off.length - 3) + " more" : "");
+}
+
+/* The Check tab's Chart Colours section: every uploaded picture in the draft. */
+function checkChartColours(box) {
+  var pub = S.article && S.article.publication;
+  var imgs = $all('.dk-block[data-type="image"]', blocksEl()).map(function (el) {
+    return S.models[el.getAttribute("data-id")];
+  }).filter(function (m) { return m && m.media; });
+  if (!imgs.length || !pub || !pub.chart_colours) return;
+  var sec = document.createElement("div");
+  sec.innerHTML = '<p class="dk-ck-h">Chart Colours</p><p class="muted dk-ck-wait">Checking ' + imgs.length +
+    (imgs.length === 1 ? " picture" : " pictures") + " against " + escapeHtml(pub.name) + "’s chart style…</p>";
+  box.appendChild(sec);
+  Promise.all(imgs.map(function (m) {
+    return chartColourCheck("/research/media/" + m.media + "." + m.ext, pub.chart_colours)
+      .then(function (res) { return { m: m, res: res }; }, function () { return { m: m, res: null }; });
+  })).then(function (all) {
+    if (!document.contains(sec)) return;
+    var bad = all.filter(function (x) { return x.res && x.res.off.length; });
+    var unread = all.filter(function (x) { return !x.res; });
+    var styleLink = '<a href="write.html#/p/' + pub.id + '/assistant" target="_blank" rel="noopener">Chart Style</a>';
+    var html = '<p class="dk-ck-h">Chart Colours</p>';
+    if (!bad.length && !unread.length) {
+      html += '<p class="muted">Every chart picture uses the six colours in ' + escapeHtml(pub.name) + "’s " + styleLink + ".</p>";
+    } else {
+      html += '<ul class="dk-ck">' + bad.map(function (x) {
+        return '<li><span class="dk-ck-t">“' + escapeHtml(clip(x.m.caption || "Untitled picture", 70)) +
+          "” uses colours outside the chart style: " + colourWords(x.res) +
+          '</span><button type="button" class="dk-mini" data-goto="' + x.m.id + '">Go to It</button></li>';
+      }).join("") + unread.map(function (x) {
+        return '<li><span class="dk-ck-t">“' + escapeHtml(clip(x.m.caption || "Untitled picture", 70)) +
+          "” could not be read for its colours. Upload it again.</span>" +
+          '<button type="button" class="dk-mini" data-goto="' + x.m.id + '">Go to It</button></li>';
+      }).join("") + "</ul>" +
+        '<p class="hint">Redraw these in the six colours listed in ' + styleLink + ". This does not stop publishing.</p>";
+    }
+    sec.innerHTML = html;
+    $all("[data-goto]", sec).forEach(function (b) {
+      b.addEventListener("click", function () { goToBlock(b.getAttribute("data-goto")); });
+    });
+  });
+}
+
 function renderCheckPane(res) {
   var box = $("#dk-pane-check");
   var server = res.problems.filter(function (p) { return p.indexOf("From the plan, ") !== 0; });
@@ -474,6 +594,7 @@ function renderCheckPane(res) {
   if (S.plan) html += progressHtml(left);
   if (!fix) html += '<p class="dk-ready">Ready to publish as version ' + res.version + ".</p>";
   box.innerHTML = html;
+  checkChartColours(box);
   $all("[data-goto]", box).forEach(function (b) {
     b.addEventListener("click", function () { goToBlock(b.getAttribute("data-goto")); });
   });

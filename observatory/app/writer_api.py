@@ -378,9 +378,10 @@ def fresh_link(publication_id: int, body: LinkBody, request: Request):
 
 # ---------------------------------------------------- assistant settings
 #
-# Each publication's own skills, house style and connectors (app/skills.py,
-# app/connectors.py): what the AI tab uses on its articles. Every member sees
-# them; editors change the skills and the house style; only owners change the
+# Each publication's own skills, house style, chart style and connectors
+# (app/skills.py, app/pub_profile.py, app/connectors.py): what the AI tab uses
+# on its articles. Every member sees them; editors change the skills and the
+# house and chart styles; only owners change the
 # connectors, which decide what a run can reach and carry the publication's
 # keys. Every change goes into the audit trail with the publication's address.
 
@@ -390,6 +391,9 @@ def _assistant(pub, person):
             "skills": skills.list_skills(publication_id=pid),
             "house_style": skills.house_style(pid),
             "default_house_style": skills.HOUSE_STYLE,
+            "chart_style": pub_profile.chart_style(pid),
+            "default_chart_style": pub_profile.CHART_STYLE,
+            "chart_colours": pub_profile.chart_colours(),
             "connectors": connectors.list_connectors(publication_id=pid),
             "can_edit": writers.at_least(person, pid, "editor"),
             "can_manage": writers.at_least(person, pid, "owner")}
@@ -461,6 +465,18 @@ def house_style(publication_id: int, body: StyleBody, request: Request):
         raise HTTPException(400, str(exc))
     _audit(request, person, "ai_house_style", "%d characters in %s" % (len(text), pub["base"]))
     return {"house_style": text}
+
+
+@router.put("/publications/{publication_id}/assistant/chart-style")
+def chart_style(publication_id: int, body: StyleBody, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "editor")
+    try:
+        text = pub_profile.set_chart_style(pub["id"], body.text)
+    except pub_profile.ProfileError as exc:
+        raise HTTPException(400, str(exc))
+    _audit(request, person, "chart_style", "%d characters in %s" % (len(text), pub["base"]))
+    return {"chart_style": text}
 
 
 class ConnectorBody(BaseModel):

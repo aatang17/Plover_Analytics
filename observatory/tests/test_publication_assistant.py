@@ -123,6 +123,36 @@ class SetupTest(AssistantBase):
         with self.assertRaises(research_ai.AIError):
             research_ai.start(person, a["id"], "Go.", skill_id=home_plan["id"])
 
+    def test_chart_style_is_the_publications_own(self):
+        from app import pub_profile
+        got = self.olive.get(self.path()).json()
+        self.assertEqual(got["chart_style"], pub_profile.CHART_STYLE)
+        self.assertEqual([c["hex"] for c in got["chart_colours"]],
+                         ["#1a4d8f", "#c2410c", "#0f766e", "#a16207", "#475569", "#9d174d"])
+        r = self.olive.put(self.path("/chart-style"), json={"text": "Teal for the main series."})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["chart_style"], "Teal for the main series.")
+        # its own runs get it; PloverResearch's keep the default
+        wendy = self.member("wendy@example.com", "Wendy Writer", "writer")
+        a = wendy.post("/admin/api/research/articles", json={"publication_id": self.pub["id"]}).json()
+        system = research_ai._system(research.get(a["id"]), staff.get_by_email("wendy@example.com"))
+        self.assertIn("Teal for the main series.", system)
+        self.assertNotIn(pub_profile.CHART_STYLE[:60], system)
+        ours = research_ai._system(research.get(self.new_article()["id"]), staff.get_by_email("w@example.com"))
+        self.assertIn(pub_profile.CHART_STYLE[:60], ours)
+        self.assertNotIn("Teal for the main series.", ours)
+        # the editor gets the colours with the article
+        art = wendy.get("/admin/api/research/articles/%d" % a["id"]).json()
+        self.assertEqual(len(art["publication"]["chart_colours"]), 6)
+        # writers read it, editors change it, empty text puts the default back
+        self.assertEqual(wendy.put(self.path("/chart-style"), json={"text": "x"}).status_code, 403)
+        eddie = self.member("eddie@example.com", "Eddie Editor", "editor")
+        r = eddie.put(self.path("/chart-style"), json={"text": ""})
+        self.assertEqual(r.json()["chart_style"], pub_profile.CHART_STYLE)
+        r = eddie.put(self.path("/chart-style"), json={"text": "x" * (pub_profile.CHART_STYLE_MAX + 1)})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("under", r.json()["detail"])
+
     def test_who_may_change_what(self):
         wendy = self.member("wendy@example.com", "Wendy Writer", "writer")
         eddie = self.member("eddie@example.com", "Eddie Editor", "editor")

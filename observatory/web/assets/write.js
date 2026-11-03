@@ -599,6 +599,14 @@
         `<textarea id="wd-style" class="wd-style" rows="14" maxlength="8000" aria-label="House style"${d.can_edit ? "" : " readonly"}>${esc(d.house_style)}</textarea>` +
         (d.can_edit ? '<div class="wd-btnrow"><button class="btn primary" type="button" id="wd-stsave">Save House Style</button>' +
           '<button class="btn" type="button" id="wd-streset">Reset to Default</button><span class="hint" id="wd-stmsg" role="status"></span></div>' : "") +
+        band("Chart Style") +
+        '<p class="wd-para">How this publication\'s charts look: titles, colours, lines, numbers and source lines. Sent with every run next to the house style; ' +
+        "give it to anyone who draws a chart for you. The editor warns when an uploaded chart uses colours outside these six, which the live charts on every page also use.</p>" +
+        `<ul class="wd-chartcols" aria-label="Chart colours, in order">${d.chart_colours.map((c, i) =>
+          `<li><span class="wd-swatch" style="background: var(--obs-series-${i + 1})"></span>${esc(c.label)} <span class="muted num">${esc(c.hex)}</span></li>`).join("")}</ul>` +
+        `<textarea id="wd-chstyle" class="wd-style" rows="14" maxlength="6000" aria-label="Chart style"${d.can_edit ? "" : " readonly"}>${esc(d.chart_style)}</textarea>` +
+        (d.can_edit ? '<div class="wd-btnrow"><button class="btn primary" type="button" id="wd-chsave">Save Chart Style</button>' +
+          '<button class="btn" type="button" id="wd-chreset">Reset to Default</button><span class="hint" id="wd-chmsg" role="status"></span></div>' : "") +
         '<div id="wd-profile"></div>' +
         band("Data Sources") +
         '<p class="wd-para">Market-data accounts this publication pays for. The assistant uses them on its articles; for a service the publication has not connected, a writer\'s own key (My Account) is used. Whether you may publish a vendor\'s prices is up to your agreement with them.</p>' +
@@ -833,6 +841,21 @@
       style.value = d.default_house_style;
       stmsg.className = "hint";
       stmsg.textContent = "Default restored here. Save to use it.";
+    });
+    const chstyle = $("#wd-chstyle"), chmsg = $("#wd-chmsg");
+    const chsave = $("#wd-chsave");
+    if (chsave) chsave.addEventListener("click", () => {
+      chmsg.className = "hint";
+      busy(chsave, "Saving…", () => send("PUT", base + "/chart-style", { text: chstyle.value })).then(res => {
+        d.chart_style = chstyle.value = res.chart_style;
+        chmsg.textContent = "Saved. The next run uses it.";
+      }).catch(err => { chmsg.className = "hint err"; chmsg.textContent = err.message; });
+    });
+    const chreset = $("#wd-chreset");
+    if (chreset) chreset.addEventListener("click", () => {
+      chstyle.value = d.default_chart_style;
+      chmsg.className = "hint";
+      chmsg.textContent = "Default restored here. Save to use it.";
     });
     $$("[data-cnopen]", body).forEach(b => b.addEventListener("click", () => {
       const c = d.connectors.find(x => x.id === Number(b.dataset.cnopen));

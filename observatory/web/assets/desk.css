@@ -240,6 +240,7 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
 .dk-img .dk-mini { margin-top: 6px; }
 .dk-img-status { font-size: 12.5px; color: var(--obs-text-muted); grid-column: 1 / -1; margin: 0; }
 .dk-img-status.bad { color: var(--obs-trust-stale); }
+.dk-img-status.warn { color: var(--obs-warn); }
 
 .dk-addend { display: block; margin-top: 16px; font: inherit; font-size: 13px; color: var(--obs-text-muted);
   background: none; border: 1px dashed var(--obs-border); border-radius: 3px; padding: 8px 12px;
@@ -644,6 +645,9 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
   padding: 8px 0; border-bottom: 1px solid var(--obs-border); }
 .dk-ck-t { flex: 1 1 200px; min-width: 0; font-size: 13px; line-height: 1.45; color: var(--obs-ink); }
 .dk-ck li .dk-mini { flex: none; }
+/* a picture's own colour, shown so the writer can see which one is meant */
+.dk-ck-sw { display: inline-block; width: 11px; height: 11px; margin: 0 4px 0 1px; border-radius: 2px;
+  border: 1px solid var(--obs-border); vertical-align: -1px; }
 .dk-ck-cmp { flex: 1 1 100%; margin: 4px 0 0; font-size: 12.5px; }
 .dk-ck-cmp dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--obs-text-muted);
   margin-top: 6px; }

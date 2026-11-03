@@ -100,6 +100,9 @@
 .wd-accent { display: inline-flex; align-items: center; gap: 6px; color: var(--obs-ink); font-size: 13px; cursor: pointer; }
 .wd-kv .wd-accent input { min-width: 0; width: auto; height: auto; margin: 0; }
 .wd-swatch { display: inline-block; width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--obs-border); }
+.wd-chartcols { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 12px; padding: 0; list-style: none; }
+.wd-chartcols li { display: inline-flex; align-items: center; gap: 6px; color: var(--obs-ink); font-size: 13px; }
+.wd-chartcols .num { font-variant-numeric: tabular-nums; }
 
 /* ---- coverage */
 .wd-cvadd { position: relative; max-width: 520px; margin: 0 0 16px; }

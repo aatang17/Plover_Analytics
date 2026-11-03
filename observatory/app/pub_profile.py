@@ -14,6 +14,13 @@ connectors. This module holds the rest, all set by its owner:
 * **Look** — its logo and its accent colour (one of ACCENTS, defined in
   tokens.css with a light and a dark shade), on its /p/<address> pages and in
   its feed. Its name and tagline are the publication's own fields already.
+* **Chart style** — how its charts are drawn, as text its editors write (a new
+  publication starts with CHART_STYLE). It is sent with every assistant run,
+  next to the house style, and shown to whoever draws a chart for it. The
+  colours are not the publication's to change: CHART_COLOURS are the ones the
+  live charts on every page draw in (tokens.css, --obs-series-*), so a picture
+  in other colours would not match them. The editor checks each uploaded
+  picture against them (desk-plan.js, chartColourCheck).
 
 Its own market-data keys are kept with the person-level ones in the desk store
 (app/assistant/store.py, ia_pub_data_sources); see app/assistant/market_data.py.
@@ -36,6 +43,29 @@ ACCENTS = (("navy", "Navy"), ("teal", "Teal"), ("forest", "Forest"), ("rust", "R
            ("plum", "Plum"), ("slate", "Slate"))
 ACCENT_LABEL = dict(ACCENTS)
 TEMPLATE_MAX = 6000
+CHART_STYLE_MAX = 6000
+# The series colours, in order, as tokens.css defines them for the light theme
+# (charts.js draws live charts in these; a PNG is always light).
+CHART_COLOURS = (("navy", "Navy", "#1a4d8f"), ("orange", "Orange", "#c2410c"),
+                 ("teal", "Teal", "#0f766e"), ("ochre", "Ochre", "#a16207"),
+                 ("slate", "Slate", "#475569"), ("plum", "Plum", "#9d174d"))
+CHART_STYLE = """\
+Every chart makes one point, and every chart in a note looks like the others.
+
+- Title: the point, as a sentence ("Pharma is Japan's most US-dependent sector"), not a label ("US revenue share by sector"). The caption under the picture uses the same words as the title in it.
+- Subtitle: one grey line saying what is measured, its unit and its basis.
+- Panels: a short heading over each, with its unit ("JGB 10Y, bp change").
+- Colours: navy #1a4d8f for the main series, orange #c2410c for the one to look at, grey #94a3b8 for plain bars, thin pale navy for background lines such as past cycles. More series take teal #0f766e, ochre #a16207, slate #475569 and plum #9d174d, in that order. No other colours: the live charts use these.
+- One colour keeps one meaning through the whole note. If orange is 2026 in one chart, it is not "Republican" or "rose" in the next.
+- Bars that go both ways are one colour, unless up versus down is the point: then orange for up and navy for down, said in the subtitle.
+- White background, light grey grid behind the data, no box around the plot.
+- Lines: thick for the series that matter, thin for context. Label line ends with their latest value where they fit, instead of a legend.
+- Events: a vertical line with its label ("Election day").
+- Numbers: a true minus sign (−1.7, not -1.7); bp for changes in yields, pp for changes in rates, % for changes in levels.
+- Axes: show every line in full. If one has to be cut off, the subtitle says so.
+- Type: IBM Plex Sans, the site's typeface, or Helvetica where it is not installed. One typeface for every chart in a note.
+- Source: a small grey line at the foot of the picture naming each source and dataset, and the last date shown.
+"""
 _LOGO = re.compile(r"^([0-9a-f]{64})\.(png|jpg|webp)$")
 
 
@@ -161,6 +191,25 @@ def set_look(publication_id, accent=None, logo=None):
     _set(publication_id, "accent", accent)
     _set(publication_id, "logo", logo)
     return look(publication_id)
+
+
+# ----------------------------------------------------------- chart style
+
+def chart_colours():
+    return [{"key": k, "label": label, "hex": hx} for k, label, hx in CHART_COLOURS]
+
+
+def chart_style(publication_id):
+    return _get(publication_id, "chart_style") or CHART_STYLE
+
+
+def set_chart_style(publication_id, text):
+    """Empty text puts the default back."""
+    text = (text or "").replace("\r\n", "\n").strip()
+    if len(text) > CHART_STYLE_MAX:
+        raise ProfileError("Keep the chart style under %d characters." % CHART_STYLE_MAX)
+    _set(publication_id, "chart_style", "" if text == CHART_STYLE.strip() else text)
+    return chart_style(publication_id)
 
 
 def view(publication_id):

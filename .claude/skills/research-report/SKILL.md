@@ -134,7 +134,10 @@ Report the result in one line ("41 numbers traced, 0 unresolved").
 - **Charts first**: build each chart as PNG from the CSVs in `data/` (matplotlib), light
   theme, Plover series colours in order — `#1a4d8f #c2410c #0f766e #a16207 #475569
   #9d174d` — tabular numbers, true minus sign, source line embedded at the bottom of the
-  image. Save to `out/charts/`.
+  image. Save to `out/charts/`. Follow the publication's **Chart Style** in full (Writer
+  Desk → Assistant Settings; the default is `CHART_STYLE` in
+  `observatory/app/pub_profile.py`): message titles, one meaning per colour in the
+  note, true minus signs, line-end labels. The editor flags any other colour.
 - **Markdown / Substack** → `out/<slug>.md`: the draft, with charts linked to their
   permanent Plover URLs (with `as_of`) so each is citable.
 - **Word** → load the `anthropic-skills:docx` skill. Title page (title, author, date,

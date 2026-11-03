@@ -160,7 +160,9 @@ Every number the angle and the implications add goes through Step 3 and into `ve
 ## Step 4 — Build the chart
 
 Every brief has exactly one chart, built by [chart.py](chart.py) from a CSV in `data/` —
-never from numbers typed into a script. **The chart shows the angle**, not just the
+never from numbers typed into a script. It follows the publication's **Chart Style**
+(Writer Desk → Assistant Settings; the default is `CHART_STYLE` in
+`observatory/app/pub_profile.py`): the six series colours only, a message title. **The chart shows the angle**, not just the
 headline series: usually two lines, the headline series and the one it is set against.
 When the two come from different datasets, write a combined CSV into `data/` (one
 `period` column, one column each, values copied as published, blanks left blank) with

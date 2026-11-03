@@ -1106,10 +1106,27 @@ function uploadImage(blockEl, file) {
     renderImageBlock(blockEl.querySelector(".dk-content"), m);
     updateCounts();
     changed();
+    colourNote(blockEl, m);
   }).catch(function (err) {
     status.className = "dk-img-status bad";
     status.textContent = err.message;
   });
+}
+
+/* After an upload: say so under the picture when it uses colours outside the
+   publication's chart style (chartColourCheck, desk-plan.js). */
+function colourNote(blockEl, m) {
+  var pub = S.article && S.article.publication;
+  if (!pub || !pub.chart_colours) return;
+  chartColourCheck("/research/media/" + m.media + "." + m.ext, pub.chart_colours).then(function (res) {
+    var st = $(".dk-img-status", blockEl);
+    if (!st || !res.off.length) return;
+    st.hidden = false;
+    st.className = "dk-img-status warn";
+    st.innerHTML = "If this is a chart, it uses colours outside " + escapeHtml(pub.name) + "’s chart style: " +
+      colourWords(res) + '. Redraw it in the six colours listed in <a href="write.html#/p/' + pub.id +
+      '/assistant" target="_blank" rel="noopener">Chart Style</a>.';
+  }).catch(function () {});
 }
 
 /* ---------------------------------------------------------------- paste */
