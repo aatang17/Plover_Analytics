@@ -134,7 +134,7 @@
         // not a stock question: the US economy may answer it (prices, yields, inflation)
         if (e.status !== 422 && e.status !== 404) throw e;
         return preview().then(function (p) {
-          if (p.kind !== "macro") throw e;
+          if (p.kind !== "macro" && p.kind !== "web") throw e;
           return { preview: p };
         }, function () { throw e; });
       });
@@ -143,7 +143,7 @@
     var answer = reader.then(function () {
       // a box on an economy page asks the economy answers first: they know the page, and make no model call
       if (on && !gated()) {
-        return preview().then(function (p) { return p.kind === "macro" ? { preview: p } : full(); }, full);
+        return preview().then(function (p) { return p.kind === "macro" || p.kind === "web" ? { preview: p } : full(); }, full);
       }
       if (!gated()) return full();
       return preview().then(function (p) { return { preview: p }; }, function (e) {
@@ -285,10 +285,10 @@
         (f.as_of ? "<small>" + esc(f.as_of_label || usFmt.dateWords(f.as_of)) + "</small>" : "") + "</dd></div>";
     }).join("");
     // an economy answer's full version is its own public page; a stock answer's waits behind the sign-up
-    var signUp = p.kind !== "macro" && gated();
+    var signUp = p.kind !== "macro" && p.kind !== "web" && gated();
     var here = p.full_url && new URL(p.full_url, location.href);
     var sameView = here && here.pathname === location.pathname && here.search === location.search;
-    var foot = signUp ?
+    var foot = p.kind === "web" ? "" : signUp ?
       "<div class='pa-gate'><p class='pa-gate-h'>The full answer also has</p><ul>" +
         (p.more || []).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ul>" +
         "<a class='btn pa-signup' href='signin.html?returnTo=" + encodeURIComponent(askHref(asked)) + "'>Sign Up Free to See the Full Answer</a>" +
@@ -301,7 +301,10 @@
       (p.lead ? "<p class='pa-text'>" + esc(p.lead) + "</p>" : "") +
       (figs ? "<dl class='pa-figs'>" + figs + "</dl>" : "") +
       ((p.sources || []).length ? "<p class='pa-src'>" + p.sources.map(function (x) { return esc(String(x).replace(/\.\s*$/, "")); }).join(" · ") + "</p>" : "") +
-      (p.calc ? "<p class='pa-src'>" + esc(p.calc) + "</p>" : "") + foot);
+      (p.calc ? "<p class='pa-src'>" + esc(p.calc) + "</p>" : "") +
+      ((p.reports || []).length ? "<p class='pa-src'>" + p.reports.map(function (r) {
+        return "<a href='" + attr(r.url) + "' rel='noopener nofollow' target='_blank'>" + esc(r.credit) + "</a> " + esc(r.note);
+      }).join(" · ") + "</p>" : "") + foot);
   };
 
   Box.prototype.drawMiss = function (text, tries, ours, q) {

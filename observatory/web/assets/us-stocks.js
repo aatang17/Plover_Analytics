@@ -202,7 +202,8 @@
   function newsHtml(sources, recipe) {
     var news = (sources || []).filter(function (s) { return s.url && /^https?:\/\//.test(s.url); });
     if (!news.length) return "";
-    var head = recipe === "web_news" ? "From news reports found by a web search" : "Published on the day";
+    var head = recipe === "web_general" ? "Sources found by a web search" :
+      recipe === "web_news" ? "From news reports found by a web search" : "Published on the day";
     return "<div class='an-news'><p class='an-news-head'>" + head + "</p><ul>" +
       news.map(function (s) {
         return "<li><a href='" + esc(s.url) + "' rel='noopener nofollow' target='_blank'>" + esc(s.credit) + "</a>" +
@@ -562,8 +563,9 @@
       }, function (e) {
         // not a stock question the box answers: the US economy may (inflation, wages, Treasury yields)
         if (e.status !== 422 && e.status !== 404) throw e;
+        heard("Not in Plover's data. Searching the web…");
         return getJSON(PREVIEW + "?q=" + encodeURIComponent(q) + (via ? "&via=" + encodeURIComponent(via) : "")).then(function (p) {
-          if (p.kind !== "macro") throw e;
+          if (p.kind !== "macro" && p.kind !== "web") throw e;
           $("status").hidden = true;
           renderPreview(p, q);
         }, function () { throw e; });
@@ -762,7 +764,8 @@
       (figs ? "<dl class='fp-figs'>" + figs + "</dl>" : "") +
       ((p.sources || []).length ? "<p class='fp-src'>" + p.sources.map(function (x) { return esc(String(x).replace(/\.\s*$/, "")); }).join(" · ") + "</p>" : "") +
       (p.calc ? "<p class='fp-src'>" + esc(p.calc) + "</p>" : "") +
-      (signedIn && p.kind !== "macro" ? "" :
+      (p.kind === "web" ? newsHtml(p.reports, "web_general") : "") +
+      (p.kind === "web" || (signedIn && p.kind !== "macro") ? "" :
         "<div class='fp-more'><p class='fp-more-h'>The full answer also has</p><ul>" +
         (p.more || []).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ul>" +
         "<p><a class='fp-cta' href='" + esc(href) + "'>" +

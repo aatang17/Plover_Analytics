@@ -198,6 +198,25 @@ def _second_try(cur, question, prev, exc):
     return again
 
 
+_MACRO_VERDICTS = {}
+
+
+def macro_on_topic(question, out):
+    """Whether a fixed economy answer shows what was asked. "Japan government debt to GDP"
+    matched the word GDP and got GDP growth; these answers run before any other check."""
+    # one reading per answer: the page's two doors each ask, and must not get different verdicts
+    key = (time.strftime("%Y-%m-%d"), question, out.get("headline"))
+    if key in _MACRO_VERDICTS:
+        return _MACRO_VERDICTS[key]
+    shows, asked_for = on_topic(question, out, QUICK_CHECK_SECONDS)
+    if not shows:
+        _log(question, "off-topic answer stopped", "macro: %s" % out.get("headline"))
+    if len(_MACRO_VERDICTS) > 2000:
+        _MACRO_VERDICTS.clear()
+    _MACRO_VERDICTS[key] = shows
+    return shows
+
+
 def answer(cur, question, prev, opts, inner):
     """The box's answer, through the checks above and back into the reader's language.
     `inner` is the routing in stock_recipes (question, prev, opts as it takes them)."""

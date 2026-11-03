@@ -14,10 +14,13 @@ away. Two routes, tried in this order:
      ready-made analysis run by code (app/recipes): a price index as its
      year-on-year rate, anything else as its latest reading. The full answer
      is the dataset's own page.
+  3. The web (app/us_web.py): a money or economy question neither route holds
+     data for, answered from a search, every source linked and the answer
+     marked as not Plover's data. Advice and forecasts stay refused.
 
 Nothing here computes a figure the pages do not: the stock answer is passed
 through, and the one calculated rate (year on year) carries its formula. A
-question neither route can answer says so, with what Plover does hold.
+question no route can answer says so, with what Plover does hold.
 """
 import datetime
 import re
@@ -90,9 +93,11 @@ CATALOGUE = {
         (r"core (?:cpi|inflation)|less fresh food|(?:ex|excluding) fresh food", "cpi-jp", "0161", "yoy"),
         (r"tokyo", "cpi-tokyo", "0001", "yoy"),
         (r"\brice\b", "cpi-jp-items", "0004", "yoy"),
+        # the BOJ's holdings only when they are asked for: "BoJ" alone once answered every question about the bank with them
+        (r"balance sheet|jgb holdings|(?:boj|bank of japan)(?:'s)? (?:holdings|assets)|"
+         r"(?=.*(?:\bboj\b|bank of japan))(?=.*\bjgbs?\b).*\b(?:owns?|holds?|holding|bought|buy|buying|purchas\w*)\b", "boj-assets", "MA03021034S", "level"),
         (r"\bjgb|\b(?:10|ten)[- ]year|yield|bond", "jgb-yields", "10Y", "level"),
         (r"monetary base", "boj-assets", "MA03021001S", "level"),
-        (r"\bboj\b|bank of japan|balance sheet|jgb holdings", "boj-assets", "MA03021034S", "level"),
         (r"\bgdp\b|economy grow|growth", "gdp-jp", "gdp.real_sa", "yoy"),
         (r"unemployment|jobless", "unemployment-jp", "sa.unemployment_rate.total", "level"),
         (r"real wages?", "wages-jp", "real_wage_yoy.all.5plus.all", "level"),
@@ -574,6 +579,43 @@ def _macro(q):
             "full_url": page or "us-treasury.html"}
 
 
+def _macro_on_topic(q):
+    """_macro, read against the question like the box's other answers: the catalogue
+    goes by single words, so a word in common is not enough (app/ask_guard.py)."""
+    out = _macro(q)
+    if out is None:
+        return None
+    from .. import ask_guard
+    return out if ask_guard.macro_on_topic(q, out) else None
+
+
+def _headline(text):
+    """(first sentence, the rest). "5 p.m. Tokyo time" does not end a sentence, and "No." alone says too little."""
+    parts = re.split(r"(?<![ap]\.m\.)(?<!\bU\.S\.)(?<!\bNo\.(?=\s\d))(?<=[.!?])\s+(?=[A-Z0-9\"“])", text)
+    head = parts.pop(0)
+    while parts and len(head) < 25:
+        head += " " + parts.pop(0)
+    return head, " ".join(parts)
+
+
+def _web(q, prev=""):
+    """A question Plover holds no data for, from the web, or None when the search
+    is off, over its cap, finds no source, or the question is not about money."""
+    from .. import us_web
+    try:
+        got = us_web.search(q, prev or None, general=True)
+    except us_web.WebError:
+        return None
+    head, lead = _headline(got["text"])
+    asked = datetime.date.fromisoformat(got["asked_at"][:10]) if got.get("asked_at") else datetime.date.today()
+    return {"kind": "web", "recipe": "web_news", "read_as": q, "headline": head, "lead": lead,
+            "figures": [], "calc": None, "more": [],
+            "sources": ["From a web search on %d %s %d, not from data Plover holds. Read the sources before relying on it." % (
+                asked.day, MONTHS[asked.month - 1], asked.year)],
+            "reports": [{"credit": s["title"], "note": s["site"], "url": s["url"]} for s in got["sources"]],
+            "full_url": "/?q=" + _quote(q)}
+
+
 def _company_named(q):
     try:
         from .. import sec_api, stock_recipes, us_link
@@ -621,17 +663,23 @@ def preview(q: str = Query(..., min_length=1, max_length=300),
     q = ask_language.country_as_us(q)
     read = ask_language.read(q)
     if not read or not read.get("english"):
-        return _preview(q, prev, on)
+        return _sent(_preview(q, prev, on))
     # another language: read in English, every route below as usual, answered in that language
     english_prev = ((ask_language.read(prev) or {}).get("english") or prev) if prev else prev
     out = _preview(read["english"], english_prev, on)
-    if isinstance(out, dict):
-        ask_log.note("/api/v1/assistant/preview", q, out.get("kind") != "none", out.get("miss") or out.get("kind"))
-        full = out.get("full_url")
-        out = ask_language.preview_in(read["language"], out)
-        out["question"] = q
-        if full:
-            out["full_url"] = "/?q=" + _quote(q)
+    ask_log.note("/api/v1/assistant/preview", q, out.get("kind") != "none", out.get("miss") or out.get("kind"))
+    full = out.get("full_url")
+    out = ask_language.preview_in(read["language"], out)
+    out["question"] = q
+    if full:
+        out["full_url"] = "/?q=" + _quote(q)
+    return _sent(out)
+
+
+def _sent(out):
+    """News dates by the hour: the response cache must not keep it (app/us_web.py)."""
+    if out.get("recipe") == "web_news":
+        return JSONResponse(content=jsonable_encoder(out), headers={"Cache-Control": "no-store"})
     return out
 
 
@@ -651,7 +699,7 @@ def _preview(q, prev, on):
     if not prev and _is_macro(q):
         out = None
         try:
-            out = _macro(q)
+            out = _macro_on_topic(q)
         except Exception:  # noqa: BLE001 — the stock route still gets its turn
             out = None
         if out is not None:
@@ -670,11 +718,14 @@ def _preview(q, prev, on):
     if out is None and not declined:
         # a follow-up ("and Japan?") is read whole by the stock route's reader; that reading answers here
         whole = getattr(refusal, "question", None) if isinstance(refusal, HTTPException) else None
-        out = _macro(whole) if whole and whole != q else None
+        out = _macro_on_topic(whole) if whole and whole != q else None
         if out is None:
-            out = _macro(q)
+            out = _macro_on_topic(q)
         if out is None and prev and not _is_macro(q):
-            out = _macro(prev + " " + q)
+            out = _macro_on_topic(prev + " " + q)
+    if out is None and refusal != "error" and (not isinstance(refusal, HTTPException) or
+                                               (refusal.status_code < 500 and _miss_kind(refusal) != "policy")):
+        out = _web(getattr(refusal, "question", None) or q, prev)
     if out is None:
         # the same reason, in the same words, as a signed-in reader gets (app/ask_miss.py)
         if isinstance(refusal, HTTPException):
@@ -688,7 +739,4 @@ def _preview(q, prev, on):
                 "holds": HOLDS}
     ask_log.note("/api/v1/assistant/preview", q, True, out.get("kind"))
     out.setdefault("question", q)
-    if out.get("recipe") == "web_news":
-        # news on the web dates by the hour: the response cache must not keep it (app/us_web.py)
-        return JSONResponse(content=jsonable_encoder(out), headers={"Cache-Control": "no-store"})
     return out

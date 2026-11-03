@@ -107,6 +107,21 @@ Search the web for recent news reports, then answer the question:
 - Plain text only: no markdown, no bold, no lists, no headings."""
 
 
+# Anything else the box holds no data for: on 2026-11-03 "When did the BoJ last raise rates?"
+# was refused, or answered with JGB holdings, when any search finds it in a second.
+GENERAL_PROMPT = """You answer a reader's question from the web, for a financial data site. Today is %(today)s.
+If the question is not about economies, central banks, markets, companies, business or public money, reply only NOT_FINANCE and do not search.
+Otherwise search the web, then answer:
+- At most three short sentences, in plain words, for an individual investor. The first sentence, under 25 words, answers the question directly.
+- Prefer the official source (the central bank, the statistics office, the company) over press reports. Give the date of any figure or event.
+- "Latest", "last", "current" or "next" means as of today: search for reports from the past few weeks first, naming the month and year, and do not stop at an older page, even an official one. The newest dated source decides.
+- For a central bank's rate change, the date is the day the decision was announced, not the day it took effect.
+- Use only what the sources say. Never guess. If they disagree, or do not settle it, say so.
+- When a previous question is given, the question follows it: read it as being about the same subject.
+- No advice on buying or selling and no price targets. Never give your own view of what will happen: about the future, say only what a named source expects, and name it in the first sentence.
+- Plain text only: no markdown, no bold, no lists, no headings."""
+
+
 def _norm(s):
     return re.sub(r"\s+", " ", (s or "").strip().lower()).strip(" ?.!")
 
@@ -169,18 +184,19 @@ def market_slot(now=None):
     return t.date().isoformat(), part
 
 
-def search(question, prev=None, share=None):
+def search(question, prev=None, share=None, general=False):
     """The news answer to a why question: {"text", "sources", "searches",
     "model", "asked_at"}. Raises WebError when it cannot answer. `share`
     (a company or index and a period) makes the answer one every reader
-    asking the same thing shares until the next part of the day."""
+    asking the same thing shares until the next part of the day. `general`
+    is any question the box holds no data for, not why something moved."""
     cfg = config()
     if cfg is None:
         raise WebError("web search is off")
     if share:
         key_ = ("shared", market_slot(), tuple(share))
     else:
-        key_ = (datetime.datetime.now().strftime("%Y-%m-%dT%H"), _norm(question), _norm(prev))
+        key_ = (datetime.datetime.now().strftime("%Y-%m-%dT%H"), _norm(question), _norm(prev), general)
     with _LOCK:
         _today_stats()
         if key_ in _CACHE:
@@ -201,16 +217,16 @@ def search(question, prev=None, share=None):
                 return dict(_CACHE[key_])
         raise WebError("the same search, already running, found nothing")
     try:
-        return _search(cfg, key_, question, prev)
+        return _search(cfg, key_, question, prev, GENERAL_PROMPT if general else PROMPT)
     finally:
         with _LOCK:
             _INFLIGHT.pop(key_).set()
 
 
-def _search(cfg, key_, question, prev):
+def _search(cfg, key_, question, prev, prompt=PROMPT):
     api_key, model = cfg
     body = {"model": model, "tools": [{"type": "web_search"}],
-            "input": [{"role": "system", "content": PROMPT % {"today": datetime.date.today().isoformat()}},
+            "input": [{"role": "system", "content": prompt % {"today": datetime.date.today().isoformat()}},
                       {"role": "user", "content": us_ask_model.user_message(question, prev)}]}
     if us_ask_model._REASONING_MODELS.match(model):
         body["reasoning"] = {"effort": "low"}
