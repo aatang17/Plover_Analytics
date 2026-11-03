@@ -190,7 +190,7 @@ class SecondTry(unittest.TestCase):
         def inner(cur, q, prev, opts):
             raise self.refused()
         with mock.patch.object(ask_guard, "_japan", return_value=None), mock.patch.object(ask_guard, "_second_try", return_value=None), \
-                mock.patch.object(ask_guard, "_own_data", return_value=None):
+                mock.patch.object(ask_guard, "_own_data", return_value=None), mock.patch.object(ask_guard, "_economy", return_value=None):
             with self.assertRaises(HTTPException) as got:
                 ask_guard.answer(None, "Foo capex", None, None, inner)
         self.assertIn("capex", got.exception.detail)

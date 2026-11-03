@@ -1661,8 +1661,11 @@ many questions took each route and the median wait, so the split can be watched.
 | Quick lane (`stock_recipes.quick_match`) | A company (or manager, industry, index) plus a few words that name one shape, read by a fixed grammar | The grammar matches the whole question | under 1 s, no model |
 | Reader (`app/us_ask_model.py`) | One short model call fills a form (shape, companies, period, ranking); code runs the shape | The quick lane did not match | 3–8 s, one call, cached per question per day |
 | Steps (`app/us_steps.py`) | The model writes the steps and one SQL query over the sandbox tables; code runs and checks it | The reader names no shape: counts, shares, screens with several conditions, custom maths | 10–30 s, two to four calls, plan cached per question per day |
+| Economic catalogue (`app/econ_ask.py`) | The model picks from every series dataset in the registry, then one calculation from a closed list; code loads the series through `api.observations`, does the arithmetic and writes every figure | Any route above refuses, or a fixed economy answer shows the wrong thing | 5-8 s, two calls, cached per question per day |
 
 Every answer is then read against the question once (`ask_guard.on_topic`: about 0.8 s, one short model call, and it lets the answer through if the model is slow or off). An answer that shows something else, and a refusal, get one more try (`ask_guard.checked`, `_second_try`): the Japanese filings, then steps if steps has not run. If that fails too the reader is told; a different figure is never shown.
+
+Only the catalogue may say the economic data lacks something, because only it has looked. The other routes see part of what Plover holds and say they could not answer. A dataset needs no change here: its manifest makes it reachable, and `ask_coverage.check_catalogue` checks every dataset daily.
 
 Rules of thumb when adding something:
 

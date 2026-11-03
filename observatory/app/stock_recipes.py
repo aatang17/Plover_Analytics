@@ -5460,8 +5460,8 @@ MACRO_WORDS = re.compile(
     r"milk|bread|coffee|chicken|beef|bacon|bananas|electricity|natural gas|utility bills?|grocery prices|used car prices|new car prices|"
     r"medical care|health ?care costs?|t.?bills?|real yields?|tips|cost of living|"
     r"(?:10|ten|2|two|5|five|30|thirty)[- ]year (?:yield|rate|bond|note)|tips)\b", re.I)
-MACRO_MISS = ("That reads as a question about the economy, and Plover's data doesn't include that series yet. It holds US inflation, "
-              "wages, jobs and Treasury yields, and prices, jobs, GDP and yields for Japan and Hong Kong.")
+MACRO_MISS = ("That reads as a question about the economy, and I couldn't match it to a series just now. "
+              "Plover's economic datasets for the US, Japan and Hong Kong are listed under Data.")
 
 
 # a dated event the events table holds (app/us_tables.py): a question about the market or a stock

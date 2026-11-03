@@ -1822,6 +1822,41 @@
     </ul>
     </div>
   </details>
+  <details class="ds" id="calc-box-economy">
+    <summary><span>Economic Questions in the Question Box</span><span class="ds-note">every dataset, figures by code</span></summary>
+    <div class="ds-body">
+    <p>A question about the economy is read against every economic dataset Plover holds. An AI model
+    chooses the series and one calculation. Code then loads those series through the same function
+    that serves the API and works out every figure. No number written by the model reaches the page,
+    and every answer names its series and shows its formula under "How it was worked out".</p>
+    <ul>
+      <li><b>Published values.</b> Shown as released, not recomputed.</li>
+      <li><b>Share.</b> First series ÷ second series × 100, for dates both have. Yen amounts in
+      different units are put on one scale first. A share of a rate or an index is refused.</li>
+      <li><b>Difference.</b> First series − second series, in the same unit.</li>
+      <li><b>Change on a year earlier.</b> (Value ÷ the same period a year before − 1) × 100. It can
+      differ from a published rate by 0.1 pp.</li>
+      <li><b>Total of a customs line.</b> Customs data is published by destination, with no total, so
+      the destinations are added up. A destination with no figure in a month adds nothing.</li>
+      <li><b>Yearly total.</b> The twelve monthly (or four quarterly) published figures of a calendar
+      year, added up. A year with a month or quarter missing is left out, not shown short. Rates and
+      indices are never added.</li>
+      <li><b>A yearly amount over GDP.</b> GDP is published per quarter at an annual rate, so the
+      year's GDP is the mean of the four quarters from the start of that year. A year without all four
+      is left out.</li>
+      <li><b>Dates.</b> Two tables that date one quarter differently are matched by calendar quarter.
+      A yearly series is never divided by a quarterly one. Fiscal years start in April and are
+      labelled by the year they start in. A series with no reading in the last four years is marked
+      as stopped.</li>
+      <li><b>Which series.</b> The model chooses, and it can choose a narrower or wider measure than
+      you meant. The answer's title and note say what was used, and a loose question offers the other
+      common reading.</li>
+      <li><b>"No series".</b> The box says this only after looking through the catalogue twice, the
+      second time over a wider list of series.</li>
+    </ul>
+    </div>
+  </details>
+
   <details class="ds" id="calc-us-sectors">
     <summary><span>Sectors in US Rankings</span><span class="ds-note">SEC industry codes, switches</span></summary>
     <div class="ds-body">

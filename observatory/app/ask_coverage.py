@@ -26,6 +26,7 @@ Two checks, because one costs money:
 import argparse
 import datetime
 import json
+import re
 import time
 
 from fastapi import HTTPException
@@ -132,6 +133,55 @@ def check_tables(cur):
             if not rows:
                 fails.append({"col": col, "why": "%s: nothing filed under this figure" % name})
     return fails
+
+
+def check_catalogue():
+    """Every economic dataset can be reached by the box, with no model: named in what the
+    reader is shown, its series listed, and one series reading back through the API.
+    {asked, failed: [...]}. A dataset added tomorrow is in this list by itself."""
+    from . import analysis, econ_ask
+    ms = econ_ask.datasets()
+    shown, failed = econ_ask.catalogue_text(ms), []
+    for m in ms:
+        mid, name = m["id"], (m.get("name") or {}).get("en") or m["id"]
+        why = None
+        if mid + " | " not in shown:
+            why = "not in the catalogue the reader sees"
+        else:
+            rows = econ_ask.series_in(mid, re.findall(r"[A-Za-z]{4,}", name))
+            if not rows:
+                why = "its series could not be listed"
+            else:
+                try:
+                    if not analysis.load({"s": "%s:%s" % (mid, rows[0]["code"])}, join="any")[0]:
+                        why = "%s reads back empty" % rows[0]["code"]
+                except analysis.AnalysisError as exc:
+                    why = str(exc)[:120]
+        if why:
+            failed.append({"dataset": mid, "why": why})
+    return {"asked": len(ms), "failed": failed}
+
+
+def check_catalogue_model(sample, offset=0, ask=None):
+    """A sample a night: a plain question for one series of each dataset in turn must find a
+    series in that dataset's subject rather than be refused."""
+    from . import econ_ask
+    ms = econ_ask.datasets()
+    failed, asked = [], 0
+    for i in range(min(sample, len(ms))):
+        m = ms[(offset + i) % len(ms)]
+        rows = econ_ask.series_in(m["id"], [])
+        if not rows:
+            continue
+        q = "%s: %s, latest" % ((m.get("name") or {}).get("en") or m["id"], rows[0].get("name_en") or rows[0]["code"])
+        asked += 1
+        try:
+            out = (ask or econ_ask.answer)(q)
+            if not out or not out.get("headline"):
+                failed.append({"dataset": m["id"], "question": q, "why": "no answer"})
+        except HTTPException as exc:
+            failed.append({"dataset": m["id"], "question": q, "why": str(exc.detail)[:160]})
+    return {"asked": asked, "total": len(ms), "failed": failed}
 
 
 def check_code(cur):

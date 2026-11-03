@@ -18,6 +18,9 @@ line saying it showed cross-shareholdings. The log called it answered. So:
   * A Japanese company is read from its Japanese filings (app/jp_company_ask.py).
   * A refusal gets one more try too (_second_try): on 2026-11-02 "who is selling
     Kioxia?" was refused in a second, while the 5% filings that answer it were on file.
+  * A refusal goes to the whole economic catalogue before it reaches a reader
+    (_economy, app/econ_ask.py): the routes above see only part of what Plover holds,
+    so none of them can say Plover lacks something.
 
 on_topic fails open, like every review on this box: if the model is off or slow
 the answer goes out and the log says so. The fixed recipes hold their own line for
@@ -30,7 +33,7 @@ import time
 
 from fastapi import HTTPException
 
-from . import ask_language, ask_miss, ask_progress, jp_company_ask, jp_holdings_ask
+from . import ask_language, ask_miss, ask_progress, econ_ask, jp_company_ask, jp_holdings_ask
 
 FOREIGN_SCRIPT = re.compile(r"[぀-ヿ㐀-鿿가-힯Ѐ-ӿ֐-ۿऀ-ॿ฀-๿]")
 CHECKED_ROUTES = ("quick", "reader", "patterns", "steps")
@@ -107,7 +110,7 @@ def on_topic(question, out, seconds=CHECK_SECONDS):
 
 def _not_shown(question, asked_for):
     what = "that" if not asked_for else "“%s”" % asked_for
-    return ask_miss.miss("Plover's data doesn't hold %s, so I haven't shown a different figure in its place." % what, "not_held")
+    return ask_miss.miss("I couldn't find %s in the company data, so I haven't shown a different figure in its place." % what, "not_held")
 
 
 def checked(cur, question, out):
@@ -198,6 +201,8 @@ def _second_try(cur, question, prev, exc):
     return again
 
 
+# what a refusal said when the catalogue might still answer; advice and our own failures never do
+ECONOMY_MISSES = ("not_held", "unsure", "other_market", "unclear")
 _MACRO_VERDICTS = {}
 
 
@@ -215,6 +220,31 @@ def macro_on_topic(question, out):
         _MACRO_VERDICTS.clear()
     _MACRO_VERDICTS[key] = shows
     return shows
+
+
+def _economy(cur, question, prev, exc):
+    """The whole catalogue's answer to a refused question, or None when the refusal stands.
+    Raises the catalogue's own refusal when it looked and nothing measures it."""
+    from . import stock_recipes
+    from .assistant import preview
+    if exc.status_code >= 500:
+        return None
+    text = exc.detail if isinstance(exc.detail, str) else ""
+    if (getattr(exc, "miss", None) or ask_miss.classify(text)) not in ECONOMY_MISSES or NO_SUCH_FILER.search(text):
+        return None
+    asked = getattr(exc, "question", None) or question
+    if text == stock_recipes.MACRO_MISS:                     # the economy answers may hold it: the page asks them next
+        try:
+            fixed = preview._macro(asked)
+        except Exception:                                    # noqa: BLE001 — the reader below still gets its turn
+            fixed = None
+        if fixed and macro_on_topic(asked, fixed):
+            return None
+    out = econ_ask.answer(asked, prev if asked == question else None)
+    if out is not None and not on_topic(asked, out)[0]:
+        _log(asked, "off-topic answer stopped", "economy: %s" % out.get("headline"))
+        return None
+    return out
 
 
 def answer(cur, question, prev, opts, inner):
@@ -247,7 +277,7 @@ def answer(cur, question, prev, opts, inner):
         try:
             out = right_currency(checked(cur, question, inner(cur, question, prev, opts)))
         except HTTPException as exc:
-            out = _second_try(cur, question, prev, exc)
+            out = _second_try(cur, question, prev, exc) or _economy(cur, question, prev, exc)
             if out is None:
                 if language and not getattr(exc, "question", None):
                     exc.question = question                    # the economy answers read the English

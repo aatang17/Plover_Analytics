@@ -314,7 +314,7 @@ _GENERIC_NAMES = {"TEN", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", 
                   "FIRST", "LAST", "NEXT", "BIG", "LARGE", "MOST", "MARKET", "VALUE", "GLOBAL", "GENERAL",
                   # a kind of business, not a name: "Equity Residential" was read as Armour Residential (2026-11-02)
                   "RESIDENTIAL", "COMMUNITIES", "APARTMENT", "STORAGE", "MORTGAGE", "INDUSTRIAL", "LOGISTICS", "INFRASTRUCTURE",
-                  "HOSPITALITY", "PIPELINE", "BUILDERS", "STEEL", "PETROLEUM",
+                  "HOSPITALITY", "PIPELINE", "BUILDERS", "STEEL", "PETROLEUM", "GOVERNMENT", "PROPERTIES", "FEDERAL", "TREASURY", "PUBLIC",
                   "AMERICAN", "UNITED", "NATIONAL", "CAPITAL", "FINANCIAL", "ENERGY", "HEALTH", "MEDICAL",
                   "DIGITAL", "TARGET", "GAP", "MATCH", "YIELD", "PRICE", "EARNINGS", "REPORT", "INSIDER",
                   "FUND", "BANK", "BANKS", "OIL", "GAS", "GOLD", "SILVER", "SUN", "STAR", "BOX", "SQUARE",

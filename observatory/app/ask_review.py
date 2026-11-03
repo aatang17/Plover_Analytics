@@ -33,6 +33,7 @@ from . import ask_log, ask_miss, sec_api, us_figures
 REVIEW_DAYS = 14
 REPLAY_MAX = 40             # questions asked again per day (each can take a few model calls)
 MATRIX_SAMPLE = 30          # model questions per day from the matrix
+CATALOGUE_SAMPLE = 8        # economic datasets asked about per day, so the whole catalogue comes round about weekly
 START_AFTER_SECONDS = 1800  # the first half hour after a boot belongs to readers
 TAKE_OVER_SECONDS = 3 * 3600
 _STARTED = time.time()
@@ -51,12 +52,13 @@ def enabled():
     return os.environ.get("ASK_REVIEW", "").strip() != "0"
 
 
-_NOT_ASKED_AGAIN = ("policy", "unclear", "other_market")
+# "another market" is asked again: Japan's GDP and Hong Kong's CPI were filed here as fine, unread
+_NOT_ASKED_AGAIN = ("policy", "unclear")
 
 
 def sort_miss(question, kind):
     """Which pile a refused question goes on."""
-    if kind in ("policy", "unclear", "other_market"):
+    if kind in ("policy", "unclear"):
         return "fine"
     verdict = us_figures.judge("", question)["verdict"]
     if verdict == "held":
@@ -85,10 +87,25 @@ def refused(days=REVIEW_DAYS, today=None):
     return sorted(seen.values(), key=lambda r: r["last"], reverse=True)
 
 
+def _full_answer(cur, question):
+    """What a reader gets: the box, then the fixed economy answers the page asks after it."""
+    from . import stock_recipes
+    from .assistant import preview
+    try:
+        return stock_recipes.answer(cur, question)
+    except HTTPException as exc:
+        if exc.detail != stock_recipes.MACRO_MISS:
+            raise
+        fixed = preview._macro(question)
+        if not fixed:
+            raise
+        return fixed
+
+
 def replay(cur, rows, ask=None):
     """Ask each question again. Each row gains: now ('answers' | the kind), said, pile."""
     from . import stock_recipes
-    ask = ask or (lambda q: stock_recipes.answer(cur, q))
+    ask = ask or (lambda q: _full_answer(cur, q))
     out = []
     for r in rows:
         row = dict(r)
@@ -121,16 +138,21 @@ def run(cur=None, today=None):
     rows = refused(today=today)
     done = replay(cur, rows[:REPLAY_MAX])
     code = ask_coverage.check_code(cur)
+    catalogue = ask_coverage.check_catalogue()
+    catalogue_model = {"asked": 0, "total": 0, "failed": []}
     model = {"asked": 0, "failed": [], "total": 0}
     if us_ask_model.provider() is not None:
         model = ask_coverage.check_model(cur, MATRIX_SAMPLE, _matrix_offset(today))
+        catalogue_model = ask_coverage.check_catalogue_model(CATALOGUE_SAMPLE, today.toordinal() * CATALOGUE_SAMPLE)
     piles = {}
     for r in done:
         piles[r["pile"]] = piles.get(r["pile"], 0) + 1
     report = {"day": today.isoformat(), "at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds") + "Z",
               "window_days": REVIEW_DAYS, "refused": len(rows), "replayed": len(done), "piles": piles, "questions": done,
               "matrix": {"code_asked": code["asked"], "code_failed": code["failed"], "model_asked": model["asked"],
-                         "model_total": model["total"], "model_failed": model["failed"]}}
+                         "model_total": model["total"], "model_failed": model["failed"]},
+              "catalogue": {"datasets": catalogue["asked"], "failed": catalogue["failed"], "model_asked": catalogue_model["asked"],
+                            "model_failed": catalogue_model["failed"]}}
     os.makedirs(str(ask_log.ANALYTICS_DIR), exist_ok=True)
     tmp = str(report_path()) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -153,7 +175,8 @@ def summary_text(report):
     """The Telegram message, or None when nothing needs fixing."""
     m = report["matrix"]
     wrong = [r for r in report["questions"] if r["pile"] == "fix"]
-    if not wrong and not m["code_failed"] and not m["model_failed"]:
+    cat = report.get("catalogue") or {}
+    if not wrong and not m["code_failed"] and not m["model_failed"] and not cat.get("failed") and not cat.get("model_failed"):
         return None
     lines = ["Ask box review, %s:" % report["day"]]
     if wrong:
@@ -163,6 +186,10 @@ def summary_text(report):
         lines.append("%d of %d figure checks failed without the AI." % (len(m["code_failed"]), m["code_asked"]))
     if m["model_failed"]:
         lines.append("%d of %d figure questions failed with the AI, e.g. %s" % (len(m["model_failed"]), m["model_asked"], m["model_failed"][0]["question"]))
+    if cat.get("failed"):
+        lines.append("%d of %d economic datasets the box cannot reach, e.g. %s" % (len(cat["failed"]), cat["datasets"], cat["failed"][0]["dataset"]))
+    if cat.get("model_failed"):
+        lines.append("%d of %d economic dataset questions failed with the AI, e.g. %s" % (len(cat["model_failed"]), cat["model_asked"], cat["model_failed"][0]["question"]))
     lines.append("Details: admin Traffic page, Ask Box tab.")
     return "\n".join(lines)
 

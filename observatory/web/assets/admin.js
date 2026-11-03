@@ -1195,6 +1195,9 @@ function trafficReview(rv) {
   var line = "<p>Every filed figure, asked every way: " + fmtCount((m.code_asked || 0) - (m.code_failed || []).length) + " of " + fmtCount(m.code_asked || 0) +
     " answered without the AI; " + fmtCount((m.model_asked || 0) - (m.model_failed || []).length) + " of " + fmtCount(m.model_asked || 0) +
     " answered with it (today\u2019s sample from " + fmtCount(m.model_total || 0) + " questions).</p>";
+  var cat = rv.catalogue;
+  if (cat) line += "<p>Every economic dataset: " + fmtCount((cat.datasets || 0) - (cat.failed || []).length) + " of " + fmtCount(cat.datasets || 0) +
+    " reachable by the box; " + fmtCount((cat.model_asked || 0) - (cat.model_failed || []).length) + " of " + fmtCount(cat.model_asked || 0) + " answered with the AI in today\u2019s sample.</p>";
   var fails = failed.length
     ? '<div class="table-wrap"><table class="data"><thead><tr><th>Figure Check That Failed</th><th>What Happened</th></tr></thead><tbody>' +
       failed.slice(0, 40).map(function (f) {

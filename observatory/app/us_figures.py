@@ -298,7 +298,7 @@ GAPS = [
     r"earnings calls?|\btranscripts?\b|\bnews\b|press releases?|\bsentiment\b|social media",
     r"\bcrypto|\bbitcoin\b|\bcommodit|\bcurrenc(?:y|ies)\b|exchange rates?|private compan",
     r"\bno debt\b|\bdebt.free\b|didn't tag|did not tag",
-    r"\bjapan|hong kong|\bnon.us\b|foreign.listed|not (?:listed|a us)",
+    r"\bnon.us\b|foreign.listed|not (?:listed|a us)",
     r"more than eight quarters|eight quarters|beyond the last",
 ]
 _GAP = re.compile("|".join("(?:%s)" % g for g in GAPS), re.I)

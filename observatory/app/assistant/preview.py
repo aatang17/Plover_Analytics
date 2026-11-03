@@ -193,8 +193,8 @@ def _allowed(q):
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
           "September", "October", "November", "December"]
 
-HOLDS = ("Plover answers questions about US-listed companies (owners, earnings, buybacks, insider "
-         "trades, prices and valuations) and US inflation, wages and Treasury yields.")
+HOLDS = ("Plover answers questions about listed companies (owners, earnings, buybacks, insider trades, prices and "
+         "valuations) and official economic statistics for the US, Japan and Hong Kong, from inflation and jobs to Treasury yields and government finance.")
 
 
 def _num(v, dp=1):
@@ -689,6 +689,11 @@ def _preview(q, prev, on):
     try:
         out = macro_read.answer(q, prev, on, _cur())
     except Exception:  # noqa: BLE001 — the routes below still get their turn
+        out = None
+    # a fixed answer that shows something else goes to the whole catalogue (the stock route's refusal: app/econ_ask.py)
+    from .. import ask_guard
+    off_topic = out is not None and not ask_guard.macro_on_topic(q, out)
+    if off_topic:
         out = None
     if out is not None:
         ask_log.note("/api/v1/assistant/preview", q, True, out.get("kind"))

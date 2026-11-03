@@ -239,4 +239,4 @@ def reply(question, exc=None, cur=None, status=None):
     read = ask_language.read(question)
     english = read["english"] if read and read.get("english") else question
     return ask_language.reply_in(question, {"detail": sentence, "miss": kind,
-                                            "try": suggestions(english, kind, text, cur, getattr(exc, "tries", None))})
+                                            "try": suggestions(english, kind, text, None if getattr(exc, "economy", False) else cur, getattr(exc, "tries", None))})
