@@ -23,7 +23,11 @@ reader with no account, when accounts are switched on. Not counted: anyone
 signed in, a click on one of the page's own examples (via=example), an answer
 that failed, and every server where accounts are off (the whole answer shows
 there, as before). The plain /api/v1/us/ask route counts too, but only when
-the response cache did not answer for it; the page uses the stream.
+the response cache did not answer for it; the page uses the stream. A
+question typed into a box on a data page (web/assets/page-ask.js) counts
+whatever answers it: an economy answer there is counted by POST
+/api/v1/us/ask/free, since its route is cached. Once the allowance is used,
+that box asks the reader to sign up, and Your Plover answers the question.
 
 The page decides
 ----------------

@@ -187,6 +187,16 @@ def run(recipe: str,
         figure: str = Query("", description="a filed line in words, e.g. debt, research spending"),
         days: int = Query(14, ge=1, le=120)):
     """Run one shape with its blanks filled explicitly, no word matching."""
+@router.post("/free")
+def free_take(request: Request):
+    """A question box on a data page (web/assets/page-ask.js) showed an answer
+    the stream did not count: an economy answer, read from the preview route,
+    whose replies the response cache may serve. One is taken from the day's
+    allowance, as a streamed stock answer is; what is left comes back."""
+    out = free_answers.take(free_answers.reader(request)) or {"free": None, "left": None}
+    return JSONResponse(content=out, headers={"Cache-Control": "no-store"})
+
+
     cur = sec_api._require()
     out = stock_recipes.run_explicit(cur, recipe, {"company": company, "company_2": company_2, "industry": industry,
                                                     "manager": manager, "since": since, "min_value": min_value,

@@ -47,6 +47,37 @@
     return me.on && !me.email && !previewOff && !(me.free && me.free.left > 0);
   }
 
+  // A signed-out reader's typed questions share the day's free answers with the
+  // front page, economy answers included. Once they are used, the next typed
+  // question is not answered here: the reader signs up and Your Plover answers
+  // it, with the question before it in the same chat and a link back to this
+  // page. The page's own suggested questions stay free (via=example).
+  function counted(via) {
+    return me.on && !me.email && !previewOff && via !== "example" && me.free && me.free.free > 0;
+  }
+
+  function handOff(via) {
+    return counted(via) && me.free.left <= 0;
+  }
+
+  function takeFree() {
+    return fetch(FREE, { method: "POST", headers: { Accept: "application/json" } }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (f) {
+      if (f && f.free != null) me.free = f;
+    }).catch(function () { /* the count is the server's; a lost one costs the reader nothing */ });
+  }
+
+  // Your Plover, asked this question, with the one before it and the way back here
+  function ploverHref(q, prev) {
+    var h1 = document.querySelector("h1");
+    var from = h1 ? h1.textContent.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+    return "my.html?q=" + encodeURIComponent(q) +
+      (prev && prev !== q ? "&prev=" + encodeURIComponent(prev) : "") +
+      "&back=" + encodeURIComponent(location.pathname + location.search) +
+      (from ? "&from=" + encodeURIComponent(from) : "");
+  }
+
   /* ---- one box --------------------------------------------------------- */
   function Box(host) {
     this.host = host;
@@ -140,7 +171,9 @@
       });
     }
 
+    var before = this.last;               // the question this one follows, for Your Plover's chat
     var answer = reader.then(function () {
+      if (handOff(via)) return { handOff: true };
       // a box on an economy page asks the economy answers first: they know the page, and make no model call
       if (on && !gated()) {
         return preview().then(function (p) { return p.kind === "macro" || p.kind === "web" ? { preview: p } : full(); }, full);
@@ -158,7 +191,12 @@
 
     return Promise.race([answer, slow]).then(function (got) {
       if (!current()) return;
+      if (got.handOff) { self.drawHandOff(q, before); return; }
       self.last = (got.full && got.full.question) || (got.preview && got.preview.question) || q;
+      // the stream counts its own answers; an economy answer from the preview route is counted here
+      if (got.preview && (got.preview.kind === "macro" || got.preview.kind === "web") && counted(via)) {
+        takeFree().then(function () { if (current()) self.noteFree(); });
+      }
       if (got.full) self.drawFull(got.full, q);
       else if (got.preview.kind === "none") self.drawMiss(got.preview.message, got.preview.try, false, q);
       else self.drawPreview(got.preview, q);
@@ -305,6 +343,24 @@
       ((p.reports || []).length ? "<p class='pa-src'>" + p.reports.map(function (r) {
         return "<a href='" + attr(r.url) + "' rel='noopener nofollow' target='_blank'>" + esc(r.credit) + "</a> " + esc(r.note);
       }).join(" · ") + "</p>" : "") + foot);
+  };
+
+  // The free answer is used: this question goes to Your Plover after a free sign-up.
+  Box.prototype.drawHandOff = function (q, before) {
+    this.show(topLine(q) +
+      "<p class='pa-head'>Sign up free to keep asking</p>" +
+      "<p class='pa-text'>You have used today's free answer. Sign up with your email and Plover answers this question " +
+      "straight away" + (before ? ", in the same chat as your last one" : "") + ". A link there brings you back to this page.</p>" +
+      "<div class='pa-gate'><a class='btn btn-primary pa-signup' href='signin.html?returnTo=" + attr(encodeURIComponent(ploverHref(q, before))) +
+      "'>Sign Up Free and Ask</a><p class='pa-small'>Your email is all it takes. No password, no card.</p></div>");
+  };
+
+  // Under an answer that used the day's last free one: what the next question does.
+  Box.prototype.noteFree = function () {
+    var foot = this.result.querySelector(".pa-card");
+    if (!foot || !me.free || me.free.left > 0 || this.result.querySelector(".pa-free-note")) return;
+    foot.insertAdjacentHTML("beforeend", "<p class='pa-small pa-free-note'>That was today's free answer. " +
+      "Your next question carries on in Plover after a free sign-up, and you can come back here.</p>");
   };
 
   Box.prototype.drawMiss = function (text, tries, ours, q) {

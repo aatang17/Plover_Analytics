@@ -535,7 +535,8 @@
     var made = null;
     var start = chat.study ? Promise.resolve({ ok: true, body: { study: chat.study } })
       : api("POST", A + "/studies", { question: q });
-    start.then(function (r) {
+    // settles once the answer (or its failure) is shown, so a second question can follow it
+    return start.then(function (r) {
       if (!r.ok) throw r;
       if (!chat.study) made = r.body.study;
       return api("POST", A + "/studies/" + r.body.study.id + "/ask", { question: q, stocks: true });
@@ -1965,20 +1966,44 @@
       initThemeToggle(redrawCharts);
     }
     // a question from the front page (index.html: my.html?q=…), kept through sign-in
-    var asked = (new URLSearchParams(location.search).get("q") || "").trim().slice(0, 600);
+    var sp = new URLSearchParams(location.search);
+    var asked = (sp.get("q") || "").trim().slice(0, 600);
+    // from a data page's question box (page-ask.js): the question before it, and the way back
+    var before = asked ? (sp.get("prev") || "").trim().slice(0, 600) : "";
+    var back = safeBack(sp.get("back")), backName = (sp.get("from") || "").replace(/\s+/g, " ").trim().slice(0, 80);
     if (asked) history.replaceState(null, "", "my.html" + location.hash);
     api("GET", A + "/status").then(function (r) {
       if (r.status === 404) {
         gate("<p>Plover accounts are not switched on for this server yet. The data pages are free to read without an account.</p>");
         return;
       }
+  // The page a reader came from (a data page's question box): a path on this
+  // site only, never another site, never Your Plover itself.
+  function safeBack(raw) {
+    raw = String(raw || "").trim();
+    if (!/^\/(?!\/)[A-Za-z0-9._\/-]*(\?[^#\s]*)?$/.test(raw) || raw.indexOf("..") >= 0) return "";
+    return /^\/my\.html/.test(raw) ? "" : raw;
+  }
+
+  function showBack(href, name) {
+    var el = $("#my-back");
+    if (!el) return;
+    var a = el.querySelector("a");
+    a.setAttribute("href", href);
+    a.textContent = "← Back to " + (name || "the page you were reading");
+    el.hidden = false;
+  }
+
       if (!r.ok) { gate('<p class="my-err">' + esc(detail(r, "This page could not be loaded")) + ' <a href="my.html">Try again</a>.</p>'); return; }
       if (!r.body.signed_in) {
-        var back = "my.html" + (asked ? "?q=" + encodeURIComponent(asked) : "");
+        var again = "my.html" + (asked ? "?q=" + encodeURIComponent(asked) +
+          (before ? "&prev=" + encodeURIComponent(before) : "") +
+          (back ? "&back=" + encodeURIComponent(back) + (backName ? "&from=" + encodeURIComponent(backName) : "") : "") : "");
         gate((asked ? '<p class="my-asked-out">Your question: <strong>' + esc(asked) + "</strong></p>" +
             "<p>Sign in to get the answer. It comes straight back to this question.</p>"
           : "<p>Sign in to ask questions about stocks and the economy, and keep a list of the companies you follow.</p>") +
-          '<p><a class="btn btn-primary" href="signin.html?returnTo=' + encodeURIComponent(back) + '">Sign In</a></p>');
+          '<p><a class="btn btn-primary" href="signin.html?returnTo=' + encodeURIComponent(again) + '">Sign In</a></p>');
+    if (back) showBack(back, backName);
         return;
       }
       $("#my-gate").hidden = true;
@@ -2038,7 +2063,8 @@
         if (asked) {
           history.replaceState(null, "", "#chat");
           route();
-          send(asked);
+          // the question asked on the data page before this one opens the chat, so it reads as one conversation
+          Promise.resolve(before && before !== asked ? send(before) : null).then(function () { send(asked); });
         }
       });
       loadChats(); loadCompanies(); loadSavedCharts(); loadSavedScreens();

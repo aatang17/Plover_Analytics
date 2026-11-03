@@ -8,6 +8,9 @@
 .my-gate p { margin: 0 0 12px; }
 .my-asked-out strong { color: var(--obs-ink); }
 .my-gate .btn { font-size: 14px; padding: 9px 16px; text-decoration: none; display: inline-flex; }
+/* the way back to the data page a question came from */
+.my-back { margin: 12px 0 0; font-size: 14px; }
+.my-back a { display: inline-block; padding: 6px 0; font-weight: 600; }
 
 /* the tab bar */
 .my-tabs { display: flex; gap: 4px; margin: 4px 0 24px; border-bottom: 1px solid var(--obs-border); overflow-x: auto;
