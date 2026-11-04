@@ -179,6 +179,15 @@
   function footerLink() {
     var footer = document.querySelector(".site-footer .inner");
     if (!footer || footer.querySelector(".consent-reopen")) return;
+    // The contact address rides along: every page writes its own footer, and
+    // this is the one script that reaches all of them.
+    if (!footer.querySelector('a[href$="contact.html"]')) {
+      var contact = document.createElement("a");
+      contact.href = "/contact.html";
+      contact.textContent = "Contact";
+      footer.appendChild(document.createTextNode(" · "));
+      footer.appendChild(contact);
+    }
     var link = document.createElement("a");
     link.className = "consent-reopen";
     link.href = "#";

@@ -1597,6 +1597,13 @@ body.has-consent-bar[style] .my-chat:not(.is-empty) .my-composer { bottom: var(-
    block that draws its own frame loses it inside a panel (no box in a box);
    its row rules stay. */
 body:has(.docs-layout) { background: var(--obs-ground); }
+/* Contact: the address is the page, so it is the largest thing on it. */
+body:has(.contact-page) { background: var(--obs-ground); }
+body:has(.contact-page) .site-footer { background: var(--obs-surface); }
+.contact-page { max-width: 860px; }
+.contact-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.contact-address { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.contact-page .prose dl.lookup-list { border-top: 0; margin: 4px 0 0; }
 body:has(.docs-layout) .site-footer { background: var(--obs-surface); }
 .doc-panel {
   background: var(--obs-surface);

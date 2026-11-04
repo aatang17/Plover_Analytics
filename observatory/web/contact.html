@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact · Plover Analytics</title>
+<meta name="description" content="Contact Plover Analytics: feedback, corrections and feature requests, and help for academics, journalists, investors and data teams.">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<header class="site-header" data-section="" data-page=""></header>
+<script src="assets/nav.js"></script>
+
+<main class="container contact-page">
+  <div class="page-head">
+    <h1>Contact</h1>
+    <p class="page-sub">We welcome feedback, corrections, questions and ideas for new features. One
+    address reaches us for all of them.</p>
+  </div>
+
+  <section class="doc-panel">
+    <h2>Email</h2>
+    <div class="contact-line">
+      <a class="contact-address" id="address" href="mailto:info@ploveranalytics.com">info@ploveranalytics.com</a>
+      <button type="button" class="btn" id="copy-address">Copy Address</button>
+    </div>
+  </section>
+
+  <section class="doc-panel prose">
+    <h2>Feedback</h2>
+    <p>Tell us what is wrong, missing or hard to use. These details help us act on it.</p>
+    <dl class="lookup-list">
+      <dt>A figure looks wrong</dt>
+      <dd>The page's link, the figure, and where you saw the value you expected.</dd>
+      <dt>Something broke</dt>
+      <dd>The page's link, what you clicked or typed, and what happened. A screenshot helps.</dd>
+      <dt>Data we should add</dt>
+      <dd>The dataset, company or market, and who publishes it if you know.</dd>
+      <dt>A feature you want</dt>
+      <dd>What you are trying to do and how you do it today. We are open to new features, and
+      requests from readers shape what we build next.</dd>
+      <dt>Your account</dt>
+      <dd>The email you sign in with. Do not forward a sign-in link: anyone holding it can
+      use it.</dd>
+    </dl>
+  </section>
+
+  <section class="doc-panel prose">
+    <h2>Academics</h2>
+    <p>The data and the <a href="api.html">API</a> are open, with no key or account. For a
+    result others can reproduce, cite the API address with <code>as_of=YYYY-MM-DD</code>: it
+    returns the data as it stood on that date. Each source's own citation is under
+    <a href="methodology.html#license">Attribution</a> on the Methodology page.</p>
+    <p>Write to us about a dataset your research needs, bulk downloads, or an error you find.</p>
+  </section>
+
+  <section class="doc-panel prose">
+    <h2>Journalists</h2>
+    <p>Charts on the data pages download as an image with the source printed on it, and as a
+    CSV. Link to the page you used so readers can check the figure. The
+    <a href="methodology.html">Methodology</a> page sets out how every rate is calculated.</p>
+    <p>Write to us to confirm a figure or how it was worked out. Include your publication and
+    deadline.</p>
+  </section>
+
+  <section class="doc-panel prose">
+    <h2>Investors</h2>
+    <p>A free account keeps every answer in full, your questions as chats, a watchlist of what
+    changed and what is coming up, and charts and screens that update themselves.
+    <a href="signin.html">Sign in</a> with your email; there is no password.</p>
+    <p>Write to us about a company or market we do not cover, a figure you rely on, or using
+    the data in your own tools through the API or an <a href="connect.html">AI assistant</a>.</p>
+  </section>
+
+  <section class="doc-panel prose">
+    <h2>Data Teams</h2>
+    <p>Every figure is kept as each release published it, and a revision is stored as a new
+    release. A backtest can therefore use only what was known on a given date.</p>
+    <p>Write to us about the datasets you need, how often you pull them, and how you want them
+    delivered.</p>
+  </section>
+
+  <section class="doc-panel prose">
+    <h2>Disclaimer</h2>
+    <p>We aim to show every figure as its source published it, but we cannot guarantee that
+    any figure on this site is complete, correct or up to date. Sources revise their data, and
+    our own calculations and our reading of company filings can contain errors. Check a figure
+    against its original source before you rely on it; every data page names its source.</p>
+    <p>Nothing on this site is investment advice.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    Plover Analytics · <a href="methodology.html">Methodology</a>
+  </div>
+</footer>
+
+<script src="assets/format.js"></script>
+<script>
+  initThemeToggle();
+  // The mail link needs a mail app set up; many readers have only webmail.
+  // Copying the address works either way.
+  (function () {
+    var button = document.getElementById("copy-address");
+    var address = document.getElementById("address").textContent;
+    button.addEventListener("click", function () {
+      if (!navigator.clipboard) { button.textContent = address; return; }
+      navigator.clipboard.writeText(address).then(function () {
+        button.textContent = "Copied";
+        setTimeout(function () { button.textContent = "Copy Address"; }, 2000);
+      }, function () { button.textContent = address; });
+    });
+  })();
+</script>
+</body>
+</html>
