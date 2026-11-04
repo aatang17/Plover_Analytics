@@ -71,6 +71,9 @@ VID_CHARS = 32
 TEAM_COOKIE = "pa_team"
 TEAM_MAX_AGE = 60 * 60 * 24 * 365
 
+# A reader's Plover account session (app/accounts.py COOKIE).
+SESSION_COOKIE = "pa_session"
+
 # How recently a request must have arrived for its visitor to count as here
 # now. Open pages send a keep-alive inside this window, so a reader sitting
 # still on one page stays counted; anything without scripts drops off it.
@@ -298,6 +301,22 @@ def _is_ours(ip, headers):
     return ask_log.is_ours(ip) or _cookies(headers).get(TEAM_COOKIE) == "1"
 
 
+def _signed_in(headers):
+    """Does this browser hold an open Plover account session? Signing in takes
+    a link opened from the account's own inbox, which no scraper does, so a
+    signed-in visit is a person even from a cloud network or VPN (many
+    readers in mainland China reach us through Hong Kong cloud servers).
+    Only the yes or no is used; the account is never written to the log."""
+    raw = _cookies(headers).get(SESSION_COOKIE)
+    if not raw:
+        return False
+    try:
+        from . import accounts
+        return accounts.session_is_live(raw)
+    except Exception:
+        return False
+
+
 def consent_value(vid, since):
     """What is stored in the visitor cookie: the id, and the day it was
     issued. Carrying the day in the cookie is what makes "reader we already
@@ -325,20 +344,22 @@ def _consented(jar):
     return parse_visitor_cookie(jar.get(VISITOR_COOKIE))
 
 
-def _touch_live(visitor, path, country, network, scripted=False):
+def _touch_live(visitor, path, country, network, scripted=False, member=False):
     """Note that this visitor is here, now. Bounded: a flood evicts the
     stalest entries rather than growing without limit.
 
     A path of None means "still here, on whatever you last had open" — a page
     fetching its own chart data must keep its reader alive without the live
     table claiming somebody is sitting on an API endpoint. `scripted` is set
-    by the page's own keep-alive, the proof a browser is showing it.
+    by the page's own keep-alive, the proof a browser is showing it;
+    `member` says the browser is signed in to a Plover account.
     """
     with _LOCK:
         held = _LIVE.get(visitor) or {}
         _LIVE[visitor] = {"at": time.time(), "path": path or held.get("path"),
                           "country": country, "network": network,
-                          "scripted": scripted or held.get("scripted", False)}
+                          "scripted": scripted or held.get("scripted", False),
+                          "member": member or held.get("member", False)}
         if len(_LIVE) > LIVE_MAX:
             for key in sorted(_LIVE, key=lambda k: _LIVE[k]["at"])[:len(_LIVE) - LIVE_MAX]:
                 _LIVE.pop(key, None)
@@ -350,12 +371,14 @@ def live():
     Counted from memory, so this is the one figure on the traffic page that
     owes nothing to the log — and the one that cannot be asked about the past.
     Only real readers, by the same test as summary(): the page's own script
-    has reported in, from a placed network that is not a data centre.
+    has reported in, from a placed network that is not a data centre, or the
+    browser is signed in.
     """
     cutoff = time.time() - LIVE_SECONDS
     with _LOCK:
         rows = [(v, dict(d)) for v, d in _LIVE.items()
-                if d["at"] >= cutoff and _is_reader(d.get("scripted"), d.get("network"))]
+                if d["at"] >= cutoff and _is_reader(d.get("scripted"), d.get("network"),
+                                                    d.get("member"))]
         for key in [v for v, d in _LIVE.items() if d["at"] < cutoff - LIVE_SECONDS]:
             _LIVE.pop(key, None)  # swept here, so no timer has to exist
     pages, countries = {}, {}
@@ -437,7 +460,8 @@ def heartbeat(scope, path):
     geoip.prepare()
     country, network = geoip.lookup(ip)
     visitor = identify(ip, user_agent, headers, now.strftime("%Y-%m-%d"))[0]
-    _touch_live(visitor, (path or "/")[:MAX_PATH_CHARS], country, network, scripted=True)
+    _touch_live(visitor, (path or "/")[:MAX_PATH_CHARS], country, network, scripted=True,
+                member=_signed_in(headers))
 
 
 def identify(ip, user_agent, headers, day):
@@ -596,12 +620,19 @@ def is_hosting(network):
     return False
 
 
-def _is_reader(scripted, network):
+def _is_reader(scripted, network, member=False):
     """The test for a real reader, used by every figure on the Traffic page:
     the page's own script reported in (so a browser rendered it) from a
     network that is placed and is not a data centre. Each part is evidence a
     scraper does not usually produce; none of it is proof. Deliberately strict
-    — the figure is meant to be believed, not to be large."""
+    — the figure is meant to be believed, not to be large.
+
+    A browser signed in to a Plover account (`member`) passes on any network:
+    the account was opened from its own inbox, stronger evidence than any of
+    the three, and the readers it lets in are the ones the network test
+    wrongly took for machines — people on a VPN or a cloud proxy."""
+    if member:
+        return True
     return bool(scripted and network and not is_hosting(network)
                 and not is_google_machine(network))
 
@@ -732,6 +763,7 @@ def observe(scope, status, seconds=None):
     sender, internal = _referrer_host(_header(headers, b"referer"),
                                       _header(headers, b"host"))
     bot = _is_bot(user_agent)
+    member = not bot and _signed_in(headers)
     label, purpose = ai_agent(user_agent)
     event = {
         "at": now.isoformat(timespec="seconds") + "Z",
@@ -762,14 +794,17 @@ def observe(scope, status, seconds=None):
         event["consent"] = choice
     if since:
         event["since"] = since
+    if member:
+        event["member"] = True
     _record(event)
     if not bot:
-        _touch_live(visitor, path if kind == "page" else None, country, network)
+        _touch_live(visitor, path if kind == "page" else None, country, network,
+                    member=member)
         if path in ask_log.PATHS:
             # A reader's question is sent by our own page, from a network that
             # is not a data centre; anything else is a machine asking.
             ask_log.record(scope, status, seconds, now,
-                           machine=not internal or not _is_reader(True, network))
+                           machine=not internal or not _is_reader(True, network, member))
 
 
 class VisitCounter(object):
@@ -939,9 +974,13 @@ def _new_day():
         # Left out of every figure, and counted only so the page can say how
         # much was left out: robot requests, and visits that failed the test.
         "bots": 0, "left_out": 0,
+        # Of those left out: signed-out visitors whose page did report in from
+        # a real browser, but from a cloud network. Some are people on a VPN,
+        # some are scrapers driving a browser; shown apart, never counted in.
+        "cloud_browsers": 0,
         # A visit is shown to be a reader only by a report that arrives after
         # its page view, so a day's events wait here until it is settled.
-        # probe: visitor -> [script reported, network].
+        # probe: visitor -> [script reported, network, signed in].
         "raw": {}, "probe": {}, "dirty": False, "settled": None,
         "first": None, "last": None,
         # Publication pages for the Writer Desk (_fold_publication). Kept apart
@@ -984,11 +1023,13 @@ def _fold(d, event, at):
     if not visitor:
         return  # nothing to test, so never shown as a reader
     _fold_publication(d, event, at)
-    probe = d["probe"].setdefault(visitor, [False, None])
+    probe = d["probe"].setdefault(visitor, [False, None, False])
     if event.get("kind") == "dwell":
         probe[0] = True
     if event.get("network"):
         probe[1] = event["network"]
+    if event.get("member"):
+        probe[2] = True
     if d["settled"] is not None:
         # A line for a day already settled: it can only add to a known reader.
         if visitor in d["settled"]:
@@ -1039,13 +1080,15 @@ def _settle(d, final):
     only its list of readers is kept."""
     if d["settled"] is not None or not (d["dirty"] or final):
         return
-    readers = set(v for v, (scripted, network) in d["probe"].items()
-                  if _is_reader(scripted, network))
+    readers = set(v for v, (scripted, network, member) in d["probe"].items()
+                  if _is_reader(scripted, network, member))
     d.update(_reader_totals())
     for visitor in readers:
         for event, at in d["raw"].get(visitor, ()):
             _fold_reader(d, event, at)
     d["left_out"] = len(d["probe"]) - len(readers)
+    d["cloud_browsers"] = sum(1 for v, (scripted, network, _) in d["probe"].items()
+                              if v not in readers and scripted and is_hosting(network))
     d["dirty"] = False
     if final:
         d["settled"], d["raw"] = readers, {}
@@ -1213,7 +1256,7 @@ def _window_totals(start, today, wanted):
             if d is None:
                 continue
             w["daily"][day] = {"visitors": set(d["visitors"]), "pageviews": d["pageviews"]}
-            for k in ("pageviews", "bots", "left_out"):
+            for k in ("pageviews", "bots", "left_out", "cloud_browsers"):
                 w[k] += d[k]
             w["visitors"] |= d["visitors"]
             for k in ("pages", "refs", "sources", "countries", "networks", "direct_networks", "direct_pages"):
@@ -1248,8 +1291,8 @@ def summary(days=30, top=15):
     """Real readers over the last `days` UTC days, for the admin Traffic page.
 
     Every figure counts readers only (_is_reader): the page's own script
-    reported a reading time, from a placed network that is not a data centre.
-    Robots, data centres and visits that never ran the page are left out of
+    reported a reading time, from a placed network that is not a data centre,
+    or the browser was signed in to a Plover account. Robots, data centres and visits that never ran the page are left out of
     all of it; how many were left out is reported once, so the gap can be read.
     """
     flush()  # so the page shows the requests that just arrived
@@ -1334,7 +1377,8 @@ def summary(days=30, top=15):
         "pageviews": sum(d["pageviews"] or 0 for d in series),
         "visitors": len(w["visitors"]),
         # What every figure here leaves out, so a small number can be read.
-        "left_out": {"visits": w["left_out"], "robot_requests": w["bots"]},
+        "left_out": {"visits": w["left_out"], "robot_requests": w["bots"],
+                     "cloud_browsers": w["cloud_browsers"]},
         "daily": series,
         "top_pages": ranked(w["pages"], page_dwell),
         "top_referrers": referrer_rows,

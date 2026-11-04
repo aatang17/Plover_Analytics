@@ -146,6 +146,28 @@ class LogTest(unittest.TestCase):
         s = ask_log.summary(1, today, today)
         self.assertEqual([r["q"] for r in s["recent"]], ["typed on our page"])
 
+    def test_a_signed_in_reader_on_a_cloud_network_is_a_reader(self):
+        real = visits.ANALYTICS_DIR, visits.SALT_PATH
+        visits.ANALYTICS_DIR, visits.SALT_PATH = self.dir, self.dir / "salt"
+        cloud = mock.patch.object(visits.geoip, "lookup",
+                                  return_value=("HK", "Shenzhen Tencent Computer Systems Company Limited"))
+        signed = _scope("/api/v1/us/ask", "wolfspeed shareholders")
+        signed["headers"].append((b"cookie", b"pa_session=open-session"))
+        bare = _scope("/api/v1/us/ask", "signed in but not from our page")
+        bare["headers"] = [h for h in bare["headers"] if h[0] != b"referer"] + [(b"cookie", b"pa_session=open-session")]
+        try:
+            with cloud, mock.patch("app.accounts.session_is_live", side_effect=lambda raw: raw == "open-session"):
+                visits.observe(signed, 200, 1.0)
+                visits.observe(bare, 200, 1.0)
+                visits.observe(_scope("/api/v1/us/ask", "signed out on the cloud"), 200, 1.0)
+            visits.flush()
+        finally:
+            visits.ANALYTICS_DIR, visits.SALT_PATH = real
+        self.assertEqual([(x["q"], x["from"]) for x in self.lines()],
+                         [("wolfspeed shareholders", "reader"), ("signed in but not from our page", "machine"),
+                          ("signed out on the cloud", "machine")])
+        self.assertEqual(len(self.sent), 1)
+
     def test_a_question_from_anyone_but_us_goes_to_telegram_once(self):
         ask_log.note("/api/v1/us/ask", "who owns apple", True, "stock")
         ask_log.record(_scope("/api/v1/us/ask", "Who owns Apple"), 200, 1.0)

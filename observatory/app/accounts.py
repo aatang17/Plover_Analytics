@@ -185,6 +185,17 @@ def signups_by_source(since):
     return dict((r[0], r[1]) for r in rows)
 
 
+def members():
+    """Every reader account, newest first, for the admin Members page: the
+    address, when it was created, when it last used a session, and the tagged
+    link that brought it. Nothing a person keeps in their account (chats,
+    keys, watchlist) is read here."""
+    rows = conn().execute("SELECT id, email, created_at, last_seen_at, source FROM accounts "
+                          "ORDER BY created_at DESC, id DESC").fetchall()
+    return [{"id": r["id"], "email": r["email"], "created_at": r["created_at"],
+             "last_seen_at": r["last_seen_at"], "source": r["source"]} for r in rows]
+
+
 def conn():
     """This thread's connection. One connection shared by every request thread
     crashed the server inside libsqlite3 (segfault / abort) when two requests
@@ -348,6 +359,37 @@ def current_account(request):
         db.execute("UPDATE accounts SET last_seen_at = ? WHERE id = ?", (now, row["id"]))
         db.commit()
     return {"id": row["id"], "email": row["email"]}
+
+
+# Session token hash -> (signed in?, when checked). The visit counter asks on
+# every page and data request, so an answer is reused for a few minutes.
+_LIVE_SESSIONS = {}
+LIVE_SESSION_SECONDS = 300
+LIVE_SESSIONS_MAX = 5000
+
+
+def session_is_live(raw):
+    """True when `raw` (the session cookie's value) is an open session. Read
+    only, unlike current_account(): the visit counter uses it to treat a
+    signed-in browser as a person on any network, since a session needs a
+    link opened from the account's own inbox. Never raises."""
+    if not raw or not enabled():
+        return False
+    key, now = _hash(raw), _now()
+    held = _LIVE_SESSIONS.get(key)
+    if held and now - held[1] < LIVE_SESSION_SECONDS:
+        return held[0]
+    try:
+        row = conn().execute(
+            "SELECT a.email FROM sessions s JOIN accounts a ON a.id = s.account_id "
+            "WHERE s.token_hash = ? AND s.expires_at > ?", (key, now)).fetchone()
+        live = bool(row) and _allowed(row["email"])
+    except sqlite3.Error:
+        return False
+    if len(_LIVE_SESSIONS) >= LIVE_SESSIONS_MAX:
+        _LIVE_SESSIONS.clear()
+    _LIVE_SESSIONS[key] = (live, now)
+    return live
 
 
 # ------------------------------------------------------------------- routes

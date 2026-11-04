@@ -13,6 +13,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -237,3 +238,41 @@ class StaffTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MembersTest(unittest.TestCase):
+    """The admin Members page: reader accounts, for the Team permission only."""
+
+    setUp, _restore = StaffTest.setUp, StaffTest._restore
+    shared_client, add_person = StaffTest.shared_client, StaffTest.add_person
+    signed_in_person = StaffTest.signed_in_person
+
+    def test_members_are_listed_newest_first_for_the_team_permission_only(self):
+        from app import accounts
+        tmp = fresh_store(self)
+        saved = accounts.DB_PATH, accounts._conn
+        accounts.DB_PATH, accounts._conn = staff.pathlib.Path(tmp) / "workspace.db", None
+        self.addCleanup(lambda: setattr(accounts, "DB_PATH", saved[0]) or setattr(accounts, "_conn", saved[1]))
+        on = mock.patch.dict(os.environ, {"ACCOUNTS_ENABLED": "1"})
+        on.start()
+        self.addCleanup(on.stop)
+        db = accounts.conn()
+        import time
+        now = int(time.time())
+        db.execute("INSERT INTO accounts (email, created_at, last_seen_at, source) VALUES (?, ?, ?, ?)",
+                   ("old@example.com", now - 30 * 86400, None, None))
+        db.execute("INSERT INTO accounts (email, created_at, last_seen_at, source) VALUES (?, ?, ?, ?)",
+                   ("new@example.com", now - 3600, now - 60, "yt"))
+        db.commit()
+
+        admin = self.shared_client()
+        got = admin.get("/admin/api/members").json()
+        self.assertEqual([m["email"] for m in got["members"]], ["new@example.com", "old@example.com"])
+        self.assertEqual((got["total"], got["new_week"], got["active_week"]), (2, 1, 1))
+        self.assertEqual(got["members"][0]["source"], "yt")
+        self.assertIsNone(got["members"][1]["last_seen"])
+        self.assertTrue(got["members"][0]["signed_up"].endswith("Z"))
+
+        ops, _ = self.signed_in_person(admin, "ops@example.com", ["operations"])
+        self.assertEqual(ops.get("/admin/api/members").status_code, 403)
+        self.assertEqual(app_client().get("/admin/api/members").status_code, 401)

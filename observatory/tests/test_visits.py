@@ -258,6 +258,36 @@ class ReadersOnlyTest(unittest.TestCase):
             self.assertNotIn(machine, networks)
         self.assertEqual(got["daily"][-1]["visitors"] - before["daily"][-1]["visitors"], 1)
 
+    def test_a_signed_in_visitor_counts_on_a_cloud_network_and_cloud_browsers_are_shown_apart(self):
+        at = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+        def page(visitor, network, member=False):
+            event = {"at": at, "visitor": visitor, "path": "/cloud-%s.html" % visitor,
+                     "kind": "page", "status": 200, "ref": None, "internal": False,
+                     "country": "HK", "network": network, "bot": False}
+            if member:
+                event["member"] = True
+            return event
+
+        def dwell(visitor):
+            return {"at": at, "visitor": visitor, "kind": "dwell", "path": "/cloud-%s.html" % visitor,
+                    "seconds": 30, "bot": False, "view": "v-" + visitor}
+
+        tencent = "Shenzhen Tencent Computer Systems Company Limited"
+        before = visits.summary(1)
+        for event in (page("cm-member", tencent, member=True),       # signed in, no script report yet
+                      page("cm-vpn", tencent), dwell("cm-vpn"),         # a browser, signed out
+                      page("cm-fetch", tencent)):                       # neither
+            visits._record(event)
+        visits.flush()
+        got = visits.summary(1)
+        self.assertEqual(got["visitors"] - before["visitors"], 1)
+        pages = [r["key"] for r in got["top_pages"]]
+        self.assertIn("/cloud-cm-member.html", pages)
+        self.assertNotIn("/cloud-cm-vpn.html", pages)
+        self.assertEqual(got["left_out"]["visits"] - before["left_out"]["visits"], 2)
+        self.assertEqual(got["left_out"]["cloud_browsers"] - before["left_out"]["cloud_browsers"], 1)
+
     def test_googles_own_machines_are_not_arrivals_from_google(self):
         # Google's renderers send a browser's user agent and a Google search
         # as the referrer; they were 83 of 189 "visitors from Google" in
@@ -690,6 +720,34 @@ class TaggedSignupTest(unittest.TestCase):
         by = self.accounts.signups_by_source(0)
         self.assertEqual(by, {"yt": 1, None: 1})
 
+    def test_a_signed_in_browser_is_marked_on_any_network_and_the_account_is_not(self):
+        on = mock.patch.dict("os.environ", {"ACCOUNTS_ENABLED": "1"})
+        on.start()
+        self.addCleanup(on.stop)
+        self.sign_up("vpn-reader@example.com")
+        raw = self.client.cookies.get(self.accounts.COOKIE)
+        self.assertTrue(self.accounts.session_is_live(raw))
+        self.assertFalse(self.accounts.session_is_live("not-a-session"))
+        self.assertFalse(self.accounts.session_is_live(""))
+
+        def scope(path, cookie, ip):
+            return {"type": "http", "method": "GET", "path": path, "client": (ip, 1),
+                    "query_string": b"", "headers": [(b"user-agent", UA.encode()),
+                                                     (b"cookie", cookie.encode())]}
+        cloud = mock.patch.object(visits.geoip, "lookup",
+                                  return_value=("HK", "Shenzhen Tencent Computer Systems Company Limited"))
+        with cloud:
+            visits.observe(scope("/member-in.html", "%s=%s" % (self.accounts.COOKIE, raw), "203.0.113.40"), 200)
+            visits.observe(scope("/member-out.html", "%s=forged" % self.accounts.COOKIE, "203.0.113.41"), 200)
+        visits.flush()
+        got = dict((e["path"], e) for e in _events() if e.get("path", "").startswith("/member-"))
+        self.assertIs(got["/member-in.html"].get("member"), True)
+        self.assertNotIn("member", got["/member-out.html"])
+        self.assertNotIn("vpn-reader", json.dumps(got["/member-in.html"]))
+        self.assertNotIn(raw, json.dumps(got["/member-in.html"]))
+        self.assertIn("/member-in.html", [r["key"] for r in visits.live()["pages"]])
+        self.assertNotIn("/member-out.html", [r["key"] for r in visits.live()["pages"]])
+
 
 class LiveTest(unittest.TestCase):
     """Right now: only a page that reported in, off a reader's network."""
@@ -703,6 +761,9 @@ class LiveTest(unittest.TestCase):
         self.assertIn("/live-reader.html", pages)
         for machine in ("/live-cloud.html", "/live-google.html", "/live-fetch.html"):
             self.assertNotIn(machine, pages)
+        # A signed-in browser is here on a cloud network too.
+        visits._touch_live("lv-member", "/live-member.html", "HK", "Tencent Cloud", member=True)
+        self.assertIn("/live-member.html", [r["key"] for r in visits.live()["pages"]])
         # Its page reporting in later makes the plain fetch a reader.
         visits._touch_live("lv-fetch", None, "JP", "KDDI CORPORATION", scripted=True)
         self.assertIn("/live-fetch.html", [r["key"] for r in visits.live()["pages"]])

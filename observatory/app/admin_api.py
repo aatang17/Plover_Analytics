@@ -734,6 +734,37 @@ def visit_summary(request: Request, days: int = 30):
     return out
 
 
+# --- members ------------------------------------------------------------------
+
+MEMBER_WEEK_SECONDS = 7 * 24 * 60 * 60
+
+
+def _iso(epoch):
+    if not epoch:
+        return None
+    return datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@router.get("/members")
+def member_list(request: Request):
+    """Every reader account: address, when it signed up, when it was last
+    signed in, and the tagged link that brought it. Readers' addresses, so the
+    Team permission, not Operations."""
+    _require_admin(request, "team")
+    if not accounts.enabled():
+        return {"enabled": False, "members": [], "total": 0, "new_week": 0, "active_week": 0}
+    rows = accounts.members()
+    week_ago = time.time() - MEMBER_WEEK_SECONDS
+    return {
+        "enabled": True,
+        "total": len(rows),
+        "new_week": sum(1 for r in rows if r["created_at"] >= week_ago),
+        "active_week": sum(1 for r in rows if (r["last_seen_at"] or 0) >= week_ago),
+        "members": [{"email": r["email"], "signed_up": _iso(r["created_at"]),
+                     "last_seen": _iso(r["last_seen_at"]), "source": r["source"]} for r in rows],
+    }
+
+
 # --- equity reads for the classification queue --------------------------------
 #
 # Its own short-lived read-only connection rather than equity_api's cached

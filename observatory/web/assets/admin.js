@@ -18,6 +18,7 @@ var ADMIN_NAV = [
     { id: "health", label: "Ingest Health", hash: "#health", perm: "operations" },
     { id: "vintages", label: "Release History", hash: "#vintages", perm: "operations" },
     { id: "traffic", label: "Traffic", hash: "#traffic", perm: "operations" },
+    { id: "members", label: "Members", hash: "#members", perm: "team" },
   ]},
   { group: "Research", pages: [
     // articles live in the Writer Desk now (write.html), with every publication's
@@ -309,6 +310,7 @@ function route() {
   else if (view === "vintages") viewVintages(target, arg);
   else if (view === "traffic") viewTraffic(target, arg, arg2);
   else if (view === "audit") viewAudit(target);
+  else if (view === "members") viewMembers(target);
   else if (view === "queue") viewQueue(target);
   else if (view === "companies") viewUsCompanies(target, arg, arg2);
   else if (view === "parties") {
@@ -1024,7 +1026,7 @@ function liveMarkup(d) {
       : '<p class="table-empty">No real reader on the site in the last ' +
         minutes + " minutes.</p>") +
     '<p class="source-line">Real readers only: the page reported in from their browser, ' +
-    "on a home, office or phone network. Robots and data centres are left out. A reader " +
+    "on a home, office or phone network, or signed in to a Plover account on any network. Robots and data centres are left out. A reader " +
     "counts as here for " + minutes + " minutes after their last request; an open page " +
     "reports itself every minute, so somebody sitting still on one page stays counted." +
     (places ? " Now: " + places + "." : "") + "</p>";
@@ -1330,7 +1332,7 @@ function trafficAsk(a) {
     "search</span></div>" + daily + trafficReview(a.review) + most + recent +
     '<p class="source-line">Real readers only. Searches and questions from the ask log; readers ' +
     "from the visit log, counted per day, so one person on two days is two. A question not sent " +
-    "by our own page, or sent from a data centre, is left out, as are robots. " +
+    "by our own page, or sent from a data centre by someone not signed in, is left out, as are robots. " +
     "A repeated question answered from the server\u2019s cache is still counted. Answered " +
     "means the box gave an answer, not that the answer was what the reader wanted. Typed by " +
     "readers leaves out clicks on the page\u2019s own example questions and our own checks " +
@@ -1344,10 +1346,13 @@ function trafficAsk(a) {
 function leftOutNote(d) {
   var o = d.left_out;
   if (!o) return "";
+  var cloud = o.cloud_browsers ? " Of those, " + fmtCount(o.cloud_browsers) + " opened the page " +
+    "in a real browser from a cloud network while signed out: some are people on a VPN, " +
+    "some are scrapers." : "";
   return '<p class="admin-page-sub">Real readers only. Left out of every figure on this ' +
     "page: " + fmtCount(o.robot_requests) + " requests from robots, and " +
     fmtCount(o.visits) + " visits whose page never reported in from a browser or that " +
-    "came from a data centre — see Show calculation.</p>";
+    "came from a data centre — see Show calculation." + cloud + "</p>";
 }
 
 /* A share of a total, where a real but tiny share must not read as zero. */
@@ -1557,6 +1562,9 @@ function trafficCalc(d) {
     "showed it. Their address was placed on a network. And that network is not a cloud, " +
     "host or CDN — Amazon, Google, Microsoft, DigitalOcean, OVH, Hetzner, Tencent, " +
     "Cloudflare and the like. Each test alone is weak; a scraper rarely passes all three. " +
+    "A visitor signed in to a Plover account is a reader on any network, since signing in " +
+    "takes a link opened from their own inbox; readers on a VPN or a cloud proxy are counted " +
+    "that way (marked from 4 November 2026). " +
     "Robots that name themselves, Google’s own page renderers and our own machines " +
     "and console browsers are never counted at all. In this window that left out " +
     fmtCount((d.left_out || {}).robot_requests) + " robot requests and " +
@@ -1762,6 +1770,49 @@ function viewAudit(target) {
         : '<p class="table-empty">No admin activity recorded yet.</p>');
   }).catch(function (err) {
     target.innerHTML = loadFailed("the audit log", err);
+  });
+}
+
+/* Everyone with a Plover reader account. Addresses, dates and the tagged link
+   that brought them; nothing a member keeps in their account. */
+function viewMembers(target) {
+  target.innerHTML = '<div class="admin-loading">Loading members…</div>';
+  api("/members").then(function (d) {
+    var head = '<div class="admin-page-head"><h1>Members</h1>' +
+      '<p class="admin-page-sub">Everyone with a Plover account, newest first. Shown: the ' +
+      "address, when they signed up, when they were last signed in, and the tagged link that " +
+      "brought them. Nothing a member keeps in their account is shown here.</p></div>";
+    if (!d.enabled) {
+      target.innerHTML = head + '<p class="table-empty">Reader accounts are switched off on ' +
+        "this server, so there is nobody to list.</p>";
+      return;
+    }
+    // The column header carries "(UTC)", so a cell is the date and time alone.
+    function when(iso) { return iso ? escapeHtml(iso.slice(0, 16).replace("T", " ")) : MISSING; }
+    var rows = d.members.map(function (m) {
+      return "<tr><td>" + escapeHtml(m.email) + "</td>" +
+        '<td class="num" data-sort="' + escapeHtml(m.signed_up || "") + '">' + when(m.signed_up) + "</td>" +
+        '<td class="num" data-sort="' + escapeHtml(m.last_seen || "") + '"' +
+        (m.last_seen ? "" : ' title="No visit recorded since signing up"') + ">" +
+        when(m.last_seen) + "</td>" +
+        "<td" + (m.source ? "" : ' title="Did not arrive through a tagged link"') + ">" +
+        escapeHtml(m.source || MISSING) + "</td></tr>";
+    }).join("");
+    target.innerHTML = head +
+      '<div class="kpi-row">' +
+      kpi(fmtCount(d.total), "Members", "") +
+      kpi(fmtCount(d.new_week), "Signed Up in the Last 7 Days", "") +
+      kpi(fmtCount(d.active_week), "Signed In in the Last 7 Days", "") +
+      "</div>" +
+      '<div class="admin-section">Member Accounts <span class="note">' +
+      fmtCount(d.total) + " account" + (d.total === 1 ? "" : "s") + "</span></div>" +
+      (d.members.length
+        ? '<div class="table-wrap"><table class="data"><thead><tr><th>Email</th>' +
+          '<th class="num">Signed Up (UTC)</th><th class="num">Last Signed In (UTC)</th>' +
+          "<th>Came From</th></tr></thead><tbody>" + rows + "</tbody></table></div>"
+        : '<p class="table-empty">Nobody has made an account yet.</p>');
+  }).catch(function (err) {
+    target.innerHTML = loadFailed("the member list", err);
   });
 }
 
