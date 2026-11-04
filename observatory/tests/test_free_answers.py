@@ -106,6 +106,35 @@ class FreeAnswers(unittest.TestCase):
         self.assertEqual(self.c.get("/status", headers=UA).json()["left"], 3)
         self.assertFalse(any(k[0] == "1999-12-31" for k in free_answers._counts))
 
+    def test_no_web_search_once_the_answer_is_used(self):
+        """A web search is a paid call: the preview route runs none for a
+        signed-out reader whose free answer is used (2026-11-04)."""
+        from unittest import mock
+        from app.assistant import preview
+        app = FastAPI()
+
+        @app.get("/web")
+        def web(request: Request):
+            return {"web": preview._web_allowed(request)}
+
+        c = TestClient(app)
+        os.environ["FREE_ANSWERS"] = "1"
+        self.assertTrue(c.get("/web", headers=UA).json()["web"])
+        self.c.get("/take", headers=UA)
+        self.assertFalse(c.get("/web", headers=UA).json()["web"])
+        self.assertTrue(preview._web_allowed(None))           # called directly: no reader, no limit
+        with mock.patch.object(preview.macro_read, "answer", return_value=None), \
+                mock.patch.object(preview, "_is_macro", return_value=False), \
+                mock.patch.object(preview, "_stock", return_value=(None, None)), \
+                mock.patch.object(preview, "_company_named", return_value=False), \
+                mock.patch.object(preview, "_macro_on_topic", return_value=None), \
+                mock.patch.object(preview, "_web", side_effect=AssertionError("searched")):
+            out = preview._preview("dollar yen after the midterms", "", "", web=False)
+        self.assertEqual(out["miss"], "signup")
+        self.assertIn("Sign up free", out["message"])
+        # never kept by the response cache: it is one reader's own state
+        self.assertEqual(preview._sent(out).headers.get("cache-control"), "no-store")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -573,11 +573,15 @@
           if (p.kind !== "macro" && p.kind !== "web") throw e;
           $("status").hidden = true;
           renderPreview(p, q);
+          // the stream counts its own answers; one from the web or the economy answers is counted here
+          if (counted(via)) takeFree().then(function (f) { if (lastAsked === q) freeNote(f ? { free: f } : null); });
         }, function () { throw e; });
       });
     }
     return reader.then(function () {
       if (!gated()) return full();
+      // today's free answer is used: a typed question waits for a free account (2026-11-04)
+      if (via !== "example") { $("status").hidden = true; renderSignup(q); return; }
       // signed out: the start of the answer, and the rest one sign-up away
       return getJSON(PREVIEW + "?q=" + encodeURIComponent(q) + tail).then(function (p) {
         $("status").hidden = true;
@@ -652,6 +656,44 @@
 
   function gated() { return me.on && !me.email && !previewOff && !!me.free && me.free.left <= 0; }
 
+  // A signed-out reader's typed question takes the day's free answer, whichever
+  // route answers it; the page's own examples stay free (via=example).
+  function counted(via) { return me.on && !me.email && !previewOff && via !== "example" && !!me.free && me.free.free > 0; }
+  function takeFree() {
+    return fetch(FREE, { method: "POST", headers: { Accept: "application/json" } }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (f) { return f && f.free != null ? f : null; }, function () { return null; });
+  }
+
+  // What a free account adds, said once for the sign-up card and the panel under the examples
+  var PERKS = [
+    "Every question answered in full, with the chart, the table and the download",
+    "Your questions kept as chats in Your Plover, to pick up where you left off",
+    "A watchlist that shows what changed at your companies and what is coming up",
+    "Charts and stock screens you save, which update with each day's prices and each new filing",
+  ];
+
+  // Once today's free answer is used, a typed question is not answered: the
+  // reader signs up and comes straight back to it, answered in full. Until
+  // 2026-11-04 the start of the answer showed, and a web search showed in full.
+  function renderSignup(q) {
+    disposeCharts();
+    var el = $("answer");
+    el.classList.remove("an-stale");
+    el.hidden = false;
+    var href = "signin.html?returnTo=" + encodeURIComponent("/?q=" + encodeURIComponent(q));
+    el.innerHTML = "<article class='fp-card fp-signup'>" +
+      "<div class='an-asked'><span>You asked</span><b>" + esc(q) + "</b></div>" +
+      "<p class='fp-head'>" + esc(usedText(me.free ? me.free.free : 1)) + " Sign up free to see this answer.</p>" +
+      "<div class='fp-more'><p class='fp-more-h'>A free account gives you</p><ul>" +
+      PERKS.map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ul>" +
+      "<p><a class='fp-cta' href='" + esc(href) + "'>Sign Up Free and See the Answer</a></p>" +
+      "<p class='fp-small'>Your email is all it takes. No password, no card. You come straight back to this question.</p></div>" +
+      "</article>";
+    $("home-note").hidden = true;
+    document.title = "Sign Up Free · Plover Analytics";
+  }
+
   // the sign-up panel under the examples; the bar's own account control is nav.js's
   function account() {
     var back = "signin.html?returnTo=" + encodeURIComponent("/" + location.search);
@@ -661,7 +703,7 @@
       if (me.free && me.free.free > 0 && $("gate-cta-text")) {
         $("gate-cta-text").textContent = (me.free.left > 0 ? (me.free.free === 1 ? "One full answer a day is free." : me.free.free + " full answers a day are free.") :
           usedText(me.free.free)) +
-          " An account shows every answer in full: the chart, the table and the download.";
+          " A free account answers every question in full, keeps your questions as chats, and gives you a watchlist, charts and screens that update themselves.";
       }
     }
   }
@@ -729,6 +771,7 @@
     var el = $("answer");
     el.classList.remove("an-stale");
     el.hidden = false;
+    if (p.kind === "none" && p.miss === "signup") { renderSignup(q); return; }   // the server's own check (app/assistant/preview.py)
     if (p.kind === "none") {
       renderMiss(p.message, p.try, p.miss || "not_held", q);
       return;

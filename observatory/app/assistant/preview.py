@@ -25,7 +25,7 @@ question no route can answer says so, with what Plover does hold.
 import datetime
 import re
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
@@ -653,9 +653,11 @@ def _cur():
 @router.get("")
 def preview(q: str = Query(..., min_length=1, max_length=300),
             prev: str = Query("", max_length=300, description="the reader's previous question, for a follow-up"),
-            on: str = Query("", max_length=20, description="the page the box sits on: prices or treasury")):
+            on: str = Query("", max_length=20, description="the page the box sits on: prices or treasury"),
+            request: Request = None):
     """The start of an answer for the front page: headline, up to two figures,
     the source, and what the full answer adds."""
+    web = _web_allowed(request)
     q = " ".join(q.split())
     prev = " ".join(prev.split()) if isinstance(prev, str) else ""          # called directly, the default is a Query
     on = on if isinstance(on, str) else ""
@@ -663,10 +665,10 @@ def preview(q: str = Query(..., min_length=1, max_length=300),
     q = ask_language.country_as_us(q)
     read = ask_language.read(q)
     if not read or not read.get("english"):
-        return _sent(_preview(q, prev, on))
+        return _sent(_preview(q, prev, on, web))
     # another language: read in English, every route below as usual, answered in that language
     english_prev = ((ask_language.read(prev) or {}).get("english") or prev) if prev else prev
-    out = _preview(read["english"], english_prev, on)
+    out = _preview(read["english"], english_prev, on, web)
     ask_log.note("/api/v1/assistant/preview", q, out.get("kind") != "none", out.get("miss") or out.get("kind"))
     full = out.get("full_url")
     out = ask_language.preview_in(read["language"], out)
@@ -676,14 +678,30 @@ def preview(q: str = Query(..., min_length=1, max_length=300),
     return _sent(out)
 
 
+def _web_allowed(request):
+    """A web search costs a paid call, so a signed-out reader gets one only
+    while the day's free answer is unused (app/free_answers.py). The page
+    asks them to sign up first; this holds for a caller that skips the page."""
+    if request is None:                                   # called directly (tests, the agent)
+        return True
+    from .. import free_answers
+    left = free_answers.status(free_answers.reader(request))
+    return left is None or left["left"] > 0
+
+
+SIGN_UP = ("Today's free answer is used. Sign up free and Plover searches the web for this "
+           "question; your email is all it takes.")
+
+
 def _sent(out):
-    """News dates by the hour: the response cache must not keep it (app/us_web.py)."""
-    if out.get("recipe") == "web_news":
+    """News dates by the hour, and one reader's sign-up note: the response
+    cache must keep neither (app/us_web.py)."""
+    if out.get("recipe") == "web_news" or out.get("miss") == "signup":
         return JSONResponse(content=jsonable_encoder(out), headers={"Cache-Control": "no-store"})
     return out
 
 
-def _preview(q, prev, on):
+def _preview(q, prev, on, web=True):
     from .. import ask_log, ask_miss
     # a price or a yield, read word by word: no model call, whatever was asked before
     try:
@@ -730,6 +748,10 @@ def _preview(q, prev, on):
             out = _macro_on_topic(prev + " " + q)
     if out is None and refusal != "error" and (not isinstance(refusal, HTTPException) or
                                                (refusal.status_code < 500 and _miss_kind(refusal) != "policy")):
+        if not web:
+            ask_log.note("/api/v1/assistant/preview", q, False, "signup")
+            return {"kind": "none", "question": q, "message": SIGN_UP, "miss": "signup", "try": [],
+                    "holds": HOLDS}
         out = _web(getattr(refusal, "question", None) or q, prev)
     if out is None:
         # the same reason, in the same words, as a signed-in reader gets (app/ask_miss.py)

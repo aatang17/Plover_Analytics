@@ -28,10 +28,16 @@ question typed into a box on a data page (web/assets/page-ask.js) counts
 whatever answers it: an economy answer there is counted by POST
 /api/v1/us/ask/free, since its route is cached. Once the allowance is used,
 that box asks the reader to sign up, and Your Plover answers the question.
+The front page does the same for a question its stream cannot answer: the
+web search or economy answer it falls back to is counted by POST /free
+(until 2026-11-04 those were free without limit, so one reader had three
+answers in a morning). Once the allowance is used, the front page answers a
+typed question with a sign-up card, and the preview route runs no web
+search for that reader (each costs a paid call).
 
 The page decides
 ----------------
-The server only counts and reports; it never refuses an answer. The front
+The server only counts and reports; it refuses only the paid web search. The front
 page reads the count and shows the start of the answer once the allowance is
 used, as it did before for every signed-out question. The answer routes stay
 public by URL, as they were.
