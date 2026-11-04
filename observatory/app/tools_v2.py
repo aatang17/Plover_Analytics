@@ -1152,8 +1152,6 @@ def get_view(dataset, view="", params=None, as_of="", limit=ROW_BUDGET):
         return _dumps({"error": ("Give a view. %s has: %s" % (
                            dataset, ", ".join(sorted(by_role)) or "none")),
                        "views": views})
-    if not registry.available(dataset):
-        return _unavailable(m)
     p_as_of, err = _parse_as_of(as_of)
     if err:
         return _fail(err)
@@ -1191,6 +1189,10 @@ def get_view(dataset, view="", params=None, as_of="", limit=ROW_BUDGET):
                        "view": by_role[view]})
     if "as_of" in signature and p_as_of:
         kwargs["as_of"] = p_as_of.isoformat()
+    # after the arguments are checked: a malformed call is told what to fix
+    # whether or not this server holds the data
+    if not registry.available(dataset):
+        return _unavailable(m)
     try:
         with asof.scope(p_as_of):
             raw = call_api(fn, **kwargs)
