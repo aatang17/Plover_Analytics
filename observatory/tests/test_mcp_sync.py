@@ -61,7 +61,11 @@ class SyncTest(Base):
 
     def test_every_exemption_still_matches_a_route(self):
         gets = self._gets()
+        # these two are mounted only when their switches are on (app/main.py)
+        optional = ("/api/v1/account/", "/api/v1/assistant/")
         for prefix in registry.NOT_DATASETS:
+            if prefix in optional:
+                continue
             self.assertTrue(any(p == prefix.rstrip("/") or p.startswith(prefix) for p in gets),
                             "%s is in NOT_DATASETS but no route matches it any more" % prefix)
 

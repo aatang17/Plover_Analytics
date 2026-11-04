@@ -176,6 +176,9 @@ EQUITY_MODULES = ("equity_api", "ownership_api", "lvh_api", "short_api",
 # tests/test_mcp_sync.py enforces it, and fails on an entry here that no
 # longer matches a route.
 NOT_DATASETS = {
+    # per reader, and only where ACCOUNTS_ENABLED / ASSISTANT_ENABLED switch them on
+    "/api/v1/account/": "a reader's own account: sign-in, settings, saved views",
+    "/api/v1/assistant/": "a reader's own Investment Assistant workspace",
     "/api/v1/answers": "answer pages written for search engines; their figures come from datasets",
     "/api/v1/catalog/": "the catalog itself, which list_datasets and describe_dataset serve",
     "/api/v1/company/": "the composed company view, which get_company with no dataset serves",
