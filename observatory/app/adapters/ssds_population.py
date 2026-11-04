@@ -56,6 +56,17 @@ the `Official Statistic` badge on that basis. It is a rate, not a count, so
 the 47 prefectures do not sum to the nation and the reconciliation gate skips
 it — see NO_SUM.
 
+**Births and the fertility rate run past the Bureau's last year.** This table
+republishes the Ministry of Health, Labour and Welfare's vital statistics
+about two years late (the 2026 edition ends at 2023). For the years after
+its last, A4101 and A4103 are read from the Ministry's own final figures
+(確定数) — e-Stat's database tables, then the Ministry's workbook for the
+newest year — through mhlw_annual.py. Where both publish a year the Bureau's
+value is kept; they matched for every year compared, and any difference past
+0.1% is recorded on the release as a data-quality note. Prefecture
+fertility rates arrive a couple of months after the national one; until
+then that year is missing for the prefectures.
+
 Counts of people are levels, not indices: `weight_per_10000` stays NULL.
 Coverage varies a lot by indicator — population runs 1975–2024, the foreign
 register only from 2013, households only in census years. Missing is
@@ -64,7 +75,7 @@ missing.
 import datetime
 import json
 
-from . import estat_api
+from . import estat_api, mhlw_annual
 
 STATS_DATA_ID = "0000010101"
 
@@ -151,16 +162,20 @@ DATASET = {
         "dates differ by indicator: register counts are as of 1 January of "
         "the following year, estimates as of 1 October, and births, deaths "
         "and migration are calendar-year flows, as is the total fertility "
-        "rate, the one published rate carried here. Coverage varies by "
-        "indicator — foreign register counts begin in 2013, the fertility "
-        "rate in 1980, and household counts appear only in census years."
+        "rate, the one published rate carried here. Births and the fertility "
+        "rate for the years after the Bureau's newest come from the Ministry "
+        "of Health, Labour and Welfare's final vital statistics. Coverage "
+        "varies by indicator — foreign register counts begin in 2013, the "
+        "fertility rate in 1980, and household counts appear only in census "
+        "years."
     ),
 }
 
 SOURCE = {
     "source_id": "e-stat:0000010101",
     "name": ("System of Social and Demographic Statistics, prefectural data — "
-             "A: Population and Households"),
+             "A: Population and Households; births and fertility rate after its "
+             "newest year from the MHLW Vital Statistics, final figures"),
     "name_ja": "社会・人口統計体系 都道府県データ Ａ　人口・世帯",
     "url": "https://www.e-stat.go.jp/dbview?sid=0000010101",
     "license_note": (
@@ -179,18 +194,26 @@ RAW_SUFFIX = ".json"
 # --- fetch ------------------------------------------------------------------
 
 def fetch():
-    """Every value of the pinned indicators, as the API returned them.
+    """Every value of the pinned indicators, as the API returned them, and the
+    Ministry of Health, Labour and Welfare's births and fertility tables that
+    carry those two series past the Bureau's last year (mhlw_annual.py).
 
-    The archived artifact is the API's own pages, not a reshaped extract, so
-    the evidence for a release is what the source actually said.
+    The archived artifact is the sources' own responses, not a reshaped
+    extract, so the evidence for a release is what the source actually said.
     """
     pages = estat_api.get_stats_data(
         STATS_DATA_ID, cdCat01=",".join(code for code, _n, _r in INDICATORS))
-    return json.dumps(pages, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    try:
+        mhlw = mhlw_annual.fetch()
+    except mhlw_annual.SourceError as exc:
+        raise ValidationError("vital statistics: %s" % exc)
+    return json.dumps({"ssds": pages, "mhlw": mhlw},
+                      ensure_ascii=False, sort_keys=True).encode("utf-8")
 
 
 def canonical_bytes(raw):
-    """The artifact with the API's served-at timestamps removed.
+    """The artifact with the API's served-at timestamps removed (the
+    Ministry's workbook is a static file and is compared as it is).
 
     Every response carries RESULT.DATE, so two identical downloads never
     match byte for byte and the runner would publish a new release each
@@ -240,8 +263,55 @@ def _year(time_code, time_name):
     return year
 
 
+# Births and the fertility rate, the two series the Ministry's tables extend.
+MHLW_INDICATORS = {"births": "A4101", "tfr": "A4103"}
+# A value both sources publish for the same year is the same figure, and
+# should match; one that differs by more than this is recorded on the release.
+DISCREPANCY_SHARE = 0.001
+PARSE_NOTES = {}
+
+
+def _mhlw_values(mhlw):
+    """{(geo, indicator, year): (value, source)} from the Ministry's tables,
+    the database ahead of the workbook, plus the checks they passed."""
+    prefectures = [(code, ja) for code, ja, _en in PREFECTURES]
+    codes = [c for c, _ja in prefectures]
+    out, notes = {}, []
+    try:
+        tfr, _ = mhlw_annual.parse_estat(mhlw["estat"]["tfr"], "tfr", codes)
+        births, reconciled = mhlw_annual.parse_estat(mhlw["estat"]["births"], "births", codes)
+        wb_births, wb_tfr, wb_prior = mhlw_annual.parse_workbook(mhlw["workbook"], prefectures)
+    except (mhlw_annual.SourceError, KeyError) as exc:
+        raise ValidationError("vital statistics: %s" % exc)
+    for (geo, year), v in tfr.items():
+        out[(geo, "A4103", year)] = (v, "e-Stat %s" % mhlw["estat"]["tfr"]["id"])
+    for (geo, year), v in births.items():
+        out[(geo, "A4101", year)] = (v, "e-Stat %s" % mhlw["estat"]["births"]["id"])
+    wb = "MHLW workbook %d" % mhlw["workbook"]["year"]
+    for (geo, year), v in wb_births.items():
+        out.setdefault((geo, "A4101", year), (v, wb))
+    for (geo, year), v in wb_tfr.items():
+        out.setdefault((geo, "A4103", year), (v, wb))
+    # The workbook's prior-year column against the database's figure.
+    newest = mhlw["workbook"]["year"]
+    prior = ([(geo, "A4101", year, v) for (geo, year), v in wb_prior.items()]
+             + [(geo, "A4103", year, v) for (geo, year), v in wb_tfr.items()
+                if year != newest])
+    for geo, ind, year, v in prior:
+        have = out.get((geo, ind, year))
+        if have and abs(have[0] - v) > DISCREPANCY_SHARE * abs(have[0]):
+            notes.append("%s.%s %d: workbook %s, database %s" % (geo, ind, year, v, have[0]))
+    return out, notes, reconciled
+
+
 def parse(raw_bytes):
-    pages = json.loads(raw_bytes.decode("utf-8"))
+    payload = json.loads(raw_bytes.decode("utf-8"))
+    # Artifacts archived before the Ministry's tables were added are the
+    # Bureau's pages alone.
+    if isinstance(payload, list):
+        pages, mhlw = payload, None
+    else:
+        pages, mhlw = payload["ssds"], payload["mhlw"]
     if not pages:
         raise ValidationError("no pages in the artifact")
 
@@ -310,6 +380,51 @@ def parse(raw_bytes):
             % (len(missing), missing))
     if not observations:
         raise ValidationError("no values parsed")
+
+    # The Ministry's figures, for the years the Bureau's table does not yet
+    # carry. Where both have a year the Bureau's value stays — it is the
+    # same figure republished — and a difference past 0.1% is recorded on
+    # the release as a data-quality note rather than resolved.
+    PARSE_NOTES.clear()
+    if mhlw is not None:
+        held = dict(((o["code"], o["period"]), o["value"]) for o in observations)
+        # Only years after the Bureau's newest for that indicator nationally:
+        # the Ministry's tables reach further back too (the fertility rate
+        # from 1960), but extending history backwards is not what they are
+        # here for, and an earlier year is compared, not added.
+        bureau_last = {}
+        for (key, period) in held:
+            geo, code = key.split(".", 1)
+            if geo == NATIONAL[0] and code in MHLW_INDICATORS.values():
+                bureau_last[code] = max(bureau_last.get(code, 0), period.year)
+        extra, notes, reconciled = _mhlw_values(mhlw)
+        added = {}
+        for (geo, code, year), (value, source) in sorted(extra.items()):
+            key = "%s.%s" % (geo, code)
+            period = _period(INDICATOR_RULE[code], year)
+            if (key, period) in held:
+                bureau = held[(key, period)]
+                if abs(bureau - value) > DISCREPANCY_SHARE * abs(bureau):
+                    notes.append("%s %d: Statistics Bureau %s, Ministry (%s) %s"
+                                 % (key, year, bureau, source, value))
+                continue
+            if year <= bureau_last.get(code, 0):
+                continue
+            if key not in series:
+                raise ValidationError("the Ministry's tables carry %s, which the "
+                                      "Bureau's table has no series for" % key)
+            observations.append({"code": key, "period": period, "value": value})
+            added.setdefault(code, set()).add(year)
+        PARSE_NOTES.update({
+            "vital_statistics_years_added": dict(
+                (code, sorted(years)) for code, years in sorted(added.items())),
+            "vital_statistics_sources": {
+                "births": mhlw["estat"]["births"]["id"],
+                "fertility": mhlw["estat"]["tfr"]["id"],
+                "workbook": mhlw["workbook"]["url"]},
+            "vital_statistics_births_years_reconciled": reconciled,
+            "data_quality_notes": notes,
+        })
     return sorted(series.values(), key=lambda s: s["sort_order"]), observations
 
 
@@ -320,8 +435,8 @@ POPULATION_MIN = 100_000_000
 POPULATION_MAX = 140_000_000
 
 # The fertility rate is published, not computed, so the gate can only ask
-# whether it is a possible number. Japan's national rate peaked at 1.91 in
-# 1980 and bottomed at 1.20 in 2023; Tokyo has been under 1.0 and Okinawa
+# whether it is a possible number. Japan's national rate was 1.75 in 1980
+# and 1.14 in 2025, the lowest in the series; Tokyo has been under 1.0 and Okinawa
 # over 2.3. The band is wide enough for a real move and narrow enough to
 # catch a column read off by one.
 TFR_MIN = 0.5
@@ -463,12 +578,15 @@ def validate(series, observations):
         "fertility_first_year": national_fertility[0][0].year,
         "fertility_latest_year": national_fertility[-1][0].year,
         "worst_sum_gap": worst,
+        **PARSE_NOTES,
     }
 
 
 PRESENTATION = {
     "credit_line": ("Source: Statistics Bureau of Japan — System of Social and "
-                    "Demographic Statistics."),
+                    "Demographic Statistics; births and fertility rate after its "
+                    "newest year, Ministry of Health, Labour and Welfare — Vital "
+                    "Statistics, final figures."),
     # Annual, republished each June, and each edition's newest period is
     # already about eighteen months old when it lands: the June 2026 release
     # tops out at 1 January 2025. So the newest period is legitimately up to
@@ -579,5 +697,13 @@ MANIFEST = {
         "rate (A4103), whose denominator — female population by single year of age "
         "— is not in this table. It is served exactly as the Bureau publishes it, "
         "is a rate rather than a count, and must never be summed across areas.",
+        "Births (A4101) and the fertility rate (A4103) for the years after the "
+        "Bureau's newest — 2024 and 2025 at November 2026 — are the Ministry of "
+        "Health, Labour and Welfare's final figures (確定数), read from its e-Stat "
+        "tables and its own workbook. Where both sources publish a year the "
+        "Bureau's value is kept; differences past 0.1% are listed on the release "
+        "under data_quality_notes. Prefecture fertility rates for the newest year "
+        "follow the national figure by a couple of months and are missing until "
+        "then.",
     ],
 }

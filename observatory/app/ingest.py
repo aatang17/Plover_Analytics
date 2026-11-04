@@ -50,6 +50,8 @@ from .adapters import (boj_assets, cpi_jp, cpi_jp_goods_services, cpi_jp_items,
                        cpi_us, cpi_us_sa, cpi_us_areas, cpi_us_weights,
                        us_avg_prices, us_wages, us_wage_tracker, us_labour, fed_h10,
                        lfs_unemployment, mhlw_job_openings, mhlw_monthly_labour,
+                       mhlw_vital_stats,
+                       estat_population_age,
                        cpi_hk, cpi_hk_rates, gdp_hk, labour_hk, retail_hk, trade_hk)
 
 ADAPTERS = {"cpi-jp": cpi_jp, "cpi-jp-items": cpi_jp_items, "boj-assets": boj_assets,
@@ -98,6 +100,10 @@ ADAPTERS = {"cpi-jp": cpi_jp, "cpi-jp-items": cpi_jp_items, "boj-assets": boj_as
             "unemployment-jp": lfs_unemployment,
             "job-openings-jp": mhlw_job_openings,
             "wages-jp": mhlw_monthly_labour,
+            # Births, deaths and marriages by month (mhlw_vital_stats.py).
+            "vital-stats-jp": mhlw_vital_stats,
+            # Population by single year of age (estat_population_age.py).
+            "population-age-jp": estat_population_age,
             # Hong Kong: the Census and Statistics Department (censtatd.py).
             "cpi-hk": cpi_hk, "cpi-hk-rates": cpi_hk_rates, "gdp-hk": gdp_hk,
             "labour-hk": labour_hk, "retail-hk": retail_hk, "trade-hk": trade_hk}

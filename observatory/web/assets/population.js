@@ -114,7 +114,11 @@ function urlState() {
 
 function setUrlState(next) {
   var s = Object.assign(urlState(), next);
-  var p = new URLSearchParams();
+  // Keys this function does not own (the monthly births section's, in
+  // vital.js) are kept; its own are cleared and rewritten.
+  var p = new URLSearchParams(location.search);
+  ["measure", "pref", "hist", "pyr", "scale", "from", "to", "segment", "muni",
+   "sort", "dir"].forEach(function (k) { p.delete(k); });
   if (s.measure !== "change_pct") p.set("measure", s.measure);
   if (s.pref !== "13") p.set("pref", s.pref);
   if (s.hist !== "level") p.set("hist", s.hist);
@@ -133,9 +137,9 @@ function setUrlState(next) {
 /* ---------- reading the payloads ---------- */
 
 /* The latest published value of one register series, or null.
-   Each register series carries a single period — a stock at 1 January, a
-   flow dated to the year it covers — so "the last one present" is the
-   value, and an absent series is missing, never zero. */
+   A register series runs over years (stocks at 1 January, flows dated to
+   the year they cover); the page shows the newest, so "the last one
+   present" is the value, and an absent series is missing, never zero. */
 function reg(geo, segment, measure) {
   var col = REG.values[geo + "." + segment + "." + measure];
   if (!col) return null;

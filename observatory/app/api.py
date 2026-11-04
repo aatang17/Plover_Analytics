@@ -14,6 +14,7 @@ import io
 import json
 import math
 import os
+import re
 import time
 from typing import List
 
@@ -45,7 +46,8 @@ from .adapters import (boj_assets, cpi_jp, cpi_jp_goods_services, cpi_jp_items,
                        jpx_margin, jpx_investor_type,
                        cpi_us, cpi_us_sa, cpi_us_areas, cpi_us_weights,
                        us_avg_prices, us_wages, us_wage_tracker, us_labour, fed_h10,
-                       lfs_unemployment, mhlw_job_openings, mhlw_monthly_labour,
+                       lfs_unemployment, mhlw_job_openings, mhlw_monthly_labour, mhlw_vital_stats,
+                       estat_population_age,
                        cpi_hk, cpi_hk_rates, gdp_hk, labour_hk, retail_hk, trade_hk)
 
 # The agent is optional: without the openai package installed the data API
@@ -110,6 +112,10 @@ ADAPTERS = {"cpi-jp": cpi_jp, "cpi-jp-items": cpi_jp_items, "boj-assets": boj_as
             "unemployment-jp": lfs_unemployment,
             "job-openings-jp": mhlw_job_openings,
             "wages-jp": mhlw_monthly_labour,
+            # Births, deaths and marriages by month (mhlw_vital_stats.py).
+            "vital-stats-jp": mhlw_vital_stats,
+            # Population by single year of age (estat_population_age.py).
+            "population-age-jp": estat_population_age,
             # Hong Kong: the Census and Statistics Department (censtatd.py).
             "cpi-hk": cpi_hk, "cpi-hk-rates": cpi_hk_rates, "gdp-hk": gdp_hk,
             "labour-hk": labour_hk, "retail-hk": retail_hk, "trade-hk": trade_hk}
@@ -132,9 +138,21 @@ CALC = {
     "yoy": "(index[t] / index[t−12 months] − 1) × 100, from published index values.",
     "mom": "(index[t] / index[t−1 month] − 1) × 100, from published index values.",
     "ann3m": "((index[t] / index[t−3 months]) ^ 4 − 1) × 100, from published index values.",
+    # Sums of monthly counts, served only for a dataset that declares
+    # PRESENTATION["additive"] (births, deaths: months add up to a year).
+    "ytd": ("sum(value[January] … value[t]) of t's year, from published monthly "
+            "values; a month with any earlier month of its year unpublished is "
+            "left out, never summed short."),
+    "sum_12m": "sum(value[t−11] … value[t]) over the trailing 12 published monthly values.",
 }
-TRUST = {"index": "official", "yoy": "derived", "mom": "derived", "ann3m": "derived"}
-UNIT = {"index": "index", "yoy": "%", "mom": "%", "ann3m": "%"}
+TRUST = {"index": "official", "yoy": "derived", "mom": "derived", "ann3m": "derived",
+         "ytd": "derived", "sum_12m": "derived"}
+# A sum carries the unit of what it sums (persons), so it has no fixed unit.
+UNIT = {"index": "index", "yoy": "%", "mom": "%", "ann3m": "%",
+        "ytd": None, "sum_12m": None}
+SUM_MEASURES = ("ytd", "sum_12m")
+# Most observations requests name at most this many series.
+MAX_OBSERVATION_SERIES = 8
 
 # Published units, human form. The 'index' measure returns the value exactly as
 # published, so its unit is the series' own — an index point for CPI, a yen
@@ -177,7 +195,10 @@ UNIT_LABEL = {"index": "index", "jpy_100mn": "¥100mn", "pct": "%",
               "persons_10k": "10k persons", "ratio": "ratio", "days": "days",
               # Hong Kong's C&SD publishes money in HK$ million and head
               # counts in thousands; both are stored as released.
-              "hkd_million": "HK$mn", "persons_1000": "'000 persons"}
+              "hkd_million": "HK$mn", "persons_1000": "'000 persons",
+              # Marriages and divorces are counted in couples (組), never
+              # people: one marriage is two persons and one couple.
+              "couples": "couples"}
 
 
 def _calc_for(measure, unit):
@@ -190,6 +211,8 @@ def _calc_for(measure, unit):
 
 
 def _unit_for(measure, unit):
+    if measure in SUM_MEASURES:
+        return UNIT_LABEL.get(unit, unit) if unit else "count"
     return (UNIT_LABEL.get(unit, unit) if unit else UNIT[measure]) \
         if measure == "index" else UNIT[measure]
 
@@ -342,6 +365,14 @@ def _measure_points(values, measure):
         v = values[p]
         if measure == "index":
             out.append((p, v))
+            continue
+        if measure in SUM_MEASURES:
+            # Every month in the window must be published: a total with a
+            # month missing is not a smaller total, it is not a total.
+            window = ([datetime.date(p.year, m, 1) for m in range(1, p.month + 1)]
+                      if measure == "ytd" else [_months_ago(p, k) for k in range(12)])
+            xs = [values.get(w) for w in window]
+            out.append((p, None if any(x is None for x in xs) else sum(xs)))
             continue
         lagn = {"yoy": 12, "mom": 1, "ann3m": 3}[measure]
         prev = values.get(_months_ago(p, lagn))
@@ -1634,6 +1665,134 @@ PREFECTURES_CALC = (
 )
 
 
+AGE_BAND_CALC = (
+    "sum of the published single-year counts from age a to age b (and the open "
+    "top band where the range reaches it); a year whose published ages do not "
+    "cover the whole range is left out, never summed short. Each age is "
+    "published rounded to the thousand, so a sum can differ from a band the "
+    "Bureau publishes by a few thousand.")
+
+
+def _band_sum(ages, lo, hi):
+    """Sum of single years lo..hi (hi None: lo and over) from {age: value},
+    or None when the published ages do not cover the range exactly. The open
+    top band (90 and over, later 100 and over) is never split."""
+    open_band = next((b for b in ("100plus", "90plus") if b in ages), None)
+    start_open = int(open_band[:-4]) if open_band else 100
+    if hi is None:
+        if open_band is None or lo > start_open:
+            return None
+        singles, extra = range(lo, start_open), ages[open_band]
+    else:
+        if hi >= start_open:
+            return None
+        singles, extra = range(lo, hi + 1), 0.0
+    xs = [ages.get(str(a)) for a in singles]
+    if any(x is None for x in xs):
+        return None
+    return sum(xs) + extra
+
+
+@router.get("/{dataset}/age-bands", openapi_extra={"x-example": "/api/v1/population-age-jp/age-bands?nationality=jp&sex=f&from=25&to=39"})
+def age_bands(dataset,
+              nationality: str = Query(..., max_length=10, description="A nationality key the dataset declares, e.g. total or jp"),
+              sex: str = Query(..., max_length=2, description="t (both sexes), m or f"),
+              from_: int = Query(None, alias="from", ge=0, le=100, description="First age of a custom band"),
+              to: int = Query(None, ge=0, le=99, description="Last age of a custom band; omit for 'and over'"),
+              bands: str = Query(None, max_length=80, description="Several bands at once, e.g. 25-39,20-44,65+ (up to eight)"),
+              as_of: str = Query(None, description="YYYY-MM-DD: the data as it stood on that date"),
+              format: str = Query("json", description="'json' or 'csv'"),
+              request: Request = None):
+    """Population in age bands, summed from published single years of age.
+
+    With ``from`` (and optionally ``to``) one band, e.g. women aged 25–39;
+    with ``bands=25-39,20-44`` several; with neither, five-year bands 0–4 … 95–99, 100 and over, and 90 and over.
+    Every value is a sum of published counts, so it is derived and carries
+    its formula. A year whose published ages cannot make the band — 95–99
+    before 2005, when the top published band is 90 and over — is a gap.
+    """
+    adapter = _dataset_or_404(dataset)
+    cfg = adapter.PRESENTATION.get("ages")
+    if not cfg:
+        raise HTTPException(404, "Dataset '%s' has no single-year age definition" % dataset)
+    nats = [n["key"] for n in cfg["nationalities"]]
+    sexes = [x["key"] for x in cfg["sexes"]]
+    if nationality not in nats:
+        raise HTTPException(400, "nationality must be one of %s" % ", ".join(nats))
+    if sex not in sexes:
+        raise HTTPException(400, "sex must be one of %s" % ", ".join(sexes))
+    if format not in ("json", "csv"):
+        raise HTTPException(400, "format must be 'json' or 'csv' (got '%s')" % format)
+    if to is not None and from_ is None:
+        raise HTTPException(400, "Give 'from' with 'to': from=25&to=39")
+    if from_ is not None and to is not None and to < from_:
+        raise HTTPException(400, "'to' must not be below 'from'")
+    try:
+        p_as_of = datetime.date.fromisoformat(as_of) if as_of else None
+    except ValueError:
+        raise HTTPException(400, "as_of must be a date, YYYY-MM-DD (got '%s')" % as_of)
+    request_bands = bool(bands)
+    if bands:
+        wanted = []
+        for item in [b.strip() for b in bands.split(",") if b.strip()]:
+            m = re.match(r"^(\d{1,3})(?:-(\d{1,2})|\+)$", item)
+            if not m or (m.group(2) is not None and int(m.group(2)) < int(m.group(1))):
+                raise HTTPException(400, "bands are ages like 25-39 or 65+, comma-separated "
+                                         "(got '%s')" % item)
+            wanted.append((int(m.group(1)), int(m.group(2)) if m.group(2) else None))
+        if not wanted or len(wanted) > 8:
+            raise HTTPException(400, "Give one to eight bands, e.g. bands=25-39,20-44")
+        bands = wanted
+    elif from_ is not None:
+        bands = [(from_, to)]
+    else:
+        bands = ([(a, a + 4) for a in range(0, 100, 5)] + [(100, None), (90, None)])
+    prefix = "%s.%s." % (nationality, sex)
+    con = _con()
+    try:
+        rel = _release(con, dataset, as_of=p_as_of)
+        smap = [s for s in _series_map(con, dataset) if s["code"].startswith(prefix)]
+        if p_as_of:
+            raw = vintages.values_as_of(con, dataset, p_as_of, [s["code"] for s in smap])
+        else:
+            by_id = _values_bulk(con, [s["series_id"] for s in smap])
+            raw = dict((s["code"], by_id.get(s["series_id"], {})) for s in smap)
+        unit = smap[0]["unit"] if smap else None
+    finally:
+        con.close()
+    years = {}
+    for c, points in raw.items():
+        age = c[len(prefix):]
+        for period, v in points.items():
+            if v is not None:
+                years.setdefault(period, {})[age] = v
+    who = "%s, %s" % (
+        dict((n["key"], n["label"]) for n in cfg["nationalities"])[nationality],
+        dict((x["key"], x["label"]) for x in cfg["sexes"])[sex])
+    out = []
+    for lo, hi in bands:
+        label = ("%d–%d" % (lo, hi)) if hi is not None else "%d+" % lo
+        out.append({
+            "code": label,
+            "name_en": "%s, aged %s" % (who, ("%d to %d" % (lo, hi)) if hi is not None
+                                        else "%d and over" % lo),
+            "from": lo, "to": hi,
+            "points": [[p.isoformat(), _band_sum(years[p], lo, hi)] for p in sorted(years)],
+        })
+    body = {"dataset": dataset, "measure": "age_band", "unit": _unit_for("index", unit),
+            "trust": "derived", "calc": AGE_BAND_CALC, "release": rel,
+            "nationality": nationality, "sex": sex, "series": out}
+    if from_ is None and not request_bands:
+        body["note"] = ("The 90+ column overlaps 90–94, 95–99 and 100+; it is there "
+                        "for the years before 2005, when 90 and over is the top band "
+                        "published. Never add it to the others.")
+    if p_as_of:
+        body["as_of"] = p_as_of.isoformat()
+    if format == "csv":
+        return _observations_csv(body, adapter, request)
+    return body
+
+
 @router.get("/{dataset}/prefectures", openapi_extra={"x-example": "/api/v1/population-jp/prefectures"})
 def prefectures(dataset, prefecture: str = Query(None, max_length=2,
                                                  description="Two-digit JIS prefecture code, e.g. 13 for Tokyo; omit for every prefecture")):
@@ -1906,7 +2065,7 @@ FISCAL_CALC = (
 def observations(dataset,
                  series: str = Query(..., max_length=200,
                                      description="Comma-separated series codes, up to eight; find them with /series"),
-                 measure: str = Query("index", description="index (as published) or a calculated rate the dataset offers: yoy, mom, ann3m, ... — see the dataset's measures"),
+                 measure: str = Query("index", description="index (as published) or a calculated measure the dataset offers: yoy, mom, ann3m; ytd and sum_12m (year-to-date and 12-month totals) on monthly counts — see the dataset's measures"),
                  start: str = Query(None, description="First period, YYYY-MM (YYYY-MM-DD for daily series)"),
                  end: str = Query(None, description="Last period, inclusive"),
                  as_of: str = Query(None, description="YYYY-MM-DD: the data as it stood on that date, from the vintage history"),
@@ -1918,7 +2077,8 @@ def observations(dataset,
                                      description="Month the fiscal year ends (3 = March)"),
                  format: str = Query("json", description="'json' or 'csv'"),
                  request: Request = None):
-    """Published values for up to eight series.
+    """Published values for up to eight series (more are answered with the
+    first eight and a `series_not_returned` list naming the rest).
 
     With ``as_of=YYYY-MM-DD`` the response is the data *as it stood on that
     date* — the numbers a reader would have had then, before any later
@@ -1948,6 +2108,11 @@ def observations(dataset,
     if period is not None and measure != "index":
         raise HTTPException(
             400, "Fiscal roll-ups sum published values; request measure=index with period=.")
+    if measure in SUM_MEASURES and not (adapter.PRESENTATION.get("additive")
+                                        and adapter.DATASET.get("frequency") == "monthly"):
+        raise HTTPException(
+            400, "measure=%s sums monthly counts, and '%s' does not publish counts "
+                 "that add up month to month. Request measure=index." % (measure, dataset))
     # Monthly-lag rates presuppose monthly periods; on a daily series the
     # lag lookup would mostly miss and a %-change of a rate is not a
     # meaningful measure anyway.
@@ -1955,9 +2120,12 @@ def observations(dataset,
         raise HTTPException(
             400, "'%s' is a daily dataset; monthly rate measures do not "
                  "apply. Request measure=index for published values." % dataset)
-    codes = [c.strip() for c in series.split(",") if c.strip()][:8]
-    if not codes:
+    asked = [c.strip() for c in series.split(",") if c.strip()]
+    if not asked:
         raise HTTPException(400, "No series codes given")
+    # More than eight are answered with the first eight, and the response
+    # says which were left out; they were once dropped without a word.
+    codes, not_returned = asked[:MAX_OBSERVATION_SERIES], asked[MAX_OBSERVATION_SERIES:]
     p_start = _period_bound(start, "start")
     p_end = _period_bound(end, "end", end=True)
     try:
@@ -1981,7 +2149,8 @@ def observations(dataset,
             # negative during runoff). A percentage change across a sign change
             # is arithmetic noise, so rates are refused on flow series rather
             # than served with a caveat.
-            if measure != "index" and _kind(adapter.PRESENTATION, code) == "flow":
+            if (measure not in ("index",) + SUM_MEASURES
+                    and _kind(adapter.PRESENTATION, code) == "flow"):
                 raise HTTPException(
                     400, "'%s' is a flow series and crosses zero; percentage "
                          "changes are not meaningful. Request measure=index." % code)
@@ -2021,7 +2190,7 @@ def observations(dataset,
             out.append(entry)
         # one response, one measure type — never a yen level and an index
         # sharing an axis (they would be silently incomparable)
-        if measure == "index" and len(units) > 1:
+        if (measure == "index" or measure in SUM_MEASURES) and len(units) > 1:
             raise HTTPException(
                 400, "Requested series have different published units (%s); "
                      "published levels of different kinds must not share an axis."
@@ -2042,6 +2211,11 @@ def observations(dataset,
             # The vintage is part of the citation: the same URL must return the
             # same numbers next year, so the response says which one it read.
             body["as_of"] = p_as_of.isoformat()
+        if not_returned:
+            body["series_not_returned"] = not_returned
+            body["note"] = ("At most %d series per request: %s not returned. Ask for "
+                            "them in a second request." % (
+                                MAX_OBSERVATION_SERIES, ", ".join(not_returned)))
         if format == "csv":
             return _observations_csv(body, adapter, request)
         return body
@@ -2105,6 +2279,8 @@ def _observations_csv(body, adapter, request):
         if s.get("months_not_summed"):
             w("# Column %s: months not summed (incomplete period): %s"
               % (s["code"], ", ".join(s["months_not_summed"])))
+    if body.get("note"):
+        w("# Note: %s" % body["note"])
     w("# Blank = not published or not available; never zero.")
     if request is not None:
         w("# Retrieved from %s on %s" % (str(request.url),

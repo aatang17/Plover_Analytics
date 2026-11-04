@@ -372,6 +372,16 @@ fillLabour("job-openings-jp", "active", "r-jobs", "a-jobs", v => fmtNum(v, 2),
            "openings per applicant, as published");
 fillLabour("wages-jp", "real", "r-wages", "a-wages", v => fmtRate(v, 1),
            "real wages YoY, as published");
+// Births in the month, from the vital statistics' preliminary count; the
+// row exists only on pages that list it.
+if (document.getElementById("r-vital")) {
+  fillLabour("vital-stats-jp", "births", "r-vital", "a-vital", v => fmtNum(v, 0),
+             "births in the month, preliminary, as published");
+}
+if (document.getElementById("r-ages")) {
+  fillLabour("population-age-jp", "total", "r-ages", "a-ages", v => fmtNum(v / 1000, 2) + "mn",
+             "total population at 1 October, as published");
+}
 fillBoj();
 fillBanks();
 fillRates();

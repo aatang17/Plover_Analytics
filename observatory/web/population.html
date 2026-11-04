@@ -147,6 +147,68 @@
     </div>
   </section>
 
+  <section aria-labelledby="h-vital">
+    <h2 id="h-vital">Births, Deaths and Marriages, Monthly <span class="h2-note" id="vital-note"></span></h2>
+    <p class="section-sub">The Ministry of Health, Labour and Welfare's two monthly counts,
+    drawn side by side and never added together. The preliminary count (速報) is every birth,
+    death, marriage and divorce reported in Japan, foreign residents included, about two
+    months after the month. The approximate count (概数) is Japanese nationals only, about
+    five months after.</p>
+    <div class="strip">
+      <div class="strip-grid cols-4" id="vital-tiles">
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+      </div>
+    </div>
+    <p class="strip-foot" id="vital-foot"></p>
+    <div class="chart-panel">
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Event" id="vital-event-seg">
+        <button type="button" data-vev="births">Births</button>
+        <button type="button" data-vev="deaths">Deaths</button>
+        <button type="button" data-vev="natural_change">Natural Change</button>
+        <button type="button" data-vev="marriages">Marriages</button>
+        <button type="button" data-vev="divorces">Divorces</button>
+      </div>
+      <div class="seg" role="group" aria-label="View" id="vital-view-seg">
+        <button type="button" data-vview="sum_12m">Last 12 Months</button>
+        <button type="button" data-vview="ytd">Year to Date</button>
+        <button type="button" data-vview="index">Monthly</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="vital-png">Download PNG</button>
+      <button type="button" class="btn" id="vital-csv">Download CSV</button>
+    </div>
+    <div class="chart" id="vital-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
+    <p class="source-line" id="vital-source"></p>
+    <details class="calc" id="vital-calc"></details>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-ages">
+    <h2 id="h-ages">Women Aged 20–44 and 25–39 <span class="h2-note" id="ages-note"></span></h2>
+    <p class="section-sub">The number of women in the ages when most births happen, at
+    1 October each year. Summed from the Statistics Bureau's population by single year of
+    age.</p>
+    <div class="chart-panel">
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Population counted" id="ages-nat-seg">
+        <button type="button" data-anat="jp">Japanese Nationals</button>
+        <button type="button" data-anat="total">Total Population</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="ages-png">Download PNG</button>
+      <button type="button" class="btn" id="ages-csv">Download CSV</button>
+    </div>
+    <div class="chart" id="ages-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
+    <p class="strip-foot" id="ages-foot"></p>
+    <p class="source-line" id="ages-source"></p>
+    <details class="calc" id="ages-calc"></details>
+    </div>
+  </section>
+
   <section aria-labelledby="h-history">
     <h2 id="h-history">Long-Run Prefecture History <span class="h2-note" id="hist-note"></span></h2>
     <p class="section-sub" style="margin-bottom:6px">Residents, age structure, births and
@@ -247,5 +309,7 @@
 <script src="assets/charts.js"></script>
 <script src="assets/sortable.js"></script>
 <script src="assets/population.js"></script>
+<script src="assets/vital.js"></script>
+<script src="assets/ages.js"></script>
 </body>
 </html>

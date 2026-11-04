@@ -16,9 +16,14 @@ Facts the parser and the gates rely on:
 
 - **The ministry keeps only the current year online.** Last year's
   workbook is deleted — the same /main_content/ id is overwritten, and
-  older ids 404. e-Stat is the only archive of prior years. That makes
-  running this ingest every July the whole point: nobody else is
-  accumulating the vintages.
+  older ids 404. e-Stat's file catalog is the archive of prior years, and
+  the population-and-flows workbooks from 2014 (flows for calendar 2013)
+  are read from it every ingest; age bands are the current year only.
+  The archived years use an older layout — headings below the 団体コード
+  row, 増加 for 増減 in 2014 — and pass every gate the current year does,
+  plus one only a history allows: each year's population plus its net
+  change equals the next year's population, exactly. Before 2014 the
+  register counted at 31 March with fiscal-year flows; not taken.
 - Content ids change without notice (000494956 in 2017, 000633315 in
   2019, 000892948 since 2023), so `fetch()` resolves the links off the
   ministry's page rather than pinning URLs.
@@ -57,7 +62,7 @@ import json
 import re
 import urllib.request
 
-from . import xlsx
+from . import estat_api, xls, xlsx
 
 
 class ValidationError(Exception):
@@ -278,8 +283,10 @@ DATASET = {
         "prefectures and the national total, from the Basic Resident "
         "Register as of 1 January, split three ways — all residents, "
         "Japanese residents and foreign residents — with population by "
-        "five-year age band and sex for each. Administrative counts of "
-        "registered residents, not a survey estimate."
+        "five-year age band and sex for the latest year. Population from 2014 "
+        "and flows from 2013, from e-Stat's archive of the ministry's "
+        "workbooks. Administrative counts of registered residents, not a "
+        "survey estimate."
     ),
 }
 
@@ -370,7 +377,62 @@ def fetch():
             _get(url)).decode("ascii")
     global _RESOLVED
     _RESOLVED = dict(("%s.%s" % k, v) for k, v in links.items())
+    for (year, segment), url in sorted(_archive_links().items()):
+        envelope["archive.%d.%s.dynamics" % (year, segment)] = base64.b64encode(
+            _get(url)).decode("ascii")
+        _RESOLVED["archive.%d.%s.dynamics" % (year, segment)] = url
     return json.dumps(envelope, sort_keys=True).encode("utf-8")
+
+
+# The register moved to a 1 January reference date in 2014; the 2013 survey
+# and earlier count at 31 March with fiscal-year flows, a different basis,
+# and are not taken. The 2014 file is the first whose flows cover a calendar
+# year (2013).
+ARCHIVE_FIRST_YEAR = 2014
+ARCHIVE_STATS_CODE = "00200241"
+
+
+def _archive_links():
+    """{(survey year, segment): download URL} of every archived prefecture
+    population-and-flows workbook on e-Stat, from 2014.
+
+    The ministry deletes each year's workbooks when the next arrive; e-Stat's
+    file catalog keeps them all. Matched on the table's name, never its id.
+    """
+    entries, key = [], 1
+    while key:
+        payload = estat_api.call("getDataCatalog", statsCode=ARCHIVE_STATS_CODE,
+                                 limit=100, startPosition=key)
+        inf = payload["GET_DATA_CATALOG"]["DATA_CATALOG_LIST_INF"]
+        found = inf.get("DATA_CATALOG_INF") or []
+        entries.extend([found] if isinstance(found, dict) else found)
+        key = (inf.get("RESULT_INF") or {}).get("NEXT_KEY")
+    out = {}
+    for entry in entries:
+        title = entry["DATASET"]["TITLE"]
+        try:
+            year = int(str(title.get("SURVEY_DATE"))[:4])
+        except ValueError:
+            continue
+        if year < ARCHIVE_FIRST_YEAR or "調査の結果" not in title.get("NAME", ""):
+            continue
+        resources = entry["RESOURCES"]["RESOURCE"]
+        for r in [resources] if isinstance(resources, dict) else resources:
+            name = r["TITLE"].get("NAME", "")
+            if "都道府県別人口、人口動態及び世帯数" not in name:
+                continue
+            for segment, ja, _en in SEGMENTS:
+                if "【%s】" % ja in name:
+                    if (year, segment) in out:
+                        raise ValidationError("e-Stat lists two %d %s workbooks"
+                                              % (year, segment))
+                    out[(year, segment)] = r["URL"]
+    years = sorted(set(y for y, _s in out))
+    if len(years) < 10 or any(len([1 for y2, _s in out if y2 == y]) != len(SEGMENTS)
+                              for y in years):
+        raise ValidationError("e-Stat's archive lists an incomplete set of register "
+                              "workbooks: %s" % sorted(out))
+    return out
 
 
 # Where fetch() got each workbook, and what parse() checked but does not
@@ -396,7 +458,8 @@ def _era_years(title):
 
 
 def _sheet(raw, label):
-    sheets = xlsx.sheets(raw)
+    # e-Stat's archive holds the older years as .xls (BIFF), the newer as .xlsx.
+    sheets = (xlsx if raw[:2] == b"PK" else xls).sheets(raw)
     if len(sheets) != 1:
         raise ValidationError(
             "%s: expected one sheet, found %d" % (label, len(sheets)))
@@ -434,15 +497,38 @@ def _number(text, label, row, column):
             "%s row %d column %s: %r is not a number" % (label, row, column, text))
 
 
-def _parse_dynamics(raw, segment):
+# The archived 2014 workbook says 増加 where every later one says 増減.
+_HEADING_SPELLING = {"増加率": "増減率", "自然増加数": "自然増減数",
+                     "自然増加率": "自然増減率", "社会増加数": "社会増減数",
+                     "社会増加率": "社会増減率"}
+
+
+def _column_number(column):
+    n = 0
+    for ch in column:
+        n = n * 26 + ord(ch) - 64
+    return n
+
+
+def _parse_dynamics(raw, segment, edition=None):
     """One population/households/flows workbook -> (stock year, flow year,
     {geo: {measure: value}}) with the published rates alongside."""
-    label = "%s dynamics workbook" % segment
+    label = "%s dynamics workbook%s" % (segment, (" " + edition) if edition else "")
     grid = _sheet(raw, label)
     header = _header_row(grid, label)
-    if header < 3:
-        raise ValidationError("%s: header at row %d, too high for two header "
-                              "rows above it" % (label, header))
+    # Two layouts. Since 2025 the two heading rows sit above the 団体コード
+    # row; in the archived years 2014–2024 they sit below it, with merged
+    # group cells (人口 over 男/女/計) and single-row headings for the change
+    # columns. Both are read the same way once located.
+    above = [xlsx.cell_text(v).strip() for v in grid.get(header - 2, {}).values()]
+    if header >= 3 and ("人口" in above or "住民票記載数" in above):
+        group, sub, data_start = grid[header - 2], grid[header - 1], header + 1
+    else:
+        group, sub = grid.get(header + 1, {}), grid.get(header + 2, {})
+        data_start = header + 3
+        if not any(xlsx.cell_text(v).strip() == "住民票記載数" for v in group.values()):
+            raise ValidationError("%s: no heading rows found around the 団体コード "
+                                  "row %d" % (label, header))
     title = xlsx.cell_text(grid.get(1, {}).get("A"))
     years = _era_years(title)
     if len(years) < 2:
@@ -455,11 +541,19 @@ def _parse_dynamics(raw, segment):
             "%s: flow year %d is not the year before stock year %d — the "
             "reference basis has changed" % (label, flow_year, stock_year))
 
-    group, sub = grid[header - 2], grid[header - 1]
     columns = {}
-    for column in sorted(sub):
-        pair = (xlsx.cell_text(group.get(column)).strip(),
-                xlsx.cell_text(sub.get(column)).strip())
+    current_group = ""
+    for column in sorted(set(group) | set(sub), key=_column_number):
+        if _column_number(column) < 3:
+            continue          # 団体コード, 都道府県名
+        g = xlsx.cell_text(group.get(column)).strip()
+        g = _HEADING_SPELLING.get(g, g)
+        current_group = g or current_group
+        sb = xlsx.cell_text(sub.get(column)).strip()
+        sb = _HEADING_SPELLING.get(sb, sb)
+        if not sb and g:
+            sb = g        # a one-row heading (増減数, 世帯数) in the old layout
+        pair = (current_group, sb)
         if not pair[1]:
             continue
         if pair not in COLUMN_MEASURE:
@@ -470,7 +564,7 @@ def _parse_dynamics(raw, segment):
 
     values = {}
     for row in sorted(grid):
-        if row <= header:
+        if row < data_start:
             continue
         cells = grid[row]
         name = xlsx.cell_text(cells.get("B")).strip()
@@ -574,10 +668,11 @@ def parse(raw_bytes):
     envelope = json.loads(raw_bytes.decode("utf-8"))
     expected = set("%s.%s" % (s, t) for s, _ja, _en in SEGMENTS
                    for t in ("dynamics", "age"))
-    if set(envelope) != expected:
+    current_keys = set(k for k in envelope if not k.startswith("archive."))
+    if current_keys != expected:
         raise ValidationError(
             "artifact holds %s, expected %s"
-            % (sorted(envelope), sorted(expected)))
+            % (sorted(current_keys), sorted(expected)))
 
     names = {}                    # geo -> the name the ministry printed
     stock_years = set()
@@ -669,12 +764,70 @@ def parse(raw_bytes):
             "the three segments disagree on the reference years: stock %s, "
             "flow %s" % (sorted(stock_years), sorted(flow_years)))
 
+    # Earlier years, from e-Stat's archive of the same workbooks: population
+    # and households at 1 January, the register flows of the year before.
+    # Age bands are the current year's only. The archive also holds the
+    # current year; that copy is compared with the ministry's, not added.
+    current_stock = sorted(stock_years)[0]
+    archive_years = sorted(set(int(k.split(".")[1]) for k in envelope
+                               if k.startswith("archive.")))
+    added_years, current_compared, current_differences = [], 0, 0
+    current_values = dict(((o["code"], o["period"]), o["value"]) for o in observations)
+    for year in archive_years:
+        if year > current_stock:
+            raise ValidationError("e-Stat's archive holds %d, after the ministry's "
+                                  "current %d" % (year, current_stock))
+        for segment, _ja, _en in SEGMENTS:
+            key = "archive.%d.%s.dynamics" % (year, segment)
+            if key not in envelope:
+                raise ValidationError("the archive has no %d %s workbook" % (year, segment))
+            a_stock, a_flow, dynamics = _parse_dynamics(
+                base64.b64decode(envelope[key]), segment, str(year))
+            if a_stock != year:
+                raise ValidationError("archived %d %s workbook is for %d"
+                                      % (year, segment, a_stock))
+            rate_gap = max(rate_gap, _check_published_rates(segment, dynamics))
+            stock_period = datetime.date(a_stock, 1, 1)
+            flow_period = datetime.date(a_flow, 1, 1)
+            for geo, (name, values) in dynamics.items():
+                if names.get(geo) != name:
+                    raise ValidationError(
+                        "archived %d %s names area %s %r, the current files %r"
+                        % (year, segment, geo, name, names.get(geo)))
+                for measure, value in values.items():
+                    if measure.startswith("~"):
+                        continue
+                    period = (stock_period if MEASURE_KIND[measure] == "stock"
+                              else flow_period)
+                    if year == current_stock:
+                        code = "%s.%s.%s" % (geo, segment, measure)
+                        current_compared += 1
+                        if current_values.get((code, period)) != value:
+                            current_differences += 1
+                        continue
+                    base = geo_index[geo]
+                    order = (base * 10000 + segment_index[segment] * 1000
+                             + MEASURE_ORDER[measure])
+                    add(geo, segment, measure, order,
+                        "%s — %s (%s)" % (_geo_en(geo), MEASURE_LABEL[measure],
+                                          SEGMENT_EN[segment]),
+                        "%s %s（%s）" % (name, MEASURE_JA[measure], SEGMENT_JA[segment]),
+                        MEASURE_UNIT[measure], period, value)
+        if year != current_stock:
+            added_years.append(year)
+    if current_differences:
+        raise ValidationError(
+            "e-Stat's copy of the %d workbooks differs from the ministry's in %d "
+            "of %d values" % (current_stock, current_differences, current_compared))
+
     _AUDIT.clear()
     _AUDIT.update({
         "stock_year": sorted(stock_years)[0],
         "flow_year": sorted(flow_years)[0],
         "max_rate_gap_pp": round(rate_gap, 8),
         "area_names": names,
+        "archive_stock_years": added_years,
+        "archive_current_year_values_compared": current_compared,
     })
     return sorted(series.values(), key=lambda s: s["sort_order"]), observations
 
@@ -731,33 +884,8 @@ MAX_UNRECORDED_SHARE_AREA = 15.0         # per cent of one area's total
 MAX_BAND_EXCESS_SHARE = 1.0              # per cent of the national population
 
 
-def validate(series, observations):
-    if not _AUDIT:
-        raise ValidationError("validate() called before parse()")
-
-    by_code = {}
-    for o in observations:
-        key = (o["code"], o["period"])
-        if key in by_code:
-            raise ValidationError("duplicate observation %s %s" % key)
-        by_code[key] = o["value"]
-    value = dict((o["code"], o["value"]) for o in observations)
-
-    prefecture_codes = [code for code, _ja, _en in PREFECTURES]
-    segments = [code for code, _ja, _en in SEGMENTS]
-
-    # 1. Every prefecture is present, named exactly as we expect it.
-    names = _AUDIT["area_names"]
-    for code, ja, _en in [NATIONAL] + PREFECTURES:
-        if code not in names:
-            raise ValidationError("area %s (%s) missing from the workbooks" % (code, ja))
-        if names[code] != ja:
-            raise ValidationError(
-                "area %s is named %r, expected %r" % (code, names[code], ja))
-    unexpected = sorted(set(names) - set([NATIONAL[0]] + prefecture_codes))
-    if unexpected:
-        raise ValidationError("unexpected areas in the workbooks: %s" % unexpected)
-
+def _check_identities(value, prefecture_codes, segments):
+    """Checks 2–4 on one year's values; returns the reconciliations made."""
     # 2. The 47 prefectures add to the ministry's own national row, exactly.
     #    These are integer counts of people: near enough is not good enough.
     reconciled = 0
@@ -806,6 +934,65 @@ def validate(series, observations):
                 raise ValidationError(
                     "%s %s: natural and social change do not add to the net change"
                     % (segment, geo))
+
+    return reconciled
+
+
+def validate(series, observations):
+    if not _AUDIT:
+        raise ValidationError("validate() called before parse()")
+
+    by_code = {}
+    for o in observations:
+        key = (o["code"], o["period"])
+        if key in by_code:
+            raise ValidationError("duplicate observation %s %s" % key)
+        by_code[key] = o["value"]
+    def edition(stock_year):
+        """{code: value} of one year's workbooks: stocks at 1 January of
+        stock_year, flows over the year before."""
+        stock, flow = datetime.date(stock_year, 1, 1), datetime.date(stock_year - 1, 1, 1)
+        return dict((code, v) for (code, period), v in by_code.items()
+                    if period == (stock if MEASURE_KIND.get(code.split(".", 2)[2], "stock")
+                                  == "stock" else flow))
+    value = edition(_AUDIT["stock_year"])
+
+    prefecture_codes = [code for code, _ja, _en in PREFECTURES]
+    segments = [code for code, _ja, _en in SEGMENTS]
+
+    # 1. Every prefecture is present, named exactly as we expect it.
+    names = _AUDIT["area_names"]
+    for code, ja, _en in [NATIONAL] + PREFECTURES:
+        if code not in names:
+            raise ValidationError("area %s (%s) missing from the workbooks" % (code, ja))
+        if names[code] != ja:
+            raise ValidationError(
+                "area %s is named %r, expected %r" % (code, names[code], ja))
+    unexpected = sorted(set(names) - set([NATIONAL[0]] + prefecture_codes))
+    if unexpected:
+        raise ValidationError("unexpected areas in the workbooks: %s" % unexpected)
+
+    reconciled = _check_identities(value, prefecture_codes, segments)
+    # The same identities in every archived year, and the bridge between
+    # years: a year's population is the year before's plus its net change.
+    bridged = 0
+    for year in _AUDIT.get("archive_stock_years", []):
+        reconciled += _check_identities(edition(year), prefecture_codes, segments)
+    for year in _AUDIT.get("archive_stock_years", []):
+        before, after = edition(year), edition(year + 1)
+        for code, pop in before.items():
+            if not code.endswith(".population"):
+                continue
+            nxt = after.get(code)
+            net = after.get(code[:-len("population")] + "net_change")
+            if nxt is None or net is None:
+                continue
+            if pop + net != nxt:
+                raise ValidationError(
+                    "%s: %d at 1 January %d plus the %d net change %d is %d, but "
+                    "1 January %d says %d" % (code, pop, year, year, net, pop + net,
+                                              year + 1, nxt))
+            bridged += 1
 
     # 5. Age bands against their own total, and against the population.
     #    The shortfall is people with no usable birth date; it is real and
@@ -919,6 +1106,9 @@ def validate(series, observations):
         "flow_year": _AUDIT["flow_year"],
         "areas": len(names),
         "identities_reconciled": reconciled,
+        "history_stock_years": ([min(_AUDIT["archive_stock_years"]), stock_year]
+                                if _AUDIT.get("archive_stock_years") else [stock_year]),
+        "population_bridges_checked": bridged,
         "max_rate_gap_pp": _AUDIT["max_rate_gap_pp"],
         "population_total": int(national_all),
         "population_foreign": int(national_foreign),
@@ -995,7 +1185,7 @@ MANIFEST = {
     "frequency": DATASET["frequency"],
     "vintage": {
         "unit": "release", "as_of_basis": "release-in-force",
-        "as_of_supported": True, "history_from": "2025-01-01",
+        "as_of_supported": True, "history_from": "2013-01-01",
         "stale_after_days": PRESENTATION["stale_after_days"],
     },
     "measures": [
@@ -1029,8 +1219,10 @@ MANIFEST = {
     "cite": "/population.html",
     "page": "/population.html",
     "notes": [
-        "The ministry keeps only the current year on its site; history "
-        "accumulates here release by release, and the long run is served by "
+        "Population and households run from 1 January 2014 and the register "
+        "flows from calendar 2013, read from e-Stat's archive of the "
+        "ministry's workbooks (the ministry keeps only the current year). Age "
+        "bands are the current year only. The long run before 2014 is "
         "population-jp-history.",
         "Counts are as of 1 January; flows cover the preceding calendar year.",
     ],

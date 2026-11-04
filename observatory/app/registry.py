@@ -123,6 +123,9 @@ UNITS = ("index", "%", "pp", "USD", "per_10000", "per_1000", "births_per_woman",
          # Japanese market statistics are published in 千株; a thousand-share
          # count is stored and shown in that unit, never rescaled to shares.
          "shares_thousand",
+         # Population estimates are published in 千人 and stored so; a
+         # thousand-person count is never ranked against "persons".
+         "persons_1000",
          "voting_rights", "m2", "JPY_per_m2", "x", "years", "days", "date",
          "category", "boolean", "text")
 
@@ -141,7 +144,7 @@ _PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
 # The measures /observations serves for every series dataset. Their formulas
 # live in api.py; a manifest restates them for readability and is checked
 # against the original, so the two can never drift.
-GENERIC_MEASURES = ("index", "yoy", "mom", "ann3m")
+GENERIC_MEASURES = ("index", "yoy", "mom", "ann3m", "ytd", "sum_12m")
 
 # Manifest unit → the unit key api.py uses to word the generic formulas.
 _API_UNIT = {"index": "index", "JPY_100mn": "jpy_100mn", "%": "percent",
@@ -155,7 +158,7 @@ _API_UNIT = {"index": "index", "JPY_100mn": "jpy_100mn", "%": "percent",
              "USD": "usd",
              "persons_10k": "persons_10k",
              # A ratio of counts (job openings per applicant, 倍).
-             "x": "ratio"}
+             "x": "ratio", "persons_1000": "persons_1000"}
 
 # Equity API modules, in registration order. Macro modules come from
 # api.ADAPTERS, so a new adapter is registered here by being registered there.

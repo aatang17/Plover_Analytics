@@ -260,6 +260,7 @@
       <tr><td>Unemployment and job openings (Japan)</td><td class="muted">Monthly</td><td class="num">100 days</td></tr>
       <tr><td>Customs trade by partner (Japan)</td><td class="muted">Monthly, about the end of the following month</td><td class="num">100 days</td></tr>
       <tr><td>Bank of Japan loan rates</td><td class="muted">Monthly</td><td class="num">120 days</td></tr>
+      <tr><td>Births, deaths and marriages (Japan, monthly)</td><td class="muted">Monthly, the preliminary count about eight weeks after the month</td><td class="num">130 days</td></tr>
       <tr><td>Wages and hours (Japan)</td><td class="muted">Monthly</td><td class="num">130 days</td></tr>
       <tr><td>Guest nights and occupancy</td><td class="muted">Monthly, in three stages</td><td class="num">150 days</td></tr>
       <tr><td>Government debt (Japan)</td><td class="muted">Quarterly</td><td class="num">220 days</td></tr>
@@ -493,6 +494,64 @@
     </ul>
     </div>
   </details>
+  <details class="ds" id="calc-vital">
+    <summary><span>Births, deaths and marriages, monthly</span><span class="ds-note">MHLW vital statistics, preliminary and approximate</span></summary>
+    <div class="ds-body">
+    <ul>
+      <li><b>vital-stats-jp</b> holds the Ministry of Health, Labour and Welfare's two monthly
+      counts of births, deaths, natural change, marriages and divorces, as separate series that are
+      never merged. The <b>preliminary count</b> (速報, codes <code>sokuhou.</code>) is every event
+      reported in Japan, foreign residents included, plus Japanese abroad, published about two
+      months after the month, from January 2005. The <b>approximate count</b> (概数, codes
+      <code>gaisu.</code>) is Japanese nationals in Japan only, published about five months after
+      the month, from January 2008; it is the population behind the annual final figures and the
+      total fertility rate.</li>
+      <li>Counts are stored exactly as published. Marriages and divorces count couples, not
+      people. Natural change is births less deaths; the ingest checks that identity for every
+      month of both counts and refuses a file where it fails. The preliminary workbooks also
+      publish 12-month totals, and the ingest recomputes every one of them from the monthly counts
+      beside it.</li>
+      <li>Year to date: <code>sum(value[January] … value[t]) of t's year, from published monthly
+      values</code>. 12-month total: <code>sum(value[t−11] … value[t])</code>. A total with any
+      month in its window unpublished is left out, never summed short. Changes on a year earlier:
+      <code>(value[t] ÷ value[same month a year earlier] − 1) × 100</code>. All three are
+      calculated, so they carry this formula and no badge.</li>
+      <li><b>December's preliminary count is below the approximate count in every year on
+      file</b>, for births by 1,500 to 2,100, although in every other month it is the larger, as
+      it should be with foreign residents included. These are the published figures; the
+      ingest's own checks confirm the reading. Compare December with December, not one count with
+      the other.</li>
+      <li>The approximate monthly figures stay approximate: the Ministry does not republish months
+      once the year's final figures (確定数) are out, so twelve approximate months can differ
+      slightly from the final annual total.</li>
+    </ul>
+    </div>
+  </details>
+  <details class="ds" id="calc-ages">
+    <summary><span>Population by single year of age</span><span class="ds-note">Population estimates, 1 October</span></summary>
+    <div class="ds-body">
+    <ul>
+      <li><b>population-age-jp</b> is the Statistics Bureau's population estimate (人口推計) at
+      1 October by single year of age and sex, in thousands as published: the total population
+      from 1980 and Japanese nationals from 2000. 1980–1999 come from the long-run table for
+      1920–2000, 2000–2020 from the long-run table adjusted between censuses, and later years
+      from the current annual table. Where two of them carry a year, the later one is used; the
+      values compared on those years were identical.</li>
+      <li>The top band moves: <b>90 and over until 2004, 100 and over from 2005</b>, each its own
+      series. Nothing is split to fill the other, so a band such as 95–99 is a gap before
+      2005.</li>
+      <li>Japanese nationals by single year for 1991–1999 exist on e-Stat in older tables
+      estimated on the census of the day and never adjusted to the next one; earlier years are
+      PDF only. They are not loaded.</li>
+      <li>Age bands, including women aged 25–39 and 20–44 on the population page:
+      <code>sum of the published single-year counts from age a to age b (and the open top band
+      where the range reaches it)</code>. A year whose published ages do not cover the whole
+      range is left out. Each age is published rounded to the thousand, so a band summed here can
+      differ from a band the Bureau publishes by a few thousand. The ingest checks every year
+      the other way: the single ages must add to the published total within 15 thousand.</li>
+    </ul>
+    </div>
+  </details>
   <details class="ds" id="calc-population">
     <summary><span>Population by prefecture</span><span class="ds-note">Basic Resident Register and SSDS</span></summary>
     <div class="ds-body">
@@ -501,7 +560,11 @@
       <b>population-jp</b> is the Basic Resident Register (住民基本台帳) as published by the
       Ministry of Internal Affairs and Communications: an administrative count of everyone on a
       municipality's register at 1 January, not a survey estimate, split three ways — all
-      residents, Japanese residents and foreign residents. <b>population-jp-history</b> is the
+      residents, Japanese residents and foreign residents. Population and households run from 1 January 2014 and the
+      register flows (births, deaths, moves) from calendar 2013, read from e-Stat's archive of
+      the ministry's workbooks, since the ministry keeps only the current year online; in every
+      year, the population plus the year's net change equals the next year's population exactly.
+      Age bands are the current year only. <b>population-jp-history</b> is the
       Statistics Bureau's System of Social and Demographic Statistics (社会・人口統計体系), which
       republishes census, population-estimate, vital-statistics and register figures on one
       prefecture grid back to 1975.</li>
@@ -555,9 +618,13 @@
       served exactly as the Statistics Bureau publishes it and carries the <b>Official
       Statistic</b> badge on that basis. Being a rate, it never sums across prefectures, and the
       ingest's reconciliation gate skips it. Prefecture figures are published for 1980, 1985 and
-      then every year from 1986; the missing years are drawn as gaps. Vital statistics run about
-      two years behind the register, so this series ends earlier than everything else on the
-      page. The 2.07 reference line is roughly the rate at which a generation replaces itself —
+      then every year from 1986; the missing years are drawn as gaps. The Statistics Bureau's
+      table republishes the vital statistics about two years late, so births and the fertility
+      rate for the years after its newest are the Ministry of Health, Labour and Welfare's own
+      final figures (確定数), read from its e-Stat tables and its workbook; where both publish a
+      year the Bureau's value is kept, and any difference past 0.1% is listed on the release.
+      Prefecture rates for the newest year follow the national figure by a couple of months and
+      are a gap until then. The 2.07 reference line is roughly the rate at which a generation replaces itself —
       a reference level, not a published series.</li>
       <li><b>Two published figures that will not reconcile, disclosed rather than adjusted.</b>
       The national age bands hold about 6,200 more foreign residents than the 47 prefectures band,
