@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Dollar Exchange Rates · Plover Analytics</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<header class="site-header" data-section="us-rates" data-page="us-fx"></header>
+<script src="assets/nav.js"></script>
+
+<main class="container">
+  <div id="stale-banner"></div>
+
+  <div class="metric-card">
+    <div class="metric-card-head">
+      <h1>US Dollar Exchange Rates</h1>
+      <span class="metric-asof" id="page-asof"></span>
+      <p class="metric-sub" id="page-sub"><span class="skeleton" style="display:inline-block;width:420px;height:14px"></span></p>
+    </div>
+    <div class="strip">
+      <div class="strip-grid cols-4" id="tiles">
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+        <div class="strip-cell skeleton" style="min-height:104px"></div>
+      </div>
+    </div>
+    <p class="strip-foot" id="strip-foot"></p>
+    <details class="calc" id="strip-calc" style="display:none"></details>
+  </div>
+
+  <section aria-labelledby="h-main">
+    <h2 id="h-main">Exchange Rate History</h2>
+    <div class="chart-panel">
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Exchange rate" id="pair-seg"></div>
+      <div class="seg" role="group" aria-label="Date range" id="range-seg">
+        <button type="button" data-range="1">1Y</button>
+        <button type="button" data-range="5">5Y</button>
+        <button type="button" data-range="10">10Y</button>
+        <button type="button" data-range="25">25Y</button>
+        <button type="button" data-range="max">Max</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="main-png">Download PNG</button>
+      <button type="button" class="btn" id="main-csv">Download CSV</button>
+    </div>
+    <p class="table-meta" id="chart-note"></p>
+    <div class="chart" id="main-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
+    <p class="source-line" id="main-source"></p>
+    </div>
+  </section>
+
+  <section aria-label="Data source and provenance" class="prov">
+    <div id="prov-card"></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    Source: Board of Governors of the Federal Reserve System, H.10 Foreign Exchange Rates.
+    <a href="methodology.html">Methodology</a>
+  </div>
+</footer>
+
+<script src="assets/echarts.min.js"></script>
+<script src="assets/format.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/us-fx.js"></script>
+</body>
+</html>

@@ -248,6 +248,9 @@ DESCRIPTIONS = {
     "us-labour.html":
         "The US unemployment rate, participation, the labor force, nonfarm payrolls and "
         "JOLTS job openings, hires and quits, monthly from 1939, from the BLS.",
+    "us-fx.html":
+        "Daily dollar–yen from 1971, dollar–Hong Kong dollar, euro–dollar and the Broad "
+        "Dollar Index: the Federal Reserve Board's H.10 noon buying rates in New York.",
     "hk-economy.html":
         "Hong Kong's quarterly GDP and its expenditure components from 1973, unemployment "
         "and the labour force from 1985, retail sales from 2004 and merchandise trade from "

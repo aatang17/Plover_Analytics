@@ -240,6 +240,7 @@
     <tbody>
       <tr><td>JGB yield curve</td><td class="muted">Every business day, one day in arrears</td><td class="num">7 days</td></tr>
       <tr><td>US Treasury yields, nominal and real</td><td class="muted">Every business day</td><td class="num">7 days</td></tr>
+      <tr><td>US dollar exchange rates (Federal Reserve H.10)</td><td class="muted">Weekly, each Monday, with the previous week's days</td><td class="num">14 days</td></tr>
       <tr><td>Company filings (EDINET)</td><td class="muted">Continuous; extraction runs nightly</td><td class="num">7 days</td></tr>
       <tr><td>Short positions (JPX)</td><td class="muted">Every business day; JPX keeps about twelve days and deletes the rest</td><td class="num">7 days</td></tr>
       <tr><td>Earnings releases (TDnet)</td><td class="muted">Every business day; TDnet keeps about a month and deletes the rest</td><td class="num">7 days</td></tr>
@@ -1691,6 +1692,31 @@
     </ul>
     </div>
   </details>
+  <details class="ds" id="calc-us-fx">
+    <summary><span>US dollar exchange rates</span><span class="ds-note">Federal Reserve Board, H.10</span></summary>
+    <div class="ds-body">
+    <ul>
+      <li>Rates are the Federal Reserve Board's <b>noon buying rates in New York</b> for cable
+      transfers, exactly as published, to four decimals: yen per US dollar from 1971, Hong Kong
+      dollars per US dollar from 1981, US dollars per euro from 1999, and the <b>Nominal Broad
+      Dollar Index</b> (January 2006 = 100, the dollar against 26 trading partners' currencies,
+      weighted by trade) from 2006.</li>
+      <li>Each pair keeps the Board's quotation. A rise in dollar–yen is a stronger dollar; a rise
+      in euro–dollar is a weaker one.</li>
+      <li>A US holiday has no rate: a gap, never zero. The yen has no rate from 16 to 30 August
+      1971, when currency markets closed after the US ended the dollar's convertibility into
+      gold.</li>
+      <li>The Bank of Japan's Tokyo rate for the same day is taken at another hour and differs
+      from the New York rate.</li>
+      <li>The Broad index is not ICE's US Dollar Index (DXY), which is a different, proprietary
+      index and is not carried.</li>
+      <li>The change shown beside each rate is calculated, not published:
+      <code>change[t] = value[t] − value[t−1]</code> and
+      <code>% change = change[t] / value[t−1] × 100</code>, where t−1 is the previous day the
+      Board published a rate.</li>
+    </ul>
+    </div>
+  </details>
   <details class="ds" id="calc-us-companies">
     <summary><span>US companies: market value and revenue</span><span class="ds-note">SEC filings and daily closes</span></summary>
     <div class="ds-body">
@@ -2138,6 +2164,9 @@
     <dd>Treasury par and real yield curves, and SEC filings (financial statements, Forms 3, 4
     and 5, Form 13F, Schedules 13D and 13G): public domain. Cite as: U.S. Department of the
     Treasury; U.S. Securities and Exchange Commission, EDGAR.</dd>
+    <dt>Board of Governors of the Federal Reserve System</dt>
+    <dd>G.5/H.10 foreign exchange rates: public domain. Cite as: Board of Governors of the
+    Federal Reserve System, H.10 Foreign Exchange Rates.</dd>
     <dt>Databento</dt>
     <dd>US daily prices are licensed market data, shown at least a day late as its terms
     allow. Not public domain; the raw files are never redistributed. Market data provided by

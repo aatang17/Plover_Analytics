@@ -246,6 +246,8 @@ var NAV_SECTIONS = [
     id: "us-rates", market: "us", label: "Rates", suffix: "US Rates",
     pages: [
       { id: "us-treasury", label: "Treasury Yields", href: "us-treasury.html" },
+      // The Federal Reserve Board's H.10 rates (app/adapters/fed_h10.py).
+      { id: "us-fx", label: "Exchange Rates", href: "us-fx.html" },
     ],
   },
   {
