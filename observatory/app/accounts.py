@@ -361,11 +361,35 @@ def current_account(request):
     return {"id": row["id"], "email": row["email"]}
 
 
-# Session token hash -> (signed in?, when checked). The visit counter asks on
-# every page and data request, so an answer is reused for a few minutes.
+# Session token hash -> (signed in?, when checked, email domain). The visit
+# counter asks on every page and data request, so an answer is reused for a
+# few minutes.
 _LIVE_SESSIONS = {}
 LIVE_SESSION_SECONDS = 300
 LIVE_SESSIONS_MAX = 5000
+
+
+def _live_session(raw):
+    """(signed in?, the account's email domain or None). Read only and never
+    raises; see session_is_live."""
+    if not raw or not enabled():
+        return False, None
+    key, now = _hash(raw), _now()
+    held = _LIVE_SESSIONS.get(key)
+    if held and now - held[1] < LIVE_SESSION_SECONDS:
+        return held[0], held[2]
+    try:
+        row = conn().execute(
+            "SELECT a.email FROM sessions s JOIN accounts a ON a.id = s.account_id "
+            "WHERE s.token_hash = ? AND s.expires_at > ?", (key, now)).fetchone()
+        live = bool(row) and _allowed(row["email"])
+    except sqlite3.Error:
+        return False, None
+    domain = row["email"].rpartition("@")[2].lower() or None if live else None
+    if len(_LIVE_SESSIONS) >= LIVE_SESSIONS_MAX:
+        _LIVE_SESSIONS.clear()
+    _LIVE_SESSIONS[key] = (live, now, domain)
+    return live, domain
 
 
 def session_is_live(raw):
@@ -373,23 +397,14 @@ def session_is_live(raw):
     only, unlike current_account(): the visit counter uses it to treat a
     signed-in browser as a person on any network, since a session needs a
     link opened from the account's own inbox. Never raises."""
-    if not raw or not enabled():
-        return False
-    key, now = _hash(raw), _now()
-    held = _LIVE_SESSIONS.get(key)
-    if held and now - held[1] < LIVE_SESSION_SECONDS:
-        return held[0]
-    try:
-        row = conn().execute(
-            "SELECT a.email FROM sessions s JOIN accounts a ON a.id = s.account_id "
-            "WHERE s.token_hash = ? AND s.expires_at > ?", (key, now)).fetchone()
-        live = bool(row) and _allowed(row["email"])
-    except sqlite3.Error:
-        return False
-    if len(_LIVE_SESSIONS) >= LIVE_SESSIONS_MAX:
-        _LIVE_SESSIONS.clear()
-    _LIVE_SESSIONS[key] = (live, now)
-    return live
+    return _live_session(raw)[0]
+
+
+def session_domain(raw):
+    """The email domain of the account `raw` is signed in to ("sabacapital.com"),
+    or None. Only the part after the @: the visit log notes it so the Traffic
+    page can say which firm a signed-in reader is from, never who they are."""
+    return _live_session(raw)[1]
 
 
 # ------------------------------------------------------------------- routes

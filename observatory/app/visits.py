@@ -36,6 +36,7 @@ address on one browser version reads as a single visitor, while one person on
 a laptop and a phone reads as two.
 """
 import binascii
+import collections
 import datetime
 import hashlib
 import hmac
@@ -46,7 +47,7 @@ import time
 import urllib.parse
 from threading import Lock
 
-from . import ask_log, db, geoip
+from . import ask_log, db, geoip, visit_orgs
 
 ANALYTICS_DIR = db.DATA_DIR / "analytics"
 SALT_PATH = ANALYTICS_DIR / "salt"
@@ -236,6 +237,23 @@ MAX_BROWSER_SEEN = 100000
 _LIVE = {}
 _SOURCES = {}
 
+# Recent page views, so a page's own reports can be put back with the view they
+# belong to. A reader without the cookie is known by address and browser, and
+# a phone can open the page over one address and send its "still here" and
+# "closed after 21 s" over another (two connections, two exits from the
+# carrier). Those reports then arrive as a second visitor who never opened a
+# page, and neither half passes the reader test: in the first days of November
+# 2026 that was one reader in eight. Entries: [epoch, visitor, path, country,
+# network, joined]. Memory only; a restart forgets the last half hour.
+VIEWS_MAX = 4000
+REJOIN_SECONDS = 1800
+ALIASES_MAX = 20000
+_VIEWS = collections.deque(maxlen=VIEWS_MAX)
+# Visitor a page's report arrived as -> (visitor that opened the page, day).
+# A reader matched to their own view is kept too, so a tab left open past the
+# half hour is never handed to somebody else's view.
+_ALIASES = {}
+
 
 def _salt():
     """The HMAC key, generated once and kept on the volume."""
@@ -315,6 +333,53 @@ def _signed_in(headers):
         return accounts.session_is_live(raw)
     except Exception:
         return False
+
+
+def _member_domain(headers):
+    """The email domain of a signed-in reader ("sabacapital.com"), or None.
+    The part after the @ only: it says which firm, never which person."""
+    raw = _cookies(headers).get(SESSION_COOKIE)
+    if not raw:
+        return None
+    try:
+        from . import accounts
+        return accounts.session_domain(raw)
+    except Exception:
+        return None
+
+
+def _rejoin(visitor, path, country, network, day):
+    """The visitor whose page view a page's own report (still here, closed
+    after N seconds) belongs to. Usually the sender; but when the sender has
+    opened no page in the last half hour, the most recent view of the same
+    page, from the same country, that no report has claimed yet — the same
+    network preferred. Nothing matching: the sender, as before."""
+    now = time.time()
+    with _LOCK:
+        held = _ALIASES.get(visitor)
+        if held and held[1] == day:
+            return held[0]
+        own, found = False, None
+        for entry in reversed(_VIEWS):
+            if now - entry[0] > REJOIN_SECONDS:
+                break
+            if entry[1] == visitor:
+                own = True
+                if entry[2] == path:
+                    entry[5] = True
+            elif (not own and entry[2] == path and not entry[5] and country
+                  and entry[3] == country):
+                if found is None or (entry[4] == network and found[4] != network):
+                    found = entry
+        if own or found is None:
+            if own:
+                _ALIASES[visitor] = (visitor, day)
+            return visitor
+        found[5] = True
+        _ALIASES[visitor] = (found[1], day)
+        while len(_ALIASES) > ALIASES_MAX:
+            _ALIASES.pop(next(iter(_ALIASES)))
+        return found[1]
 
 
 def consent_value(vid, since):
@@ -425,15 +490,25 @@ def record_dwell(scope, path, seconds, view=None):
     ip = _client_ip(scope, _header(headers, b"x-forwarded-for"))
     if _is_ours(ip, headers):
         return
-    visitor = identify(ip, user_agent, headers, now.strftime("%Y-%m-%d"))[0]
+    geoip.prepare()
+    country, network = geoip.lookup(ip)
+    day = now.strftime("%Y-%m-%d")
+    path = (path or "/")[:MAX_PATH_CHARS]
+    sender = identify(ip, user_agent, headers, day)[0]
+    visitor = _rejoin(sender, path, country, network, day)
     event = {
         "at": now.isoformat(timespec="seconds") + "Z",
         "visitor": visitor,
         "kind": "dwell",
-        "path": (path or "/")[:MAX_PATH_CHARS],
+        "path": path,
         "seconds": seconds,
         "bot": False,
+        "country": country,
+        "network": network,
     }
+    if visitor != sender:
+        # Sent from another address than the page view it is filed under.
+        event["rejoined"] = True
     # Which page view this belongs to. A page reports again every time it is
     # hidden, so one reading can arrive three times; the id is what lets the
     # longest report win instead of all three being counted as separate reads.
@@ -459,9 +534,10 @@ def heartbeat(scope, path):
         return
     geoip.prepare()
     country, network = geoip.lookup(ip)
-    visitor = identify(ip, user_agent, headers, now.strftime("%Y-%m-%d"))[0]
-    _touch_live(visitor, (path or "/")[:MAX_PATH_CHARS], country, network, scripted=True,
-                member=_signed_in(headers))
+    day = now.strftime("%Y-%m-%d")
+    path = (path or "/")[:MAX_PATH_CHARS]
+    visitor = _rejoin(identify(ip, user_agent, headers, day)[0], path, country, network, day)
+    _touch_live(visitor, path, country, network, scripted=True, member=_signed_in(headers))
 
 
 def identify(ip, user_agent, headers, day):
@@ -796,7 +872,13 @@ def observe(scope, status, seconds=None):
         event["since"] = since
     if member:
         event["member"] = True
+        domain = _member_domain(headers)
+        if domain:
+            event["member_domain"] = domain[:MAX_PATH_CHARS]
     _record(event)
+    if kind == "page" and not bot:
+        with _LOCK:
+            _VIEWS.append([time.time(), visitor, path, country, network, False])
     if not bot:
         _touch_live(visitor, path if kind == "page" else None, country, network,
                     member=member)
@@ -965,7 +1047,33 @@ def _reader_totals():
         "dwell_views": {}, "activity": {},
         "stable_since": {}, "stable": set(),
         "consent": {"granted": 0, "denied": 0, "unanswered": 0},
+        # Page reads by signed-in readers, by their email domain (_count_org).
+        "domains": {},
     }
+
+
+def _count_org(source, key, event, at):
+    """One page read into an organisation's row: which pages, from where, when."""
+    row = source.setdefault(key, {"views": 0, "visitors": set(), "pages": {},
+                                  "countries": {}, "last": None})
+    row["views"] += 1
+    row["visitors"].add(event.get("visitor"))
+    path = event.get("path") or "/"
+    row["pages"][path] = row["pages"].get(path, 0) + 1
+    if event.get("country"):
+        row["countries"][event["country"]] = row["countries"].get(event["country"], 0) + 1
+    if row["last"] is None or at > row["last"]:
+        row["last"] = at
+
+
+def _join_org(into, row):
+    into["views"] += row["views"]
+    into["visitors"] |= row["visitors"]
+    for name in ("pages", "countries"):
+        for key, n in row[name].items():
+            into[name][key] = into[name].get(key, 0) + n
+    if row["last"] and (into["last"] is None or row["last"] > into["last"]):
+        into["last"] = row["last"]
 
 
 def _new_day():
@@ -986,6 +1094,11 @@ def _new_day():
         # Publication pages for the Writer Desk (_fold_publication). Kept apart
         # from the reader totals, which _settle rebuilds and these do not join.
         "pub_pages": {}, "pub_dwell": {},
+        # Page reads from networks that name an organisation (visit_orgs).
+        # Kept apart like the publication pages: a bank's network often stops
+        # the page's own report, so these do not wait for the reader test;
+        # the summary says how many of their visitors also passed it.
+        "orgs": {},
     })
     return d
 
@@ -1023,6 +1136,11 @@ def _fold(d, event, at):
     if not visitor:
         return  # nothing to test, so never shown as a reader
     _fold_publication(d, event, at)
+    if (event.get("kind") == "page" and (event.get("status") or 0) < 400
+            and visit_orgs.kind(event.get("network")) in (visit_orgs.ORGANISATION, visit_orgs.SECURITY)
+            and not (event.get("path") or "").lower().endswith(ASSET_SUFFIXES + (".md",))):
+        # The .md copies of pages are read by scripts and assistants, not people.
+        _count_org(d["orgs"], event["network"], event, at)
     probe = d["probe"].setdefault(visitor, [False, None, False])
     if event.get("kind") == "dwell":
         probe[0] = True
@@ -1162,6 +1280,8 @@ def _fold_reader(d, event, at):
                         (d["networks"], event.get("network"))):
         if key:
             _count(source, key, visitor)
+    if event.get("member_domain"):
+        _count_org(d["domains"], event["member_domain"], event, at)
 
 
 def _reset_folds():
@@ -1262,6 +1382,10 @@ def _window_totals(start, today, wanted):
             for k in ("pages", "refs", "sources", "countries", "networks", "direct_networks", "direct_pages"):
                 for key, row in d[k].items():
                     _join(w[k].setdefault(key, {"views": 0, "visitors": set()}), row)
+            for k in ("orgs", "domains"):
+                for key, row in d[k].items():
+                    _join_org(w[k].setdefault(key, {"views": 0, "visitors": set(), "pages": {},
+                                                    "countries": {}, "last": None}), row)
             _join(w["direct"], d["direct"])
             _join(w["ai_referred"], d["ai_referred"])
             w["ask_hits"].extend(d["ask_hits"])
@@ -1422,6 +1546,10 @@ def summary(days=30, top=15):
                          "visitors": len(w["ai_referred"]["visitors"])},
         "top_countries": ranked(w["countries"]),
         "top_networks": ranked(w["networks"]),
+        # Who the readers were, as far as the network or a signed-in reader's
+        # email domain says: see app/visit_orgs.py for how a name is sorted.
+        "organisations": _org_rows(w["orgs"], readers=w["visitors"]),
+        "member_domains": _org_rows(w["domains"]),
         "geoip": geoip.status(),
         "first_event": first_event,
         "last_event": last_event,
@@ -1431,6 +1559,26 @@ def summary(days=30, top=15):
         "unreadable_lines": w["unreadable"],
         "truncated": w["truncated"],
     }
+
+
+def _org_rows(source, readers=None, top=200):
+    """An organisation's (or email domain's) row for the Traffic page. With
+    `readers`, the rows are networks, and `confirmed` is how many of their
+    visitors also passed the reader test."""
+    rows = []
+    for key, row in source.items():
+        pages = sorted(row["pages"].items(), key=lambda kv: (-kv[1], kv[0]))
+        countries = sorted(row["countries"].items(), key=lambda kv: (-kv[1], kv[0]))
+        out = {"key": key, "views": row["views"], "visitors": len(row["visitors"]),
+               "last": row["last"], "countries": [c for c, _ in countries[:3]],
+               "pages": [{"path": p, "views": n} for p, n in pages[:10]]}
+        if readers is not None:
+            out["name"] = visit_orgs.label(key)
+            out["kind"] = visit_orgs.kind(key)
+            out["confirmed"] = len(row["visitors"] & readers)
+        rows.append(out)
+    rows.sort(key=lambda r: (r["last"] or ""), reverse=True)
+    return rows[:top]
 
 
 def publication_stats(pages, days=30, top=15):

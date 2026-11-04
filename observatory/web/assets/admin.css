@@ -732,3 +732,16 @@ tr.clickable { cursor: pointer; }
 #traffic-tabs { margin: 18px 0 4px; overflow-x: auto; flex-wrap: nowrap; }
 #traffic-tabs button { white-space: nowrap; }
 .traffic-more { margin-top: 12px; }
+
+/* Latest Visits and Organisations (admin.js recentMarkup, orgTable): one line per
+   visitor; the trip opens in a row underneath, and the table scrolls on a phone */
+.data.visits td { white-space: nowrap; }
+.data.visits td.net { white-space: normal; min-width: 180px; }
+.data.visits td.row-action { text-align: right; padding-top: 4px; padding-bottom: 4px; }
+.row-action .btn { padding: 2px 10px; white-space: nowrap; }
+.now-label { color: var(--obs-trust-official); font-weight: 600; }
+tr.openable { cursor: pointer; }
+tr.openable:hover > td { background: var(--obs-surface-subtle); }
+.data.trip { width: auto; min-width: 60%; margin: 0; background: var(--obs-surface); }
+.data.trip td { white-space: nowrap; }
+.detail-row .source-line { margin: 8px 0 0; }

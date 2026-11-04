@@ -31,7 +31,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import accounts, db, filer_labels, mailer, parties, registry, seo, staff, vintages, visits
+from . import accounts, db, filer_labels, mailer, parties, registry, seo, staff, vintages, visit_trips, visits
 from .api import ADAPTERS, health
 from .equity_api import DB_PATH as EQUITY_DB_PATH
 
@@ -704,6 +704,14 @@ def visits_live(request: Request):
     here that cannot be asked about yesterday."""
     _require_admin(request, "operations")
     return visits.live()
+
+
+@router.get("/visits/recent")
+def visits_recent(request: Request, hours: int = 24):
+    """Each visitor of the last day, with the pages they opened in order,
+    and the machines apart. See app/visit_trips.py."""
+    _require_admin(request, "operations")
+    return visit_trips.recent(hours)
 
 
 @router.get("/visits")

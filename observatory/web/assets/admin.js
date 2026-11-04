@@ -917,6 +917,8 @@ var TRAFFIC_WINDOWS = [7, 30, 90];
    tab sits in the address (#traffic/30/ask) and switching never refetches. */
 var TRAFFIC_TABS = [
   { id: "overview", label: "Overview" },
+  { id: "visits", label: "Latest Visits" },
+  { id: "orgs", label: "Organisations" },
   { id: "readers", label: "Readers" },
   { id: "pages", label: "Pages" },
   { id: "ask", label: "Ask Box" },
@@ -925,7 +927,7 @@ var TRAFFIC_TABS = [
 ];
 var TRAFFIC_ROWS = 10;     // a long table shows this many until Show all
 var TRAFFIC_TOP = 5;       // the overview's short lists
-var trafficState = { d: null, days: 30, tab: "overview", all: {} };
+var trafficState = { d: null, days: 30, tab: "overview", all: {}, recent: null, open: {} };
 
 /* The first TRAFFIC_ROWS of a long table, unless Show all was pressed. */
 function trafficFold(rows, key) {
@@ -991,7 +993,7 @@ function viewTraffic(target, arg, tab) {
   if (!TRAFFIC_TABS.some(function (t) { return t.id === tab; })) tab = "overview";
   target.innerHTML = '<div class="admin-loading">Loading traffic…</div>';
   api("/visits?days=" + days).then(function (d) {
-    trafficState = { d: d, days: days, tab: tab, all: {} };
+    trafficState = { d: d, days: days, tab: tab, all: {}, recent: null, open: {} };
     target.innerHTML = trafficMarkup(d, days);
     wireTraffic(target, d, days);
   }).catch(function (err) {
@@ -1100,6 +1102,10 @@ function trafficTab(d, tab) {
       trafficArrivals(d) + trafficSources(d) + trafficDirect(d);
   }
   if (tab === "places") return trafficPlaces(d);
+  if (tab === "visits") {
+    return '<div id="traffic-recent">' + recentMarkup(trafficState.recent) + "</div>";
+  }
+  if (tab === "orgs") return trafficOrgs(d);
   return trafficOverview(d);
 }
 
@@ -1554,6 +1560,244 @@ function trafficPlaces(d) {
     fmtCount(geo.ranges) + " address ranges.</p>";
 }
 
+/* ---------- latest visits and organisations ---------- */
+
+/* Each recent visitor and the trip they took, from /admin/api/visits/recent
+   (app/visit_trips.py). Its own request, refreshed while the tab is open, so
+   a reader shows here within a minute of arriving. */
+var RECENT_REFRESH_MS = 30000;
+
+var NETWORK_KINDS = {
+  organisation: "Organisation",
+  security: "Security service",
+  provider: "Internet provider",
+  hosting: "Data centre",
+  other: "Other network",
+};
+
+/* The reader's own time zone, named the way people say it: "Singapore". */
+var LOCAL_ZONE = (function () {
+  try {
+    var zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    return zone.split("/").pop().replace(/_/g, " ");
+  } catch (e) {
+    return "";
+  }
+})();
+
+/* "2026-11-04T12:24:13Z" -> "20:24" today, "3 Nov 20:24" before. */
+function fmtClock(iso) {
+  if (!iso) return MISSING;
+  var when = new Date(iso);
+  if (isNaN(when.getTime())) return MISSING;
+  var time = when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (when.toDateString() === new Date().toDateString()) return time;
+  return when.getDate() + " " + MONTHS[when.getMonth()].slice(0, 3) + " " + time;
+}
+
+function refreshRecent() {
+  api("/visits/recent?hours=24").then(function (r) {
+    trafficState.recent = r;
+    var box = document.getElementById("traffic-recent");
+    if (box && trafficState.tab === "visits") box.innerHTML = recentMarkup(r);
+  }).catch(function (err) {
+    var box = document.getElementById("traffic-recent");
+    if (!box) return;
+    // A failed refresh keeps what is already on screen; only a first load
+    // with nothing to show says so.
+    if (!trafficState.recent) box.innerHTML = loadFailed("the latest visits", err);
+  });
+}
+
+/* Opens or closes the detail row under a visitor or an organisation. The
+   choice is kept, so the thirty-second refresh does not close what is open. */
+function toggleTrafficRow(btn) {
+  if (!btn) return;
+  var key = btn.getAttribute("data-open");
+  var row = btn.closest("tr");
+  var detail = row && row.nextElementSibling;
+  if (!detail || !detail.classList.contains("detail-row")) return;
+  var opening = detail.hidden;
+  detail.hidden = !opening;
+  btn.setAttribute("aria-expanded", opening ? "true" : "false");
+  btn.textContent = opening ? btn.getAttribute("data-hide") : btn.getAttribute("data-show");
+  if (opening) trafficState.open[key] = true;
+  else delete trafficState.open[key];
+}
+
+function openButton(key, show, hide) {
+  var open = !!trafficState.open[key];
+  return '<td class="row-action"><button type="button" class="btn btn-sm" data-open="' +
+    escapeHtml(key) + '" data-show="' + escapeHtml(show) + '" data-hide="' + escapeHtml(hide) +
+    '" aria-expanded="' + (open ? "true" : "false") + '">' + escapeHtml(open ? hide : show) +
+    "</button></td>";
+}
+
+function detailRow(key, cols, inner) {
+  return '<tr class="detail-row"' + (trafficState.open[key] ? "" : " hidden") + '><td colspan="' +
+    cols + '">' + inner + "</td></tr>";
+}
+
+function pageLink(path) {
+  return '<a class="mono" href="' + escapeHtml(path) + '" target="_blank" rel="noopener">' +
+    escapeHtml(path) + "</a>";
+}
+
+/* One reader's trip: every page in the order opened, and how long it was open. */
+function tripTable(steps) {
+  var body = (steps || []).map(function (s) {
+    var page = s.asked ? "Asked the question box" : pageLink(s.path);
+    var from = s.from ? escapeHtml(s.from) : s.tag ? "Tagged link (" + escapeHtml(s.tag) + ")" : MISSING;
+    return '<tr><td class="num">' + escapeHtml(fmtClock(s.at)) + "</td><td>" + page + "</td>" +
+      "<td>" + from + '</td><td class="num"' +
+      (s.asked || s.seconds ? "" : ' title="The page sent no reading time: closed within a ' +
+        'second, or still open"') + ">" + (s.asked ? "" : fmtDuration(s.seconds)) + "</td></tr>";
+  }).join("");
+  return '<table class="data trip" data-no-enhance><thead><tr><th class="num">Time</th>' +
+    "<th>Page</th><th>Came From</th>" + '<th class="num">Time Open</th></tr></thead><tbody>' +
+    body + "</tbody></table>";
+}
+
+function networkCell(name, kind) {
+  if (!name) return '<td class="net">' + MISSING + "</td>";
+  return '<td class="net">' + (kind === "organisation" ? "<strong>" + escapeHtml(name) + "</strong>"
+    : escapeHtml(name)) + "</td>";
+}
+
+function recentMarkup(r) {
+  if (!r) return '<p class="admin-loading">Loading the latest visits…</p>';
+  var readers = r.readers || [];
+  var now = readers.filter(function (x) { return x.here_now; }).length;
+  var named = readers.filter(function (x) { return x.organisation || x.member_domain; }).length;
+  var kpis = '<div class="kpi-row">' +
+    kpi(fmtCount(r.readers_total), "Readers, Last 24 Hours", "") +
+    kpi(fmtCount(now), "Reading Now", now ? "ok" : "") +
+    kpi(fmtCount(named), "From a Named Organisation", "") + "</div>";
+  // Listed but not counted: organisation networks whose page never reported in.
+
+  var cols = 9;
+  var rows = trafficFold(readers, "recent").map(function (x) {
+    var key = "v:" + x.visitor;
+    var last = x.here_now ? '<span class="now-label">Now</span>' : escapeHtml(fmtClock(x.last));
+    return '<tr class="openable">' +
+      '<td class="num">' + last + "</td>" +
+      "<td>" + escapeHtml(countryName(x.country)) + "</td>" +
+      networkCell(x.network, x.network_kind) +
+      "<td>" + escapeHtml(NETWORK_KINDS[x.network_kind] || MISSING) + "</td>" +
+      "<td>" + escapeHtml(x.arrived) + "</td>" +
+      '<td class="num">' + fmtCount(x.pages) + "</td>" +
+      (x.confirmed
+        ? '<td class="num">' + fmtDuration(x.seconds) + "</td>"
+        : '<td class="num muted" title="The page never reported in from a browser. Office ' +
+          'networks often block that report, so it is listed, but it is not counted as a ' +
+          'reader anywhere on this page.">Not confirmed</td>') +
+      "<td>" + (x.member_domain ? escapeHtml(x.member_domain) : x.member ? "Yes" : MISSING) +
+      "</td>" + openButton(key, "Show Trip", "Hide Trip") + "</tr>" +
+      detailRow(key, cols, tripTable(x.steps) +
+        (x.returning_since ? '<p class="source-line">Returning reader: accepted the cookie on ' +
+          escapeHtml(fmtDay(x.returning_since)) + ".</p>" : ""));
+  }).join("");
+
+  var table = readers.length
+    ? '<div class="table-wrap"><table class="data visits" data-no-enhance><thead><tr>' +
+      '<th class="num">Last Seen</th><th>Country</th><th>Network</th><th>Network Type</th>' +
+      '<th>Arrived From</th><th class="num">Pages</th><th class="num">Time Reading</th>' +
+      "<th>Signed In</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
+      trafficMore(readers.length, "recent")
+    : '<p class="table-empty">No real reader in the last 24 hours.</p>';
+
+  var machines = r.machines || [];
+  var mrows = trafficFold(machines, "machines").map(function (m) {
+    return "<tr><td>" + escapeHtml(m.name) + "</td>" +
+      '<td class="num">' + fmtCount(m.requests) + "</td>" +
+      '<td class="num">' + fmtCount(m.visitors) + "</td>" +
+      "<td>" + (m.pages.length ? pageLink(m.pages[0]) : MISSING) + "</td>" +
+      '<td class="num" data-sort="' + escapeHtml(m.last || "") + '">' +
+      escapeHtml(fmtClock(m.last)) + "</td></tr>";
+  }).join("");
+  var mtable = machines.length
+    ? '<div class="table-wrap"><table class="data"><thead><tr><th>What It Was</th>' +
+      '<th class="num">Requests</th><th class="num">Visitors</th><th>Most-Asked Page</th>' +
+      '<th class="num">Last Seen</th></tr></thead><tbody>' + mrows + "</tbody></table></div>" +
+      trafficMore(machines.length, "machines")
+    : '<p class="table-empty">No machine visits in the last 24 hours.</p>';
+
+  return '<div class="admin-section">Latest Visits <span class="note">real readers in the ' +
+    "last 24 hours, newest first" + (LOCAL_ZONE ? ", " + escapeHtml(LOCAL_ZONE) + " time" : "") +
+    ", refreshed every 30 seconds</span></div>" + kpis + table +
+    '<p class="source-line">A row is one visitor for one day: the identity resets at midnight ' +
+    "UTC, so the same person tomorrow is a new row unless they accepted the cookie or are " +
+    "signed in. Network is the operator of the network they came from; when that is an office " +
+    "or a campus it names the organisation (in bold), on a phone or at home it is only their " +
+    "provider. Signed In shows the email domain, never the address. Real readers only, by the " +
+    "same test as every figure on this page.</p>" +
+    '<div class="admin-section">Machines and Unconfirmed Visits <span class="note">left out of ' +
+    "every figure on this page</span></div>" + mtable +
+    '<p class="source-line">A link preview is a site fetching the page to draw its card when ' +
+    "somebody pastes the link into a post or a message. Unconfirmed visits sent a browser's " +
+    "description but their page never reported in, or came from a data centre: scripts, " +
+    "people on a VPN, and readers who closed the page at once.</p>";
+}
+
+/* Organisations over the window, from the network a reader came from, and
+   signed-in readers by email domain. */
+function orgTable(rows, key, label, kinds) {
+  var cols = kinds ? 8 : 7;
+  var body = trafficFold(rows, key).map(function (o) {
+    var id = key + ":" + o.key;
+    var pages = (o.pages || []).map(function (p) {
+      return "<tr><td>" + pageLink(p.path) + '</td><td class="num">' + fmtCount(p.views) +
+        "</td></tr>";
+    }).join("");
+    return '<tr class="openable">' + networkCell(o.name || o.key, kinds ? o.kind : "organisation") +
+      "<td>" + escapeHtml((o.countries || []).map(countryName).join(", ") || MISSING) + "</td>" +
+      '<td class="num">' + fmtCount(o.visitors) + "</td>" +
+      (kinds ? '<td class="num">' + fmtCount(o.confirmed) + "</td>" : "") +
+      '<td class="num">' + fmtCount(o.views) + "</td>" +
+      "<td>" + (o.pages && o.pages.length ? pageLink(o.pages[0].path) : MISSING) + "</td>" +
+      '<td class="num">' + escapeHtml(fmtClock(o.last)) + "</td>" +
+      openButton(id, "Show Pages", "Hide Pages") + "</tr>" +
+      detailRow(id, cols, '<table class="data trip" data-no-enhance><thead><tr><th>Page</th>' +
+        '<th class="num">Page Views</th></tr></thead><tbody>' + pages + "</tbody></table>");
+  }).join("");
+  return '<div class="table-wrap"><table class="data visits" data-no-enhance><thead><tr><th>' +
+    escapeHtml(label) + '</th><th>Country</th><th class="num">Visitors</th>' +
+    (kinds ? '<th class="num">Confirmed</th>' : "") +
+    '<th class="num">Page Views</th><th>Most-Read Page</th><th class="num">Last Visit</th>' +
+    "<th></th></tr></thead><tbody>" + body + "</tbody></table></div>" +
+    trafficMore(rows.length, key);
+}
+
+function trafficOrgs(d) {
+  var all = d.organisations || [];
+  var orgs = all.filter(function (o) { return o.kind === "organisation"; });
+  var hidden = all.filter(function (o) { return o.kind === "security"; });
+  var domains = d.member_domains || [];
+  var span = escapeHtml(fmtDay(d.from)) + " to " + escapeHtml(fmtDay(d.to)) + ", newest first";
+  return '<div class="admin-section">Organisations <span class="note">' + span + "</span></div>" +
+    (orgs.length ? orgTable(orgs, "orgs", "Organisation", true)
+      : '<p class="table-empty">No reader in this window came from a network that names an ' +
+        "organisation.</p>") +
+    '<div class="admin-section">Signed-In Readers by Email Domain <span class="note">' + span +
+    "</span></div>" +
+    (domains.length ? orgTable(domains, "domains", "Email Domain")
+      : '<p class="table-empty">No signed-in reader in this window. Visits are marked with ' +
+        "the email domain from 4 November 2026.</p>") +
+    (hidden.length
+      ? '<div class="admin-section">Company Hidden by a Security Service <span class="note">' +
+        "staff of a company that uses one reach the web through it</span></div>" +
+        orgTable(hidden, "hidden", "Service", true)
+      : "") +
+    '<p class="source-line">An organisation is named only when the operator of the network a ' +
+    "reader came from says what it is: a university, a bank, a fund, a public body, or a firm " +
+    "on a fixed list. Phone networks, home broadband and data centres are never named, and a " +
+    "network whose name says neither is left out. It is an estimate read off the name, so a " +
+    "small firm on its provider's network cannot be seen. Visitors counts one per day, so " +
+    "one person on three days is three. Confirmed is how many of them passed the reader test " +
+    "(their page reported in from a browser); office networks often block that report, so " +
+    "organisation visits are listed either way. Email domains are real readers only.</p>";
+}
+
 function trafficCalc(d) {
   return '<details class="calc"><summary>Show calculation</summary><div class="calc-body">' +
     "<p><strong>Only real readers are counted, everywhere on this page.</strong> A " +
@@ -1672,7 +1916,12 @@ function wireTraffic(target, d, days) {
     if (more) {
       trafficState.all[more.getAttribute("data-more")] = true;
       showTrafficTab(target, trafficState.tab);
+      return;
     }
+    // The whole row opens its detail, not only the button: on a phone the
+    // button sits past the right edge of a table that scrolls sideways.
+    var row = e.target.closest("tr.openable");
+    if (row && !e.target.closest("a")) toggleTrafficRow(row.querySelector("[data-open]"));
   });
   showTrafficTab(target, trafficState.tab);
 }
@@ -1696,6 +1945,13 @@ function showTrafficTab(target, tab) {
   box.innerHTML = trafficTab(d, tab);
   if (window.history && history.replaceState) {
     history.replaceState(null, "", trafficHash(trafficState.days, tab));
+  }
+  if (tab === "visits") {
+    refreshRecent();
+    liveTimer = window.setInterval(function () {
+      if (document.visibilityState !== "hidden") refreshRecent();
+    }, RECENT_REFRESH_MS);
+    return;
   }
   if (tab !== "overview") return;
   refreshLive(target);
