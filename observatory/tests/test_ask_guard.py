@@ -174,6 +174,10 @@ class Figures(unittest.TestCase):
         self.assertFalse(same("Revenue was $416bn.", "Revenue was 416 M$."))
         self.assertTrue(same("Revenue was $3.5bn.", "Le chiffre : $3,5bn."))
         self.assertFalse(same("About 166,000.", "Etwa 166.000."))      # read as 166, so kept in English
+        # 4 Nov: "yen per dollar" is 1ドル…円, and the 1 kept the whole Japanese answer in English
+        self.assertTrue(same("It moved from 80.80 yen per dollar on Election Day in 2010 to 83.56 by month-end.",
+                             "2010年の選挙当日の1ドル80.80円から月末には83.56円へと動いた。"))
+        self.assertFalse(same("It moved from 80.80 to 83.56 in 2010.", "2010年に1ドル80.80円から83.56円へ。"))   # no "per": the 1 is new
 
 
 class Currency(unittest.TestCase):

@@ -590,12 +590,14 @@ def _macro_on_topic(q):
 
 
 def _headline(text):
-    """(first sentence, the rest). "5 p.m. Tokyo time" does not end a sentence, and "No." alone says too little."""
+    """(first sentence, the rest). "5 p.m. Tokyo time" does not end a sentence, and "No." alone says too little.
+    Lines under the first ("- 2014: rose…", one per year) stay lines: the page shows them as a list."""
+    text, _, lines = text.partition("\n")
     parts = re.split(r"(?<![ap]\.m\.)(?<!\bU\.S\.)(?<!\bNo\.(?=\s\d))(?<=[.!?])\s+(?=[A-Z0-9\"“])", text)
     head = parts.pop(0)
     while parts and len(head) < 25:
         head += " " + parts.pop(0)
-    return head, " ".join(parts)
+    return re.sub(r":$", ".", head), "\n".join(x for x in (" ".join(parts), lines) if x)
 
 
 def _web(q, prev=""):

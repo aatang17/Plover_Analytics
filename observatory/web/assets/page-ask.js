@@ -272,7 +272,7 @@
     this.show(topLine(q, when) +
       (a.read && a.read.text ? "<p class='pa-read'><b>Read as</b> " + esc(a.read.text) + "</p>" : "") +
       "<p class='pa-head hit'>" + esc(a.headline) + "</p>" +
-      (a.answer ? "<p class='pa-text'>" + esc(a.answer) + "</p>" : "") +
+      (a.answer ? usFmt.answerHtml(a.answer, "pa-text") : "") +
       figuresHtml(a.figures) +
       (a.chart ? "<div class='pa-chart-wrap'><div class='pa-chart'></div><div class='pa-chart-foot'><span>" + esc(src) + "</span>" +
         "<span class='pa-acts'><button type='button' class='pa-link pa-png'>Download PNG</button>" +
@@ -336,7 +336,7 @@
         "<div class='pa-foot'>" + fullLink(asked) + "</div>");
     this.show(topLine(q, p.period && p.period.text) +
       "<p class='pa-head hit'>" + esc(p.headline) + "</p>" +
-      (p.lead ? "<p class='pa-text'>" + esc(p.lead) + "</p>" : "") +
+      (p.lead ? usFmt.answerHtml(p.lead, "pa-text") : "") +
       (figs ? "<dl class='pa-figs'>" + figs + "</dl>" : "") +
       ((p.sources || []).length ? "<p class='pa-src'>" + p.sources.map(function (x) { return esc(String(x).replace(/\.\s*$/, "")); }).join(" · ") + "</p>" : "") +
       (p.calc ? "<p class='pa-src'>" + esc(p.calc) + "</p>" : "") +

@@ -104,7 +104,8 @@ Search the web for recent news reports, then answer the question:
 - Use only what the reports say. Never guess a reason. If the reports disagree, or nothing explains the move, say so.
 - When a previous question is given, the question follows it: read it as being about the same company, index and period.
 - No advice on buying or selling, no forecasts, no price targets.
-- Plain text only: no markdown, no bold, no lists, no headings."""
+- Plain text only: no markdown, no bold, no headings.
+- When the answer runs through two or more years, events or companies, write the first sentence, then one short line for each, each on its own line starting with "- " ("- 2014: rose, from X to Y yen per dollar"), at most six lines. Otherwise no lists."""
 
 
 # Anything else the box holds no data for: on 2026-11-03 "When did the BoJ last raise rates?"
@@ -119,7 +120,8 @@ Otherwise search the web, then answer:
 - Use only what the sources say. Never guess. If they disagree, or do not settle it, say so.
 - When a previous question is given, the question follows it: read it as being about the same subject.
 - No advice on buying or selling and no price targets. Never give your own view of what will happen: about the future, say only what a named source expects, and name it in the first sentence.
-- Plain text only: no markdown, no bold, no lists, no headings."""
+- Plain text only: no markdown, no bold, no headings.
+- When the answer runs through two or more years, events or companies, write the first sentence, then one short line for each, each on its own line starting with "- " ("- 2014: rose, from X to Y yen per dollar"), at most six lines. Otherwise no lists."""
 
 
 def _norm(s):
@@ -135,7 +137,9 @@ def _plain(text):
     text = _CITE.sub("", text or "")
     text = _LINK.sub(r"\1", text)
     text = _BOLD.sub("", text)
-    return re.sub(r"[ \t]+", " ", text).strip()
+    text = re.sub(r"(?m)^[ \t]*[•*][ \t]+", "- ", text)          # a list the page shows line by line
+    text = re.sub(r"[ \t]+", " ", text)
+    return re.sub(r" ?\n[\s]*", "\n", text).strip()
 
 
 def _clean_url(url):

@@ -31,6 +31,7 @@ _LATIN_HINT = re.compile(r"\b(?:quels?|quelles?|combien|pourquoi|est-ce|les|des|
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 _MONTH_OR_WORD = re.compile(r"\b(?:january|february|march|april|may|june|july|august|september|october|november|december|"
                             r"one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b", re.I)
+_PER_ONE = re.compile(r"\b(?:per|each|a|an)\b", re.I)
 ENGLISH_NAMES = ("english", "en")
 CACHE_MAX = 5000
 _LOCK = threading.Lock()
@@ -91,6 +92,9 @@ def same_figures(english, translated):
     if before - after:
         return False
     extra = after - before
+    # "yen per dollar" is 1ドル80.80円 and "a share" 1株: a 1 for each per, each, a or an
+    extra["1"] -= min(extra["1"], len(_PER_ONE.findall(english or "")))
+    extra += collections.Counter()
     if any(not n.isdigit() or int(n) > 12 for n in extra):
         return False
     return sum(extra.values()) <= len(_MONTH_OR_WORD.findall(english or ""))

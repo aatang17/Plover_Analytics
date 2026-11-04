@@ -4698,7 +4698,8 @@ def _web_answer(cur, question, prev=None, opts=frozenset()):
     except us_web.WebError as exc:
         us_steps.log(question, "web search: no answer", str(exc))
         return None
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"“])", got["text"], maxsplit=1)
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"“])|\s*\n(?=- )", got["text"], maxsplit=1)   # a list after the first sentence is the body
+    parts[0] = re.sub(r":$", ".", parts[0])                       # "…varied:" over its list reads as a sentence on its own
     sources = [{"name": s["site"], "credit": s["title"], "note": s["site"], "url": s["url"]} for s in got["sources"]]
     asked = datetime.date.fromisoformat(got["asked_at"][:10]) if got.get("asked_at") else datetime.date.today()
     out = pkg("web_news", question, parts[0], parts[1] if len(parts) > 1 else "", sources=sources,

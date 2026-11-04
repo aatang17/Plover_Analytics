@@ -113,6 +113,9 @@ body.asked .hp-hero { display: none; }
 .an-co img { width: 16px; height: 16px; object-fit: contain; background: var(--obs-logo-bg); }
 .hp #answer .headline { margin: 14px 0 10px; font-size: 26px; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; max-width: 880px; }
 .hp #answer .answer-text { margin: 0; font-size: 15px; line-height: 1.55; color: var(--obs-text); max-width: 820px; }
+.hp #answer .answer-text + .answer-text { margin-top: 8px; }
+.hp #answer .answer-text.ans-list { padding-left: 20px; }
+.hp #answer .ans-list li + li { margin-top: 4px; }
 .hp #answer .read-as { margin: 10px 0 0; }
 /* what a ranking assumed, and the switches that change it (us-stocks.js readHtml) */
 .an-read { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--obs-grid); }

@@ -236,7 +236,24 @@
     return obsChart(el, "line", cfg);
   }
 
-  window.usFmt = { esc: esc, money: money, pct: pct, mult: mult, count: count, dateWords: dateWords,
+  /* An answer's text: each line a paragraph, and lines that start "- "
+     (one per year, event or company, app/us_web.py) a list. */
+  function answerHtml(text, cls) {
+    var out = [], items = [];
+    function flushList() {
+      if (items.length) out.push("<ul class='" + cls + " ans-list'>" + items.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>");
+      items = [];
+    }
+    String(text || "").split("\n").forEach(function (line) {
+      line = line.trim();
+      if (/^[-•]\s+/.test(line)) items.push(line.replace(/^[-•]\s+/, ""));
+      else if (line) { flushList(); out.push("<p class='" + cls + "'>" + esc(line) + "</p>"); }
+    });
+    flushList();
+    return out.join("");
+  }
+
+  window.usFmt = { esc: esc, answerHtml: answerHtml, money: money, pct: pct, mult: mult, count: count, dateWords: dateWords,
                    fmtBy: fmtBy, cellFor: cellFor, tableHtml: tableHtml, sourcesHtml: sourcesHtml,
                    previewValue: previewValue, getJSON: getJSON, askStream: askStream, drawChart: drawChart };
 })();

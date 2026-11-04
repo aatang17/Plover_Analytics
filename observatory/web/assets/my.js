@@ -370,7 +370,7 @@
     return '<article class="my-msg my-plover">' + ploverHead(day(run.created_at)) +
       '<p class="my-head-line">' + esc(a.headline) + "</p>" +
       (a.period && a.period.text ? '<p class="my-src">' + esc(a.period.text) + "</p>" : "") +
-      (a.answer ? '<div class="my-note-text"><p>' + esc(a.answer) + "</p></div>" : "") +
+      (a.answer ? '<div class="my-note-text">' + noteHtml(a.answer) + "</div>" : "") +
       (a.quotes || []).map(function (qt) {
         return '<blockquote class="my-quote">' + (qt.text || []).map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") +
           (qt.cite ? '<p class="my-src">' + (qt.url ? '<a href="' + esc(qt.url) + '" rel="noopener">' + esc(qt.cite) + "</a>" : esc(qt.cite)) + "</p>" : "") + "</blockquote>";

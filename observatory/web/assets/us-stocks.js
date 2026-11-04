@@ -378,7 +378,7 @@
       // other common readings the question has: each a whole question, one click away (app/us_ask_model.py alternatives)
       dymHtml(dym) +
       "<p class='headline hit'>" + esc(a.headline) + "</p>" +
-      (a.answer ? "<p class='answer-text'>" + esc(a.answer) + "</p>" : "") +
+      (a.answer ? usFmt.answerHtml(a.answer, "answer-text") : "") +
       newsHtml(a.sources, a.recipe) + quotesHtml(a.quotes) + readHtml(a.read), "an-q") +
       figuresHtml(a.figures);
     if (a.chart) {
@@ -788,7 +788,7 @@
       "<div class='an-asked'><span>You asked</span><b>" + esc(q) + "</b></div>" +
       "<p class='fp-head hit'>" + esc(p.headline) + "</p>" +
       (p.period && p.period.text ? "<p class='period-line'>" + esc(p.period.text) + "</p>" : "") +
-      (p.lead ? "<p class='fp-lead'>" + esc(p.lead) + "</p>" : "") +
+      (p.lead ? usFmt.answerHtml(p.lead, "fp-lead") : "") +
       (figs ? "<dl class='fp-figs'>" + figs + "</dl>" : "") +
       ((p.sources || []).length ? "<p class='fp-src'>" + p.sources.map(function (x) { return esc(String(x).replace(/\.\s*$/, "")); }).join(" · ") + "</p>" : "") +
       (p.calc ? "<p class='fp-src'>" + esc(p.calc) + "</p>" : "") +

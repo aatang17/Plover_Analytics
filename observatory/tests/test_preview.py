@@ -87,6 +87,9 @@ class Preview(unittest.TestCase):
                          ("No. The BOJ held its rate at 1.25% in October.", "It meets in December."))
         self.assertEqual(preview._headline("Rates in the U.S. Federal Reserve system are set by the committee."),
                          ("Rates in the U.S. Federal Reserve system are set by the committee.", ""))
+        # 4 Nov: four midterms in one sentence was hard to read; one line each stays one line each
+        self.assertEqual(preview._headline("USD/JPY after midterms varied:\n- 2010: fell\n- 2014: rose\nNo pattern holds."),
+                         ("USD/JPY after midterms varied.", "- 2010: fell\n- 2014: rose\nNo pattern holds."))
 
     def test_advice_stays_refused_and_a_failed_search_says_so(self):
         from app import ask_miss

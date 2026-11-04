@@ -30,6 +30,8 @@
 .pa-read b { color: var(--obs-ink); font-weight: 600; }
 .pa-head { margin: 10px 0 0; font-size: 17px; font-weight: 600; line-height: 1.35; color: var(--obs-ink); text-wrap: pretty; }
 .pa-text { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--obs-text); text-wrap: pretty; }
+.pa-text.ans-list { padding-left: 20px; }
+.pa-text.ans-list li + li { margin-top: 3px; }
 .pa-miss { margin: 10px 0 0; font-size: 15px; line-height: 1.4; color: var(--obs-ink); }
 .pa-retry { margin-top: 10px; }
 .pa-try-h { margin: 12px 0 0; font-size: 12px; font-weight: 600; color: var(--obs-text-muted); }

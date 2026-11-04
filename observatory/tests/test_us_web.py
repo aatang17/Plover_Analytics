@@ -42,6 +42,12 @@ class ReadResponse(unittest.TestCase):
         self.assertEqual(got["sources"][1]["title"], "finance.yahoo.com")    # no title: the site stands in
         self.assertEqual(got["searches"], ["Tesla stock October 2026 news"])
 
+    def test_a_list_keeps_one_line_per_item(self):
+        reply = {"output": [{"type": "message", "content": [{"type": "output_text", "annotations": [],
+                 "text": "USD/JPY shows no consistent pattern after midterms.\n\n* 2010: **fell**  \n- 2014: rose ([x.com](https://x.com/a))"}]}]}
+        self.assertEqual(us_web.read_response(reply)["text"],
+                         "USD/JPY shows no consistent pattern after midterms.\n- 2010: fell\n- 2014: rose")
+
     def test_off_with_the_box_models_off(self):
         with mock.patch.dict(os.environ, {"US_ASK_MODEL": "0", "OPENAI_API_KEY": "k"}):
             self.assertIsNone(us_web.config())
@@ -129,6 +135,14 @@ class Routing(unittest.TestCase):
         # "the market today" is a question every reader shares: one search, asked the same way for all
         self.assertEqual(s.call_args.kwargs["share"], ("index", "sp500", "today"))
         self.assertEqual(s.call_args.args[0], "What moved the S&P 500 today? Give the biggest moves, their dates and the reasons the reports give.")
+
+    def test_a_list_after_the_first_sentence_is_the_body(self):
+        found = dict(FOUND, text="USD/JPY shows no consistent pattern after midterms:\n- 2010: fell\n- 2014: rose")
+        with mock.patch.object(us_web, "config", return_value=("k", "m")), \
+                mock.patch.object(us_web, "search", return_value=found):
+            d = self.c.get("/api/v1/us/ask", params={"q": "Why did the market fall today?"}).json()
+        self.assertEqual(d["headline"], "USD/JPY shows no consistent pattern after midterms.")
+        self.assertEqual(d["answer"], "- 2010: fell\n- 2014: rose")
 
     def test_advice_is_still_refused_and_a_failed_search_refuses(self):
         with mock.patch.object(us_web, "config", return_value=("k", "m")), \
