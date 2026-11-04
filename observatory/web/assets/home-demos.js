@@ -243,7 +243,9 @@
 
   list.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-demo]");
-    if (b) play(b.getAttribute("data-demo"), true);
+    if (!b) return;
+    play(b.getAttribute("data-demo"), true);
+    if (window.ploverNote) ploverNote("demo", b.getAttribute("data-demo"));   // home-tasks.js
   });
   root.querySelector(".dm-replay").addEventListener("click", function () { play(playing || "chart", true); });
 

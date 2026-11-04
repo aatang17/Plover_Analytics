@@ -922,6 +922,7 @@ var TRAFFIC_TABS = [
   { id: "readers", label: "Readers" },
   { id: "pages", label: "Pages" },
   { id: "ask", label: "Ask Box" },
+  { id: "tasks", label: "Tasks" },
   { id: "arrivals", label: "Arrivals" },
   { id: "places", label: "Places" },
 ];
@@ -1106,6 +1107,7 @@ function trafficTab(d, tab) {
     return '<div id="traffic-recent">' + recentMarkup(trafficState.recent) + "</div>";
   }
   if (tab === "orgs") return trafficOrgs(d);
+  if (tab === "tasks") return trafficTasks(d.tasks);
   return trafficOverview(d);
 }
 
@@ -1766,6 +1768,69 @@ function orgTable(rows, key, label, kinds) {
     '<th class="num">Page Views</th><th>Most-Read Page</th><th class="num">Last Visit</th>' +
     "<th></th></tr></thead><tbody>" + body + "</tbody></table></div>" +
     trafficMore(rows.length, key);
+}
+
+/* The front page's tasks (app/task_log.py): who opened each, how far they got,
+   and the demonstrations picked by hand. */
+function taskShare(part, whole) {
+  return whole ? Math.round(100 * part / whole) + "%" : MISSING;
+}
+
+function trafficTasks(t) {
+  if (!t) return '<p class="table-empty">Task counts are unavailable.</p>';
+  var span = escapeHtml(fmtDay(t.from)) + " to " + escapeHtml(fmtDay(t.to));
+  var rows = (t.tasks || []).map(function (r) {
+    var id = "task:" + r.key;
+    var steps = (r.steps || []).map(function (s, i) {
+      return "<tr><td>" + (i + 1) + ". " + escapeHtml(s.name) + '</td><td class="num">' +
+        fmtCount(s.readers) + '</td><td class="num">' + taskShare(s.readers, r.readers) + "</td></tr>";
+    }).join("");
+    var picks = (r.picks || []).map(function (p) {
+      return escapeHtml(p.key) + " " + fmtCount(p.results);
+    }).join(" · ");
+    return '<tr class="openable"><td>' + escapeHtml(r.name) + "</td>" +
+      '<td class="num">' + fmtCount(r.readers) + "</td>" +
+      '<td class="num">' + fmtCount(r.result_readers) + "</td>" +
+      '<td class="num">' + taskShare(r.result_readers, r.readers) + "</td>" +
+      '<td class="num">' + fmtCount(r.results) + "</td>" +
+      '<td class="num">' + fmtCount(r.failed) + "</td>" +
+      '<td class="num">' + fmtCount(r.from.menu) + "</td>" +
+      '<td class="num">' + fmtCount(r.from.demo) + "</td>" +
+      '<td class="num">' + fmtCount(r.from.link) + "</td>" +
+      openButton(id, "Show Steps", "Hide Steps") + "</tr>" +
+      detailRow(id, 10, '<table class="data trip" data-no-enhance><thead><tr><th>Step</th>' +
+        '<th class="num">Readers</th><th class="num">Of Those Who Opened</th></tr></thead><tbody>' +
+        steps + "</tbody></table>" +
+        (picks ? '<p class="source-line">Most often answered: ' + picks + ".</p>" : ""));
+  }).join("");
+  var demos = (t.demos || []).map(function (r) {
+    return "<tr><td>" + escapeHtml(r.name) + '</td><td class="num">' + fmtCount(r.clicks) +
+      '</td><td class="num">' + fmtCount(r.readers) + "</td></tr>";
+  }).join("");
+  var none = !(t.tasks || []).some(function (r) { return r.readers; });
+  return '<div class="admin-section">Front-Page Tasks <span class="note">' + span + "</span></div>" +
+    (none ? '<p class="table-empty">No reader used a task in this window. Counting began ' +
+      (t.since ? escapeHtml(fmtDay(t.since)) : "on 4 November 2026") + ".</p>" : "") +
+    '<div class="table-wrap"><table class="data visits" data-no-enhance><thead><tr><th>Task</th>' +
+    '<th class="num">Readers</th><th class="num">Got an Answer</th><th class="num">Share</th>' +
+    '<th class="num">Answers</th><th class="num">Failed</th><th class="num">From Menu</th>' +
+    '<th class="num">From Demo</th><th class="num">From a Link</th><th></th></tr></thead><tbody>' +
+    rows + "</tbody></table></div>" +
+    '<div class="admin-section">Demonstrations Picked by Hand <span class="note">' + span +
+    "</span></div>" +
+    '<div class="table-wrap"><table class="data" data-no-enhance><thead><tr><th>Demonstration</th>' +
+    '<th class="num">Picked</th><th class="num">Readers</th></tr></thead><tbody>' + demos +
+    "</tbody></table></div>" +
+    '<p class="source-line">Real readers only, counted one per day, so one person on three days ' +
+    "is three. Readers is everyone who did anything in the task; someone who followed a link " +
+    "straight to an answer counts without the earlier steps. Got an Answer is the readers who " +
+    "reached the last step; Answers counts every answer shown, so one reader trying three " +
+    "companies is three. From Menu is the task links under the box, From Demo the Try button " +
+    "under a demonstration, From a Link an address that already named the task. Draw Charts " +
+    "answers through the question box, so those questions are in the Ask Box tab too. A " +
+    "demonstration that plays by itself is not counted. Nothing typed is kept: only the " +
+    "company of an answer, or which figure a chart shows. Counted from " +
+    (t.since ? escapeHtml(fmtDay(t.since)) : "4 November 2026") + ".</p>";
 }
 
 function trafficOrgs(d) {

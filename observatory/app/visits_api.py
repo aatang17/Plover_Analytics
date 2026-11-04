@@ -1,4 +1,4 @@
-"""The two things a page tells the server about itself.
+"""The things a page tells the server about itself.
 
 Both exist because a request log cannot see reading. A reader who opens one
 page and stays on it for ten minutes makes exactly one request, so without the
@@ -15,7 +15,7 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from . import seo, visits
+from . import seo, task_log, visits
 
 router = APIRouter(prefix="/api/v1/visit", tags=["Traffic"],
                    include_in_schema=False)
@@ -52,7 +52,10 @@ async def ping(request: Request):
     data = await _payload(request)
     path = data.get("path")
     try:
-        if data.get("closed"):
+        if data.get("task"):
+            # a step in one of the front page's tasks (app/task_log.py)
+            task_log.record(request.scope, data)
+        elif data.get("closed"):
             visits.record_dwell(request.scope, path, data.get("seconds"),
                                 data.get("view"))
         else:

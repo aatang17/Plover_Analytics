@@ -31,7 +31,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import accounts, db, filer_labels, mailer, parties, registry, seo, staff, vintages, visit_trips, visits
+from . import accounts, db, filer_labels, mailer, parties, registry, seo, staff, task_log, vintages, visit_trips, visits
 from .api import ADAPTERS, health
 from .equity_api import DB_PATH as EQUITY_DB_PATH
 
@@ -739,6 +739,8 @@ def visit_summary(request: Request, days: int = 30):
             row["signups"] = n
         for row in out["sources"]:
             row.setdefault("signups", 0)
+    # The front page's tasks, step by step (app/task_log.py).
+    out["tasks"] = task_log.summary(days)
     return out
 
 

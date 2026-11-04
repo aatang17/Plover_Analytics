@@ -75,6 +75,34 @@
   };
   var cur = { task: null };
 
+  /* ---- how far readers get (app/task_log.py) ---- */
+  // Sent like the page's reading time: a beacon, never retried, never in the way.
+  // Each step once in a row; a result again only when its choices change.
+  var RESULT_AT = { research: 2, earnings: 1, chart: 3, screen: 3, insiders: 2 };
+  var lastNote = "";
+  function note(task, step, extra) {
+    var body = { path: "/", task: task, step: step };
+    Object.keys(extra || {}).forEach(function (k) { if (extra[k]) body[k] = extra[k]; });
+    var key = JSON.stringify(body) + (step === "result" && !body.pick ? location.search : "");
+    if (key === lastNote) return;
+    lastNote = key;
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon("/api/v1/visit/ping", JSON.stringify(body));
+    } catch (e) { /* counting must never break a page */ }
+  }
+  function pickOf(task) {
+    if (task === "research" || task === "earnings") return cur.t || "";
+    if (task === "chart") return cur.c && cur.c.m || "";
+    return "";
+  }
+  function noteDrawn(task, at, body) {
+    if (body.indexOf("<p class='tk-wait'") === 0) return;       // still loading
+    if (body.indexOf("<p class='tk-err'") === 0) return note(task, "failed");
+    if (at >= RESULT_AT[task]) return note(task, "result", { pick: pickOf(task) });
+    note(task, at);
+  }
+  window.ploverNote = note;   // home-demos.js: a demonstration picked by hand
+
   function stepsHtml(task, at) {
     var names = task === "chart" && cur.c && cur.c.m === "sectors" ? ["What to Chart", "Sectors", "Period"] : STEPS[task];
     return "<ol class='tk-steps' aria-label='Steps'>" + names.map(function (n, i) {
@@ -87,6 +115,7 @@
       "<div class='tk-body'>" + body + "</div>" + (foot ? "<div class='tk-foot'>" + foot + "</div>" : "");
     panel.hidden = false;
     $("tk-close").onclick = function () { close(true); };
+    noteDrawn(task, at, body);
   }
   function busy(text) { return "<p class='tk-wait' role='status'>" + esc(text) + "</p>"; }
   function failed(text, retry) {
@@ -116,6 +145,7 @@
     panel.hidden = true;
     panel.innerHTML = "";
     cur = { task: null };
+    lastNote = "";
     if (push) {
       history.pushState(null, "", "/");
       if (window.ploverHome) ploverHome.home();
@@ -552,6 +582,7 @@
     if (!kept || !kept.c || !(same(a.question) || same(a.asked))) return;
     var c = kept.c, m = measure(c.m), el = $("answer");
     if (!m || !el || el.querySelector(".tk-nextbar")) return;
+    note("chart", "result", { pick: c.m });
     var other = MEASURES.filter(function (x) { return x.id !== c.m && x.id !== "sectors"; });
     var tool = "my.html#charts?s=" + c.s.map(function (x) { return x.ticker; }).join(",") + "&m=" +
       ({ price: "price", revenue: "revenue", profit: "net_income" })[c.m] + "&p=" + (c.p === "10y" ? "max" : c.p) + (c.m === "price" ? "&b=sp500" : "");
@@ -1554,8 +1585,12 @@
     if (task === "insiders") return insidersStart({}, push);
   }
   // us-stocks.js route(): an address with ?task= opens that task at the step it names
+  var landedOn = new URLSearchParams(location.search).get("task");
   function route(u) {
     var p = u.searchParams, task = p.get("task");
+    // the page opened on a task's address (a shared link, a bookmark): once
+    if (landedOn && task === landedOn && TITLES[task]) note(task, "open", { from: "link" });
+    landedOn = null;
     if (task === "research") return research((p.get("c") || "").trim().toUpperCase().slice(0, 12), false, p, p.get("step") === "build" ? "build" : "brief");
     if (task === "earnings") return earnings((p.get("c") || "").trim().toUpperCase().slice(0, 12), false, +p.get("w") || 1);
     if (task === "chart") {
@@ -1571,7 +1606,12 @@
     return false;
   }
   Array.prototype.forEach.call(document.querySelectorAll("[data-task]"), function (b) {
-    b.addEventListener("click", function (ev) { ev.preventDefault(); open(b.getAttribute("data-task"), true); });
+    b.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var task = b.getAttribute("data-task");
+      note(task, "open", { from: b.classList.contains("dm-try") ? "demo" : "menu" });
+      open(task, true);
+    });
   });
   window.ploverTasks = { route: route, hide: function () { close(false); }, open: open };
 })();
