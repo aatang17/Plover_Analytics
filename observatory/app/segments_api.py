@@ -869,6 +869,7 @@ MANIFEST = {
     ],
     "endpoints": {
         "company": "/api/v1/equity/segments/company/{sec_code}",
+        "companies": "/api/v1/equity/segments/companies",
         "lens": "/api/v1/equity/segments/lens/{sec_code}",
         "lens_csv": "/api/v1/equity/segments/lens/{sec_code}.csv",
         "customers": "/api/v1/equity/segments/customers",

@@ -163,7 +163,55 @@ EQUITY_MODULES = ("equity_api", "ownership_api", "lvh_api", "short_api",
                   "governance_api",
                   "buyback_api", "facility_api", "financials_api", "agm_api",
                   "segments_api", "earnings_api", "sec_api", "sec_insiders_api", "sec_13f_api", "sec_13dg_api", "us_prices_api", "us_events_api", "bank_api",
-                  "risk_api")
+                  "risk_api", "us_pay_api", "sec_text_api", "us_press_api", "sec_deep_api")
+
+
+# Public GET routes under /api/v1 that are deliberately not a dataset view,
+# each with its reason. Every other one must be named by some manifest: a
+# manifest is what puts a route in front of the MCP (get_view reads any
+# endpoint a manifest names) and the catalog, so a route left out of both is
+# one the site serves and a connected assistant cannot see. That happened:
+# US CEO pay, annual-report text and press releases were on the site for
+# weeks before anything noticed the MCP could not reach them (2026-11-04).
+# tests/test_mcp_sync.py enforces it, and fails on an entry here that no
+# longer matches a route.
+NOT_DATASETS = {
+    "/api/v1/answers": "answer pages written for search engines; their figures come from datasets",
+    "/api/v1/catalog/": "the catalog itself, which list_datasets and describe_dataset serve",
+    "/api/v1/company/": "the composed company view, which get_company with no dataset serves",
+    "/api/v1/equity/claim-check": "served by the check_claim tool",
+    "/api/v1/equity/cohorts": "served by the list_cohorts and compare_cohort tools",
+    "/api/v1/equity/calendar/": ("the JPX earnings calendar is not a dataset yet: it has no freshness "
+                                 "row in /api/v1/catalog/health, which a manifest would need"),
+    "/api/v1/representation/": "a calculation over population-jp and population-jp-history, both datasets",
+    "/api/v1/us/ask": "the question box: written answers, not data",
+    "/api/v1/us/build/": "turns a sentence into a chart or screen spec; what it draws comes from datasets",
+    "/api/v1/us/company": ("the US company directory and record: which datasets hold a company; "
+                           "get_company with no dataset composes the same"),
+    "/api/v1/us/preview/": "the front page's answer preview: written answers, not data",
+    "/api/v1/us/research/": "the Research a Stock brief, composed from the dataset views",
+}
+
+
+def not_a_dataset(path):
+    """The reason a route is not a dataset view, or None."""
+    for prefix, why in NOT_DATASETS.items():
+        if path == prefix.rstrip("/") or path.startswith(prefix):
+            return why
+    return None
+
+
+def named_by_a_manifest(route):
+    """Whether some manifest's endpoint is this route (a generic route counts
+    when a manifest names a concrete path under it)."""
+    shape = _route_shape(route)
+    rx = _route_regex(route)
+    for mid in _ORDER:
+        for path in _REGISTRY[mid]["endpoints"].values():
+            path = path.split("?")[0]
+            if _route_shape(path) == shape or rx.match(path):
+                return True
+    return False
 
 
 class RegistryError(Exception):
@@ -420,6 +468,7 @@ _MODULES = {}       # id -> the module that exported it, for the availability ga
 _ORDER = []         # ids in registration order
 _ERRORS = []        # [{"module", "id", "errors": [...]}]
 _BOUND = False
+_APP = None         # the app bind() was given: handler() falls back to its routes
 
 
 def _sources():
@@ -471,7 +520,8 @@ def bind(app):
     Called from the app's lifespan, once the routers are included. A manifest
     naming a path that does not exist is quarantined; in strict mode it raises.
     """
-    global _BOUND, _ROUTES_SEEN
+    global _BOUND, _ROUTES_SEEN, _APP
+    _APP = app
     seen = route_paths(app)
     _ROUTES_SEEN = len(seen)
     faults = {}
@@ -614,9 +664,96 @@ def bound(mid, attr):
     the module that exported it. Nothing to keep in step: registering a
     manifest is all a new dataset needs.
     """
+    m = _REGISTRY.get(mid)
+    cap = _CAPABILITY_OF.get(attr)
+    if m is None or (cap and cap not in m["capabilities"]):
+        # A module may have a helper that happens to be called `summary`
+        # (sec_text_api's summary(c, adsh) cuts a paragraph); only a declared
+        # capability is the dataset's read function.
+        return None
     mod = _MODULES.get(mid)
     fn = getattr(mod, attr, None) if mod is not None else None
     return fn if callable(fn) else None
+
+
+_CAPABILITY_OF = {"company": "company", "summary": "summary", "companies": "search"}
+_PATH_PARAM = re.compile(r"\{([^{}:]+)(?::[^{}]*)?\}")
+
+
+def _route_shape(template):
+    return _PATH_PARAM.sub("{}", template.split("?")[0])
+
+
+def _route_regex(template):
+    parts = _PATH_PARAM.split(template)
+    rx = ""
+    for i, part in enumerate(parts):
+        rx += re.escape(part) if i % 2 == 0 else "(?P<%s>[^/]+)" % part
+    return re.compile("^" + rx + "$")
+
+
+def handler(mid, role):
+    """The function that serves one endpoint a manifest names, for in-process calls.
+
+    Returns ``(fn, params, fixed)`` or None: ``params`` maps each ``{name}``
+    in the manifest's path to the handler argument it fills (a manifest may
+    write ``{cik_or_ticker}`` where the route says ``{sec_code}``), and
+    ``fixed`` holds what a concrete manifest path supplies to a generic route
+    (``/api/v1/cpi-jp/observations`` under ``/api/v1/{dataset}/observations``).
+
+    Read from the routers of the module that exported the manifest and of
+    api.py first: those are plain FastAPI routes, which the app's table is not
+    reliably (see route_paths). Then the app's own routes, for a manifest that
+    names another module's endpoint (sec-financials lists the reporting
+    calendar sec_calendar_api serves). GET routes only: everything a manifest
+    names is a read.
+    """
+    m = _REGISTRY.get(mid)
+    path = (m or {}).get("endpoints", {}).get(role)
+    if not path:
+        return None
+    template = path.split("?")[0]
+    names = _PATH_PARAM.findall(template)
+    routers = [getattr(_MODULES.get(mid), "router", None), api.router, _APP]
+    for router in routers:
+        for route in getattr(router, "routes", None) or []:
+            rpath = getattr(route, "path", None)
+            fn = getattr(route, "endpoint", None)
+            if not isinstance(rpath, str) or not callable(fn) \
+                    or "GET" not in (getattr(route, "methods", None) or ()):
+                continue
+            if _route_shape(rpath) == _route_shape(template):
+                return fn, dict(zip(names, _PATH_PARAM.findall(rpath))), {}
+            if not names:
+                hit = _route_regex(rpath).match(template)
+                if hit:
+                    return fn, {}, hit.groupdict()
+    return None
+
+
+def company_reader(mid):
+    """(fn, argument) that answers one company for a dataset with a company view.
+
+    The module's own ``company`` function when it has one, else the handler of
+    the manifest's ``company`` endpoint. ``argument`` is the parameter the
+    company code goes in: ``sec_code`` by convention, otherwise the function's
+    first — sec_13dg_api.company takes ``company``, and calling it with
+    ``sec_code`` failed every lookup until 2026-11-04.
+    """
+    import inspect
+    fn = bound(mid, "company")
+    if fn is None and "company" in (_REGISTRY.get(mid) or {}).get("capabilities", ()):
+        found = handler(mid, "company")
+        if found:
+            fn, params, _fixed = found
+            if params:
+                return fn, list(params.values())[0]
+    if fn is None:
+        return None
+    names = list(inspect.signature(fn).parameters)
+    if "sec_code" in names or not names:
+        return fn, "sec_code"
+    return fn, names[0]
 
 
 def errors():

@@ -404,15 +404,20 @@ def company_by_cik(cik: str,
 
 
 def company(sec_code, form="", limit=12):
-    """The registry's company view: accepts `cik:NNN` (or bare digits).
+    """The registry's company view: accepts `cik:NNN`, bare digits or a ticker.
 
-    A code that is not a CIK is "not here" (404), not a bad request: the
+    A code that is neither is "not here" (404), not a bad request: the
     composed company page asks every dataset about a Japanese securities
-    code, and this shelf simply has nothing under it."""
-    if not _CIK_RE.match((sec_code or "").strip()):
-        raise HTTPException(404, "no US filer under %r — this shelf is keyed by SEC CIK "
-                                 "(write cik:320193)" % (sec_code or ""))
-    return company_by_cik(sec_code, form=form, limit=limit)
+    code, and this shelf simply has nothing under it. A ticker is what people
+    and assistants type (AAPL), so it resolves the way every other US view
+    resolves it, through the SEC's own ticker list."""
+    raw = (sec_code or "").strip()
+    if not _CIK_RE.match(raw):
+        if not _TICKER_RE.match(raw.upper().replace(".", "-")):
+            raise HTTPException(404, "no US filer under %r — give a ticker (AAPL) or an SEC "
+                                     "CIK (cik:320193)" % raw)
+        raw = "cik:%d" % resolve_company(_require(), raw)
+    return company_by_cik(raw, form=form, limit=limit)
 
 
 # ---- statements ------------------------------------------------------------
@@ -1102,6 +1107,7 @@ MANIFEST = {
         "summary": "/api/v1/us/financials/summary",
         "screen": "/api/v1/us/financials/screen",
         "screener": "/api/v1/us/financials/screener",
+        "screener_options": "/api/v1/us/financials/screener/options",
         "metrics": "/api/v1/us/financials/metrics/{cik_or_ticker}",
         "industries": "/api/v1/us/financials/industries",
         "calendar": "/api/v1/us/earnings/calendar",

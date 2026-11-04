@@ -14,9 +14,14 @@ formulas, and cite URLs. No tool here may bypass that layer.
 Implemented directly rather than via the official MCP SDK because the SDK
 requires Python 3.10+ and app/ code must run on the 3.9 used locally. The
 protocol methods a stateless tools-only server must answer are few:
-initialize, the initialized notification, ping, tools/list, and tools/call.
-Plus resources/list and resources/read, which serve the dataset manifests
-(app/registry.py) as `observatory://datasets/{id}`.
+server/discover (2026-07-28) or initialize and ping (earlier revisions),
+tools/list and tools/call, plus resources/list and resources/read, which
+serve the dataset manifests (app/registry.py) as `observatory://datasets/{id}`.
+Both revisions are served on the same URL; see MODERN_VERSIONS below.
+
+The Origin header is not checked. The spec asks for it against DNS
+rebinding, which targets a server on the reader's own machine; this one is
+public, read-only and needs no login, so every origin is a valid one.
 
 Two tool surfaces coexist behind MCP_TOOLSET (v1 | v2 | both, default both):
 the original per-dataset tools in tools.py, and the generic tools in
@@ -27,6 +32,7 @@ Kill switch: MCP_ENABLED — on by default (unlike ASK_ENABLED, nothing here
 generates text or spends money; it serves the same bytes as the API), set it
 to a falsy value to turn the endpoint off.
 """
+import base64
 import json
 import os
 import pathlib
@@ -41,16 +47,39 @@ from .tools import (EQUITY_TOOL_IMPLS, EQUITY_TOOL_SCHEMAS, SEC_TOOL_IMPLS,
                     run_tool, sec_available)
 from . import registry, tools_v2
 
-# Newest first; initialize echoes the client's version when we support it and
-# offers the newest otherwise, per the negotiation rules.
-PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+# Two eras, one endpoint (a "dual-era" server in the 2026-07-28 spec's words).
+#
+#   Modern (2026-07-28): no handshake. Every request names its version in
+#   params._meta and in the MCP-Protocol-Version header, which must agree, and
+#   the method (and tool or resource name) in Mcp-Method / Mcp-Name headers.
+#   server/discover replaces initialize; ping is gone; every result carries
+#   resultType, and list results say how long they may be cached.
+#
+#   Legacy (2025-11-25 and earlier): initialize first, then plain JSON-RPC.
+#   Claude and most clients still speak it, so it stays, unchanged.
+#
+# A request carrying the modern _meta key is modern; anything else is legacy.
+# Newest first in each list.
+MODERN_VERSIONS = ("2026-07-28",)
+LEGACY_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSIONS = MODERN_VERSIONS + LEGACY_VERSIONS
+
+_META = "io.modelcontextprotocol/"
+# The dataset list changes on a deploy, not between calls: an hour is a safe
+# freshness hint for tools/list, resources and discover. Nothing here is one
+# reader's own, so shared caches may keep it.
+LIST_TTL_MS = 3600 * 1000
+
+# JSON-RPC errors the 2026-07-28 spec defines.
+HEADER_MISMATCH = -32020
+UNSUPPORTED_VERSION = -32022
 
 SERVER_INFO = {
     # Named for the platform, not the macro product alone — future datasets
     # (BOJ, equity holdings) join this same server.
     "name": "plover-analytics",
     "title": "Plover Analytics",
-    "version": "1.0.0",
+    "version": "1.1.0",
 }
 
 # Shown to the connected assistant at initialize time: the trust contract in
@@ -370,8 +399,74 @@ def _error(msg_id, code, message):
             "error": {"code": code, "message": message}}
 
 
+def _capabilities(modern):
+    if modern:
+        return {"tools": {}, "resources": {}}
+    return {"tools": {"listChanged": False},
+            "resources": {"subscribe": False, "listChanged": False}}
+
+
+def _discover():
+    return {"supportedVersions": list(PROTOCOL_VERSIONS),
+            "capabilities": _capabilities(True),
+            "instructions": _instructions(_toolset())}
+
+
+# Results that may be cached, and for how long (2026-07-28's CacheableResult).
+_CACHEABLE = ("server/discover", "tools/list", "resources/list", "resources/read",
+              "resources/templates/list")
+# Methods a modern request may use. initialize and ping are legacy only: the
+# 2026-07-28 revision removed both.
+_MODERN_METHODS = ("server/discover", "tools/list", "tools/call", "resources/list",
+                   "resources/templates/list", "resources/read")
+
+
+def _call_tool(params):
+    """(result, None) or (None, (code, message))."""
+    name = params.get("name")
+    toolset = _toolset()
+    arguments = params.get("arguments") or {}
+    if toolset != "v1" and name in tools_v2.IMPLS:
+        text, is_error = tools_v2.run_tool(name, arguments)
+    elif toolset != "v2" and (name in TOOL_IMPLS or name in EQUITY_TOOL_IMPLS
+                              or name in SEC_TOOL_IMPLS):
+        text, is_error = run_tool(name, arguments)
+    else:
+        return None, (-32602, "Unknown tool: %s" % name)
+    return {"content": [{"type": "text", "text": text}], "isError": is_error}, None
+
+
+def _dispatch(method, params, modern):
+    """(result, None), (None, (code, message)) or (None, None) for an unknown method."""
+    if method == "server/discover":
+        return _discover(), None
+    if method == "initialize" and not modern:
+        requested = params.get("protocolVersion")
+        version = requested if requested in LEGACY_VERSIONS else LEGACY_VERSIONS[0]
+        return {"protocolVersion": version, "capabilities": _capabilities(False),
+                "serverInfo": SERVER_INFO, "instructions": _instructions(_toolset())}, None
+    if method == "ping" and not modern:
+        return {}, None
+    if method == "tools/list":
+        return {"tools": _tools_for(_toolset())}, None
+    if method == "tools/call":
+        return _call_tool(params)
+    if method == "resources/list":
+        return {"resources": _resources()}, None
+    if method == "resources/templates/list":
+        return {"resourceTemplates": []}, None
+    if method == "resources/read":
+        uri = params.get("uri") or ""
+        contents = _read_resource(uri)
+        if contents is None:
+            # -32002 until 2025-11-25; Invalid Params from 2026-07-28
+            return None, (-32602 if modern else -32002, "Resource not found: %s" % uri)
+        return {"contents": contents}, None
+    return None, None
+
+
 def _handle_one(msg):
-    """One JSON-RPC message in, one response dict out — or None for
+    """One legacy JSON-RPC message in, one response dict out — or None for
     notifications and client responses, which get no reply."""
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
         bad_id = msg.get("id") if isinstance(msg, dict) else None
@@ -384,54 +479,12 @@ def _handle_one(msg):
         return None  # a notification (initialized, cancelled, …); none need action
     msg_id = msg["id"]
     params = msg.get("params") or {}
-
-    if method == "initialize":
-        requested = params.get("protocolVersion")
-        version = requested if requested in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0]
-        return _result(msg_id, {
-            "protocolVersion": version,
-            "capabilities": {"tools": {"listChanged": False},
-                             "resources": {"subscribe": False, "listChanged": False}},
-            "serverInfo": SERVER_INFO,
-            "instructions": _instructions(_toolset()),
-        })
-
-    if method == "ping":
-        return _result(msg_id, {})
-
-    if method == "tools/list":
-        return _result(msg_id, {"tools": _tools_for(_toolset())})
-
-    if method == "tools/call":
-        name = params.get("name")
-        toolset = _toolset()
-        arguments = params.get("arguments") or {}
-        if toolset != "v1" and name in tools_v2.IMPLS:
-            text, is_error = tools_v2.run_tool(name, arguments)
-        elif toolset != "v2" and (name in TOOL_IMPLS or name in EQUITY_TOOL_IMPLS
-                                  or name in SEC_TOOL_IMPLS):
-            text, is_error = run_tool(name, arguments)
-        else:
-            return _error(msg_id, -32602, "Unknown tool: %s" % name)
-        return _result(msg_id, {
-            "content": [{"type": "text", "text": text}],
-            "isError": is_error,
-        })
-
-    if method == "resources/list":
-        return _result(msg_id, {"resources": _resources()})
-
-    if method == "resources/templates/list":
-        return _result(msg_id, {"resourceTemplates": []})
-
-    if method == "resources/read":
-        uri = params.get("uri") or ""
-        contents = _read_resource(uri)
-        if contents is None:
-            return _error(msg_id, -32002, "Resource not found: %s" % uri)
-        return _result(msg_id, {"contents": contents})
-
-    return _error(msg_id, -32601, "Method not found: %s" % method)
+    result, err = _dispatch(method, params, modern=False)
+    if err:
+        return _error(msg_id, *err)
+    if result is None:
+        return _error(msg_id, -32601, "Method not found: %s" % method)
+    return _result(msg_id, result)
 
 
 def _handle(message):
@@ -443,6 +496,78 @@ def _handle(message):
         replies = [r for r in (_handle_one(m) for m in message) if r is not None]
         return replies or None
     return _handle_one(message)
+
+
+def _modern_version(message):
+    """The version a modern request names in its _meta, or None for a legacy one."""
+    if not isinstance(message, dict):
+        return None
+    params = message.get("params")
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    if not isinstance(meta, dict):
+        return None
+    return meta.get(_META + "protocolVersion")
+
+
+def _header_value(raw):
+    """A header value, Base64 sentinel decoded (=?base64?...?=)."""
+    if raw is None:
+        return None
+    if raw.startswith("=?base64?") and raw.endswith("?="):
+        try:
+            return base64.b64decode(raw[len("=?base64?"):-2]).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return False
+    return raw
+
+
+def _handle_modern(message, version, headers):
+    """(HTTP status, body or None) for one 2026-07-28 request or notification.
+
+    Validation follows the Streamable HTTP binding: the headers must mirror
+    the body (400 HeaderMismatch), an unknown version is 400 with the list we
+    speak, an unknown method 404. Everything else answers 200 — a tool that
+    finds nothing is a result, not a transport failure."""
+    if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+        return 400, _error(None, -32600, "Invalid Request")
+    msg_id = message.get("id")
+    method = message.get("method")
+    params = message.get("params") or {}
+    if version is None:
+        return 400, _error(msg_id, HEADER_MISMATCH, (
+            "Header mismatch: MCP-Protocol-Version %s needs params._meta[%r] to match"
+            % (headers.get("mcp-protocol-version"), _META + "protocolVersion")))
+    if version not in MODERN_VERSIONS:
+        return 400, {"jsonrpc": "2.0", "id": msg_id, "error": {
+            "code": UNSUPPORTED_VERSION, "message": "Unsupported protocol version",
+            "data": {"supported": list(PROTOCOL_VERSIONS), "requested": version}}}
+    if "id" not in message:
+        return 202, None  # a notification: none need action
+    problems = []
+    if headers.get("mcp-protocol-version") != version:
+        problems.append("MCP-Protocol-Version header %r does not match _meta %r"
+                        % (headers.get("mcp-protocol-version"), version))
+    if headers.get("mcp-method") != method:
+        problems.append("Mcp-Method header %r does not match method %r"
+                        % (headers.get("mcp-method"), method))
+    if method in ("tools/call", "resources/read", "prompts/get"):
+        want = params.get("name") if method != "resources/read" else params.get("uri")
+        got = _header_value(headers.get("mcp-name"))
+        if got != want:
+            problems.append("Mcp-Name header %r does not match %r" % (headers.get("mcp-name"), want))
+    if problems:
+        return 400, _error(msg_id, HEADER_MISMATCH, "Header mismatch: " + "; ".join(problems))
+    if method not in _MODERN_METHODS:
+        return 404, _error(msg_id, -32601, "Method not found: %s" % method)
+    result, err = _dispatch(method, params, modern=True)
+    if err:
+        return 200, _error(msg_id, *err)
+    result = dict(result, resultType="complete")
+    result["_meta"] = {_META + "serverInfo": SERVER_INFO}
+    if method in _CACHEABLE:
+        result["ttlMs"] = LIST_TTL_MS
+        result["cacheScope"] = "public"
+    return 200, _result(msg_id, result)
 
 
 # ---------------------------------------------------------------------------
@@ -470,6 +595,15 @@ async def mcp_post(request: Request):
         message = json.loads(await request.body())
     except (ValueError, UnicodeDecodeError):
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
+    version = _modern_version(message)
+    if version is not None or request.headers.get("mcp-protocol-version") in MODERN_VERSIONS:
+        # A modern header on a body without the _meta it must mirror is a
+        # mismatch, answered as one rather than served as legacy.
+        headers = dict((k.lower(), v) for k, v in request.headers.items())
+        status, reply = await run_in_threadpool(_handle_modern, message, version, headers)
+        if reply is None:
+            return Response(status_code=status)
+        return JSONResponse(reply, status_code=status)
     # Tools run DuckDB queries synchronously; keep them off the event loop.
     reply = await run_in_threadpool(_handle, message)
     if reply is None:

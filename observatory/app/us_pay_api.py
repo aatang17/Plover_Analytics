@@ -794,3 +794,52 @@ def health():
         "archive_read_back_to": _d(first_filed),
         "shape_flags": flags,
     }]
+
+
+MANIFEST = {
+    "id": "us-pay",
+    "section": "us-reference",
+    "name": {"en": "US executive pay (S&P 500 proxies)", "ja": "米国役員報酬（S&P 500・委任状説明書）"},
+    "shape": "company",
+    "summary": ("CEO pay for every S&P 500 member, from the pay-versus-performance table in each "
+                "proxy statement (DEF 14A) since 2023: the Summary Compensation Table total, the "
+                "SEC's compensation actually paid, the other named executives' averages and "
+                "shareholder return, each fiscal year and each CEO separately."),
+    "source": {
+        "publisher": "U.S. Securities and Exchange Commission",
+        "document": "Proxy statements (DEF 14A), Item 402(v) pay versus performance, as tagged in XBRL; "
+                    "members from State Street's SPDR S&P 500 ETF (SPY) holdings",
+        "url": "https://www.sec.gov/edgar/search/",
+        "credit": PROVENANCE["credit"],
+        "license_note": "US government work; public domain. SPY holdings published by State Street.",
+    },
+    "keys": ["cik", "ticker", "fiscal_year_end"],
+    "frequency": "per-filing",
+    "vintage": {"unit": "filing", "as_of_basis": "filed_date", "as_of_supported": True,
+                "history_from": "proxies filed from 2023, each covering up to five fiscal years",
+                "stale_after_days": STALE_AFTER_DAYS},
+    "measures": [
+        {"id": "ceo_total_pay", "label": "CEO total pay (Summary Compensation Table)", "unit": "USD", "trust": "official"},
+        {"id": "ceo_actually_paid", "label": "CEO compensation actually paid (SEC Item 402(v))", "unit": "USD",
+         "trust": "official"},
+        {"id": "neo_avg_total_pay", "label": "Other named executives, average total pay", "unit": "USD",
+         "trust": "official"},
+        {"id": "tsr", "label": "Shareholder return: value of $100 invested", "unit": "USD", "trust": "official"},
+    ],
+    "endpoints": {
+        "company": "/api/v1/us/pay/{ticker}",
+        "index": "/api/v1/us/pay",
+    },
+    "capabilities": ["company"],
+    "cite": "/us-pay.html?t={ticker}",
+    "page": "/us-pay.html",
+    "notes": [
+        "Every figure is as the company tagged it; nothing is recomputed. Actually paid marks equity awards "
+        "to market, so it can be far above total pay or below zero.",
+        "A year with two CEOs lists each with their own figures; the two are never added together.",
+        "Shareholder return is cumulative from the first year of one proxy's table, so all its years come "
+        "from the latest proxy that reports it.",
+        "basis=latest (default) takes each value from the newest proxy that carries it; basis=first from "
+        "the first; as_of drops proxies filed after that day.",
+    ],
+}

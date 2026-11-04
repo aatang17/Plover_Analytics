@@ -447,3 +447,46 @@ def health():
         "archive_read_back_to": _d(first),
         "shape_flags": ["latest pull failed: %s" % t for t in failed],
     }]
+
+
+MANIFEST = {
+    "id": "sec-deep",
+    "section": "us-reference",
+    "name": {"en": "US financials, full history (S&P 500, 2009 on)", "ja": "米国企業の財務・長期履歴（S&P 500、2009年以降）"},
+    "shape": "company",
+    "summary": ("Every number each S&P 500 company has filed in XBRL since 2009, from the SEC's "
+                "company-facts files, each tied to the filing that reported it: key indicators by "
+                "fiscal year or quarter, one concept's full history, and the menu of every concept a "
+                "company files, with restated and first-reported values kept apart."),
+    "source": {
+        "publisher": "U.S. Securities and Exchange Commission",
+        "document": "Company facts (data.sec.gov/api/xbrl/companyfacts): every XBRL fact each company has filed",
+        "url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+        "credit": PROVENANCE["credit"],
+        "license_note": "US government work; public domain.",
+    },
+    "keys": ["cik", "ticker", "tag", "period_end"],
+    "frequency": "per-filing",
+    "vintage": {"unit": "filing", "as_of_basis": "filed_date", "as_of_supported": True,
+                "history_from": "fiscal 2009 (the start of XBRL filing), and predecessor registrants",
+                "stale_after_days": STALE_AFTER_DAYS},
+    "measures": [
+        {"id": "value", "label": "Value as filed", "unit": "USD", "trust": "official"},
+        {"id": "shares_outstanding", "label": "Shares outstanding (balance sheet)", "unit": "shares",
+         "trust": "official"},
+    ],
+    "endpoints": {
+        "company": "/api/v1/us/financials/deep/{ticker}/indicators",
+        "concepts": "/api/v1/us/financials/deep/{ticker}",
+        "series": "/api/v1/us/financials/deep/{ticker}/series",
+        "universe": "/api/v1/us/financials/deep",
+    },
+    "capabilities": ["company"],
+    "cite": "/us-company.html?t={ticker}",
+    "page": "/us-company.html",
+    "notes": [
+        CALC["basis"],
+        CALC["periods"],
+        "Units are as filed: a figure in another currency carries it and is never ranked against USD.",
+    ],
+}

@@ -33,6 +33,7 @@ import array
 import bisect
 import datetime
 import importlib
+import inspect
 import json
 import re
 import threading
@@ -92,10 +93,6 @@ def _status(exc):
 
 def _bound(mid, attr):
     return registry.bound(mid, attr)
-
-
-def _company_fn(mid):
-    return _bound(mid, "company")
 
 
 def _summary_fn(mid):
@@ -298,8 +295,8 @@ def _cite_for(m, **params):
     path = m["cite"]
     for k, v in params.items():
         path = path.replace("{%s}" % k, str(v))
-        if k == "sec_code":                 # the US shelf keys on a CIK
-            path = path.replace("{cik}", str(v).split(":")[-1])
+        if k == "sec_code":                 # the US shelf keys on a CIK or a ticker
+            path = path.replace("{cik}", str(v).split(":")[-1]).replace("{ticker}", str(v))
     return _cite(path)
 
 
@@ -410,7 +407,9 @@ def describe_dataset(dataset):
         "get_company": "company" in m["capabilities"],
         "screen": "screen" in m["capabilities"],
         "search": "search" in m["capabilities"] or m["shape"] == "series",
+        "get_view": True,
     }
+    m["views"] = _views(m)
     m["cite"] = _cite_for(m)
     return _dumps(m)
 
@@ -895,8 +894,32 @@ def _company_hits(dataset, needle, limit):
         out.append({"kind": "company", "dataset": dataset,
                     "sec_code": c.get("sec_code"),
                     "name": c.get("name") or c.get("filer_name"),
-                    "name_en": c.get("name_en") or c.get("filer_name_en")})
+                    "name_en": c.get("name_en") or c.get("filer_name_en"),
+                    "ticker": c.get("ticker")})
     return out
+
+
+_LEGAL = re.compile(r"[\s,.]+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|"
+                    r"lp|sa|ag|nv|se|holdings?|group)\b\.?", re.I)
+_STATE = re.compile(r"\s*/[a-z]{2,3}/?\s*$", re.I)     # the SEC's "MICROSOFT CORP /WA/"
+
+
+def _bare(name):
+    """A company name without its legal form: 'APPLE INC' -> 'apple'."""
+    n = _STATE.sub("", (name or "").replace("株式会社", "")).strip()
+    prev = None
+    while prev != n:
+        prev, n = n, _LEGAL.sub("", n).strip(" ,.&")
+    return n.lower()
+
+
+def _exact(row, needle):
+    """Whether a hit is the company the query names, not one that contains it:
+    "Apple" is Apple Inc., not Apple Hospitality REIT or Apple International."""
+    want = needle.strip().lower()
+    if row.get("ticker") and row["ticker"].lower() == want:
+        return True
+    return any(_bare(n) == _bare(needle) for n in (row.get("name"), row.get("name_en")) if n)
 
 
 def search(query, dataset="", limit=SEARCH_LIMIT):
@@ -937,11 +960,16 @@ def search(query, dataset="", limit=SEARCH_LIMIT):
                     row["datasets"].append(mid)
                     if not row["name_en"] and h["name_en"]:
                         row["name_en"] = h["name_en"]
+                    if h.get("ticker"):
+                        row["ticker"] = h["ticker"]
         except Exception as exc:  # noqa: BLE001 — one dataset failing must not empty the list
             failed.append({"dataset": mid, "error": _detail(exc)})
+    # The code typed, then the company the words name (ticker or full name),
+    # then the one most datasets know. Breadth alone put a small Japanese
+    # company that appears in nine datasets above Apple Inc. for "Apple".
     rows = sorted(companies.values(),
-                  key=lambda r: (needle != (r["sec_code"] or ""), -len(r["datasets"]),
-                                 r["name"] or ""))
+                  key=lambda r: (needle != (r["sec_code"] or ""), not _exact(r, needle),
+                                 -len(r["datasets"]), r["name"] or ""))
     company_rows = rows[:limit]
     series = _spread(sorted(series, key=lambda h: h[0]))
     series_rows = _series_details(series[:limit])
@@ -958,11 +986,17 @@ def search(query, dataset="", limit=SEARCH_LIMIT):
 
 def _company_block(m, code, as_of, tool):
     """One dataset's answer for one company, as an envelope — or a missing block."""
-    fn = _company_fn(m["id"])
-    if fn is None:
+    reader = registry.company_reader(m["id"])
+    if reader is None:
         return None, "no company view"
+    fn, arg = reader
+    kwargs = {arg: code}
+    if as_of and "as_of" in inspect.signature(fn).parameters:
+        # a view that takes its own as_of (US pay, deep financials) rather
+        # than reading the request-wide scope
+        kwargs["as_of"] = as_of.isoformat()
     try:
-        raw = call_api(fn, sec_code=code)
+        raw = call_api(fn, **kwargs)
     except Exception as exc:  # noqa: BLE001
         status = _status(exc)
         if status == 404:
@@ -1033,6 +1067,163 @@ def get_company(code, dataset="", as_of="", limit=ROW_BUDGET):
     for block in doc["datasets"].values():
         block["cite"] = _cite(block["cite"])
     return _dumps(doc)
+
+
+def _coerce(param, value):
+    """A tool argument as the handler's own type, with the route's bounds.
+
+    Called in-process, a handler gets no FastAPI validation, so the limits its
+    Query() declares (limit le=2000) would not hold unless checked here."""
+    ann = param.annotation
+    try:
+        if ann is bool:
+            v = value if isinstance(value, bool) else str(value).strip().lower() in (
+                "1", "true", "yes", "on")
+        elif ann is int:
+            v = int(value)
+        elif ann is float:
+            v = float(value)
+        else:
+            v = value if isinstance(value, str) else str(value)
+    except (TypeError, ValueError):
+        raise ValueError("%s must be %s (got %r)" % (param.name, getattr(ann, "__name__", ann), value))
+    info = param.default
+    bounds = [info] + list(getattr(info, "metadata", None) or [])
+    for b in bounds:
+        for key, ok in (("ge", lambda a, b: a >= b), ("gt", lambda a, b: a > b),
+                        ("le", lambda a, b: a <= b), ("lt", lambda a, b: a < b)):
+            lim = getattr(b, key, None)
+            if isinstance(lim, (int, float)) and isinstance(v, (int, float)) \
+                    and not isinstance(v, bool) and not ok(v, lim):
+                raise ValueError("%s must be %s %s (got %r)" % (
+                    param.name, {"ge": ">=", "gt": ">", "le": "<=", "lt": "<"}[key], lim, v))
+    return v
+
+
+def _required(param):
+    """Whether a handler parameter has no default (Query(...) or a bare argument)."""
+    d = param.default
+    if d is inspect.Parameter.empty:
+        return True
+    is_required = getattr(d, "is_required", None)
+    if callable(is_required):
+        return bool(is_required())
+    return getattr(d, "default", None) is Ellipsis
+
+
+def _view_params(fn, path_params):
+    """The query parameters a handler takes, beyond the path: name -> description,
+    with " (required)" on the ones that have no default."""
+    out = {}
+    for name, p in inspect.signature(fn).parameters.items():
+        if name in path_params or name == "as_of":
+            continue
+        desc = getattr(p.default, "description", None) or ""
+        out[name] = (desc + " (required)").strip() if _required(p) else desc
+    return out
+
+
+def _views(m):
+    """Every endpoint a dataset's manifest names, as get_view arguments."""
+    out = []
+    for role, path in m["endpoints"].items():
+        found = registry.handler(m["id"], role)
+        if not found:
+            continue
+        fn, params, _fixed = found
+        out.append({"view": role, "path": path, "needs": list(params),
+                    "params": _view_params(fn, set(params.values()))})
+    return out
+
+
+def get_view(dataset, view="", params=None, as_of="", limit=ROW_BUDGET):
+    """Any endpoint a dataset's manifest names, by role — the same function
+    /api/v1 serves it with, called in-process. What a manifest publishes, an
+    assistant can read: a new endpoint needs no new tool."""
+    args = {"dataset": dataset, "view": view or None, "params": params or None,
+            "as_of": as_of or None}
+    _record("get_view", args)
+    m, err = _manifest_or_fail(dataset)
+    if err:
+        return err
+    views = _views(m)
+    by_role = dict((v["view"], v) for v in views)
+    if (view or "") not in by_role:
+        return _dumps({"error": ("Give a view. %s has: %s" % (
+                           dataset, ", ".join(sorted(by_role)) or "none")),
+                       "views": views})
+    if not registry.available(dataset):
+        return _unavailable(m)
+    p_as_of, err = _parse_as_of(as_of)
+    if err:
+        return _fail(err)
+    if p_as_of and not m["vintage"]["as_of_supported"]:
+        return _fail("%s does not keep its history by date; leave as_of empty." % dataset)
+    if params is not None and not isinstance(params, dict):
+        return _fail("params must be an object, e.g. {\"limit\": 20}")
+    limit = max(1, min(int(limit or ROW_BUDGET), MAX_LIMIT))
+
+    fn, path_params, fixed = registry.handler(dataset, view)
+    given = dict(params or {})
+    kwargs = dict(fixed)
+    filled = {}
+    for placeholder, arg in path_params.items():
+        value = given.pop(placeholder, None)
+        if value in (None, ""):
+            value = given.pop(arg, None)
+        if value in (None, ""):
+            return _fail("The %s view needs %s (in params)." % (view, placeholder))
+        kwargs[arg] = filled[placeholder] = str(value).strip()
+    signature = inspect.signature(fn).parameters
+    unknown = [k for k in given if k not in signature or k in kwargs]
+    if unknown:
+        return _dumps({"error": "Unknown params %s for %s/%s." % (", ".join(unknown), dataset, view),
+                       "view": by_role[view]})
+    try:
+        for k, v in given.items():
+            kwargs[k] = _coerce(signature[k], v)
+    except ValueError as exc:
+        return _fail(str(exc))
+    needed = [k for k, p in signature.items()
+              if k not in kwargs and k != "as_of" and _required(p)]
+    if needed:
+        return _dumps({"error": "The %s view needs %s (in params)." % (view, ", ".join(needed)),
+                       "view": by_role[view]})
+    if "as_of" in signature and p_as_of:
+        kwargs["as_of"] = p_as_of.isoformat()
+    try:
+        with asof.scope(p_as_of):
+            raw = call_api(fn, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        status = _status(exc)
+        if status == 503:
+            return _unavailable(m)
+        if status == 404:
+            return _dumps(_envelope("get_view", m, None, vintage=_equity_vintage(p_as_of),
+                                    missing=_detail(exc), view=view))
+        if status:
+            return _fail(_detail(exc))
+        raise
+    if hasattr(raw, "body") and hasattr(raw, "media_type"):
+        # A handler that answers with a Response (CSV, a cached JSON body).
+        if "json" not in (raw.media_type or ""):
+            return _fail("The %s view answers in %s, not JSON; read it at %s"
+                         % (view, raw.media_type, _cite(m["endpoints"][view].split("?")[0])))
+        raw = json.loads(raw.body)
+    path = m["endpoints"][view].split("?")[0]
+    for k, v in filled.items():
+        path = path.replace("{%s}" % k, v)
+    query = dict((k, v) for k, v in (params or {}).items() if k not in filled)
+    if p_as_of:
+        query["as_of"] = p_as_of.isoformat()
+    truncated = _budget(raw, limit) if isinstance(raw, dict) else None
+    if isinstance(raw, list) and len(raw) > limit:
+        truncated = {"rows": {"returned": limit, "total": len(raw)}}
+        raw = raw[:limit]
+    vintage = (_macro_vintage(dataset, p_as_of)[0] if m["shape"] == "series"
+               else _equity_vintage(p_as_of))
+    return _dumps(_envelope("get_view", m, raw, vintage=vintage, cite=_cite(path, **query),
+                            truncated=truncated, view=view))
 
 
 def get_series(dataset, series, measure="index", start="", end="", as_of="",
@@ -1462,6 +1653,7 @@ IMPLS = {
     "get_breakdown": get_breakdown,
     "get_vintages": get_vintages,
     "screen": screen,
+    "get_view": get_view,
 }
 
 
@@ -1601,6 +1793,29 @@ def descriptors():
              "as_of": _str("YYYY-MM-DD: the filings that existed on EDINET by that date.")},
              "required": ["dataset"]},
          "annotations": ro},
+        {"name": "get_view", "title": "Read a dataset view",
+         "description": ("Any view a dataset publishes beyond the tools above, read from "
+                         "the same endpoint /api/v1 serves: a US company's CEO pay "
+                         "(us-pay, view company), its latest annual report's sections "
+                         "and risk factors (sec-text, company; section for one in full; "
+                         "search for the paragraphs that mention a phrase), its press "
+                         "releases (us-press), a stock's daily prices (us-prices, "
+                         "series), an insider's or a fund's filings, a reporting "
+                         "calendar. describe_dataset lists each dataset's `views` with "
+                         "the params each needs; a call with no view lists them too. "
+                         "US companies take a ticker (AAPL) or cik:NNN."),
+         "inputSchema": {"type": "object", "properties": {
+             "dataset": _str("Dataset id.", enum=ids),
+             "view": _str("A view from describe_dataset's `views`, e.g. company."),
+             "params": {"type": "object",
+                        "description": ("The view's path values and query fields, e.g. "
+                                        "{\"code\": \"NVDA\", \"key\": \"risk_factors\"} or "
+                                        "{\"q\": \"tariffs\"}.")},
+             "as_of": _str("YYYY-MM-DD: the data as it stood on that date, where the "
+                           "dataset keeps its history by date."),
+             "limit": {"type": "integer", "description": "Rows per list (default 50, max 100)."}},
+             "required": ["dataset", "view"]},
+         "annotations": ro},
         {"name": "list_cohorts", "title": "List peer groups",
          "description": ("The peer groups a company can be compared within: the TOPIX "
                          "scale bands (Core30, Large70, Mid400, Small 1/2), JPX market "
@@ -1699,7 +1914,10 @@ _HOW = (
     "Start with list_datasets (or describe_dataset for one you already know), find "
     "codes with search, then get_series for series datasets, get_company for a company "
     "(without a dataset first, to see which datasets know it), and screen for ranked "
-    "cross-sections using the sorts describe_dataset lists."
+    "cross-sections using the sorts describe_dataset lists. Everything else a dataset "
+    "publishes (a US company's CEO pay, its annual report's own words, its press "
+    "releases, an owner's insider trades, a fund's 13F holdings, a price history) is a "
+    "view: describe_dataset lists them, and get_view reads one."
 )
 
 

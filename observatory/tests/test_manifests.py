@@ -14,7 +14,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from app import api, equity_api, registry, sec_api
+from app import api, equity_api, registry, sec_api, sec_text_api, us_press
 from app.main import app
 from tests import _data
 
@@ -301,8 +301,12 @@ class CatalogEndpointTest(unittest.TestCase):
     def test_equity_absent_is_listed_but_unavailable(self):
         real = equity_api.DB_PATH
         real_sec = sec_api.DB_PATH
+        real_text, real_press = sec_text_api.DB_PATH, us_press.DB_PATH
         equity_api.DB_PATH = pathlib.Path("/nonexistent/equity.duckdb")
         sec_api.DB_PATH = pathlib.Path("/nonexistent/sec.duckdb")   # the US shelf's own file
+        # and the two US datasets that keep a file of their own
+        sec_text_api.DB_PATH = pathlib.Path("/nonexistent/sec_text.duckdb")
+        us_press.DB_PATH = pathlib.Path("/nonexistent/us-press.sqlite")
         try:
             r = self.client.get("/api/v1/catalog/manifests")
             self.assertEqual(r.status_code, 200)
@@ -314,6 +318,7 @@ class CatalogEndpointTest(unittest.TestCase):
         finally:
             equity_api.DB_PATH = real
             sec_api.DB_PATH = real_sec
+            sec_text_api.DB_PATH, us_press.DB_PATH = real_text, real_press
 
 
 if __name__ == "__main__":

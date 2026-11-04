@@ -152,10 +152,11 @@ def _read(code, mid, manifest, limit, compact):
     """(block, missing_reason). Never raises for a company that simply has no
     rows — that is an answer."""
     from .tools import call_api
-    fn = registry.bound(mid, "company")
-    if fn is None:
+    reader = registry.company_reader(mid)
+    if reader is None:
         return None, "no company view"
-    raw = call_api(fn, sec_code=code)
+    fn, arg = reader
+    raw = call_api(fn, **{arg: code})
     return _block(mid, manifest, raw, compact, limit), None
 
 

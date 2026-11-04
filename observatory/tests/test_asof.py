@@ -69,8 +69,10 @@ def _filing_dates(obj, path=""):
 
 
 def _company(mid, code):
-    fn = registry.bound(mid, "company")
-    return call_api(fn, sec_code=code)
+    # the same reader get_company and the composed company view use, so the
+    # code goes in whichever argument the dataset's company view takes
+    fn, arg = registry.company_reader(mid)
+    return call_api(fn, **{arg: code})
 
 
 @unittest.skipUnless(EQUITY, "equity database not present")

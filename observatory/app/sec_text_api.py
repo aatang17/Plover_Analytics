@@ -77,6 +77,9 @@ def cur():
 
 
 def _require():
+    # every view also reads the filer from data/sec.duckdb (_company): both
+    # files must be here for the dataset to be
+    sec_api._require()
     c = cur()
     if c is None:
         raise HTTPException(503, "Annual report text is not loaded on this server yet.")
@@ -180,6 +183,8 @@ def _company(code):
     """(cik, ticker, name) from a ticker or a CIK."""
     sc = sec_api._require()
     code = (code or "").strip()
+    if code.lower().startswith("cik:"):
+        code = code[4:].lstrip("0") or "0"
     if code.isdigit():
         row = sc.execute("SELECT cik, ticker, name FROM sec_companies WHERE cik = ?", [int(code)]).fetchone()
     else:
@@ -276,3 +281,47 @@ def health():
         "archive_read_back_to": _d(first_filed),
         "shape_flags": flags,
     }]
+
+
+MANIFEST = {
+    "id": "sec-text",
+    "section": "us-reference",
+    "name": {"en": "US annual report text (10-K, 20-F)", "ja": "米国年次報告書の本文（10-K・20-F）"},
+    "shape": "company",
+    "summary": ("The written parts of each US filer's latest annual report, exactly as filed: "
+                "Business, Risk Factors, Cybersecurity, Properties, Legal Proceedings, "
+                "Management's Discussion and Analysis and Market Risk, cut at the report's own "
+                "item headings, with the list of risk factors and a search for the paragraphs "
+                "that mention a phrase."),
+    "source": {
+        "publisher": "U.S. Securities and Exchange Commission",
+        "document": "Annual reports (10-K, and 20-F for foreign filers), the primary document on EDGAR",
+        "url": "https://www.sec.gov/edgar/search/",
+        "credit": PROVENANCE["credit"],
+        "license_note": "US government work; public domain. The text is each company's own.",
+    },
+    "keys": ["cik", "ticker", "section"],
+    "frequency": "per-filing",
+    "vintage": {"unit": "filing", "as_of_basis": "filed_date", "as_of_supported": False,
+                "history_from": "the latest annual report of each filer",
+                "stale_after_days": STALE_AFTER_DAYS},
+    "measures": [
+        {"id": "section_text", "label": "Section text, as filed", "unit": "text", "trust": "official"},
+        {"id": "risk_factors", "label": "Risk factor headings, as filed", "unit": "text", "trust": "official"},
+    ],
+    "endpoints": {
+        "company": "/api/v1/us/text/{ticker}",
+        "section": "/api/v1/us/text/{ticker}/section/{section}",
+        "search": "/api/v1/us/text/{ticker}/search",
+    },
+    "capabilities": ["company"],
+    "cite": "/us-company.html?t={ticker}",
+    "page": "/us-company.html",
+    "notes": [
+        "Text is quoted exactly as the company wrote it; nothing is summarised by a model. Figure tables "
+        "are left out: the numbers are in the financial statements (sec-financials).",
+        "Sections: %s." % ", ".join(SECTION_NAMES),
+        "Only the latest annual report is held for each filer; every reply names the filing, its date and "
+        "its link on EDGAR.",
+    ],
+}

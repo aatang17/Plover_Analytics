@@ -519,6 +519,8 @@ MANIFEST = {
     "endpoints": {
         "company": "/api/v1/us/insiders/company/{cik_or_ticker}",
         "recent": "/api/v1/us/insiders/recent",
+        "recent_companies": "/api/v1/us/insiders/recent/companies",
+        "buying": "/api/v1/us/insiders/buying",
         "owner": "/api/v1/us/insiders/owner/{owner_cik}",
         "summary": "/api/v1/us/insiders/summary",
     },
