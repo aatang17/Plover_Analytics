@@ -1,12 +1,13 @@
-/* index.html: the front page's tasks, Earnings Preview, Draw Charts, Screen
-   Stocks and Insider Buying. Each walks the reader through a few steps, one choice at a
+/* index.html: the front page's tasks, Research a Stock, Earnings Preview, Draw
+   Charts, Screen Stocks and Insider Buying. Each walks the reader through a few steps, one choice at a
    time, with suggestions at every step and the next things to do once the
    result shows.
 
    The address carries the task and every choice, so any step can be linked
-   to and Back works: /?task=earnings&c=AMD, /?task=chart&m=price&s=AAPL,MSFT&p=5y,
+   to and Back works: /?task=research&c=AMD, /?task=earnings&c=AMD, /?task=chart&m=price&s=AAPL,MSFT&p=5y,
    /?task=screen&size=large&f=growth,cheap, /?task=insiders&who=bosses&d=30.
 
+   - Research a Stock reads /api/v1/us/research (app/us_research_api.py).
    - Earnings Preview reads /api/v1/us/preview (app/us_preview_api.py).
    - A chart is a question for the box (us-stocks.js ask()), worded the way the
      box's fixed answers read it: share prices against the S&P 500 (up to five
@@ -50,7 +51,7 @@
 
   // who is reading: a signed-in reader saves into Your Plover, others are offered an account
   var me = { email: null, on: false };
-  fetch("/api/v1/account/me", { headers: { Accept: "application/json" } }).then(function (r) {
+  var meReady = fetch("/api/v1/account/me", { headers: { Accept: "application/json" } }).then(function (r) {
     if (r.status === 404) return null;
     me.on = true;
     return r.ok ? r.json() : null;
@@ -64,8 +65,9 @@
   }
 
   /* ---- the panel ------------------------------------------------------ */
-  var TITLES = { earnings: "Earnings Preview", chart: "Draw Charts", screen: "Screen Stocks", insiders: "Insider Buying" };
+  var TITLES = { research: "Research a Stock", earnings: "Earnings Preview", chart: "Draw Charts", screen: "Screen Stocks", insiders: "Insider Buying" };
   var STEPS = {
+    research: ["Choose a Company", "Choose What Goes In", "Read and Download"],
     earnings: ["Choose a Company", "Read the Preview"],
     chart: ["What to Chart", "Companies", "Period"],
     screen: ["Company Size", "Sector", "What to Look For", "Results"],
@@ -1062,8 +1064,490 @@
     });
   }
 
+  /* ================================================== Research a Stock */
+  // Three steps: choose a company, choose what goes in, read and download. Every
+  // choice is in the address (the same keys the API reads, app/us_research_api.py),
+  // so a tailored brief can be linked to. The server writes the brief once as a
+  // plain document; the page draws it and PDF, Word and Excel are made from it,
+  // so a download always matches the page.
+  var R_KEYS = ["s", "per", "n", "f", "pc", "p", "h", "r", "k", "ask"];
+  var rOpts = null, rUsual = null, rUsualAsked = false;
+  function rOptions() {
+    if (rOpts) return Promise.resolve(rOpts);
+    return getJSON(API + "/research/options").then(function (o) { rOpts = o; return o; });
+  }
+  // a signed-in reader's usual choices, kept on their account
+  function rLayout() {
+    return meReady.then(function () {
+      if (rUsualAsked || !me.email) return rUsual;
+      rUsualAsked = true;
+      return getJSON(API + "/research/layout").then(function (d) { rUsual = d.layout; return rUsual; }, function () { return null; });
+    });
+  }
+  // the standard brief (usual = false), or the reader's own usual choices on top of it
+  function rDefaults(usual) {
+    var d = rOpts.defaults, u = (usual && rUsual) || {};
+    var per = u.per || d.per;
+    return { s: u.s ? u.s.split(",") : d.sections.slice(), per: per, n: +(u.n || d.n[per]),
+             f: u.f ? u.f.split(",") : d.figures.slice(), pc: u.pc ? u.pc.split(",") : d.peer_cols.slice(),
+             p: [], h: +(u.h || d.holders), r: u.r != null && u.r !== "" ? +u.r : d.risks, k: [], ask: [] };
+  }
+  // An address that names any layout choice is read on the standard brief, so a shared
+  // link shows everyone the same brief; one that names none starts from the reader's own.
+  function rRead(p) {
+    var layout = ["s", "per", "n", "f", "pc", "h", "r"].some(function (k) { return p.get(k) != null && p.get(k) !== ""; });
+    var c = rDefaults(!layout);
+    if (p.get("s")) c.s = p.get("s").split(",").filter(function (x) { return rOpts.sections.some(function (o) { return o.key === x; }); });
+    if (p.get("per") === "q" || p.get("per") === "a") { if (p.get("per") !== c.per) c.n = rOpts.defaults.n[p.get("per")]; c.per = p.get("per"); }
+    if (+p.get("n") && rOpts.periods[c.per].indexOf(+p.get("n")) >= 0) c.n = +p.get("n");
+    if (p.get("f")) c.f = p.get("f").split(",");
+    if (p.get("pc")) c.pc = p.get("pc").split(",");
+    if (p.get("p")) c.p = p.get("p").split(",").filter(Boolean).slice(0, rOpts.limits.peers);
+    if (rOpts.holders.indexOf(+p.get("h")) >= 0) c.h = +p.get("h");
+    if (p.get("r") != null && rOpts.risks.indexOf(+p.get("r")) >= 0) c.r = +p.get("r");
+    if (p.get("k")) c.k = p.get("k").split("|").filter(Boolean).slice(0, rOpts.limits.topics);
+    if (p.get("ask")) c.ask = p.get("ask").split("|").filter(Boolean).slice(0, rOpts.limits.questions);
+    if (!c.s.length) c.s = rDefaults(false).s;
+    return c;
+  }
+  // what differs from the standard brief goes in the address, and to the server
+  function rParams(c) {
+    var d = rDefaults(false), o = {};
+    function same(a, b) { return a.join(",") === b.join(","); }
+    if (!same(c.s, d.s)) o.s = c.s.join(",");
+    o.per = c.per;     // always named: an address that names a choice is read the same way on every reload
+    if (c.n !== d.n || c.per !== d.per) o.n = String(c.n);
+    if (!same(c.f, d.f)) o.f = c.f.join(",");
+    if (!same(c.pc, d.pc)) o.pc = c.pc.join(",");
+    if (c.p.length) o.p = c.p.join(",");
+    if (c.h !== d.h) o.h = String(c.h);
+    if (c.r !== d.r) o.r = String(c.r);
+    if (c.k.length) o.k = c.k.join("|");
+    if (c.ask.length) o.ask = c.ask.join("|");
+    return o;
+  }
+  function rQuery(c) {
+    var u = new URLSearchParams(), o = rParams(c);
+    Object.keys(o).forEach(function (k) { u.set(k, o[k]); });
+    return u.toString().replace(/%2C/g, ",").replace(/%7C/g, "|");
+  }
+  function rUrl(step, push) {
+    var o = rParams(cur.ch);
+    o.task = "research";
+    o.c = cur.t;
+    if (step === "build") o.step = "build";
+    var ordered = { task: o.task, c: o.c, step: o.step };
+    R_KEYS.forEach(function (k) { if (o[k]) ordered[k] = o[k]; });
+    var u = new URLSearchParams();
+    Object.keys(ordered).forEach(function (k) { if (ordered[k]) u.set(k, ordered[k]); });
+    var url = "/?" + u.toString().replace(/%2C/g, ",").replace(/%7C/g, "|");
+    if (location.pathname + location.search !== url) history[push ? "pushState" : "replaceState"]({ task: "research" }, "", url);
+  }
+  function notesKey(t) { return "plover-research-notes:" + t; }
+  function readNotes(t) { try { return localStorage.getItem(notesKey(t)) || ""; } catch (e) { return ""; } }
+  function keepNotes(t, text) { try { if (text) localStorage.setItem(notesKey(t), text); else localStorage.removeItem(notesKey(t)); } catch (e) {} }
+  function signinHere() { return "signin.html?returnTo=" + encodeURIComponent(location.pathname + location.search); }
+
+  // entry: from the task link, an address, or a Next Step button
+  function research(t, push, params, step) {
+    cur = { task: "research", t: (t || "").toUpperCase() };
+    enter();
+    if (!cur.t) {
+      setUrl({ task: "research" }, push);
+      return researchPick();
+    }
+    draw("research", step === "build" ? 1 : 2, busy("Opening " + cur.t + "…"));
+    rOptions().then(function () { return rLayout(); }).then(function () {
+      if (cur.task !== "research" || cur.t !== (t || "").toUpperCase()) return;
+      cur.ch = rRead(params || new URLSearchParams());
+      rUrl(step, push);
+      if (step === "build") return researchBuild();
+      researchBrief();
+    }, function () {
+      draw("research", 1, failed("The research choices could not be loaded. Check your connection.", true));
+      $("tk-retry").onclick = function () { research(t, false, params, step); };
+    });
+  }
+
+  function researchPick() {
+    draw("research", 0, "<p class='tk-ask'>Which company? Type a name or ticker, or pick one below.</p>" +
+      "<div id='tk-pick'></div><div id='tk-soon'>" + busy("Finding the largest companies in the S&P 500…") + "</div>");
+    picker($("tk-pick"), "e.g. Nvidia or NVDA", function (c) { research(c.ticker, true, null, "build"); }).focus();
+    var row = function (c, when) {
+      return "<li><button type='button' data-t='" + esc(c.ticker) + "'>" + (when ? "<span class='d'>" + esc(when) + "</span>" : "") + logo(c, 20) +
+        "<span class='n'>" + esc(c.display_name || c.name) + "</span><span class='t'>" + esc(c.ticker) + "</span></button></li>";
+    };
+    Promise.all([
+      getJSON(API + "/financials/screener?sp500=true&sort=market_cap&limit=10").catch(function () { return null; }),
+      getJSON(API + "/preview/upcoming?days=7&limit=10").catch(function () { return null; }),
+    ]).then(function (got) {
+      if (cur.task !== "research" || cur.t || !$("tk-soon")) return;
+      var big = ((got[0] || {}).rows || []).filter(function (c) { return c.ticker; });
+      var done = ((got[1] || {}).reported || []);
+      var html = "";
+      if (done.length) html += "<h3>Reported Results in the Last Week</h3><ul class='tk-cos'>" + done.map(function (c) { return row(c, shortDay(c.results_date)); }).join("") + "</ul>";
+      if (big.length) html += "<h3>Largest in the S&amp;P 500</h3><ul class='tk-cos'>" + big.map(function (c) { return row(c); }).join("") + "</ul>";
+      $("tk-soon").innerHTML = html || "<p class='tk-note'>The suggested companies could not be loaded. Type any company above.</p>";
+      Array.prototype.forEach.call($("tk-soon").querySelectorAll("button[data-t]"), function (b) {
+        b.onclick = function () { research(b.getAttribute("data-t"), true, null, "build"); };
+      });
+    });
+  }
+
+  /* ---- step 2: choose what goes in ------------------------------------ */
+  var TOPIC_IDEAS = ["China", "tariffs", "artificial intelligence", "competition", "interest rates", "supply chain", "debt"];
+  function questionIdeas(t) { return ["Who owns " + t + "?", t + " revenue by segment", "Insiders selling " + t]; }
+  function chipList(items, kind) {
+    return items.length ? "<ul class='rb-chips'>" + items.map(function (x, i) {
+      return "<li><span>" + esc(x) + "</span><button type='button' class='tk-x' data-del-" + kind + "='" + i + "' aria-label='Remove " + esc(x) + "'>×</button></li>";
+    }).join("") + "</ul>" : "";
+  }
+  function choiceCards(name, items, on) {
+    return "<div class='tk-cards tk-cards-sm rb-cards' role='radiogroup'>" + items.map(function (x) {
+      var v = x[0], sel = String(v) === String(on);
+      return "<button type='button' role='radio' aria-checked='" + sel + "' class='tk-card" + (sel ? " on" : "") + "' data-" + name + "='" + esc(v) + "'><b>" + esc(x[1]) + "</b></button>";
+    }).join("") + "</div>";
+  }
+  function checks(name, opts, on) {
+    return "<div class='rb-checks'>" + opts.map(function (o) {
+      return "<label><input type='checkbox' data-" + name + "='" + esc(o.key) + "'" + (on.indexOf(o.key) >= 0 ? " checked" : "") + "> " + esc(o.label) + "</label>";
+    }).join("") + "</div>";
+  }
+
+  function researchBuild() {
+    var c = cur.ch, t = cur.t, o = rOpts;
+    var label = {};
+    o.sections.forEach(function (x) { label[x.key] = x.label; });
+    // ticked sections in their order, then the rest
+    var order = c.s.concat(o.sections.map(function (x) { return x.key; }).filter(function (k) { return c.s.indexOf(k) < 0; }));
+    var secs = "<ol class='rb-order'>" + order.map(function (k, i) {
+      var on = c.s.indexOf(k) >= 0;
+      return "<li class='" + (on ? "" : "off") + "'><label><input type='checkbox' data-sec='" + k + "'" + (on ? " checked" : "") + "> " + esc(label[k]) + "</label>" +
+        (on ? "<span class='rb-move'><button type='button' class='tk-opt' data-up='" + k + "'" + (i === 0 ? " disabled" : "") + " aria-label='Move " + esc(label[k]) + " up'>↑ Up</button>" +
+          "<button type='button' class='tk-opt' data-down='" + k + "'" + (i >= c.s.length - 1 ? " disabled" : "") + " aria-label='Move " + esc(label[k]) + " down'>↓ Down</button></span>" : "") + "</li>";
+    }).join("") + "</ol>";
+    var counts = o.periods[c.per].map(function (n) { return [n, c.per === "q" ? n + " Quarters" : n === 20 ? "Since 2009" : n + " Years"]; });
+    var signedIn = !!me.email;
+    var lead = "Choose what goes into the brief. " + (rUsual ? "Your usual choices are" : "The standard brief is") + " ticked already: Make the Brief to see it.";
+    var body =
+      "<div class='tk-co-head' id='rb-co'><b>" + esc(t) + "</b><span class='tk-co-meta'>" + esc(lead) + "</span></div>" +
+      "<div class='rs-bar'><button type='button' class='tk-go' data-make='1'>Make the Brief</button><span class='tk-note rs-dl-note'>Or change anything below first.</span></div>" +
+      "<div class='rb'>" +
+      "<section class='rb-sec'><h3>Sections and Their Order</h3>" + secs + "</section>" +
+      "<section class='rb-sec'><h3>Results</h3>" + choiceCards("per", [["a", "By Year"], ["q", "By Quarter"]], c.per) +
+        choiceCards("n", counts, c.n) + "<p class='rb-lab'>Figures in the table</p>" + checks("fig", o.figures, c.f) + "</section>" +
+      "<section class='rb-sec'><h3>Peers</h3>" + choiceCards("pm", [["auto", "Closest in Size, Same Industry"], ["own", "My Own List"]], c.p.length || cur.ownPeers ? "own" : "auto") +
+        (c.p.length || cur.ownPeers ? "<div id='rb-peer-pick'></div>" + chipList(c.p, "peer") +
+          "<p class='tk-note'>Up to " + o.limits.peers + " companies. Type a name or ticker and pick it.</p>" : "") +
+        "<p class='rb-lab'>Columns in the peer table</p>" + checks("pc", o.peer_cols, c.pc) + "</section>" +
+      "<section class='rb-sec'><h3>Fund Holders and Risks</h3><p class='rb-lab'>Largest fund holders</p>" +
+        choiceCards("h", o.holders.map(function (n) { return [n, "Top " + n]; }), c.h) +
+        "<p class='rb-lab'>Risk factors</p>" + choiceCards("r", o.risks.map(function (n) { return [n, n ? "First " + n : "All"]; }), c.r) + "</section>" +
+      "<section class='rb-sec'><h3>Topics in the Annual Report</h3><p class='tk-note'>The brief quotes the paragraphs of " + esc(t) +
+        "'s latest 10-K that mention each topic, word for word. Up to " + o.limits.topics + ".</p>" +
+        "<div class='rb-add'><label class='fp-sr' for='rb-topic'>A topic</label><input type='text' id='rb-topic' maxlength='40' placeholder='e.g. China' autocomplete='off'>" +
+        "<button type='button' class='tk-opt' id='rb-topic-add'>Add Topic</button></div>" + chipList(c.k, "topic") +
+        "<div class='rb-ideas'>" + TOPIC_IDEAS.filter(function (x) { return c.k.indexOf(x) < 0; }).map(function (x) {
+          return "<button type='button' class='an-link' data-idea-topic='" + esc(x) + "'>+ " + esc(x) + "</button>"; }).join("") + "</div></section>" +
+      "<section class='rb-sec'><h3>Your Questions</h3>" + (signedIn ?
+        "<p class='tk-note'>Each question is answered from the data and goes into the brief. Up to " + o.limits.questions + ".</p>" +
+        "<div class='rb-add'><label class='fp-sr' for='rb-q'>A question</label><input type='text' id='rb-q' maxlength='300' placeholder='e.g. Who owns " + esc(t) + "?' autocomplete='off'>" +
+        "<button type='button' class='tk-opt' id='rb-q-add'>Add Question</button></div>" + chipList(c.ask, "q") +
+        "<div class='rb-ideas'>" + questionIdeas(t).filter(function (x) { return c.ask.indexOf(x) < 0; }).map(function (x) {
+          return "<button type='button' class='an-link' data-idea-q='" + esc(x) + "'>+ " + esc(x) + "</button>"; }).join("") + "</div>"
+        : "<p class='tk-note'>Add your own questions about " + esc(t) + " and have them answered in the brief, with a free account. <a href='" + esc(signinHere()) + "'>Sign in or create one</a></p>") +
+      "</section>" +
+      "<section class='rb-sec'><h3>Your Notes</h3><p class='tk-note'>Your own view, added to the brief and its downloads under Your Notes. Notes stay in this browser.</p>" +
+        "<label class='fp-sr' for='rb-notes'>Your notes</label><textarea id='rb-notes' rows='5' maxlength='20000' placeholder='e.g. Expensive on earnings; watch data-centre share.'>" + esc(readNotes(t)) + "</textarea></section>" +
+      "</div>";
+    var foot = "<button type='button' class='tk-go' id='rb-make'>Make the Brief</button>" +
+      "<button type='button' class='tk-opt' id='rb-reset'>Back to the Standard Brief</button>" +
+      (signedIn ? "<button type='button' class='tk-opt' id='rb-save'>Keep as My Usual Choices</button><span class='tk-note rb-saved' id='rb-saved' role='status'></span>" : "") +
+      "<button type='button' class='tk-back' id='rb-other'>Choose Another Company</button>";
+    var y = window.scrollY;
+    draw("research", 1, body, foot);
+    document.title = t + " Research: Choose What Goes In · Plover Analytics";
+    if (cur.redraw) window.scrollTo(0, y);
+    cur.redraw = true;
+
+    function again() { rUrl("build", false); researchBuild(); }
+    // a company name on the builder: read it from the company list once
+    getJSON(API + "/company/" + encodeURIComponent(t)).then(function (d) {
+      if (cur.task === "research" && cur.t === t && $("rb-co")) $("rb-co").innerHTML = logo(d.company, 28) + "<b>" + esc(d.company.name) + "</b><span class='t'>" + esc(t) + "</span>" +
+        "<span class='tk-co-meta'>" + esc(lead) + "</span>";
+    }, function () {});
+    function each(sel, fn) { Array.prototype.forEach.call(panel.querySelectorAll(sel), fn); }
+    each("[data-sec]", function (x) {
+      x.onchange = function () {
+        var k = x.getAttribute("data-sec");
+        if (x.checked) c.s.push(k); else c.s = c.s.filter(function (y) { return y !== k; });
+        again();
+      };
+    });
+    each("[data-up],[data-down]", function (b) {
+      b.onclick = function () {
+        var k = b.getAttribute("data-up") || b.getAttribute("data-down"), i = c.s.indexOf(k), j = b.getAttribute("data-up") ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= c.s.length) return;
+        c.s[i] = c.s[j]; c.s[j] = k;
+        again();
+        var nb = panel.querySelector("[data-" + (b.getAttribute("data-up") ? "up" : "down") + "='" + k + "']");
+        if (nb && !nb.disabled) nb.focus();
+      };
+    });
+    each("[data-per]", function (b) { b.onclick = function () { var v = b.getAttribute("data-per"); if (v !== c.per) { c.per = v; c.n = rOpts.defaults.n[v]; } again(); }; });
+    each("[data-n]", function (b) { b.onclick = function () { c.n = +b.getAttribute("data-n"); again(); }; });
+    each("[data-h]", function (b) { b.onclick = function () { c.h = +b.getAttribute("data-h"); again(); }; });
+    each("[data-r]", function (b) { b.onclick = function () { c.r = +b.getAttribute("data-r"); again(); }; });
+    each("[data-fig]", function (x) {
+      x.onchange = function () {
+        var k = x.getAttribute("data-fig");
+        c.f = x.checked ? rOpts.figures.map(function (o) { return o.key; }).filter(function (y) { return y === k || c.f.indexOf(y) >= 0; }) : c.f.filter(function (y) { return y !== k; });
+        if (!c.f.length) c.f = [k];          // a table needs one figure
+        again();
+      };
+    });
+    each("[data-pc]", function (x) {
+      x.onchange = function () {
+        var k = x.getAttribute("data-pc");
+        c.pc = x.checked ? rOpts.peer_cols.map(function (o) { return o.key; }).filter(function (y) { return y === k || c.pc.indexOf(y) >= 0; }) : c.pc.filter(function (y) { return y !== k; });
+        if (!c.pc.length) c.pc = [k];
+        again();
+      };
+    });
+    each("[data-pm]", function (b) {
+      b.onclick = function () {
+        if (b.getAttribute("data-pm") === "auto") { c.p = []; cur.ownPeers = false; } else cur.ownPeers = true;
+        again();
+        if (cur.ownPeers && $("tk-co")) $("tk-co").focus();
+      };
+    });
+    if ($("rb-peer-pick")) {
+      picker($("rb-peer-pick"), "Add a peer, e.g. Intel or INTC", function (co) {
+        if (co.ticker === t || c.p.indexOf(co.ticker) >= 0 || c.p.length >= rOpts.limits.peers) return;
+        c.p.push(co.ticker);
+        again();
+        if ($("tk-co")) $("tk-co").focus();
+      });
+    }
+    function addFrom(id, list, limit, min) {
+      var v = $(id).value.trim().replace(/\s+/g, " ").replace(/\|/g, " ");
+      if (v.length < min) { $(id).focus(); return; }
+      if (list.length >= limit) return;
+      if (list.map(function (x) { return x.toLowerCase(); }).indexOf(v.toLowerCase()) < 0) list.push(v);
+      again();
+      if ($(id)) $(id).focus();
+    }
+    if ($("rb-topic")) {
+      $("rb-topic-add").onclick = function () { addFrom("rb-topic", c.k, rOpts.limits.topics, 3); };
+      $("rb-topic").onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); addFrom("rb-topic", c.k, rOpts.limits.topics, 3); } };
+    }
+    if ($("rb-q")) {
+      $("rb-q-add").onclick = function () { addFrom("rb-q", c.ask, rOpts.limits.questions, 3); };
+      $("rb-q").onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); addFrom("rb-q", c.ask, rOpts.limits.questions, 3); } };
+    }
+    each("[data-idea-topic]", function (b) { b.onclick = function () { if (c.k.length < rOpts.limits.topics) { c.k.push(b.getAttribute("data-idea-topic")); again(); } }; });
+    each("[data-idea-q]", function (b) { b.onclick = function () { if (c.ask.length < rOpts.limits.questions) { c.ask.push(b.getAttribute("data-idea-q")); again(); } }; });
+    each("[data-del-topic]", function (b) { b.onclick = function () { c.k.splice(+b.getAttribute("data-del-topic"), 1); again(); }; });
+    each("[data-del-q]", function (b) { b.onclick = function () { c.ask.splice(+b.getAttribute("data-del-q"), 1); again(); }; });
+    each("[data-del-peer]", function (b) { b.onclick = function () { c.p.splice(+b.getAttribute("data-del-peer"), 1); again(); }; });
+    $("rb-notes").oninput = function () { keepNotes(t, $("rb-notes").value); };
+    each("#rb-make,[data-make]", function (x) { x.onclick = function () { cur.redraw = false; rUrl("brief", true); researchBrief(); window.scrollTo(0, 0); }; });
+    // the standard brief, whatever the reader keeps as usual
+    $("rb-reset").onclick = function () { cur.ch = rDefaults(false); cur.ownPeers = false; again(); };
+    $("rb-other").onclick = function () { research("", true); };
+    if ($("rb-save")) {
+      $("rb-save").onclick = function () {
+        // the full choices, not only what differs: the usual brief is now these
+        var b = $("rb-save"), keep = { s: c.s.join(","), per: c.per, n: String(c.n), f: c.f.join(","), pc: c.pc.join(","), h: String(c.h), r: String(c.r) };
+        b.disabled = true;
+        fetch(API + "/research/layout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layout: keep }) })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function (d) {
+            rUsual = d.layout;
+            $("rb-saved").textContent = "Kept. Every brief you open starts with these choices, wherever you sign in.";
+            b.disabled = false;
+          }, function () {
+            $("rb-saved").textContent = "Your choices could not be kept. Check your connection, then try again.";
+            b.disabled = false;
+          });
+      };
+    }
+  }
+
+  /* ---- step 3: read and download -------------------------------------- */
+  function researchBrief() {
+    var t = cur.t, q = rQuery(cur.ch);
+    draw("research", 2, busy("Putting together the research brief for " + t + ": filings, peers, holders and insider trades" +
+      (cur.ch.ask.length ? ", and answering your questions" : "") + "…"));
+    getJSON(API + "/research/" + encodeURIComponent(t) + (q ? "?" + q : "")).then(function (d) {
+      if (cur.task !== "research" || cur.t !== t) return;
+      renderResearch(d);
+    }, function (e) {
+      if (cur.task !== "research" || cur.t !== t) return;
+      draw("research", 2, failed(e.status === 404 ? "No listed US company has the ticker " + t + ". Choose another company."
+        : (e.message || "The research brief could not be loaded.") + " Check your connection.", e.status !== 404),
+        "<button type='button' class='tk-back' id='tk-other'>Choose Another Company</button>");
+      $("tk-other").onclick = function () { research("", true); };
+      if ($("tk-retry")) $("tk-retry").onclick = function () { researchBrief(); };
+    });
+  }
+
+  // one block of the server's document, drawn as the page shows it
+  function blockHtml(b, i, all) {
+    // Key Points beside Key Data, as the downloads lay them out
+    if (b.t === "points") {
+      var kd = (all || []).filter(function (x) { return x.t === "keydata"; })[0];
+      return "<div class='rs-top'><div class='rs-points'><h4 class='rs-k'>Key Points</h4><ul>" + b.items.map(function (x) {
+        return "<li>" + esc(x) + "</li>"; }).join("") + "</ul></div>" +
+        (kd ? "<aside class='rs-kd' aria-label='Key data'><h4 class='rs-k'>Key Data</h4><dl>" + kd.items.map(function (x) {
+          return "<div><dt>" + esc(x[0]) + "</dt><dd>" + esc(x[1]) + "</dd></div>"; }).join("") + "</dl></aside>" : "") + "</div>";
+    }
+    if (b.t === "keydata") return "";
+    if (b.t === "h") return "<h3" + (b.id ? " id='rs-" + esc(b.id) + "'" : "") + ">" + esc(b.text) + "</h3>";
+    if (b.t === "p") {
+      if (b.style === "note") return "<p class='tk-note'>" + esc(b.text) + (b.signin ? " <a href='" + esc(signinHere()) + "'>Sign in or create one</a>" : "") + "</p>";
+      if (b.style === "sub") return "<h4 class='rs-sub'>" + esc(b.text) + "</h4>";
+      return "<p class='tk-biz'>" + esc(b.text) + "</p>";
+    }
+    if (b.t === "stats") {
+      return "<dl class='an-figs tk-figs" + (b.items.length < 3 ? " tk-figs-2" : "") + "'>" + b.items.map(function (x) {
+        return "<div><dt>" + esc(x[0]) + "</dt><dd>" + esc(x[1]) + (x[2] ? "<small>" + esc(x[2]) + "</small>" : "") + "</dd></div>";
+      }).join("") + "</dl>";
+    }
+    if (b.t === "table") {
+      var strong = b.strong || [], muted = b.muted || [];
+      var exn = (all || []).slice(0, i + 1).filter(function (x) { return x.t === "table" && x.title; }).length;
+      return (b.title ? "<p class='rs-ex'><b>Exhibit " + exn + ":</b> " + esc(b.title) + "</p>" : "") + "<div class='tk-table'><table class='tk-tab' data-no-enhance><thead><tr>" + b.cols.map(function (c) {
+        return "<th" + (c[1] === "r" ? " class='r'" : "") + ">" + esc(c[0]) + "</th>";
+      }).join("") + "</tr></thead><tbody>" + b.rows.map(function (r, i) {
+        var cls = strong.indexOf(i) >= 0 ? "tk-me" : muted.indexOf(i) >= 0 ? "tk-med" : "";
+        return "<tr" + (cls ? " class='" + cls + "'" : "") + ">" + r.map(function (v, j) {
+          if (j === 0 && b.tickers) {
+            var tk = b.tickers[i], lg = b.logos ? { logo: b.logos[i] } : null;
+            if (tk) return "<td class='tk-wrap'><button type='button' class='tk-coname tk-linkbtn' data-rs='" + esc(tk) + "' title='Research " + esc(tk) + "'>" + logo(lg, 18) + esc(v) + "</button></td>";
+            if (lg && lg.logo) return "<td class='tk-wrap'><span class='tk-coname'>" + logo(lg, 18) + esc(v) + "</span></td>";
+          }
+          return "<td class='" + (b.cols[j][1] === "r" ? "r" : "tk-wrap") + "'>" + esc(v) + "</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>" + ((b.source || b.note) ? "<p class='tk-note'>" +
+        esc([b.source ? "Source: " + b.source : "", b.note || ""].filter(Boolean).join(" ")) + "</p>" : "");
+    }
+    if (b.t === "list") {
+      var tag = b.ordered ? "ol" : "ul";
+      return "<" + tag + " class='tk-list'>" + b.items.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</" + tag + ">";
+    }
+    if (b.t === "quote") return "<blockquote class='rs-quote'><p>" + esc(b.text) + "</p>" + (b.cite ? "<cite>" + esc(b.cite) + "</cite>" : "") + "</blockquote>";
+    if (b.t === "links") {
+      if (b.style === "note") {
+        return b.items.map(function (x) { return "<p class='tk-note'>" + (x[2] ? "<a href='" + esc(x[2]) + "' rel='noopener'>" + esc(x[1]) + "</a>" : esc(x[1])) + "</p>"; }).join("");
+      }
+      return "<ul class='tk-list tk-news'>" + b.items.map(function (x) {
+        return "<li>" + (x[0] ? "<span class='d'>" + esc(x[0]) + "</span>" : "") + (x[2] ? "<a href='" + esc(x[2]) + "' rel='noopener'>" + esc(x[1]) + "</a>" : esc(x[1])) + "</li>";
+      }).join("") + "</ul>";
+    }
+    if (b.t === "notes") {
+      var text = readNotes(cur.t).trim();
+      if (!text) return "";
+      return "<h3 id='rs-notes'>Your Notes</h3><p class='tk-note'>Written by you, not by Plover. They stay in this browser and go into your downloads.</p>" +
+        text.split("\n").filter(function (x) { return x.trim(); }).map(function (x) { return "<p class='tk-biz'>" + esc(x) + "</p>"; }).join("");
+    }
+    return "";
+  }
+
+  var DL = [["pdf", "PDF"], ["docx", "Word"], ["xlsx", "Excel"]];
+  function downloadBar(where) {
+    return "<div class='rs-bar' role='group' aria-label='Download the brief'><span class='tk-next-h'>Download</span>" + DL.map(function (x) {
+      return "<button type='button' class='" + (x[0] === "pdf" ? "tk-go" : "tk-opt") + "' data-dl='" + x[0] + "'>" + x[1] + "</button>";
+    }).join("") + "<button type='button' class='tk-opt' data-change='1'>Change What Goes In</button>" +
+      "<span class='tk-note rs-dl-note' id='rs-dl-" + where + "' role='status'></span></div>";
+  }
+  function download(fmt, btn, noteId) {
+    var t = cur.t, name = { pdf: "PDF", docx: "Word file", xlsx: "Excel file" }[fmt];
+    var all = panel.querySelectorAll("[data-dl]");
+    Array.prototype.forEach.call(all, function (b) { b.disabled = true; });
+    var label = btn.textContent;
+    btn.textContent = "Making the " + name + "…";
+    $(noteId).textContent = "";
+    fetch(API + "/research/" + encodeURIComponent(t) + "/download", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ format: fmt, query: rQuery(cur.ch), notes: readNotes(t) }),
+    }).then(function (r) {
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (e) { throw new Error(e.detail || ""); });
+      var cd = r.headers.get("Content-Disposition") || "", m = cd.match(/filename="([^"]+)"/);
+      return r.blob().then(function (blob) { return [blob, m ? m[1] : t + "-research." + fmt]; });
+    }).then(function (got) {
+      var a = document.createElement("a"), url = URL.createObjectURL(got[0]);
+      a.href = url; a.download = got[1];
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      if ($(noteId)) $(noteId).textContent = "Downloaded " + got[1] + ".";
+    }, function (e) {
+      if ($(noteId)) $(noteId).textContent = (e.message ? e.message + " " : "The " + name + " could not be made. ") + "Check your connection, then try again.";
+    }).then(function () {
+      btn.textContent = label;
+      Array.prototype.forEach.call(panel.querySelectorAll("[data-dl]"), function (b) { b.disabled = false; });
+    });
+  }
+
+  function renderResearch(d) {
+    var co = d.company, tk = co.ticker, doc = d.doc;
+    var calc = (doc.calc || []).map(function (x) { return "<li><b>" + esc(x[0]) + "</b> = " + esc(x[1]) + "</li>"; }).join("");
+    var body =
+      "<div class='tk-co-head'>" + logo(co, 28) + "<b>" + esc(co.name) + "</b><span class='t'>" + esc(tk) + "</span>" +
+        (doc.meta[0] ? "<span class='tk-co-meta'>" + esc(doc.meta[0]) + "</span>" : "") +
+        "<a href='" + esc(co.page) + "'>Open the company page</a></div>" +
+      (doc.subtitle ? "<p class='tk-headline hit'>" + esc(doc.subtitle) + "</p>" : "") +
+      downloadBar("top") +
+      doc.blocks.map(function (b, i) { return blockHtml(b, i, doc.blocks); }).join("") +
+      (calc ? "<details class='tk-calc'><summary>Show calculation</summary><ul>" + calc + "</ul></details>" : "") +
+      "<p class='tk-src'>Sources: " + esc(doc.sources.join("; ")) + ". " + esc(doc.meta[1] || "") + "</p>" +
+      downloadBar("end");
+    var nexts = [
+      ["preview", "Earnings Preview for " + tk],
+      ["chart", "Chart " + tk + " Against the S&P 500"],
+      ["ask", "Ask a Question About " + tk],
+      ["other", "Research Another Company"],
+    ];
+    draw("research", 2, body, "<span class='tk-next-h'>Next Step</span>" + nexts.map(function (x, i) {
+      return "<button type='button' class='" + (i ? "tk-opt" : "tk-go") + "' data-next='" + x[0] + "'>" + esc(x[1]) + "</button>";
+    }).join(""));
+    document.title = co.name + " Research · Plover Analytics";
+    Array.prototype.forEach.call(panel.querySelectorAll("[data-dl]"), function (b) {
+      b.onclick = function () { download(b.getAttribute("data-dl"), b, b.closest(".rs-bar").querySelector(".rs-dl-note").id); };
+    });
+    Array.prototype.forEach.call(panel.querySelectorAll("[data-change]"), function (b) {
+      b.onclick = function () { cur.redraw = false; rUrl("build", true); researchBuild(); window.scrollTo(0, 0); };
+    });
+    Array.prototype.forEach.call(panel.querySelectorAll("[data-rs]"), function (b) {
+      b.onclick = function () {
+        // the same choices for the peer, without this company's own peers, topics and questions
+        var keep = new URLSearchParams(rQuery(cur.ch));
+        ["p", "k", "ask"].forEach(function (k) { keep.delete(k); });
+        research(b.getAttribute("data-rs"), true, keep, "brief");
+      };
+    });
+    Array.prototype.forEach.call(panel.querySelectorAll("[data-next]"), function (b) {
+      b.onclick = function () {
+        var k = b.getAttribute("data-next");
+        if (k === "preview") return earnings(tk, true);
+        if (k === "chart") return chartStart({ m: "price", s: [{ ticker: tk, name: co.name }], p: "1y" }, true, true);
+        // the reader's own question: the box holds the ticker, the cursor after it
+        if (k === "ask") {
+          var q = $("q");
+          q.value = tk + " ";
+          window.scrollTo(0, 0);
+          q.focus();
+          q.setSelectionRange(q.value.length, q.value.length);
+          return;
+        }
+        research("", true);
+      };
+    });
+  }
+
   /* ---- entry points --------------------------------------------------- */
   function open(task, push) {
+    if (task === "research") return research("", push);
     if (task === "earnings") return earnings("", push);
     if (task === "chart") return chartStart({}, push);
     if (task === "screen") return screenStart({}, push);
@@ -1072,6 +1556,7 @@
   // us-stocks.js route(): an address with ?task= opens that task at the step it names
   function route(u) {
     var p = u.searchParams, task = p.get("task");
+    if (task === "research") return research((p.get("c") || "").trim().toUpperCase().slice(0, 12), false, p, p.get("step") === "build" ? "build" : "brief");
     if (task === "earnings") return earnings((p.get("c") || "").trim().toUpperCase().slice(0, 12), false, +p.get("w") || 1);
     if (task === "chart") {
       var m = measure(p.get("m")) ? p.get("m") : "", raw = (p.get("s") || "").split(",");

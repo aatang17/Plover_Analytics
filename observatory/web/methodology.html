@@ -1969,6 +1969,56 @@
     </ul>
     </div>
   </details>
+  <details class="ds" id="calc-us-research">
+    <summary><span>Research a Stock</span><span class="ds-note">the front page's Research a Stock task</span></summary>
+    <div class="ds-body">
+    <p>The brief puts together, on one page, figures each of the company's other pages already
+    shows; nothing in it is collected for it alone (<code>/api/v1/us/research</code>). The reader
+    chooses what goes in and in what order, and every choice is part of the brief's link, so a
+    tailored brief can be cited. A part with nothing on file says so and why; it is never filled in.
+    The PDF, Word and Excel downloads are made from the same document the page shows.</p>
+    <ul>
+      <li><b>Business.</b> The opening of the Business section of the company's latest annual report
+      (10-K, or 20-F for a foreign filer), in its own words, cut after the last full sentence within
+      600 characters.</li>
+      <li><b>Results by year or quarter.</b> The figures the reader picks, as most recently filed:
+      every filing since 2009 for S&amp;P 500 companies, the SEC's quarterly data sets for any other
+      filer. Revenue growth = (revenue for the period ÷ revenue for the same period a year earlier
+      − 1) × 100, the year-earlier period being the one ending 330 to 400 days before. Operating
+      margin = operating income ÷ revenue × 100; net margin = net income ÷ revenue × 100. Free cash
+      flow = operating cash flow − purchases of property, plant and equipment; free cash flow margin
+      = free cash flow ÷ revenue × 100. A fourth quarter is not filed on its own and is left out
+      rather than derived; cash flows, filed year to date, show only for a first quarter.</li>
+      <li><b>Share price against the S&amp;P 500.</b> (latest close ÷ close one year earlier − 1) ×
+      100, nearest trading day, for the company and for SPY, the fund that tracks the S&amp;P 500,
+      over the same closes.</li>
+      <li><b>Peers.</b> The reader's own list of up to eight companies; otherwise up to five companies
+      with the same four-digit SIC industry code (three digits when fewer than three share it) whose
+      market value is closest to the company's own, by ratio, and within 25 times it either way,
+      among filers with revenue on file whose latest annual report ended within 18 months. The
+      columns are the Screener's figures, as the reader picks them. The peer median is the middle
+      value of the peers for each column, leaving out a peer with no value.</li>
+      <li><b>Fund holders.</b> The 5, 10 or 20 largest holders by value in the latest Form 13F
+      window, with each manager's change in shares against its filing for the quarter before.</li>
+      <li><b>Insider trades.</b> Open-market purchases (code P) and sales (S) over the last 12
+      months; awards, option exercises and shares withheld for tax are left out.</li>
+      <li><b>Main risks.</b> The first 6 or 12, or all, risk-factor headings of the latest annual
+      report, in the report's own order and words. The order is the company's, not a ranking by
+      Plover.</li>
+      <li><b>Topics.</b> The paragraphs of the latest annual report that contain every word of a
+      topic the reader typed, most mentions first, word for word; a paragraph longer than 900
+      characters is cut after a sentence and the cut marked […]. A paragraph quoted under one topic
+      is not repeated under the next.</li>
+      <li><b>Your questions.</b> For a signed-in reader, up to three questions answered by the
+      question box, exactly as it answers them on the front page, with its sources.</li>
+      <li><b>Your notes.</b> The reader's own words, kept in their browser and added to the brief
+      and its downloads under Your Notes, marked as written by the reader.</li>
+      <li><b>Latest announcements.</b> The company's own press releases. A release filed only as an
+      exhibit to an 8-K carries no headline of its own, so it is named as a press release filed with
+      the SEC; on a day the company's own feed carries its release, the filed copy is left out.</li>
+    </ul>
+    </div>
+  </details>
 
   <h3 class="ds-group">Hong Kong</h3>
   <details class="ds" id="calc-hk">

@@ -335,6 +335,8 @@
     "desk-research.js#snap-": "A page address to copy a chart from.",
     "desk.js#data-f=source": "A source line for a table or chart.",
     "desk.js#data-f=unit": "The unit printed on a chart of the writer's own numbers.",
+    "home-tasks.js#rb-q": "Research a Stock: a question the reader adds to their brief; it is answered when the brief is made, not searched as typed.",
+    "home-tasks.js#rb-topic": "Research a Stock: a topic the reader adds to their brief; the annual report is searched for it when the brief is made, not as typed.",
     "memory-panel.js#class=memp-new": "The text of a new memory note; it does not search."
   }
 }

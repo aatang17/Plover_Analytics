@@ -1270,9 +1270,11 @@ def _us_stock_view(values):
 
 
 def _home_view(values):
-    """The front page's Earnings Preview for one US company (home-tasks.js,
-    /?task=earnings&c=AMD). The other tasks pick nothing that is a page's subject."""
-    if values.get("task") != "earnings":
+    """The front page's Earnings Preview or Research a Stock for one US company
+    (home-tasks.js, /?task=earnings&c=AMD, /?task=research&c=AMD). The other
+    tasks pick nothing that is a page's subject."""
+    task = values.get("task")
+    if task not in ("earnings", "research"):
         return None
     t = (values.get("c") or "").strip().upper().replace(".", "-")
     if not t:
@@ -1286,6 +1288,11 @@ def _home_view(values):
     if not row or not row[0]:
         return NOINDEX
     name, ticker = _clean(row[0]), row[1] or t
+    if task == "research":
+        sentence = ("%s (%s): what it does, its results by year, its peers, its largest fund holders, "
+                    "insider trades and main risks, from SEC filings and daily closes." % (name, ticker))
+        return {"title": "%s (%s) — Research · %s" % (name, ticker, SITE), "description": sentence,
+                "noscript": sentence + " Source: SEC EDGAR."}
     sentence = ("%s (%s): when its next results are expected, its last eight quarters, and how its "
                 "share price moved around each results day, from SEC filings and daily closes." % (name, ticker))
     return {"title": "%s (%s) — Earnings Preview · %s" % (name, ticker, SITE), "description": sentence,

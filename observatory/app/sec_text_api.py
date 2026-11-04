@@ -119,7 +119,8 @@ _BOILER = re.compile(
     r"(?i)forward[- ]looking|safe harbor|in this (annual )?report,? (the terms|references)|unless the context|"
     r"“we,” “us”|\"we,\" \"us\"|“company,” “we”|references (in this|to) |incorporated (herein )?by reference|"
     r"available (free of charge|on our website)|our (internet )?website|this annual report on form|"
-    r"should be read in conjunction|as used in this|refers? to [a-z ]+ and (its|our) (consolidated )?subsidiaries")
+    r"should be read in conjunction|as used in this|refers? to [a-z ]+ and (its|our) (consolidated )?subsidiaries|"
+    r"unless otherwise (noted|indicated|stated|specified)|context otherwise requires")
 
 
 _OVERVIEW = re.compile(r"(?i)^(?:\d\.?\s*)?(?:[a-z]\.?\s+)?(business overview|overview of (our|the) business)\b")
