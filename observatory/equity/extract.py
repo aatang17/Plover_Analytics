@@ -22,6 +22,7 @@ Usage:
     python extract.py --all                           # every archived filer, local
     python extract.py --all --source s3               # FULL UNIVERSE, 5 years
     python extract.py --all --source s3 --workers 16  # tune fetch concurrency
+    python extract.py --fill-codes --db PATH          # delisted companies' codes only
 
 Inherits the M1 lessons (see m1/README.md): Deemed-table context collision,
 element-name variants by filer structure, purpose/reciprocity element families,
@@ -52,6 +53,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # disagree about what "carrying amount" means.
 sys.path.insert(0, os.path.join(HERE, ".."))
 from app import basis  # noqa: E402
+sys.path.insert(0, HERE)
+import holdings_html  # noqa: E402
 
 # Both paths are environment-overridable because these extractors now run in
 # two places: on the laptop against the local archive, and inside the serving
@@ -67,7 +70,9 @@ ARCHIVE = os.environ.get("EDINET_ARCHIVE_ROOT",
 CODELIST = os.path.join(HERE, "m1", "EdinetcodeDlInfo.csv")
 DB_PATH = os.environ.get(
     "EQUITY_DB_PATH", os.path.join(HERE, "..", "data", "equity.duckdb"))
-PARSER_VERSION = "m6-0"
+# m6-1: a table whose XBRL names fewer than half the rows the rules require is
+# read from the filing's HTML instead (holdings_html.py), and says so.
+PARSER_VERSION = "m6-1"
 
 FIN_INDUSTRIES = ("銀行業", "保険業", "証券", "その他金融業")
 
@@ -250,8 +255,9 @@ LEGAL = re.compile(r"(株式会社|株式會社|（株）|\(株\)|ホールデ�
 # footnote markers filers glue onto names: (※5), （注）３, （注４）, (注)4 …
 FOOTNOTE = re.compile(r"[（(]\s*(?:※|注)?\s*[0-9０-９]+\s*[）)]|[（(]注[）)][0-9０-９]*")
 ALIASES = {  # filing-era base name -> current registered base name (eq_name_map seed)
-    # NOTE: hand-curation works at sector scale; M4 (3,829 filers) needs a
-    # systematic rename feed keyed on securities codes instead.
+    # Hand-curated, and now the last resort: renames are found systematically
+    # from the filers' own names over time (Resolver, eq_name_history). These
+    # remain for spellings no filer ever filed under (大阪ガス for 大阪瓦斯).
     "日本碍子": "NGK",
     "大阪ガス": "大阪瓦斯",
     "パナソニックHD": "パナソニック",
@@ -362,6 +368,86 @@ def fill_entity_english(con):
                              AND trim(f.filer_name_en) <> '')
          WHERE e.name_en IS NULL OR trim(e.name_en) = ''
     """)
+
+
+def fill_entity_codes(con, verbose=True):
+    u"""Keep the last securities code a delisted company filed under.
+
+    When a company leaves the market -- usually a take-private -- EDINET's code
+    list marks it 非上場 and blanks its 証券コード. Its eq_entities row then has no
+    sec_code, every holding matched to it has none either, and the company can
+    no longer be looked up by the code everyone knows it by: Toyota Industries
+    (6201), held by others at ¥852bn, was unreachable as a held company, and
+    Hisamitsu (4530) and Fujitec (6406) showed no holders at all.
+
+    The company's own annual reports carry the code on their cover
+    (eq_filings.sec_code), so the newest one that states a code is the code it
+    last filed under. That is copied onto the entity where the registry has
+    none; `listed` is left as the registry says (FALSE), so the company is
+    still shown as delisted. Holdings and purpose changes matched to an entity
+    (held_edinet_code) but carrying no code then take the entity's.
+
+    A delisted code can be given to a new company years later, so a code is
+    never filled when another entity in the registry carries it today, nor when
+    two delisted companies last filed under the same one. Both are reported and
+    left blank: an unreachable company is better than two companies' holders on
+    one page.
+
+    Runs after eq_entities is refreshed from the code list, every run. Writes
+    no figure: only the code columns, and only where they are empty.
+    Returns (filled, clashes), clashes as (edinet_code, code, name, reason).
+    """
+    cands = con.execute("""
+        WITH last AS (
+            SELECT edinet_code, sec_code,
+                   row_number() OVER (PARTITION BY edinet_code
+                                      ORDER BY period_end DESC NULLS LAST,
+                                               filed_date DESC NULLS LAST,
+                                               doc_id DESC) AS rn
+            FROM eq_filings
+            WHERE edinet_code IS NOT NULL
+              AND sec_code IS NOT NULL AND trim(sec_code) <> '')
+        SELECT e.edinet_code, l.sec_code, e.name_ja
+        FROM eq_entities e JOIN last l ON l.edinet_code = e.edinet_code AND l.rn = 1
+        WHERE e.sec_code IS NULL OR trim(e.sec_code) = ''
+        ORDER BY l.sec_code, e.edinet_code""").fetchall()
+    carried = defaultdict(list)
+    for ec, sc, nm in con.execute(
+            "SELECT edinet_code, sec_code, name_ja FROM eq_entities "
+            "WHERE sec_code IS NOT NULL AND trim(sec_code) <> ''").fetchall():
+        carried[sc].append((ec, nm))
+    wanted = defaultdict(list)
+    for ec, sc, nm in cands:
+        wanted[sc].append(ec)
+    fill, clashes = [], []
+    for ec, sc, nm in cands:
+        if carried.get(sc):
+            clashes.append((ec, sc, nm, "code now carried by " + ", ".join(
+                "%s %s" % (o, on) for o, on in carried[sc])))
+        elif len(wanted[sc]) > 1:
+            clashes.append((ec, sc, nm, "code also last filed under by " + ", ".join(
+                o for o in wanted[sc] if o != ec)))
+        else:
+            fill.append((sc, ec))
+    if fill:
+        con.executemany("UPDATE eq_entities SET sec_code = ? WHERE edinet_code = ?",
+                        fill)
+    rows = {}
+    for table in ("eq_holdings", "eq_reclassified"):
+        rows[table] = con.execute("""
+            UPDATE %s AS h SET held_sec_code = e.sec_code
+              FROM eq_entities e
+             WHERE h.held_edinet_code = e.edinet_code
+               AND h.held_sec_code IS NULL
+               AND e.sec_code IS NOT NULL AND trim(e.sec_code) <> ''""" % table
+        ).fetchone()[0]
+    if verbose:
+        print("entity codes: %d delisted companies keep the code they last filed "
+              "under; %d holdings and %d purpose-change rows now carry it"
+              % (len(fill), rows["eq_holdings"], rows["eq_reclassified"]))
+        for ec, sc, nm, why in clashes:
+            print("  not filled: %s %s %s -- %s" % (ec, sc, nm, why))
+    return len(fill), clashes
 
 
 def norm(s):
@@ -499,6 +585,228 @@ def filing_evidence(con):
     return dict((r[0], (r[1], r[2], r[3])) for r in con.execute(
         "SELECT edinet_code, count(DISTINCT period_end), min(period_end), max(period_end) "
         "FROM eq_filings WHERE edinet_code IS NOT NULL GROUP BY 1").fetchall())
+
+
+# ---- names in force at the time (rename history) ---------------------------
+# The registry above is today's: EDINET's code list as downloaded, one name per
+# company. A holder writes the held company's name as it stood when the report
+# was filed, so every company that renamed itself went unmatched in every
+# filing that used its old name -- 日本電信電話㈱ (NTT, 9432) in all of
+# 2022-2025, about ¥300bn of other companies' holdings a year, matched only
+# once filings began writing ＮＴＴ.
+#
+# We already hold each filer's own name at every date: the name it filed its
+# annual report under, in eq_filings. That is the history. A name is in force
+# for its filer from the first period it filed under it to the last, widened
+# by HISTORY_SLACK_DAYS either side, because a holder's period end can sit up
+# to a year from the held company's own and holders keep writing an old name
+# for a while after a change. A key that more than one company filed under
+# within that window is evidence of nothing, and the row stays unmatched.
+HISTORY_SLACK_DAYS = 366
+
+NAME_HISTORY_DDL = """
+CREATE TABLE IF NOT EXISTS eq_name_history (
+    edinet_code VARCHAR, name_ja VARCHAR, first_period DATE, last_period DATE,
+    valid_from DATE, valid_to DATE, filings INTEGER)
+"""
+
+
+def name_history(con):
+    u"""Each filer's names as filed: [(code, name, first, last, from, to, n)].
+
+    One row per company and normalised name; the most-used spelling of the
+    name is kept for display. Derived wholesale from eq_filings on every run,
+    so it never needs migrating and never disagrees with the filings.
+    """
+    spans = {}
+    for code, name, first, last, n in con.execute(
+            "SELECT edinet_code, filer_name, min(period_end), max(period_end), "
+            "count(*) FROM eq_filings WHERE edinet_code IS NOT NULL "
+            "AND filer_name IS NOT NULL AND period_end IS NOT NULL "
+            "GROUP BY 1, 2 ORDER BY 1, 2").fetchall():
+        key = (code, norm(name))
+        if not key[1]:
+            continue
+        s = spans.get(key)
+        if s is None:
+            spans[key] = [name, first, last, n, n]
+        else:
+            if n > s[4]:
+                s[0], s[4] = name, n
+            s[1], s[2], s[3] = min(s[1], first), max(s[2], last), s[3] + n
+    slack = _dt.timedelta(days=HISTORY_SLACK_DAYS)
+    return sorted((code, s[0], s[1], s[2], s[1] - slack, s[2] + slack, s[3])
+                  for (code, _), s in spans.items())
+
+
+def write_name_history(con, history):
+    u"""Publish the history as eq_name_history, rewritten wholesale (derived)."""
+    con.execute(NAME_HISTORY_DDL)
+    con.execute("DELETE FROM eq_name_history")
+    if history:
+        con.executemany("INSERT INTO eq_name_history VALUES (?,?,?,?,?,?,?)",
+                        history)
+
+
+def build_history_index(history):
+    """The same three keyed views as build_index, over names in force at a time."""
+    tiers = [{}, {}, {}]
+    for code, name, _f, _l, valid_from, valid_to, _n in history:
+        entry = (code, str(valid_from), str(valid_to))
+        for tier, key in zip(tiers, (norm(name), core_name(name), base_name(name))):
+            if key:
+                tier.setdefault(key, []).append(entry)
+    return tiers
+
+
+def entity_sec_codes(con):
+    u"""edinet_code -> the company's current securities code, from eq_entities."""
+    return dict(con.execute(
+        "SELECT edinet_code, sec_code FROM eq_entities").fetchall())
+
+
+class Resolver(object):
+    u"""Held name + the holding's period end -> (match_status, edinet_code, sec_code).
+
+    Strongest key first, and at each strength today's registry before the
+    history: exact name, then name less its legal form, then the base name
+    (which also applies ALIASES, the last resort). At one strength:
+
+    - the history names one company in force at the period -> it, carrying
+      that company's current securities code from eq_entities. This wins over
+      the registry when the two disagree: a company that filed its own annual
+      report under the name at the time is better evidence than the company
+      that holds the name today. 株式会社ノバレーゼ is today an unlisted
+      registration with no code, but the Novarese whose shares holders named
+      in 2023-2025 filed as such and is 9160 (now オンザページ); ＧＭＯ
+      インターネット was 9449 until 2022 and is 4784 since 2024. Each such
+      case is recorded in `conflicts`;
+    - the history names several companies in force at the period -> nothing
+      from the history at this strength (recorded in `ambiguous`);
+    - otherwise the registry names one company -> that company, as before.
+
+    A weaker key never overrides a stronger one, and an ambiguous key is
+    skipped rather than resolved by registry order.
+    """
+
+    def __init__(self, tiers, history_tiers=None, evidence=None, sec_codes=None):
+        self.tiers = tiers
+        self.history = history_tiers or [{}, {}, {}]
+        self.evidence = evidence
+        self.sec_codes = sec_codes or {}
+        self.ambiguous = {}       # held name -> candidate codes
+        self.conflicts = {}       # held name -> (registry code, history code)
+        self._cache = {}
+
+    def __call__(self, nm, when=None):
+        k = (nm, None if when is None else str(when))
+        hit = self._cache.get(k)
+        if hit is None:
+            hit = self._cache[k] = self._resolve(nm, k[1])
+        return hit
+
+    def _in_force(self, entries, when):
+        return sorted(set(c for c, f, t in entries if f <= when <= t))
+
+    def _resolve(self, nm, when):
+        for tier, htier, key in zip(self.tiers, self.history,
+                                    (norm(nm), core_name(nm), base_name(nm))):
+            if not key:
+                continue
+            hentries = htier.get(key) if when else None
+            codes = self._in_force(hentries, when) if hentries else []
+            entries = tier.get(key)
+            hit = pick(entries, self.evidence, when) if entries else None
+            if len(codes) == 1:
+                if hit and hit[0] != codes[0]:
+                    self.conflicts[nm] = (hit[0], codes[0])
+                if hit and hit[0] == codes[0]:
+                    return "matched", hit[0], self._code(hit)
+                return "matched", codes[0], self.sec_codes.get(codes[0]) or None
+            if codes:
+                self.ambiguous[nm] = codes
+            if hit:
+                return "matched", hit[0], self._code(hit)
+        return ("foreign" if is_foreign(nm) else "unmatched"), None, None
+
+    def _code(self, hit):
+        # The registry blanks a delisted company's code; eq_entities keeps the
+        # code it last filed under (fill_entity_codes), so a registry match
+        # falls back to that rather than un-doing the fill on every rematch.
+        return hit[1] or self.sec_codes.get(hit[0]) or None
+
+
+def rematch(db_path, codelist=None):
+    u"""Re-resolve stored held names; nothing is downloaded or re-parsed.
+
+    The match is derived, not filed: held_name_raw and every filed number stay
+    exactly as stored, and only held_edinet_code, held_sec_code and
+    match_status are rewritten -- and only on rows whose answer changed.
+    Covers eq_holdings and eq_reclassified, which the extraction resolves with
+    the same resolver. Returns what changed, for print_rematch.
+    """
+    codelist = codelist if codelist is not None else load_codelist()
+    con = duckdb.connect(db_path)
+    try:
+        con.execute(SCHEMA_SQL)          # a database with nothing extracted yet
+        history = name_history(con)
+        write_name_history(con, history)
+        resolver = Resolver(build_index(codelist), build_history_index(history),
+                            filing_evidence(con), entity_sec_codes(con))
+        changes = {"history_names": len(history)}
+        for table in ("eq_holdings", "eq_reclassified"):
+            rows = con.execute(
+                "SELECT h.doc_id, h.held_name_raw, f.period_end, h.match_status, "
+                "h.held_edinet_code, h.held_sec_code, count(*), sum(h.book_value_yen) "
+                "FROM %s h LEFT JOIN eq_filings f USING (doc_id) "
+                "WHERE h.held_name_raw IS NOT NULL "
+                "GROUP BY 1, 2, 3, 4, 5, 6" % table).fetchall()
+            todo, log = [], []
+            for doc_id, nm, pe, mstat, ec, sc, n, v in rows:
+                new = resolver(nm, pe)
+                old = (mstat, ec, sc)
+                if new != old:
+                    todo.append((doc_id, nm) + new)
+                    log.append((old, new, n, v, nm, doc_id, pe))
+            if todo:
+                con.execute("CREATE OR REPLACE TEMP TABLE _rematch (doc_id VARCHAR, "
+                            "held_name_raw VARCHAR, match_status VARCHAR, "
+                            "held_edinet_code VARCHAR, held_sec_code VARCHAR)")
+                con.executemany("INSERT INTO _rematch VALUES (?,?,?,?,?)", todo)
+                con.execute(
+                    "UPDATE %s AS h SET match_status = m.match_status, "
+                    "held_edinet_code = m.held_edinet_code, "
+                    "held_sec_code = m.held_sec_code FROM _rematch m "
+                    "WHERE h.doc_id = m.doc_id AND h.held_name_raw = m.held_name_raw"
+                    % table)
+            changes[table] = log
+        changes["ambiguous"] = sorted(resolver.ambiguous.items())
+        changes["conflicts"] = sorted(resolver.conflicts.items())
+        return changes
+    finally:
+        con.close()
+
+
+def print_rematch(changes):
+    print("name history: %d company-name spans" % changes["history_names"])
+    for table in ("eq_holdings", "eq_reclassified"):
+        log = changes[table]
+        by = defaultdict(lambda: [0, 0])
+        for old, new, n, v, _nm, _doc, _pe in log:
+            by[(old[0], new[0])][0] += n
+            by[(old[0], new[0])][1] += v or 0
+        print("%s: %d rows changed" % (table, sum(x[0] for x in by.values())))
+        for (a, b), (n, v) in sorted(by.items()):
+            print("  %-9s -> %-9s %7d rows  %10.1f bn yen" % (a, b, n, v / 1e9))
+        for old, new, n, v, nm, doc_id, pe in log:
+            if old[1] and new[1] and old[1] != new[1]:
+                print("  CODE CHANGED %s %s %s: %s/%s -> %s/%s" % (
+                    doc_id, pe, nm, old[1], old[2], new[1], new[2]))
+    for nm, codes in changes["ambiguous"]:
+        print("history names several companies (not matched from it): %s %s"
+              % (nm, ",".join(codes)))
+    for nm, (reg, hist) in changes["conflicts"]:
+        print("history %s chosen over today's registry %s: %s" % (hist, reg, nm))
 
 
 # ---- filing discovery ------------------------------------------------------
@@ -833,6 +1141,14 @@ class LocalSource(object):
         with open(os.path.join(ARCHIVE, "docs", date, doc_id + "_t5.zip"), "rb") as f:
             return f.read()
 
+    def read_t1(self, doc_id, date):
+        """The type=1 package (XBRL + HTML) archived beside the CSV, or None."""
+        path = os.path.join(ARCHIVE, "docs", date, doc_id + "_t1.zip")
+        if not os.path.exists(path):
+            return None
+        with open(path, "rb") as f:
+            return f.read()
+
 
 class S3Source(object):
     """The cloud bucket — authoritative, and the only copy with all 5 years.
@@ -971,6 +1287,14 @@ class S3Source(object):
     def read_zip(self, doc_id, date):
         key = "docs/%s/%s_t5.zip" % (date, doc_id)
         return self.c.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+
+    def read_t1(self, doc_id, date):
+        """The type=1 package archived beside the CSV, or None if absent."""
+        key = "docs/%s/%s_t1.zip" % (date, doc_id)
+        try:
+            return self.c.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+        except self.c.exceptions.NoSuchKey:
+            return None
 
 
 # ---- per-filing extraction (M1 core, hardened) -----------------------------
@@ -1131,6 +1455,61 @@ def to_int(s):
     return int(s) if s.isdigit() else None
 
 
+def with_html_fallback(parsed, src, doc_id, date):
+    """parse_filing's result, with any short named table read from the
+    filing's HTML (holdings_html.py) and a sentence per short table in
+    extra["short_notes"] (the filing is partial) or extra["short_remarks"]
+    (the HTML confirms the filing names no more; it stays clean). A filing
+    with no short table is returned untouched and its HTML never fetched."""
+    holdings, totals, extra = parsed
+    short = holdings_html.shortfalls(holdings, extra["totals"])
+    if not short:
+        return parsed
+    missing = "HTML not archived"
+    try:
+        t1 = src.read_t1(doc_id, date)
+    except Exception as e:     # an unreachable archive keeps the XBRL rows
+        t1, missing = None, "HTML could not be read: %s" % str(e)[:80]
+    holdings, problems, remarks = holdings_html.fallback(
+        holdings, extra["totals"], short, t1, missing)
+    return holdings, totals, dict(extra, short_notes=problems, short_remarks=remarks)
+
+
+def scan(db_path):
+    """Print every short named table in a cross-shareholding DB, then the
+    --docs list that re-extracts exactly those filings. Read-only."""
+    con = duckdb.connect(db_path, read_only=True)
+    has_source = "row_source" in {r[1] for r in con.execute(
+        "PRAGMA table_info('eq_holdings')").fetchall()}
+    rows = con.execute(holdings_html.scan_sql(has_source)).fetchall()
+    cols = [d[0] for d in con.description]
+    con.close()
+    print("%-9s %-7s %-10s %-15s %7s %6s %18s %18s  %-18s %s"
+          % ("doc", "filer", "period", "table", "issues", "named",
+             "listed total yen", "named yen", "state", "filer"))
+    todo = set()
+    for r in rows:
+        d = dict(zip(cols, r))
+        detail = d["detail"] or ""
+        state = ("read from HTML" if "html" in (d.get("sources") or "")
+                 else "HTML agrees" if "in its HTML as in its XBRL" in detail
+                 else "HTML could not" if "HTML fallback not used" in detail
+                 else "not yet re-run")
+        if state == "not yet re-run":
+            todo.add(d["doc_id"])
+        print("%-9s %-7s %-10s %-15s %7d %6d %18s %18s  %-18s %s"
+              % (d["doc_id"], d["edinet_code"] or "", d["period_end"] or "",
+                 d["holder_table"], d["issues"], d["named"],
+                 "{:,}".format(d["listed_yen"]) if d["listed_yen"] is not None else "-",
+                 "{:,}".format(d["named_yen"]) if d["named_yen"] is not None else "-",
+                 state, d["filer_name"]))
+    docs = sorted({r[0] for r in rows})
+    print("%d short tables in %d filings, %d not yet re-run"
+          % (len(rows), len(docs), len(todo)))
+    if todo:
+        print("re-run: python equity/extract.py --all --docs %s" % ",".join(sorted(todo)))
+
+
 SCHEMA_SQL = """
         CREATE TABLE IF NOT EXISTS eq_entities (
             edinet_code VARCHAR PRIMARY KEY, sec_code VARCHAR, name_ja VARCHAR,
@@ -1178,8 +1557,18 @@ SCHEMA_SQL = """
             held_name_raw VARCHAR, held_edinet_code VARCHAR, held_sec_code VARCHAR,
             match_status VARCHAR, shares BIGINT, book_value_yen BIGINT,
             prior_shares BIGINT, prior_book_value_yen BIGINT,
-            purpose_ja VARCHAR, reciprocal VARCHAR);
+            purpose_ja VARCHAR, reciprocal VARCHAR,
+            -- 'xbrl': the filer's tagged rows (the type=5 CSV); 'html': read
+            -- from the filing's HTML because the XBRL tagged too few of them.
+            -- The filing's eq_filings.detail says which table and why.
+            row_source VARCHAR DEFAULT 'xbrl');
 """
+
+HOLDINGS_INSERT = (
+    "INSERT INTO eq_holdings (doc_id, holder_table, row_no, held_name_raw, "
+    "held_edinet_code, held_sec_code, match_status, shares, book_value_yen, "
+    "prior_shares, prior_book_value_yen, purpose_ja, reciprocal, row_source) "
+    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
 
 # The column list `base + (...)` is built against, in order. Named explicitly in
 # the INSERT below because a positional INSERT ties the code to the table's
@@ -1272,8 +1661,38 @@ def main():
                          "database built forward from a watermark fills in its "
                          "own history a slice at a time. 0 (default) is "
                          "forward only.")
+    ap.add_argument("--rematch", action="store_true",
+                    help="re-resolve the stored held names against the "
+                         "registry and the filers' own name history; reads "
+                         "and downloads no filings, changes only "
+                         "held_edinet_code, held_sec_code and match_status")
+    ap.add_argument("--fill-codes", action="store_true",
+                    help="only give delisted companies the securities code they "
+                         "last filed under (fill_entity_codes), on the DB as it "
+                         "stands; reads no filing. Every full run does this too.")
+    ap.add_argument("--scan", action="store_true",
+                    help="list every filing in --db whose named table falls "
+                         "short of what its own totals require (see "
+                         "holdings_html.py), with the --docs list to re-run "
+                         "them; reads only, writes nothing")
     args = ap.parse_args()
     db_path = args.db
+    if args.scan:
+        return scan(db_path)
+
+    if args.fill_codes:
+        con = duckdb.connect(db_path)
+        try:
+            fill_entity_codes(con)
+        finally:
+            con.close()
+        print("wrote", os.path.normpath(db_path))
+        return
+
+    if args.rematch:
+        print_rematch(rematch(db_path))
+        print("wrote", os.path.normpath(db_path))
+        return
 
     src = S3Source(args.workers) if args.source == "s3" else LocalSource()
 
@@ -1334,6 +1753,10 @@ def main():
                      ("total_assets_yen", "BIGINT"), ("assets_basis", "VARCHAR")):
         if col not in have:
             con.execute("ALTER TABLE eq_filings ADD COLUMN %s %s" % (col, typ))
+    if "row_source" not in {r[1] for r in con.execute(
+            "PRAGMA table_info('eq_holdings')").fetchall()}:
+        # every stored row so far came from the XBRL
+        con.execute("ALTER TABLE eq_holdings ADD COLUMN row_source VARCHAR DEFAULT 'xbrl'")
 
     # The basis vocabulary, and a view that projects the basis tuple onto the
     # fact rows. Both are derived from app/basis.py, so a schema that has drifted
@@ -1374,6 +1797,11 @@ def main():
     # Read once, before this run rewrites eq_filings, so the tie-break between
     # two registrations of one company is stable across the run.
     evidence = filing_evidence(con)
+    # And what each filer was called when, read at the same moment for the
+    # same reason: a held name is matched against the names in force at its
+    # holding's period end, not only against today's registry.
+    resolve_at = Resolver(tiers, build_history_index(name_history(con)),
+                          evidence, entity_sec_codes(con))
 
     stats = {"clean": 0, "partial": 0, "failed": 0}
     matched = domestic = foreign = reclassified = 0
@@ -1386,7 +1814,9 @@ def main():
             # Hash the bytes we actually parsed rather than trusting a manifest
             # field — the provenance claim on every row is then verifiable, and
             # S3 discovery has no manifest to read in the first place.
-            return t, parse_filing(blob), hashlib.sha256(blob).hexdigest(), None
+            parsed = parse_filing(blob)
+            return t, with_html_fallback(parsed, src, doc_id, rec["date"]), \
+                hashlib.sha256(blob).hexdigest(), None
         except Exception as e:
             return t, None, None, str(e)[:200]
 
@@ -1414,6 +1844,12 @@ def main():
                 continue
             holdings, totals, extra = parsed
             so = extra["shares_out"]
+            # A named table the XBRL left short, and what the HTML did about
+            # it. Partial whether the HTML filled it or not: either way the
+            # stored rows are not the filer's own tagged table. Where the HTML
+            # names exactly the tagged rows the filing names no more, and the
+            # sentence goes in detail with the status left clean.
+            short_notes = extra.get("short_notes") or []
 
             # reconciliation gate: named sum must not exceed the filing's own total
             sums = defaultdict(int)
@@ -1423,7 +1859,7 @@ def main():
                     sums[h["holder_table"]] += v
             breaches = [v for v in sums if v in totals and sums[v] > totals[v]]
             problems = (["named sum exceeds tagged total: %s" % breaches]
-                        if breaches else [])
+                        if breaches else []) + short_notes
 
             # A second gate against the filer's own balance sheet. A company
             # cannot hold a portfolio of other companies' shares worth more
@@ -1440,7 +1876,7 @@ def main():
                     % (portfolio, assets))
 
             status = "partial" if problems else "clean"
-            detail = "; ".join(problems) or None
+            detail = "; ".join(problems + (extra.get("short_remarks") or [])) or None
             con.execute("DELETE FROM eq_filings WHERE doc_id = ?", [doc_id])
             con.execute(FILINGS_INSERT,
                         base + (status, detail, to_int(so["issued"]),
@@ -1451,20 +1887,8 @@ def main():
             stats[status] += 1
 
             def resolve(nm):
-                """Held name -> (match_status, edinet_code, sec_code).
-
-                Strongest key that names exactly one company wins. A weaker key
-                is never allowed to override a stronger one, and an ambiguous
-                key is skipped rather than resolved by registry order.
-                """
-                for tier, key in zip(tiers, (norm(nm), core_name(nm), base_name(nm))):
-                    entries = tier.get(key)
-                    if not entries:
-                        continue
-                    hit = pick(entries, evidence, period_end)
-                    if hit:
-                        return "matched", hit[0], hit[1] or None
-                return ("foreign" if is_foreign(nm) else "unmatched"), None, None
+                """Held name -> (match_status, edinet_code, sec_code); see Resolver."""
+                return resolve_at(nm, period_end)
 
             con.execute("DELETE FROM eq_holdings WHERE doc_id = ?", [doc_id])
             rows = []
@@ -1483,9 +1907,10 @@ def main():
                 rows.append((doc_id, h["holder_table"], h["row"], nm, ec, sc, mstat,
                              to_int(h["shares"]), to_int(h["book_value"]),
                              to_int(h["prior_shares"]), to_int(h["prior_book_value"]),
-                             h["purpose"] or None, (h["reciprocal"] or "").strip() or None))
+                             h["purpose"] or None, (h["reciprocal"] or "").strip() or None,
+                             h.get("source") or "xbrl"))
             if rows:
-                con.executemany("INSERT INTO eq_holdings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+                con.executemany(HOLDINGS_INSERT, rows)
 
             con.execute("DELETE FROM eq_reclassified WHERE doc_id = ?", [doc_id])
             rc = []
@@ -1522,11 +1947,17 @@ def main():
                 con.executemany("INSERT INTO eq_filing_totals VALUES (?,?,?,?,?)", tt)
 
     fill_entity_english(con)
+    fill_entity_codes(con)
 
     con.close()
     n = con = None
     record_run(db_path, "cross-shareholdings", through, len(filings), PARSER_VERSION,
                back_to=catch_up_floor)
+    # This run's filings can add names to the history (a company's first
+    # report under a new name) that earlier holdings were written with, and
+    # the rows just written were resolved before this run's names existed.
+    # Re-deriving every stored match costs seconds and touches only the match.
+    print_rematch(rematch(db_path, codelist))
     if not args.no_compact:
         compact(db_path)
     print("filings: clean %(clean)d, partial %(partial)d, failed %(failed)d" % stats)

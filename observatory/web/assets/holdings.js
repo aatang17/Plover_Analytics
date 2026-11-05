@@ -373,21 +373,37 @@
     if (s.listed_yen != null) split.push("¥" + yenBn(s.listed_yen) + "bn listed");
     if (s.unlisted_yen != null) split.push("¥" + yenBn(s.unlisted_yen) + "bn unlisted");
 
+    // A filed total that cannot be right (total_implausible) stays on view as
+    // filed, marked beside the number; the two shares built on it are left
+    // out — a dash, never a percentage of a wrong figure, never zero.
+    var bad = !!s.total_implausible;
+    var why = !bad ? "" :
+      (s.total_assets_yen != null && s.policy_total_yen > s.total_assets_yen
+        ? "As filed, but larger than total assets of ¥" + yenBn(s.total_assets_yen) +
+          "bn, so it cannot be right"
+        : "As filed, but " + fmtNum(s.listed_yen / s.named_yen, 0) +
+          " times the named holdings below, so it cannot be right");
+    var leftOut = "Left out: the filed total cannot be right";
     $("co-scale").hidden = false;
     $("co-scale").innerHTML =
       '<div class="strip-grid cols-3">' +
       cell("Policy shareholdings",
-           "¥" + yenBn(s.policy_total_yen) + '<span class="unit"> bn</span>',
-           (issues.length ? issues.join(" + ") + " issues · " : "") +
-           (split.join(" · ") || "total as filed"), null) +
+           "¥" + yenBn(s.policy_total_yen) + '<span class="unit"> bn</span>' +
+           (bad ? ' <span class="badge badge-warn" title="'  + esc(s.total_implausible_reason || "") +
+                  '">check filing</span>' : ""),
+           bad ? esc(why)
+               : (issues.length ? issues.join(" + ") + " issues · " : "") +
+                 (split.join(" · ") || "total as filed"), null) +
       cell("Share of equity", pct(s.pct_of_equity),
-           s.pct_of_equity == null
+           bad ? leftOut
+           : s.pct_of_equity == null
              ? "No usable equity figure filed"
              : esc(s.equity_basis_label || "Shareholders’ equity") +
                " · ¥" + yenBn(s.equity_yen) + "bn",
            s.pct_of_equity) +
       cell("Share of total assets", pct(s.pct_of_assets),
-           s.pct_of_assets == null
+           bad ? leftOut
+           : s.pct_of_assets == null
              ? "No usable total-assets figure filed"
              : "of ¥" + yenBn(s.total_assets_yen) + "bn total assets",
            s.pct_of_assets) +
@@ -401,7 +417,11 @@
       "not the sum of the named holdings below, which cover only the largest " +
       "issues" + entitiesPhrase(d.scale_entities) + ". " +
       "It is a floor: holdings at group companies the filing does not name are " +
-      "disclosed nowhere and are not counted. " + esc(d.scale_reference || "");
+      "disclosed nowhere and are not counted. " + esc(d.scale_reference || "") +
+      (bad ? "<br><b>This filing’s total is flagged:</b> " +
+             esc(s.total_implausible_reason || "") + ". The rule: " +
+             esc(d.total_implausible_calc || "") + ". The total is shown as filed; " +
+             "the two shares built on it are left out, not set to zero." : "");
 
     function pct(v) { return v == null ? MISSING : fmtNum(v, 1) + '<span class="unit">%</span>'; }
     // The meter reads directly as the share it states — 61% of equity fills
@@ -438,6 +458,11 @@
     var out = ["policy_shareholdings_total_yen = " + s.policy_total_yen +
                " (filing's own total for the whole policy bucket, not the sum " +
                "of the rows below; a floor — see scale_note)"];
+    if (s.total_implausible) {
+      out.push("policy_total_implausible = true — " + (s.total_implausible_reason || "") +
+               "; pct_of_equity and pct_of_total_assets left empty (" +
+               (d.total_implausible_calc || "") + ")");
+    }
     if (s.listed_yen != null) out.push("  of which listed_yen = " + s.listed_yen);
     if (s.unlisted_yen != null) out.push("  of which unlisted_yen = " + s.unlisted_yen);
     if (s.equity_yen != null) {
@@ -586,6 +611,11 @@
       $("co-name-ja").textContent = nameEn ? displayNameJa(name) : "";
       $("co-name-ja").hidden = !nameEn;
       $("co-code").textContent = code;
+      // A company taken private keeps its page under the code it was known by
+      // (app/listing.py decides; the API sends the reason with it).
+      var gone = !!(d.entity && d.entity.delisted);
+      $("co-delisted").hidden = !gone;
+      $("co-delisted").title = gone ? (d.entity.delisted_note || "") : "";
       // sector is recorded in Japanese only; show the standard English name of
       // the TSE sector where there is one, with the recorded Japanese on hover
       var ind = (d.entity && d.entity.industry) || "";

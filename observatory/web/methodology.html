@@ -1337,6 +1337,39 @@
   </details>
 
   <h3 class="ds-group">Japan: company filings</h3>
+  <details class="ds" id="calc-holdings">
+    <summary><span>Cross-shareholdings: named holdings</span><span class="ds-note">政策保有株式, as filed; when a status reads partial</span></summary>
+    <div class="ds-body">
+    <p>Each annual securities report lists its policy holdings by name (特定投資株式): for the
+    company itself and, for a holding company, its largest and second-largest holders. Each row
+    gives the shares and book value for this year and last, the purpose, and whether the other
+    company holds back. Values are as filed, in yen. A blank, a dash or an omitted (*) cell is —,
+    never zero. Deemed holdings (みなし保有株式) are not part of this table.</p>
+    <ul>
+      <li><b>Read from the filer's tags.</b> The rows come from the filing's XBRL, the tagged
+      version of the report.</li>
+      <li><b>Two checks.</b> The named rows must not add up to more than the filing's own tagged
+      total for listed holdings, and all holdings must not exceed the filer's total assets. A
+      filing that fails either is marked <i>partial</i>, with the reason, and its figures are
+      still shown as filed.</li>
+      <li><b>When the tags name too few rows.</b> The rules ask each table to name every listed
+      holding above 1% of the company's capital and at least the 60 largest (10 for the
+      second-largest holder), or all of them if there are fewer. When a filing's own count of
+      listed holdings is 10 or more and its tags name fewer than half that minimum, the table is
+      read from the printed report (the filing's HTML) instead. That read is used only if it names
+      more rows than the tags, every book value has a stated unit, and its total is no more than
+      the filing's own tagged total. Such rows are stored marked as read from the HTML, and the
+      filing is marked <i>partial</i> with a note saying which table and why. Example: Sumitomo
+      Mitsui Financial Group's report for the year to March 2025 tags 9 rows for its bank against
+      785 listed holdings. The printed table has 59, and every one of them also appears in the
+      bank's table the year before or the year after.</li>
+      <li><b>When the printed report names no more.</b> Some filings name fewer holdings than the
+      rule suggests in print as well as in their tags. Those keep their tagged rows and their
+      status, with a note that the printed report agrees. A filing whose printed report has no
+      readable named table keeps its tagged rows and is marked <i>partial</i>.</li>
+    </ul>
+    </div>
+  </details>
   <details class="ds" id="calc-financials">
     <summary><span>Financial statements and key indicators</span><span class="ds-note">EDINET XBRL, as filed</span></summary>
     <div class="ds-body">
@@ -1633,6 +1666,13 @@
       it and it is not on JPX's latest list of Tokyo issues. Both must agree, because the JPX list
       leaves out companies listed only in Nagoya, Fukuoka or Sapporo. Its filings stay available,
       and it cannot be added to a list of companies to follow. A view at a past date carries no mark.</li>
+      <li><b>Codes after delisting.</b> When a company is taken private, EDINET's filer registry
+      drops its securities code. Here it keeps the code printed on the cover of its last annual
+      report that had one, so its page, and the cross-shareholdings other companies held in it,
+      stay under the code readers know: Hisamitsu is still 4530, Toyota Industries 6201. A code is
+      not kept if another company in the registry now carries it, or if two delisted companies
+      last filed under the same one; those stakes are left without a code rather than shown on
+      the wrong company's page. Only the code is filled in. No figure changes.</li>
     </ul>
     </div>
   </details>
@@ -1799,6 +1839,17 @@
       in 2026. A count with no second count to check it against is checked against the holders: a
       value above $3bn of which the 13F filers together report holding under 0.1% is held back with a
       note (a 20-F cover tagging 150 billion shares implied $417bn for a company no fund holds).</li>
+      <li><b>Market value on a past day</b> is formed the same way and stored for every trading day
+      from May 2018: that day's close (the last within ten days) times the newest cover count filed
+      by that day, with the depositary-share ratio from the newest annual report filed by then. A
+      cover count whose filing date is not on file is taken as public 45 days after its own date;
+      nine in ten are filed within 35. A company with several share classes and no class counts on
+      file for the day takes the whole-company count from its filings to the SEC (shares outstanding
+      on the balance sheet, else the quarter's average), and is left blank where neither is tagged.
+      A ticker since changed is read under its old symbol. Three limits: the list of companies is
+      today's, so a company since acquired or delisted has no past value; daily closes before 2023
+      cover a quarter to a third as many stocks as since; and a foreign company valued per depositary
+      share is blank before the first annual report of its that was read for the ratio.</li>
       <li><b>Depositary shares.</b> A foreign company's US listing is usually an American
       Depositary Share, and one can stand for any number of the shares the filing counts: three
       for HDFC Bank, eight for Alibaba, thirteen for BeOne, 4,000 for Scinai. That number is read
@@ -1874,6 +1925,20 @@
       <li><b>Every filed line is available.</b> An answer worked out step by step reads the same
       lines as the ready-made answers: capital expenditure, research spending, gross profit and the
       rest, for the latest annual report and year by year.</li>
+      <li><b>Every table is available.</b> Since 5 November 2026 the worked-out answer can reach
+      every table in the US database, read-only: each fund manager's 13F positions line by line,
+      daily market values since 2018, index weights, and the raw filings behind the summary tables.
+      The list of tables is written from the database itself, not by hand, so a table added to the
+      database is known to the box the same day.</li>
+      <li><b>Names are found by code.</b> Companies, fund managers and the people behind them
+      ("Ackman", "Saba Capital", "Two Sigma") are matched by code before any question is read, and
+      the match is shown to the model with its identifier. A name that fits both a manager and a
+      listed fund is resolved by what the question asks: what it owns is the manager; its price is
+      the fund.</li>
+      <li><b>A ready-made answer may not drop a word.</b> A ready-made answer that would ignore a
+      date or time phrase in the question ("on 2 January 2024", "a year ago") is not given; the
+      question is worked out step by step instead. A ready-made answer that cannot be given is
+      tried step by step before the box says so.</li>
       <li><b>Which years.</b> S&amp;P 500 members from 2009, other companies from about 2021. Each
       year shows its latest filed value. Only US dollar figures are used: a filer in another
       currency is left blank, never converted, and a line a company did not file is blank, never
@@ -1885,7 +1950,11 @@
       Gross margin, research intensity and debt-to-equity are one filed line as a percentage of
       another. Every query is shown under "How This Was Worked Out".</li>
       <li><b>When an answer is refused.</b> "Not in Plover's data" appears only for what is known
-      not to be held. Otherwise the box says it could not work the answer out.</li>
+      not to be held, checked against the list of tables the box holds. Otherwise the box says it
+      could not work the answer out.</li>
+      <li><b>Checked every night.</b> Every question readers typed in the last 30 days is asked
+      again each night on that night's data and compared with the night before. A question that
+      stopped answering, or whose answer changed, is listed for us to read before a reader finds it.</li>
       <li><b>Checked before it goes out.</b> Each answer is read against the question once. One that
       shows something else, and a refusal, get one more try; if that fails too, the reader is told,
       and a different figure is never shown in its place.</li>
@@ -2159,6 +2228,19 @@
   ever disclosed in Japan is about ¥13bn for one person, so a category averaging over ¥3bn is
   on the wrong scale. A flag says a number cannot be right; it never says what it should
   be.</p>
+  <p id="plausible-policy-total"><b>Cross-shareholding totals.</b> A filing's own total for its
+  policy shareholdings is flagged when
+  <code>policy total &gt; total assets</code>, or when
+  <code>listed total ≥ 500 × the named listed holdings</code> and
+  <code>policy total ≥ 10% of total assets</code>, every figure from the same annual report.
+  A portfolio on the balance sheet cannot be bigger than the balance sheet. The named table
+  must list the largest holdings, so an honest filer's listed total stays close to it: across
+  16,039 filings the widest honest gap is 66 times, and the highest honest total is 84% of
+  total assets. The 15 filings caught are all errors, most a yen figure exactly 1,000 times too
+  large (Soft99 tags ¥3.46tn against ¥3.46bn of named holdings and ¥67bn of assets). The total
+  stays on the page as filed and marked, but its share of equity and share of total assets are
+  shown as — and counted as excluded. Equity alone is no test: a company can hold more than
+  its own equity, and Japan Securities Finance does.</p>
   </section>
 
   <section class="doc-panel">

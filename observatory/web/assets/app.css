@@ -257,6 +257,9 @@ h3 { font-size: 13.5px; color: var(--obs-ink); font-weight: 600; margin: 16px 0 
 .badge-official { color: var(--obs-trust-official); }
 .badge-model    { color: var(--obs-trust-model); }
 .badge-stale    { color: var(--obs-trust-stale); }
+/* A filed figure the filing itself contradicts ("check filing"). Not a trust
+   label: the number is still as filed; this says it cannot be right. */
+.badge-warn     { color: var(--obs-warn); font-weight: 500; }
 
 /* ---------- headline metric card ---------- */
 

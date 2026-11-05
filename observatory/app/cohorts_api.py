@@ -70,9 +70,11 @@ METRICS = [
     ("cross_holdings_pct_of_equity", u"Cross-shareholdings / equity", u"%", False,
      "cross-shareholdings",
      u"total book value of policy shareholdings ÷ equity × 100, both from the "
-     u"same annual report"),
+     u"same annual report; left out where the filed total is flagged "
+     u"implausible (larger than total assets, or 500× the named holdings)"),
     ("cross_holdings_yen",     u"Cross-shareholdings (book)", u"¥", False, "cross-shareholdings",
-     u"sum of the book value of every policy shareholding in the filing"),
+     u"sum of the book value of every policy shareholding in the filing; left "
+     u"out of the comparison where that filed total is flagged implausible"),
     ("cross_holdings_count",   u"Named cross-shareholdings",  u"",  False, "cross-shareholdings",
      u"count of individually named policy shareholdings in the filing"),
 ]
@@ -115,8 +117,7 @@ _OWN_SQL = """
     ) WHERE rn = 1
 """
 _XS_SQL = """
-    WITH tot AS (SELECT doc_id, sum(book_value_yen) AS policy_total_yen
-                 FROM eq_filing_totals GROUP BY 1),
+    WITH""" + equity_api.POLICY_TOT_CTE + """,
          latest AS (
         SELECT * FROM (
             SELECT *, row_number() OVER (PARTITION BY sec_code
@@ -125,6 +126,7 @@ _XS_SQL = """
             WHERE sec_code IS NOT NULL AND status IN ('clean','partial')
         ) WHERE rn = 1)
     SELECT f.sec_code, t.policy_total_yen AS cross_holdings_yen,
+           t.policy_total_yen, t.listed_yen, t.named_yen, f.total_assets_yen,
            CASE WHEN f.equity_yen > 0
                 THEN 100.0 * t.policy_total_yen / f.equity_yen END
                 AS cross_holdings_pct_of_equity,
@@ -198,6 +200,14 @@ def panel(cur):
     for r in _rows(cur, _XS_SQL):
         row = slot(r["sec_code"])
         row["cross_period_end"] = r["period_end"]
+        # A filed total that cannot be right is not compared: as filed it would
+        # rank ソフト99 among the largest policy books in Japan. The company's
+        # own page still shows it, as filed and flagged.
+        reason = equity_api.check_policy_total(r)["total_implausible_reason"]
+        row["cross_holdings_total_implausible"] = reason
+        if reason:
+            r["cross_holdings_yen"] = None
+            r["cross_holdings_pct_of_equity"] = None
         for key in ("cross_holdings_yen", "cross_holdings_pct_of_equity",
                     "cross_holdings_count"):
             row[key] = r[key]

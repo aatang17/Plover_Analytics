@@ -128,6 +128,54 @@ def holdings_total(row, portfolio_yen, total_assets_yen):
     return row
 
 
+# A filing's tagged policy total, tested against two other numbers on the same
+# document. Measured on 16,039 filings with a tagged total (FY2021-FY2026):
+#   * the largest honest total is 84% of the filer's total assets (Fisco,
+#     FY2025); 15 filings exceed 100%, and every one is an error -- 13 carry
+#     a listed total 1,000x their named rows (a yen figure entered where the
+#     filing works in thousands); 2 name no rows and are 122x and 352x total
+#     assets;
+#   * the listed total against the named listed rows -- which must include
+#     every listed holding above 1% of capital, and at least the 60 largest --
+#     tops out at 66x for an honest filer; the next value is 1,000x.
+# Equity alone is no test: Japan Securities Finance's honest total is 12.6x
+# its equity, and 13% of its assets.
+TOTAL_ABOVE_ASSETS = 1.0
+TOTAL_NAMED_MULTIPLE = 500
+# The second test also needs the total to matter against the balance sheet.
+# Without it a filer whose ROWS are the wrong figure (光陽社 FY2026 names a
+# holding of 11,532 shares at 3,000 yen, beside a correct 4.7m-yen total) would
+# have its correct total flagged instead.
+TOTAL_NAMED_MIN_SHARE_OF_ASSETS = 0.10
+
+
+def policy_total_reason(total_yen, listed_yen, named_yen, total_assets_yen):
+    u"""Why a filing's tagged policy total cannot be right, or None.
+
+    named_yen is the sum of the filing's named rows, excluding rows already
+    flagged implausible. The total itself is never changed: the caller shows it
+    as filed and leaves it out of the percentages."""
+    if not total_yen or not total_assets_yen or total_assets_yen <= 0:
+        return None
+    if total_yen > TOTAL_ABOVE_ASSETS * total_assets_yen:
+        return ("the tagged policy total of %s yen is larger than the filer's "
+                "total assets of %s yen in the same filing; a portfolio carried "
+                "on the balance sheet cannot exceed the balance sheet, so the "
+                "total is filed on the wrong scale"
+                % ("{:,}".format(int(total_yen)),
+                   "{:,}".format(int(total_assets_yen))))
+    if (named_yen and named_yen > 0 and listed_yen
+            and listed_yen >= TOTAL_NAMED_MULTIPLE * named_yen
+            and total_yen >= TOTAL_NAMED_MIN_SHARE_OF_ASSETS * total_assets_yen):
+        return ("the tagged listed total of %s yen is %s times the %s yen of "
+                "named listed holdings; the named table must include the "
+                "largest holdings, so the total is filed on the wrong scale"
+                % ("{:,}".format(int(listed_yen)),
+                   "{:,}".format(int(round(listed_yen / float(named_yen)))),
+                   "{:,}".format(int(named_yen))))
+    return None
+
+
 def _scope(basis):
     u"""'ifrs_consolidated_excl_nci' -> 'consolidated'; None stays None."""
     if not basis:

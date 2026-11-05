@@ -458,6 +458,33 @@ IMPLAUSIBLE_NOTE = (
     "excluded_positions / excluded_yen so the exclusion is visible."
     % "{:,}".format(IMPLAUSIBLE_YEN_PER_SHARE))
 
+# The same discipline for the filing's tagged TOTAL, which no per-row test
+# reaches: ソフト99 tags a policy total of ¥3.46trn beside ¥3.46bn of named rows
+# and ¥67bn of total assets, which would put its holdings at 5,872% of equity.
+# The rule and its measured evidence live in plausibility.policy_total_reason.
+TOTAL_IMPLAUSIBLE_CALC = (
+    "flagged when the tagged policy total > the filer's total assets, or when "
+    "the tagged listed total ≥ %d × the sum of the named listed holdings and "
+    "the policy total ≥ %d%% of total assets — every figure as filed in the "
+    "same annual securities report"
+    % (plausibility.TOTAL_NAMED_MULTIPLE,
+       int(100 * plausibility.TOTAL_NAMED_MIN_SHARE_OF_ASSETS)))
+
+TOTAL_IMPLAUSIBLE_NOTE = (
+    "A filing's tagged policy total is flagged implausible (total_implausible, "
+    "with the reason in total_implausible_reason) when it cannot be right "
+    "against two other numbers in the same filing: " + TOTAL_IMPLAUSIBLE_CALC +
+    ". A portfolio carried on the balance sheet cannot be larger than the "
+    "balance sheet, and the named table must include the largest holdings, so "
+    "an honest filer's listed total stays close to its named rows (the largest "
+    "honest gap in the archive is 66 times; the errors are 1,000 times — a yen "
+    "figure entered where the filing works in thousands). It is a filer tagging "
+    "error, not an extraction error. The total is still returned exactly as "
+    "filed, but pct_of_equity and pct_of_assets are null for that filing, "
+    "never zero, and excluded_totals / excluded_totals_yen count the filings "
+    "left out. Equity alone is not a test: a holder can legitimately hold more "
+    "than its own equity.")
+
 HOLDER_SHARE_CALC = ("this position's book value ÷ the holder's shareholders' "
                      "equity (or total assets) × 100, both as filed in the "
                      "holder's own annual securities report")
@@ -533,6 +560,46 @@ EQUITY_BASIS_LABEL = {
     "parent_only": "Parent company only — not consolidated",
 }
 
+# The filing's tagged totals beside the sum of its own named rows, which the
+# total check needs. Named rows already flagged implausible are left out of the
+# sum, as they are from every other yen aggregate. Used as a WITH-clause body.
+POLICY_TOT_CTE = """
+    tot AS (
+        SELECT ft.doc_id, ft.policy_total_yen, ft.listed_yen, ft.unlisted_yen,
+               ft.listed_issues, ft.unlisted_issues, nm.named_yen
+        FROM (SELECT doc_id,
+                     sum(book_value_yen) AS policy_total_yen,
+                     sum(CASE WHEN share_class = 'listed'
+                              THEN book_value_yen END) AS listed_yen,
+                     sum(CASE WHEN share_class = 'unlisted'
+                              THEN book_value_yen END) AS unlisted_yen,
+                     sum(CASE WHEN share_class = 'listed'
+                              THEN issue_count END) AS listed_issues,
+                     sum(CASE WHEN share_class = 'unlisted'
+                              THEN issue_count END) AS unlisted_issues
+              FROM eq_filing_totals GROUP BY 1) ft
+        LEFT JOIN (SELECT r.doc_id,
+                          sum(CASE WHEN """ + PLAUSIBLE_SQL + """
+                                   THEN r.book_value_yen END) AS named_yen
+                   FROM eq_holdings r GROUP BY 1) nm USING (doc_id))"""
+
+
+def check_policy_total(row):
+    u"""Flag a scale row whose tagged total cannot be right; null its ratios.
+
+    The total stays exactly as filed. Mutates and returns `row`, which must
+    carry policy_total_yen, listed_yen, named_yen and total_assets_yen."""
+    reason = plausibility.policy_total_reason(
+        row.get("policy_total_yen"), row.get("listed_yen"),
+        row.get("named_yen"), row.get("total_assets_yen"))
+    row["total_implausible"] = reason is not None
+    row["total_implausible_reason"] = reason
+    if reason:
+        row["pct_of_equity"] = None
+        row["pct_of_assets"] = None
+    return row
+
+
 SCALE_EQUITY_CALC = ("total policy shareholdings ÷ shareholders' equity × 100, "
                      "both as filed in this annual securities report")
 
@@ -550,7 +617,8 @@ SCALE_NOTE = (
     "latter two stops tagging the Japanese consolidated figure — a parent-only "
     "denominator is a different measure and is labelled as one, never silently "
     "mixed with a group figure. Percentages are null where equity or total "
-    "assets is missing or not positive; missing is never shown as zero.")
+    "assets is missing or not positive, and where the tagged total is flagged "
+    "implausible (see total_implausible_note); missing is never shown as zero.")
 
 # Stated because it is the published threshold professional readers apply, and
 # it is a fact about a third party's policy, not our judgement of a company.
@@ -564,6 +632,14 @@ NAMES_NOTE = ("English company names are as filed: each company's own annual "
               "report states its English name on the cover page. For a company "
               "that files no annual report, EDINET's filer registry is used "
               "instead. The as-filed Japanese name is always returned alongside.")
+
+DELISTED_NOTE = ("No longer listed: EDINET's filer registry marks the company "
+                 "unlisted and JPX's newest list of Tokyo issues no longer has "
+                 "the code. Where the registry no longer gives a code, the code "
+                 "is the one on the cover of the company's last annual report "
+                 "that stated one, so its filings and the stakes "
+                 "others held in it stay reachable under the code it was "
+                 "known by.")
 
 # EDINET records a filer's sector in Japanese only. These are the standard TSE
 # 33 sectors, whose English names JPX publishes, plus the filer types EDINET
@@ -850,13 +926,19 @@ def company(sec_code: str):
     ent = _rows(cur, """
         WITH x AS (SELECT 1)""" + NAME_CTES + """
         SELECT e.edinet_code, e.sec_code, e.name_ja,
-               coalesce(n.name_en, s.name_en) AS name_en, e.industry
+               coalesce(n.name_en, s.name_en) AS name_en, e.industry, e.listed
         FROM eq_entities e
         LEFT JOIN en_ecode n ON n.edinet_code = e.edinet_code
         LEFT JOIN en_scode s ON s.sec_code = e.sec_code
-        WHERE e.sec_code = ? LIMIT 1""", [sec_code])
+        WHERE e.sec_code = ? ORDER BY e.listed DESC LIMIT 1""", [sec_code])
     if ent:
         ent[0]["industry_en"] = INDUSTRY_EN.get(ent[0]["industry"])
+        # A company taken private keeps the code it last filed under
+        # (extract.fill_entity_codes), so it is reachable here -- and is said
+        # to be gone, by the same two-source test every search box uses.
+        if listing.is_delisted(sec_code):
+            ent[0]["delisted"] = True
+            ent[0]["delisted_note"] = DELISTED_NOTE
     filing = _rows(cur, """
         WITH x AS (SELECT 1)""" + NAME_CTES + """
         SELECT f.doc_id, f.filer_name, coalesce(n.name_en, s.name_en) AS filer_name_en,
@@ -911,11 +993,10 @@ def company(sec_code: str):
     # balance sheets, so the series is comparable year to year even though the
     # named table's composition changes.
     scale_history = _rows(cur, """
-        WITH tot AS (
-            SELECT doc_id, sum(book_value_yen) AS policy_total_yen
-            FROM eq_filing_totals GROUP BY 1)
+        WITH""" + POLICY_TOT_CTE + """
         SELECT CAST(year(f.period_end) AS VARCHAR) AS year, f.period_end,
                t.policy_total_yen, f.equity_yen, f.equity_basis,
+               t.listed_yen, t.named_yen, f.total_assets_yen,
                CASE WHEN f.equity_yen > 0
                     THEN 100.0 * t.policy_total_yen / f.equity_yen END
                     AS pct_of_equity,
@@ -926,6 +1007,8 @@ def company(sec_code: str):
         WHERE f.sec_code = ? AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") +
         asof.newest("f", "eq_filings", ok="newer.status IN ('clean','partial')") + """
         ORDER BY 1""", [sec_code])
+    for p in scale_history:
+        check_policy_total(p)
     reclassified, notes, flows = [], [], []
     scale, scale_entities = None, []
     if filing:
@@ -934,20 +1017,9 @@ def company(sec_code: str):
         # LABEL. Guarded on > 0 rather than IS NOT NULL: equity can be filed
         # negative, and a percentage of negative equity is not a reading.
         got = _rows(cur, """
-            WITH tot AS (
-                SELECT doc_id,
-                       sum(book_value_yen) AS policy_total_yen,
-                       sum(CASE WHEN share_class = 'listed'
-                                THEN book_value_yen END) AS listed_yen,
-                       sum(CASE WHEN share_class = 'unlisted'
-                                THEN book_value_yen END) AS unlisted_yen,
-                       sum(CASE WHEN share_class = 'listed'
-                                THEN issue_count END) AS listed_issues,
-                       sum(CASE WHEN share_class = 'unlisted'
-                                THEN issue_count END) AS unlisted_issues
-                FROM eq_filing_totals GROUP BY 1)
+            WITH""" + POLICY_TOT_CTE + """
             SELECT t.policy_total_yen, t.listed_yen, t.unlisted_yen,
-                   t.listed_issues, t.unlisted_issues,
+                   t.listed_issues, t.unlisted_issues, t.named_yen,
                    f.equity_yen, f.equity_basis,
                    f.total_assets_yen, f.assets_basis,
                    CASE WHEN f.equity_yen > 0
@@ -966,6 +1038,7 @@ def company(sec_code: str):
                 scale["assets_basis"])
             scale["equity_calc"] = SCALE_EQUITY_CALC
             scale["assets_calc"] = SCALE_ASSETS_CALC
+            check_policy_total(scale)
             plausibility.scale_bases(scale)
             # Disclosure order, not alphabetical: the filer first, then the
             # group holders it names, which is how the filing itself reads.
@@ -1053,6 +1126,13 @@ def company(sec_code: str):
             "scale_entities": scale_entities,
             "scale_history": scale_history,
             "scale_note": SCALE_NOTE,
+            # Counted across scale_history, which includes the current filing.
+            "excluded_totals": sum(1 for p in scale_history
+                                   if p["total_implausible"]),
+            "excluded_totals_yen": sum(p["policy_total_yen"] for p in scale_history
+                                       if p["total_implausible"]) or None,
+            "total_implausible_calc": TOTAL_IMPLAUSIBLE_CALC,
+            "total_implausible_note": TOTAL_IMPLAUSIBLE_NOTE,
             "scale_reference": SCALE_REFERENCE,
             "ownership_calc": OWNERSHIP_CALC,
             "ownership_note": OWNERSHIP_NOTE,
@@ -1256,6 +1336,11 @@ MANIFEST = {
          "unit": "category", "trust": "derived", "calc": ACTION_CALC},
         {"id": "split_ratio", "label": "Implied split or consolidation ratio",
          "unit": "x", "trust": "derived", "calc": RATIO_CALC},
+        {"id": "total_implausible",
+         "label": "Filed policy total impossible against the same filing",
+         "unit": "boolean", "trust": "derived",
+         "calc": TOTAL_IMPLAUSIBLE_CALC + " — the total is returned as filed and "
+                 "left out of pct_of_equity and pct_of_assets"},
         {"id": "implausible", "label": "Filed figures mutually impossible",
          "unit": "boolean", "trust": "derived",
          "calc": ("book value ÷ shares of ¥%s or more — a filer scale error; the row "

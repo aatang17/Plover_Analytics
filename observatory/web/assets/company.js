@@ -281,7 +281,7 @@ function renderIdentity() {
     '<span class="co-tick">' + escapeHtml(c.sec_code) + "</span>" +
     escapeHtml(c.display_name || displayName(c.name_en) || displayNameJa(c.name) || c.sec_code) + delistedTag(c);
   $("page-asof").textContent = "FY to " + day(f.period) + " · filed " + day(f.filed);
-  $("page-sub").textContent = [displayNameJa(c.name), c.industry, edinet ? "EDINET " + edinet : "",
+  $("page-sub").textContent = ["Japan", displayNameJa(c.name), c.industry, edinet ? "EDINET " + edinet : "",
     fin.accounting_standard ? fin.accounting_standard +
       (fin.consolidated ? ", consolidated" : ", parent") : ""].filter(Boolean).join(" · ");
 
@@ -647,7 +647,10 @@ function ownPane() {
     const holds = rows("cross-shareholdings", "holdings");
     if (!holds.length) return '<p class="table-empty">This company names no policy shareholdings.</p>';
     const f = facts("cross-shareholdings");
-    const total = f["scale.policy_total_yen"];
+    // A filed total that cannot be right (scale.total_implausible) is no
+    // denominator: every share of it would be off by the same error.
+    const badTotal = !!f["scale.total_implausible"];
+    const total = badTotal ? null : f["scale.policy_total_yen"];
     const body = holds.map(function (h) {
       return "<tr><td>" + (h.held_sec_code ? '<span class="co-code">' +
         escapeHtml(h.held_sec_code) + "</span>" : "") +
@@ -661,14 +664,22 @@ function ownPane() {
     return table("<th>Issue held</th>" +
       '<th class="num">Shares</th><th class="num">Book value</th><th class="num">Share of total</th>', body) +
       '<p class="table-foot">' + count(nrows("cross-shareholdings", "holdings")) +
-      " named holdings, " + yenScale(total).replace(/<[^>]+>/g, "") + " at carrying amount" +
+      " named holdings, " + yenScale(f["scale.policy_total_yen"]).replace(/<[^>]+>/g, "") +
+      " at carrying amount" +
       (bought ? " · bought " + yenScale(bought).replace(/<[^>]+>/g, "") : "") +
-      (sold ? " · sold " + yenScale(sold).replace(/<[^>]+>/g, "") + " of proceeds" : "") + ".</p>" +
+      (sold ? " · sold " + yenScale(sold).replace(/<[^>]+>/g, "") + " of proceeds" : "") + "." +
+      (badTotal ? " That total is shown as filed but cannot be right: " +
+        escapeHtml(f["scale.total_implausible_reason"] || "") +
+        ". Shares of it are left out, not set to zero." : "") + "</p>" +
       calc("Show calculation — share of total, and share of equity",
         "<code>book value of the issue ÷ total policy holdings × 100</code>. The headline ratio is " +
-        "<code>" + yenScale(total).replace(/<[^>]+>/g, "") + " ÷ " +
-        yenScale(f["scale.equity_yen"]).replace(/<[^>]+>/g, "") + " equity × 100 = " +
-        pct(f["scale.pct_of_equity"], 2) + "</code>. Carrying amount is parent-only while equity " +
+        (badTotal
+          ? "not calculated, because the filed total fails this check: it is " +
+            escapeHtml(f.total_implausible_calc || "")
+          : "<code>" + yenScale(total).replace(/<[^>]+>/g, "") + " ÷ " +
+            yenScale(f["scale.equity_yen"]).replace(/<[^>]+>/g, "") + " equity × 100 = " +
+            pct(f["scale.pct_of_equity"], 2) + "</code>") +
+        ". Carrying amount is parent-only while equity " +
         "is consolidated: an indicator of scale, not an accounting identity.");
   }
   if (state.own === "holders") {
@@ -717,9 +728,15 @@ function renderOwnership() {
     cell("Top ten", pct(f.majors_ratio_filed_pct, 2), "of voting rights, as filed") +
     cell("Held through nominees", pct(f.nominee_ratio_pct, 2),
          count(f.nominee_rows) + " trust-bank and foreign nominee lines") +
-    cell("Policy shareholdings", yenScale(x["scale.policy_total_yen"]),
-         count(x["scale.listed_issues"]) + " listed issues, " +
-         count(x["scale.unlisted_issues"]) + " unlisted");
+    cell("Policy shareholdings", yenScale(x["scale.policy_total_yen"]) +
+         (x["scale.total_implausible"]
+           ? ' <span class="badge badge-warn" title="' +
+             escapeHtml(x["scale.total_implausible_reason"] || "") + '">check filing</span>'
+           : ""),
+         x["scale.total_implausible"]
+           ? "as filed, but the filing’s own figures rule it out"
+           : count(x["scale.listed_issues"]) + " listed issues, " +
+             count(x["scale.unlisted_issues"]) + " unlisted");
   $("own-tabs").innerHTML = OWN_TABS.map(function (t) {
     return '<button type="button" role="tab" data-own="' + t.id + '" aria-selected="' +
       (state.own === t.id) + '">' + escapeHtml(t.label) + "</button>";
@@ -920,7 +937,7 @@ function load() {
   if (!state.code) {
     $("profile").hidden = true;
     $("empty").hidden = false;
-    $("empty").innerHTML = "<p>Find a company to see everything filed on it — the documents, " +
+    $("empty").innerHTML = "<p>Find a Japanese company to see everything filed on it — the documents, " +
       "the statements, the register, the board, the buyback and the property table.</p>" +
       '<p class="co-empty-hint">Try ' +
       ["7203", "8306", "6758", "6502"].map(function (c) {
@@ -930,7 +947,7 @@ function load() {
   }
   $("empty").hidden = true;
   $("profile").hidden = false;
-  document.title = state.code + " · Company Profile · Plover Analytics";
+  document.title = state.code + " · Japanese Company Profile · Plover Analytics";
 
   Promise.all([
     getJSON(CO_API + "/" + encodeURIComponent(state.code) + "?limit=25"),
@@ -953,7 +970,7 @@ function load() {
   }).catch(function (err) {
     $("profile").hidden = true;
     $("empty").hidden = false;
-    document.title = "No Company " + state.code + " · Company Profile · Plover Analytics";
+    document.title = "No Company " + state.code + " · Japanese Company Profile · Plover Analytics";
     $("empty").innerHTML = "<p>We hold no company under the code " +
       escapeHtml(state.code) + ".</p><p class=\"co-empty-hint\">The profile covers companies " +
       "that have filed an annual securities report. Search by name above.</p>";
