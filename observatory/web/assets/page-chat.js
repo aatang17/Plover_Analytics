@@ -392,7 +392,12 @@
       (prev ? "&prev=" + encodeURIComponent(prev) : "");
     fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok) throw new Error(d.detail || "");
+        if (!r.ok) {
+          // the server's own sentence; a lost connection has none and gets the plain one below
+          var err = new Error(typeof d.detail === "string" ? d.detail : "");
+          err.fromServer = true;
+          throw err;
+        }
         return d;
       });
     }).then(function (d) {
@@ -407,7 +412,7 @@
       render();
     }).catch(function (e) {
       delete turn.pending;
-      turn.error = (e && e.message) ? e.message + " Try again, or use the tables on this page."
+      turn.error = (e && e.fromServer && e.message) ? e.message + " Try again, or use the tables on this page."
         : "Couldn't get an answer just now. Check your connection and try again.";
       busy = false;
       render();
