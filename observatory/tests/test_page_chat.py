@@ -14,20 +14,12 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app import equity_api, governance_api, page_chat, visits
+from tests import _data
+
+from app import governance_api, page_chat, visits
 from app.main import app
 
 
-def _has_boards():
-    if not equity_api.DB_PATH.exists():
-        return False
-    try:
-        return bool(governance_api.companies(q="Toyota")["companies"])
-    except Exception:                                             # noqa: BLE001
-        return False
-
-
-HAS = _has_boards()
 
 
 class WordsTest(unittest.TestCase):
@@ -64,7 +56,7 @@ class FormatTest(unittest.TestCase):
         self.assertEqual(page_chat._name({"filer_name_en": "TOEI ANIMATION CO.,LTD."}), "Toei Animation Co., Ltd.")
 
 
-@unittest.skipUnless(HAS, "needs data/equity.duckdb with board data")
+@unittest.skipUnless(_data.EQUITY, _data.NO_EQUITY)
 class RouteTest(unittest.TestCase):
     """The route, model off, against the local database: every number comes from the page's functions."""
 
@@ -119,8 +111,13 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(lines[0]["action"], "screen")
         self.assertTrue(re.match(r"^[0-9a-f]+$", lines[0]["visitor"]))
 
+
+
+class NoDataTest(unittest.TestCase):
+    """What needs no database: a page that has no panel."""
+
     def test_unknown_page(self):
-        r = self.client.get("/api/v1/page-chat", params={"page": "nowhere", "q": "hi"})
+        r = TestClient(app).get("/api/v1/page-chat", params={"page": "nowhere", "q": "hi"})
         self.assertEqual(r.status_code, 404)
 
 
