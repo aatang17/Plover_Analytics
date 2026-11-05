@@ -42,7 +42,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse,
                                RedirectResponse, Response)
 
-from . import newsletter, prerender, pub_profile, research, research_doc as rd, seo
+from . import newsletter, prerender, pub_profile, pub_topics, research, research_doc as rd, seo
 
 log = logging.getLogger(__name__)
 
@@ -329,7 +329,7 @@ def article_main(v, versions, current_version, notice="", preview=False, pub=Non
     ]
     doc = v.get("doc") or {}
     kicker = [t for t in [MARKET_LABEL.get(doc.get("market"), "")] +
-              [TOPIC_LABEL.get(t, "") for t in doc.get("topics") or []] if t]
+              [_topic_labels(pub).get(t, "") for t in doc.get("topics") or []] if t]
     if kicker:
         parts.append('<p class="rs-kicker">%s</p>' % ' <span aria-hidden="true">\u00b7</span> '.join(
             esc(k) for k in kicker))
@@ -462,7 +462,9 @@ def _row_or_404(slug, pub=None):
 
 LATEST_ROWS = 12
 MARKET_LABEL = dict(rd.MARKETS)
-TOPIC_LABEL = dict(rd.TOPICS)
+def _topic_labels(pub):
+    """The publication's own topic names (app/pub_topics.py)."""
+    return pub_topics.labels(pub["id"]) if pub else dict(rd.TOPICS)
 
 
 def _figure_ok(b, snapshots):
@@ -534,11 +536,12 @@ def _plot(b, key, mode, data, alt):
         mode, esc(key), esc("Chart: " + (alt or "")))
 
 
-def _label(a, topics=1):
+def _label(a, topics=1, pub=None):
     """The category line on a card: market, then the first topic."""
     doc = a["doc"]
     out = [MARKET_LABEL.get(doc.get("market"), "")]
-    out += [TOPIC_LABEL.get(t, "") for t in (doc.get("topics") or [])[:topics]]
+    names = _topic_labels(pub)
+    out += [names.get(t, "") for t in (doc.get("topics") or [])[:topics]]
     return " · ".join(t for t in out if t)
 
 
@@ -569,7 +572,7 @@ def _card(a, key, data, pub=None):
             '<h3 class="rh-card-title"><a href="%s">%s</a></h3>'
             '<p class="rh-date"><time datetime="%s">%s</time></p></div></article>' % (
                 esc(doc.get("market") or ""), href, _thumb(a, key, data, brand=pub["name"]),
-                esc(_label(a)),
+                esc(_label(a, pub=pub)),
                 href, esc(a["title"]), esc(a["first_published_at"][:10]),
                 esc(_date_short(a["first_published_at"]))))
 
@@ -679,7 +682,7 @@ def render_home(pub=None):
             '<p class="rh-hero-meta">%s<time datetime="%s">%s</time></p>'
             '<p class="rh-hero-go"><a class="rh-read" href="%s">Read the note'
             '<span aria-hidden="true"> \u2192</span></a></p></div></article>' % (
-                "" if fig else " rh-hero-solo", fig, esc(_label(lead, topics=2)), href,
+                "" if fig else " rh-hero-solo", fig, esc(_label(lead, topics=2, pub=pub)), href,
                 esc(lead["title"]),
                 ('<p class="rh-hero-dek">%s</p>' % esc(lead["dek"] or lead["summary"]))
                 if (lead["dek"] or lead["summary"]) else "",

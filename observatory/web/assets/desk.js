@@ -2199,10 +2199,74 @@ function toast(text, withUndo) {
 /* ---------------------------------------------------------------- counts */
 
 var MARKETS = [["jp", "Japan"], ["us", "United States"], ["global", "Global"]];
-var TOPICS = [["inflation", "Inflation"], ["monetary-policy", "Monetary Policy"], ["rates", "Rates"],
-  ["banks", "Banks"], ["equities", "Equities"], ["companies", "Companies"], ["governance", "Governance"],
-  ["growth", "Growth"], ["labour", "Labour"], ["trade", "Trade"], ["public-finance", "Public Finance"],
-  ["tourism", "Tourism"]];
+/* The publication's own topics (app/pub_topics.py): anyone writing adds one
+   here; its editors remove one. */
+function pubTopics() {
+  return (S.article.publication && S.article.publication.topics) || [];
+}
+
+function checkedTopics() {
+  return $all('input[name="dk-topic"]').filter(function (x) { return x.checked; })
+    .map(function (x) { return x.value; });
+}
+
+function renderTopics(ticked) {
+  var box = $("#dk-topics");
+  if (!box) return;
+  var canRemove = !!(S.article.publication && S.article.publication.can_remove_topics);
+  box.innerHTML = pubTopics().map(function (t) {
+    return '<span class="dk-topic"><label><input type="checkbox" name="dk-topic" value="' + escapeHtml(t.key) + '"' +
+      (ticked.indexOf(t.key) !== -1 ? " checked" : "") + "> " + escapeHtml(t.label) + "</label>" +
+      (canRemove ? '<button type="button" class="dk-topic-x" data-key="' + escapeHtml(t.key) +
+        '" aria-label="Remove the topic ' + escapeHtml(t.label) + '" title="Remove from this publication">\u00d7</button>' : "") +
+      "</span>";
+  }).join("");
+  $all('input[name="dk-topic"]', box).forEach(function (x) {
+    x.addEventListener("change", function () {
+      if (checkedTopics().length > 3) { x.checked = false; toast("Choose up to three topics."); return; }
+      changed();
+    });
+  });
+  $all(".dk-topic-x", box).forEach(function (b) {
+    b.addEventListener("click", function () {
+      var key = b.getAttribute("data-key");
+      var label = (pubTopics().filter(function (t) { return t.key === key; })[0] || {}).label || key;
+      var keep = checkedTopics();
+      b.disabled = true;
+      send("DELETE", "/write/publications/" + S.article.publication.id + "/topics/" + encodeURIComponent(key))
+        .then(function (r) {
+          S.article.publication.topics = r.topics;
+          renderTopics(keep);
+          if (keep.indexOf(key) !== -1) changed();
+          toast("Removed " + label + " from this publication's topics. Add it again to bring it back.");
+        })
+        .catch(function (e) { b.disabled = false; toast(e.message); });
+    });
+  });
+}
+
+function addTopic() {
+  var input = $("#dk-topic-new");
+  var btn = $("#dk-topic-add");
+  var label = (input.value || "").replace(/\s+/g, " ").trim();
+  if (!label) { toast("Type a name for the topic, then Add."); input.focus(); return; }
+  var keep = checkedTopics();
+  btn.disabled = true;
+  btn.textContent = "Adding…";
+  send("POST", "/write/publications/" + S.article.publication.id + "/topics", { label: label })
+    .then(function (r) {
+      S.article.publication.topics = r.topics;
+      var full = keep.length >= 3;
+      if (!full && keep.indexOf(r.added) === -1) keep.push(r.added);
+      renderTopics(keep);
+      input.value = "";
+      changed();
+      toast(full ? "Added " + label + ". Untick a topic to use it: three is the most."
+        : "Added " + label + " and ticked it.");
+    })
+    .catch(function (e) { toast(e.message); })
+    .then(function () { btn.disabled = false; btn.textContent = "Add"; });
+}
 
 /* The homepage-chart choices: every figure in the article, by number and title. */
 function fillLeadOptions() {
@@ -2279,29 +2343,26 @@ function renderSide() {
       return '<option value="' + m[0] + '">' + m[1] + "</option>";
     }).join("") + "</select></div>" +
     '<div class="field"><span class="dk-flabel">Topics <span class="muted">up to 3</span></span>' +
-    '<div class="dk-topics">' + TOPICS.map(function (t) {
-      return '<label><input type="checkbox" name="dk-topic" value="' + t[0] + '"> ' + t[1] + "</label>";
-    }).join("") + "</div></div>" +
+    '<div class="dk-topics" id="dk-topics"></div>' +
+    '<div class="dk-topic-new"><input type="text" id="dk-topic-new" maxlength="30" placeholder="New topic, e.g. Energy" ' +
+    'aria-label="New topic"><button type="button" class="btn" id="dk-topic-add">Add</button></div></div>' +
     '<div class="field"><label for="dk-lead">Homepage Chart</label><select id="dk-lead"></select>' +
     '<span class="hint">Shown beside the note on the PloverResearch homepage.</span></div>' +
     '<label class="dk-check"><input type="checkbox" id="dk-feature"> Offer it as Chart of the Week</label>' +
     '<p class="dk-words" id="dk-words"></p>';
   $("#dk-summary").value = d.summary || "";
   $("#dk-market").value = d.market || "";
-  $all('input[name="dk-topic"]').forEach(function (x) { x.checked = (d.topics || []).indexOf(x.value) !== -1; });
+  renderTopics(d.topics || []);
+  $("#dk-topic-add").addEventListener("click", addTopic);
+  $("#dk-topic-new").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); addTopic(); }
+  });
   $("#dk-feature").checked = !!d.feature;
   S.leadChoice = d.lead || "";
   fillLeadOptions();
   $("#dk-market").addEventListener("change", changed);
   $("#dk-lead").addEventListener("change", function () { S.leadChoice = $("#dk-lead").value; changed(); });
   $("#dk-feature").addEventListener("change", changed);
-  $all('input[name="dk-topic"]').forEach(function (x) {
-    x.addEventListener("change", function () {
-      var on = $all('input[name="dk-topic"]').filter(function (y) { return y.checked; });
-      if (on.length > 3) { x.checked = false; toast("Choose up to three topics."); return; }
-      changed();
-    });
-  });
   $("#dk-slug").value = (locked ? a.slug : d.slug) || "";
   $("#dk-authors").innerHTML = S.authors.map(function (p) {
     return '<label><input type="checkbox" name="dk-author" value="' + p.id + '"' +

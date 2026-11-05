@@ -88,7 +88,8 @@ _SAFE_HREF = re.compile(r"^(https?://[^\s<>\"]+|mailto:[^\s<>\"]+|/(?!/)[^\s<>\"
 _RELATIVE_HREF = re.compile(r"^[A-Za-z0-9_\-]+\.html(?:[?#][^\s<>\"]*)?$")
 
 # Where an article sits on the PloverResearch homepage. Fixed lists, so a
-# filter never has two spellings of one topic.
+# filter never has two spellings of one topic. TOPICS is where a publication
+# starts; each adds its own (app/pub_topics.py).
 MARKETS = [("jp", "Japan"), ("us", "United States"), ("global", "Global")]
 MARKET_KEYS = [k for k, _ in MARKETS]
 TOPICS = [("inflation", "Inflation"), ("monetary-policy", "Monetary Policy"), ("rates", "Rates"),
@@ -97,6 +98,7 @@ TOPICS = [("inflation", "Inflation"), ("monetary-policy", "Monetary Policy"), ("
           ("trade", "Trade"), ("public-finance", "Public Finance"), ("tourism", "Tourism")]
 TOPIC_KEYS = [k for k, _ in TOPICS]
 TOPICS_MAX = 3
+_TOPIC_KEY = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,9}$")
 FIGURE_TYPES = ("chart", "snapshot", "datachart", "image")
 
 TYPES = ("p", "heading", "list", "quote", "table", "chart", "snapshot", "datachart", "image",
@@ -447,7 +449,13 @@ def clean_draft(draft):
     # and whether that chart is offered as Chart of the Week
     out["market"] = draft.get("market") if draft.get("market") in MARKET_KEYS else ""
     topics = draft.get("topics") if isinstance(draft.get("topics"), list) else []
-    out["topics"] = [k for k in TOPIC_KEYS if k in topics][:TOPICS_MAX]
+    # any well-formed key here; research.py keeps only the publication's own
+    # (app/pub_topics.py), since a publication adds topics of its own
+    seen = []
+    for k in topics:
+        if isinstance(k, str) and _TOPIC_KEY.match(k) and k not in seen:
+            seen.append(k)
+    out["topics"] = seen[:TOPICS_MAX]
     figure_ids = [b["id"] for b in out["blocks"] if b["type"] in FIGURE_TYPES]
     out["lead"] = draft.get("lead") if draft.get("lead") in figure_ids else ""
     out["feature"] = bool(draft.get("feature")) and bool(figure_ids)

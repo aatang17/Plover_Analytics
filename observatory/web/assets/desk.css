@@ -503,6 +503,15 @@ sup.dk-fn[data-note=""]::after { content: "[?]"; color: var(--obs-warn); }
   border: 1px solid var(--obs-border); border-radius: 3px; padding: 6px 8px; width: 100%; }
 .dk-topics { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
 .dk-topics label, .dk-check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--obs-ink); }
+.dk-topic { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; }
+.dk-topic label { min-width: 0; }
+.dk-topic-x { border: 0; background: none; color: var(--obs-text-muted); font-size: 15px; line-height: 1;
+  padding: 2px 5px; border-radius: 3px; cursor: pointer; }
+.dk-topic-x:hover, .dk-topic-x:focus-visible { color: var(--obs-ink); background: var(--obs-surface-subtle); }
+.dk-topic-x:disabled { opacity: 0.4; cursor: default; }
+.dk-topic-new { display: flex; gap: 6px; margin-top: 8px; }
+.dk-topic-new input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--obs-ink);
+  background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 3px; padding: 6px 8px; }
 .dk-check { margin: -6px 0 14px; }
 
 /* The draft reads like the published page (research.css): serif text,

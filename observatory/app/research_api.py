@@ -23,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import (chart_library, mailer, newsletter, market_history, pub_coverage, pub_profile, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
+from . import (chart_library, mailer, newsletter, market_history, pub_coverage, pub_profile, pub_topics, research, research_backup, research_doc as rd, research_pages as rp, seo, staff,
                writers)
 from .admin_api import _client_ip, audit
 
@@ -64,7 +64,10 @@ def _decorate(person, a):
     a["publication"] = {"id": pub["id"], "name": pub["name"], "base": pub["base"],
                         "home": pub["home"],
                         # what the editor checks an uploaded chart against
-                        "chart_colours": pub_profile.chart_colours()}
+                        "chart_colours": pub_profile.chart_colours(),
+                        # the Topics tick boxes (app/pub_topics.py)
+                        "topics": pub_topics.topics(pub["id"]),
+                        "can_remove_topics": writers.at_least(person, pub["id"], "editor")}
     return a
 
 

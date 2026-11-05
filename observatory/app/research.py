@@ -337,12 +337,19 @@ def get(article_id):
     return out
 
 
+def _pub_topics(publication_id, keys):
+    """Only topics the publication has (app/pub_topics.py)."""
+    from . import pub_topics
+    return pub_topics.keep(publication_id, keys)
+
+
 def create(actor, draft=None, publication_id=HOME):
     draft = rd.clean_draft(draft or rd.new_draft())
     now = _now()
     c = conn()
     if publication(publication_id) is None:
         raise ResearchError("No such publication.")
+    draft["topics"] = _pub_topics(publication_id, draft["topics"])
     with _lock:
         cur = c.execute(
             "INSERT INTO articles (publication_id, draft, revision, status, created_at, created_by, "
@@ -372,6 +379,7 @@ def save(article_id, draft, base_revision, actor, label=None):
         if row["published_version"]:
             # the address is part of every citation: fixed at first publication
             draft["slug"] = row["slug"]
+        draft["topics"] = _pub_topics(row["publication_id"], draft["topics"])
         rev = row["revision"] + 1
         payload = json.dumps(draft, ensure_ascii=False)
         c.execute("UPDATE articles SET draft = ?, revision = ?, updated_at = ?, updated_by = ? "

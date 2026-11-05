@@ -334,6 +334,7 @@
     "cohorts.html#p-company": "Highlights one company in a ranking; it does not search.",
     "desk-research.js#snap-": "A page address to copy a chart from.",
     "desk.js#data-f=source": "A source line for a table or chart.",
+    "desk.js#dk-topic-new": "The name of a new topic for the publication; it does not search.",
     "desk.js#data-f=unit": "The unit printed on a chart of the writer's own numbers.",
     "home-tasks.js#rb-q": "Research a Stock: a question the reader adds to their brief; it is answered when the brief is made, not searched as typed.",
     "home-tasks.js#rb-topic": "Research a Stock: a topic the reader adds to their brief; the annual report is searched for it when the brief is made, not as typed.",

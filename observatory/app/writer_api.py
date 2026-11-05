@@ -45,7 +45,7 @@ from pydantic import BaseModel
 
 from . import (accounts, connectors, mailer, newsletter, research, seo, skills, staff, visits,
                writers, writing_style)
-from . import pub_coverage, pub_profile
+from . import pub_coverage, pub_profile, pub_topics
 from .assistant import market_data, memory, store as ia_store
 from .admin_api import STAFF_COOKIE, _client_ip, _mark_team, audit
 
@@ -909,3 +909,37 @@ def remove_coverage(publication_id: int, code: str, request: Request):
     pub_coverage.remove(publication_id, code)
     _audit(request, person, "coverage_removed", "%s in %s" % (code.upper(), pub["base"]))
     return get_coverage(publication_id, request)
+
+
+# ------------------------------------------------------------------- topics
+# The publication's topics (app/pub_topics.py): anyone who writes for it adds
+# one from the editor; its editors remove one.
+
+class TopicBody(BaseModel):
+    label: str = ""
+
+
+def _topics_view(person, publication_id, added=None):
+    return {"topics": pub_topics.topics(publication_id), "added": added,
+            "can_remove": writers.at_least(person, publication_id, "editor")}
+
+
+@router.post("/publications/{publication_id}/topics")
+def add_topic(publication_id: int, body: TopicBody, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "writer")
+    try:
+        _, key = pub_topics.add(publication_id, body.label)
+    except pub_topics.TopicError as exc:
+        raise HTTPException(400, str(exc))
+    _audit(request, person, "topic_added", "%s in %s" % (key, pub["base"]))
+    return _topics_view(person, publication_id, key)
+
+
+@router.delete("/publications/{publication_id}/topics/{key}")
+def remove_topic(publication_id: int, key: str, request: Request):
+    person = writers.require_writer(request)
+    pub = _need(person, publication_id, "editor")
+    pub_topics.remove(publication_id, key)
+    _audit(request, person, "topic_removed", "%s in %s" % (key, pub["base"]))
+    return _topics_view(person, publication_id)
