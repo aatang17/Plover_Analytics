@@ -1,6 +1,7 @@
 """Ingestion runner: fetch -> archive -> parse -> validate -> publish.
 
 Usage:  python -m app.ingest cpi-jp [--from-file path.csv]
+        python -m app.ingest cpi-jp --probe new.csv   # read-only: changed?
 
 Every run archives the raw artifact with its checksum before parsing.
 If the checksum matches the newest artifact for the source, the run
@@ -156,15 +157,88 @@ def _check_periods(adapter, slug, observations):
                 "the first." % (slug, period, type(period).__name__))
 
 
-def run(slug, from_file=None):
+def _fetch(adapter):
+    print("fetching %s ..." % adapter.DOWNLOAD_URL)
+    return adapter.fetch()
+
+
+def _unchanged(con, adapter, raw, sha):
+    """True when the newest published artifact of this source is this file."""
+    prior = con.execute(
+        "SELECT a.sha256, a.path FROM source_artifacts a "
+        "JOIN releases r ON r.artifact_id = a.artifact_id AND r.status = 'published' "
+        "WHERE a.source_id=? ORDER BY a.retrieved_at DESC LIMIT 1",
+        [adapter.SOURCE["source_id"]],
+    ).fetchone()
+    if prior and prior[0] == sha:
+        print("unchanged: newest artifact already has sha256 %s..." % sha[:12])
+        return True
+    # Sources whose response embeds a fetch timestamp never repeat
+    # byte-for-byte; such adapters expose canonical_bytes() and the
+    # unchanged check compares canonical content against the archived
+    # copy of the newest published artifact.
+    canonical = getattr(adapter, "canonical_bytes", None)
+    if prior and canonical is not None:
+        try:
+            prior_raw = open(prior[1], "rb").read()
+        except OSError:
+            prior_raw = None
+        if prior_raw is not None and canonical(prior_raw) == canonical(raw):
+            print("unchanged: canonical content matches artifact %s..." % prior[0][:12])
+            return True
+    return False
+
+
+# probe()'s exit code when the source has a file the database does not hold.
+CHANGED = 3
+
+
+def probe(slug, out_path):
+    """Fetch a dataset's source and say whether the served database has it.
+
+    Opens the database read-only and writes nothing to it, so the nightly
+    refresh can ask before it copies the whole file to work on: an unchanged
+    source exits 0 and costs one download. A new file is saved to out_path
+    and the exit is CHANGED; run(prefetched=out_path) then ingests those same
+    bytes into the copy, which repeats the unchanged check there. A dataset
+    the database has never held, or a database that will not open read-only,
+    counts as changed: probe can only ever skip work, never decide a publish.
+    """
+    adapter = ADAPTERS[slug]
+    raw = _fetch(adapter)
+    sha = hashlib.sha256(raw).hexdigest()
+    try:
+        con = db.connect(read_only=True)
+    except Exception as exc:  # noqa: BLE001 - any failure means "do the full run"
+        print("probe: database not readable (%s); treating as changed" % exc)
+        con = None
+    if con is not None:
+        try:
+            if _unchanged(con, adapter, raw, sha):
+                return 0
+        except Exception as exc:  # noqa: BLE001 - e.g. no tables yet
+            print("probe: could not compare (%s); treating as changed" % exc)
+        finally:
+            con.close()
+    with open(out_path, "wb") as fh:
+        fh.write(raw)
+    print("probe: new file %s... saved for the ingest" % sha[:12])
+    return CHANGED
+
+
+def run(slug, from_file=None, prefetched=None):
     adapter = ADAPTERS[slug]
 
     if from_file:
         raw = open(from_file, "rb").read()
         origin = "file://" + from_file
+    elif prefetched:
+        # Bytes probe() downloaded from the source minutes ago: they are the
+        # source's file, so the artifact keeps the source's address.
+        raw = open(prefetched, "rb").read()
+        origin = adapter.DOWNLOAD_URL
     else:
-        print("fetching %s ..." % adapter.DOWNLOAD_URL)
-        raw = adapter.fetch()
+        raw = _fetch(adapter)
         origin = adapter.DOWNLOAD_URL
     sha = hashlib.sha256(raw).hexdigest()
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
@@ -205,28 +279,8 @@ def run(slug, from_file=None):
                  adapter.SOURCE["name_ja"], adapter.SOURCE["url"], adapter.SOURCE["license_note"]],
             )
 
-        prior = con.execute(
-            "SELECT a.sha256, a.path FROM source_artifacts a "
-            "JOIN releases r ON r.artifact_id = a.artifact_id AND r.status = 'published' "
-            "WHERE a.source_id=? ORDER BY a.retrieved_at DESC LIMIT 1",
-            [adapter.SOURCE["source_id"]],
-        ).fetchone()
-        if prior and prior[0] == sha:
-            print("unchanged: newest artifact already has sha256 %s..." % sha[:12])
+        if _unchanged(con, adapter, raw, sha):
             return 0
-        # Sources whose response embeds a fetch timestamp never repeat
-        # byte-for-byte; such adapters expose canonical_bytes() and the
-        # unchanged check compares canonical content against the archived
-        # copy of the newest published artifact.
-        canonical = getattr(adapter, "canonical_bytes", None)
-        if prior and canonical is not None:
-            try:
-                prior_raw = open(prior[1], "rb").read()
-            except OSError:
-                prior_raw = None
-            if prior_raw is not None and canonical(prior_raw) == canonical(raw):
-                print("unchanged: canonical content matches artifact %s..." % prior[0][:12])
-                return 0
 
         # archive first, validate second — evidence is kept even for bad files
         db.RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -357,8 +411,15 @@ def main():
     ap = argparse.ArgumentParser(description="Observatory ingestion")
     ap.add_argument("dataset", choices=sorted(ADAPTERS))
     ap.add_argument("--from-file", help="parse a local CSV instead of downloading")
+    ap.add_argument("--probe", metavar="PATH",
+                    help="only fetch and compare: exit 0 if unchanged, %d after saving "
+                         "a new file to PATH; the database is opened read-only" % CHANGED)
+    ap.add_argument("--prefetched", metavar="PATH",
+                    help="ingest the source file --probe saved, keeping the source's address")
     args = ap.parse_args()
-    sys.exit(run(args.dataset, args.from_file))
+    if args.probe:
+        sys.exit(probe(args.dataset, args.probe))
+    sys.exit(run(args.dataset, args.from_file, args.prefetched))
 
 
 if __name__ == "__main__":

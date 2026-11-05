@@ -419,12 +419,50 @@ def _published_mark(path, dataset):
         con.close()
 
 
+# app.ingest.CHANGED, repeated so this module does not import every adapter.
+INGEST_CHANGED = 3
+
+
+def _probe_macro(ds, fetched):
+    """Ask the source before copying: True when the served file already has it.
+
+    Copying the whole database to find that a source has not changed was most
+    of the nightly refresh: on 4 November 2026 every one of 39 datasets was
+    unchanged, their checks took about six minutes between them, and the
+    copies took the rest of the hour while slowing every other write on the
+    volume. ingest --probe fetches, compares against the served file opened
+    read-only, and keeps a new file for the ingest, so the source is
+    downloaded once either way. A probe that fails for any reason returns
+    False and the dataset gets the full copy-and-ingest it always had.
+    """
+    _drop_files(fetched)
+    env = dict(os.environ, OBSERVATORY_DB_PATH=str(LIVE_MACRO))
+    started = time.time()
+    rc = _run([sys.executable, "-m", "app.ingest", ds, "--probe", str(fetched)], env, ROOT)
+    if rc == 0:
+        log("%s unchanged (%.0fs); no copy taken" % (ds, time.time() - started))
+        record_check(ds, "unchanged", None)
+        return True
+    if rc != INGEST_CHANGED:
+        _drop_files(fetched)
+        if rc != -1:
+            log("probe of %s did not answer (exit %s); ingesting the usual way" % (ds, rc))
+    return False
+
+
 def backfill_macro(datasets):
     work = DATA_DIR / "observatory.backfill.duckdb"
+    fetched = DATA_DIR / "observatory.backfill.fetched"
     for ds in datasets:
         if _stopping:
             return
+        if _probe_macro(ds, fetched):
+            continue
+        if _stopping:
+            return
+        prefetched = fetched.exists()
         if fresh_copy(LIVE_MACRO, work) is None:
+            _drop_files(fetched)
             if not _stopping:
                 record_check(ds, "failed", "no working copy of the database could "
                                            "be taken (volume full or file busy)")
@@ -433,7 +471,11 @@ def backfill_macro(datasets):
         env = dict(os.environ, OBSERVATORY_DB_PATH=str(work))
         log("ingest %s into a copy" % ds)
         started = time.time()
-        rc = _run([sys.executable, "-m", "app.ingest", ds], env, ROOT)
+        cmd = [sys.executable, "-m", "app.ingest", ds]
+        if prefetched:
+            cmd += ["--prefetched", str(fetched)]
+        rc = _run(cmd, env, ROOT)
+        _drop_files(fetched)
         took = time.time() - started
         if rc != 0:
             log("ingest %s did not publish (exit %s, %.0fs); served data untouched"
