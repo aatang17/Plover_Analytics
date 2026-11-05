@@ -111,3 +111,29 @@ class Settle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Targets(unittest.TestCase):
+    """2026-10-19 to 2026-11-04: one malformed filing (RZLV) was the only company
+    due each night, failed each night, and marked every run failed. A filing
+    whose read failed waits for the company's next report."""
+
+    def setUp(self):
+        import duckdb
+        self.con = duckdb.connect(":memory:")
+        self.con.execute(ads.SCHEMA_SQL)
+        self.con.execute("CREATE TABLE sec_filings (cik BIGINT, adsh VARCHAR, form VARCHAR, filed DATE, period DATE, country_inc VARCHAR)")
+        self.con.execute("CREATE TABLE sec_companies (cik BIGINT, ticker VARCHAR)")
+        self.con.execute("INSERT INTO sec_companies VALUES (1, 'BAD'), (2, 'GOOD')")
+        self.con.execute("INSERT INTO sec_filings VALUES (1, 'a-1', '20-F', DATE '2026-09-30', DATE '2026-06-30', 'IL'),"
+                         " (2, 'b-1', '20-F', DATE '2026-09-30', DATE '2026-06-30', 'NL')")
+
+    def test_a_filing_that_failed_is_not_asked_for_again_until_the_next_report(self):
+        self.assertEqual(sorted(t[1] for t in ads.targets(self.con)), ["BAD", "GOOD"])
+        self.con.execute("INSERT INTO sec_ads_checks VALUES (1, TIMESTAMP '2026-10-19 13:17:00', 'failed', 'instance is not XML')")
+        self.assertEqual([t[1] for t in ads.targets(self.con)], ["GOOD"])
+        self.assertEqual(sorted(t[1] for t in ads.targets(self.con, reread="failed")), ["BAD", "GOOD"])
+        # the company files again: it is due once more
+        self.con.execute("INSERT INTO sec_filings VALUES (1, 'a-2', '20-F', DATE '2026-11-20', DATE '2026-09-30', 'IL')")
+        self.assertEqual(sorted(t[1] for t in ads.targets(self.con)), ["BAD", "GOOD"])
+        self.assertEqual([t[2] for t in ads.targets(self.con) if t[1] == "BAD"], ["a-2"])

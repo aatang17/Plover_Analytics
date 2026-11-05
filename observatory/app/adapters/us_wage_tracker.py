@@ -31,6 +31,8 @@ own; the smoothing window is part of every series name.
 """
 import datetime
 import re
+import urllib.parse
+import urllib.request
 
 from . import bls_flat, xlsx
 
@@ -39,8 +41,14 @@ class ValidationError(Exception):
     pass
 
 
+# The Atlanta Fed moves this file when it reorganises its site (2026-11-05:
+# the datafiles/chcs/ path answered 404 and the workbook sat under
+# research-and-data/data/). fetch() finds the current link on the tracker's
+# own page and uses this only when the page names none.
+PAGE = "https://www.atlantafed.org/research-and-data/data/wage-growth-tracker"
 URL = ("https://www.atlantafed.org/-/media/Project/Atlanta/FRBA/Documents/"
-       "datafiles/chcs/wage-growth-tracker/wage-growth-data.xlsx")
+       "research-and-data/data/wage-growth-tracker/wage-growth-data.xlsx")
+_DATA_LINK = re.compile(r'href="([^"]*wage-growth-data\.xlsx[^"]*)"', re.I)
 
 DATASET = {
     "slug": "us-wage-tracker",
@@ -117,8 +125,24 @@ PRESENTATION = {
 }
 
 
+def data_url(html, page_url=PAGE):
+    """The workbook's current address from the tracker page, or None."""
+    m = _DATA_LINK.search(html or "")
+    return urllib.parse.urljoin(page_url, m.group(1).replace("&amp;", "&")) if m else None
+
+
+def current_url():
+    try:
+        req = urllib.request.Request(PAGE, headers={"User-Agent": bls_flat.user_agent()})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            html = resp.read().decode("utf-8", "replace")
+    except Exception:                                        # noqa: BLE001
+        return URL              # the page is down; the last known address may still answer
+    return data_url(html) or URL
+
+
 def fetch():
-    return bls_flat.fetch_url(URL, "atlfed-wage-growth-data.xlsx", accept_prefix=b"PK")
+    return bls_flat.fetch_url(current_url(), "atlfed-wage-growth-data.xlsx", accept_prefix=b"PK")
 
 
 def _slug(text):

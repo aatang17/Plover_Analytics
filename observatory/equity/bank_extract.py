@@ -725,7 +725,10 @@ def main():
     for k in sorted(stats, key=lambda x: -stats[x]):
         print("  %-16s %d" % (k, stats[k]))
     con.close()
-    if targets:
+    # Recorded whether or not there was anything to read: banks file twice a
+    # year, so most nights there is nothing, and a run stamped only when a
+    # filing landed looked like an extractor that had stopped (2026-11-05).
+    if through is not None and not args.docs:
         record_run(args.db, EXTRACTOR, through, universe, PARSER_VERSION)
     if not args.no_compact:
         compact(args.db)

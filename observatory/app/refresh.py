@@ -197,11 +197,21 @@ def problems(report):
     # question the macro journal answers.
     for row in report.get("equity_extractors", []):
         name = "equity/" + str(row.get("dataset"))
-        ran = _age_hours(row.get("last_extracted_at"))
+        # "Reached" is the journal's stamp where the refresh keeps one for the
+        # job (the SEC and US jobs); the extractor's own stamp otherwise. The
+        # own stamp of a quarterly set is when its last set landed, which is
+        # weeks ago every healthy night: until 2026-11-05 that read as "the
+        # extractor has stopped" for sec-financials and sec-13f every day.
+        ran = _age_hours(row.get("last_checked_at") or row.get("last_extracted_at"))
         if ran is not None and ran > heartbeat.check_max_age_hours():
             found.append((name + ":unchecked",
-                          "%s has not run for %.0f hours — the extractor has stopped, "
-                          "whatever the archive holds" % (name, ran)))
+                          "%s has not been reached for %.0f hours — the extractor has "
+                          "stopped, whatever the archive holds" % (name, ran)))
+        if row.get("last_check_outcome") == "failed":
+            found.append((name + ":failing",
+                          "%s failed its last run at %s: %s"
+                          % (name, row.get("last_checked_at"),
+                             row.get("last_check_detail") or "no detail recorded")))
         if row.get("stale"):
             found.append((name + ":stale",
                           "%s has read the archive only through %s (%s days behind, "

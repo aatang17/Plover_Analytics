@@ -27,7 +27,11 @@ router = APIRouter(prefix="/api/v1/us/text", tags=["US annual report text"])
 
 DB_PATH = pathlib.Path(os.environ.get(
     "SEC_TEXT_DB_PATH", str(pathlib.Path(__file__).resolve().parent.parent / "data" / "sec_text.duckdb")))
-STALE_AFTER_DAYS = 3          # app/backfill.py reads new annual reports every day
+# app/backfill.py looks every day, but it learns of a new annual report from
+# sec_filings, which the SEC's quarterly financial-statement sets fill: the
+# reports filed in a quarter reach this reader weeks after the quarter ends.
+# So the window is the shelf's (sec_api.STALE_AFTER_DAYS), not a day's.
+STALE_AFTER_DAYS = 130
 SECTION_NAMES = {"business": "Business", "risk_factors": "Risk Factors", "cybersecurity": "Cybersecurity",
                  "properties": "Properties", "legal": "Legal Proceedings",
                  "mdna": "Management's Discussion and Analysis", "market_risk": "Market Risk"}

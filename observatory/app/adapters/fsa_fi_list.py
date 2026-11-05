@@ -38,6 +38,7 @@ import base64
 import datetime
 import json
 import re
+import urllib.parse
 
 from . import boj_ts, xlsx
 
@@ -46,10 +47,21 @@ class ValidationError(Exception):
     pass
 
 
+# The FSA posts one edition a year as two workbooks, <year>-1.xlsx (banks)
+# and <year>-2.xlsx (shinkin banks and credit co-operatives), and moves the
+# previous year's files when it does: on 2026-11-04 the 2025 files answered
+# 404 and the 2026 ones sat at a new path. fetch() therefore reads the page
+# and takes the newest year's pair; these are only the last pair known, used
+# when the page lists none.
+PAGE = "https://www.fsa.go.jp/policy/chusho/shihyou.html"
 FILES = {
-    "banks": "https://www.fsa.go.jp/policy/chusho/shihyou/zenkoku/2025-1.xlsx",
-    "coops": "https://www.fsa.go.jp/policy/chusho/shihyou/zenkoku/2025-2.xlsx",
+    "banks": "https://www.fsa.go.jp/policy/chusho/shihyou/zenkoku/2026-1.xlsx",
+    "coops": "https://www.fsa.go.jp/policy/chusho/shihyou/zenkoku/2026-2.xlsx",
 }
+# .../zenkoku/2026-1.xlsx — the year the edition was posted, then 1 = banks,
+# 2 = co-operatives. Matched anywhere in the href so a moved folder still fits.
+_FILE_LINK = re.compile(r'href="([^"]*?/(\d{4})-([12])\.xlsx)"', re.I)
+_GROUP_BY_NUMBER = {"1": "banks", "2": "coops"}
 # The bank file is in 億円, the co-operative file in 百万円: ×100 is exact.
 AMOUNT_SCALE = {"banks": 100, "coops": 1}
 
@@ -128,7 +140,7 @@ SOURCE = {
     ),
 }
 
-DOWNLOAD_URL = SOURCE["url"] + " (zenkoku/2025-1.xlsx and 2025-2.xlsx)"
+DOWNLOAD_URL = SOURCE["url"] + " (the newest zenkoku/<year>-1.xlsx and <year>-2.xlsx linked there)"
 RAW_SUFFIX = ".json"
 
 PRESENTATION = {
@@ -146,9 +158,35 @@ PRESENTATION = {
 
 # --- fetching ---------------------------------------------------------------
 
+def linked_files(html, page_url=PAGE):
+    """{group: url} for the newest edition's two workbooks linked from the page.
+
+    Every <year>-1/-2.xlsx link is collected; the newest year that has both
+    files wins. Empty when the page links none, so the caller can fall back to
+    the last pair known rather than fail on a page redesign alone.
+    """
+    by_year = {}
+    for href, year, number in _FILE_LINK.findall(html):
+        by_year.setdefault(int(year), {})[_GROUP_BY_NUMBER[number]] = \
+            urllib.parse.urljoin(page_url, href.replace("&amp;", "&"))
+    for year in sorted(by_year, reverse=True):
+        if set(by_year[year]) == set(FILES):
+            return by_year[year]
+    return {}
+
+
+def current_files():
+    """The two workbooks to read: found on the page, or the last pair known."""
+    try:
+        html = boj_ts.fetch_bytes(PAGE).decode("utf-8", "replace")
+    except Exception:                                        # noqa: BLE001
+        return dict(FILES)      # the page is down; the files themselves may not be
+    return linked_files(html) or dict(FILES)
+
+
 def fetch():
     envelope = {}
-    for group, url in sorted(FILES.items()):
+    for group, url in sorted(current_files().items()):
         envelope[group] = {
             "url": url,
             "b64": base64.b64encode(boj_ts.fetch_bytes(url)).decode("ascii"),

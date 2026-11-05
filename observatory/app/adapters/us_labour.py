@@ -4,9 +4,14 @@ Source: U.S. Bureau of Labor Statistics, through its public data API, version
 1 (https://api.bls.gov/publicAPI/v1/timeseries/data/). Version 1 needs no key
 and allows 25 queries a day, each of up to 25 series and 10 years; the whole
 history is fetched in ten-year windows, one query a window, so a nightly
-ingest spends nine of the twenty-five. The bulk flat files were not used
-because the household-survey file (ln.data.1.AllData) is 390 MB for the
-handful of headline series held here.
+ingest spends nine of the twenty-five. With BLS_API_KEY set (free, from
+https://data.bls.gov/registrationEngine/) version 2 is used instead: 500
+queries a day in twenty-year windows, five a fetch. Each window's answer is
+kept for the rest of the UTC day under data/bls-cache/, so the refresh's
+probe-then-ingest pair, or a retry, costs no second query (2026-11-05: the
+keyless allowance ran out and the day's ingest failed). The bulk flat files
+were not used because the household-survey file (ln.data.1.AllData) is 390 MB
+for the handful of headline series held here.
 
 Three surveys, thirteen series, monthly, all as the BLS publishes them:
 
@@ -30,6 +35,7 @@ is a new vintage, so the first print stays retrievable with as_of.
 """
 import datetime
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -71,6 +77,8 @@ SOURCE = {
 }
 
 DOWNLOAD_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+KEYED_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+KEYED_WINDOW_YEARS = 20                # v2's limit per query with a key
 RAW_SUFFIX = ".json"
 
 # (code, name, unit, first year the BLS publishes)
@@ -102,36 +110,93 @@ TILES = [
 
 PRESENTATION = {
     "credit_line": "Source: U.S. Bureau of Labor Statistics.",
-    "stale_after_days": 45,        # the jobs report lands in the first week of the next month
+    # A month is dated by its first day and its jobs report lands in the first
+    # week of the month after next at the earliest — September's on 2 October,
+    # 31 days; October's on 6 November, when September is 66 days old. A limit
+    # has to clear that gap, with room for a delayed release.
+    "stale_after_days": 80,
     "overview_tiles": [{"key": k, "code": c, "label": l, "type": "level"} for k, c, l in TILES],
     "main_series": [{"role": k, "code": c, "label": l, "slot": i + 1} for i, (k, c, l) in enumerate(TILES)],
 }
 
 
-def _post(start, end):
-    body = json.dumps({"seriesid": CODES, "startyear": str(start), "endyear": str(end)}).encode("utf-8")
-    req = urllib.request.Request(DOWNLOAD_URL, data=body, method="POST")
+def _api_key():
+    return (os.environ.get("BLS_API_KEY") or "").strip()
+
+
+def _cache_dir():
+    root = os.environ.get("OBSERVATORY_DATA_DIR")
+    if not root:
+        here = os.path.dirname(os.path.abspath(__file__))
+        root = os.path.join(here, "..", "..", "data")
+    return os.path.join(root, "bls-cache")
+
+
+def _cache_path(start, end, today):
+    return os.path.join(_cache_dir(), "us-labour-%d-%d-%s.json" % (start, end, today.strftime("%Y%m%d")))
+
+
+def _post(start, end, today=None):
+    """One window's answer, from the day's cache when it is there.
+
+    The BLS counts queries per address per day; a second fetch the same day
+    — the refresh probes, then ingests — must not pay twice for the same
+    window. A cached answer is the exact body the API gave, so the bundle
+    built from it is the one the first fetch built.
+    """
+    today = today or datetime.date.today()
+    path = _cache_path(start, end, today)
+    try:
+        with open(path, "rb") as fh:
+            return json.loads(fh.read().decode("utf-8"))
+    except (OSError, ValueError):
+        pass
+    key = _api_key()
+    payload = {"seriesid": CODES, "startyear": str(start), "endyear": str(end)}
+    if key:
+        payload["registrationkey"] = key
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(KEYED_URL if key else DOWNLOAD_URL, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "Plover Analytics ingest (keyless BLS API v1)")
+    req.add_header("User-Agent", "Plover Analytics ingest (BLS API %s)" % ("v2" if key else "v1, keyless"))
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            out = json.loads(resp.read().decode("utf-8"))
+            raw = resp.read()
+            out = json.loads(raw.decode("utf-8"))
     except (urllib.error.URLError, ValueError) as exc:
         raise FetchError("BLS API %d-%d: %s" % (start, end, exc))
     if out.get("status") != "REQUEST_SUCCEEDED":
         raise FetchError("BLS API %d-%d: %s %s" % (start, end, out.get("status"), "; ".join(out.get("message") or [])))
+    try:
+        os.makedirs(_cache_dir(), exist_ok=True)
+        tmp = path + ".part"
+        with open(tmp, "wb") as fh:
+            fh.write(raw)
+        os.replace(tmp, path)
+    except OSError:
+        pass                    # a cache that cannot be written costs a query, nothing else
+    return out
+
+
+def windows(first_year, last_year, years=None):
+    """[(start, end)] covering first_year..last_year in windows of `years`."""
+    years = years or (KEYED_WINDOW_YEARS if _api_key() else WINDOW_YEARS)
+    out, start = [], first_year
+    while start <= last_year:
+        end = min(start + years - 1, last_year)
+        out.append((start, end))
+        start = end + 1
     return out
 
 
 def fetch():
-    """Every window of ten years from the first year to now, one query each,
-    bundled as one JSON document whose bytes depend only on the data."""
+    """Every window from the first year to now, one query each, bundled as one
+    JSON document whose bytes depend only on the data (and the window size:
+    adding a key changes it once, which is one new vintage, not a revision)."""
     today = datetime.date.today()
-    windows = []
-    start = FIRST_YEAR
-    while start <= today.year:
-        end = min(start + WINDOW_YEARS - 1, today.year)
-        got = _post(start, end)
+    windows_out = []
+    for start, end in windows(FIRST_YEAR, today.year):
+        got = _post(start, end, today)
         series = []
         for s in got.get("Results", {}).get("series", []):
             data = sorted(({"year": d.get("year"), "period": d.get("period"), "value": d.get("value"),
@@ -139,9 +204,8 @@ def fetch():
                            for d in s.get("data", [])), key=lambda d: (d["year"], d["period"]))
             series.append({"seriesID": s.get("seriesID"), "data": data})
         series.sort(key=lambda s: s["seriesID"])
-        windows.append({"start": start, "end": end, "series": series})
-        start = end + 1
-    return json.dumps({"source": DOWNLOAD_URL, "series": CODES, "windows": windows},
+        windows_out.append({"start": start, "end": end, "series": series})
+    return json.dumps({"source": DOWNLOAD_URL, "series": CODES, "windows": windows_out},
                       sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 

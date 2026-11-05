@@ -663,6 +663,21 @@ def health():
             equity = equity + us_press.health()
         except Exception:                                    # noqa: BLE001
             pass
+        # When the refresh last reached each of these jobs, and how it went,
+        # from the refresh journal (app/backfill.py record_check). The rows'
+        # own stamps say when data last landed, which for a quarterly set is
+        # weeks ago on a healthy night; "has the pipeline reached it" is a
+        # different question, and refresh.py asks it of these fields first.
+        try:
+            journal = heartbeat.journal()
+            for row in equity:
+                note = journal.get(row.get("dataset")) or {}
+                if note.get("at"):
+                    row["last_checked_at"] = note.get("at")
+                    row["last_check_outcome"] = note.get("outcome")
+                    row["last_check_detail"] = note.get("detail")
+        except Exception:                                    # noqa: BLE001
+            pass
         # The SEC refusing this server (app/sec_gate.py's marker): every
         # SEC-sourced row needs attention, whatever its own staleness window
         # says. 2026-10-19: sec-insiders and sec-13f said ok through a block,

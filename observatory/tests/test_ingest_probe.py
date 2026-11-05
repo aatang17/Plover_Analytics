@@ -142,6 +142,12 @@ class BackfillUsesTheProbe(unittest.TestCase):
                     pathlib.Path(cmd[cmd.index("--probe") + 1]).write_bytes(b"new")
                 return probe_rc
             return 0
+        # the ingest itself runs through _run_noting_errors (exit code plus the
+        # child's last stderr line, since 2026-11-05); the fake has no stderr
+        noting = mock.patch.object(backfill, "_run_noting_errors",
+                                   lambda cmd, env, cwd: (run(cmd, env, cwd), None))
+        noting.start()
+        self.addCleanup(noting.stop)
         return mock.patch.object(backfill, "_run", run)
 
     def test_unchanged_takes_no_copy(self):

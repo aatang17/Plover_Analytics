@@ -160,3 +160,64 @@ class Health(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArchiveTrouble(unittest.TestCase):
+    """2026-11-04 and 2026-11-05: one cut-short bucket read (botocore
+    RequestCanceled) ended the run with nothing recorded. An archive error is
+    one failed filing; a run of them stops the job, and either way the run is
+    written down."""
+
+    def setUp(self):
+        self.path = os.path.join(tempfile.mkdtemp(), "sec.duckdb")
+        self.con = duckdb.connect(self.path)
+        self.con.execute(quarterly.SCHEMA_SQL)
+        blob = _blob()
+        self.good = {"date": "2026-09-16", "accession": ACC, "form": "4", "sha256": hashlib.sha256(blob).hexdigest()}
+        self.bad = {"date": "2026-09-16", "accession": "0000000000-26-000001", "form": "4", "sha256": "0" * 64}
+        self.blob = blob
+        self.days = [datetime.date(2026, 9, 16)]
+
+    def tearDown(self):
+        self.con.close()
+
+    def test_one_unreadable_object_is_one_failed_filing(self):
+        class Flaky(FakeArchive):
+            def filing(self, rec):
+                if rec["accession"] != ACC:
+                    raise RuntimeError("An error occurred (RequestCanceled) when calling the GetObject operation")
+                return FakeArchive.filing(self, rec)
+        archive = Flaky([self.bad, self.good], {ACC: self.blob})
+        # the real Archive turns a bucket error into FilingError; the fake stands in for that
+        archive.filing = lambda rec, _f=archive.filing: _f(rec) if rec["accession"] == ACC else (_ for _ in ()).throw(daily.FilingError("archive: cancelled"))
+        status = daily.run(self.con, archive, self.days, log=lambda *a: None)
+        self.assertEqual(status, "ok")           # something loaded, so the run stands
+        seen, loaded, failed, st = self.con.execute(
+            "SELECT seen, loaded, failed, status FROM sec_ins_daily_runs").fetchone()
+        self.assertEqual((seen, loaded, failed, st), (2, 1, 1, "ok"))
+
+    def test_a_run_of_unreadable_objects_stops_the_job_but_records_it(self):
+        recs = [dict(self.bad, accession="0000000000-26-%06d" % n) for n in range(daily.ARCHIVE_GIVE_UP + 5)]
+        archive = FakeArchive(recs, {})
+        archive.filing = lambda rec: (_ for _ in ()).throw(daily.FilingError("archive: cancelled"))
+        status = daily.run(self.con, archive, self.days, log=lambda *a: None)
+        self.assertEqual(status, "failed")
+        failed, note = self.con.execute("SELECT failed, detail FROM sec_ins_daily_runs").fetchone()
+        self.assertEqual(failed, daily.ARCHIVE_GIVE_UP)
+        self.assertIn("in a row", note)
+
+    def test_the_real_archive_wraps_a_bucket_error_as_a_filing_error(self):
+        class Client(object):
+            class exceptions(object):
+                class NoSuchKey(Exception):
+                    pass
+            calls = 0
+            def get_object(self, Bucket, Key):
+                Client.calls += 1
+                raise RuntimeError("Request is canceled")
+        archive = daily.Archive.__new__(daily.Archive)
+        archive.bucket, archive.c = "b", Client()
+        with mock.patch.object(daily.time, "sleep", lambda s: None):
+            with self.assertRaises(daily.FilingError):
+                archive.filing(self.bad)
+        self.assertEqual(Client.calls, 3)

@@ -682,3 +682,20 @@ class GdpVintageCountTest(unittest.TestCase):
         backfill.DATA_DIR = self.dir
         backfill._run = lambda cmd, env, cwd: 0       # loader found nothing new
         backfill.backfill_gdp_vintages(max_slices=1)   # must not raise
+
+
+class ErrorNotingTest(unittest.TestCase):
+    """A failed ingest's journal entry carries the reason, not just 'exited 1'."""
+
+    def test_the_last_line_of_stderr_is_returned(self):
+        rc, why = backfill._run_noting_errors(
+            [sys.executable, "-c",
+             "import sys; sys.stderr.write('Traceback (most recent call last):\\n  File \"x\", line 1\\n"
+             "    raise ValueError\\napp.adapters.x.ValidationError: unknown brand \\'y\\'\\n'); sys.exit(1)"],
+            dict(os.environ), ROOT)
+        self.assertEqual(rc, 1)
+        self.assertEqual(why, "app.adapters.x.ValidationError: unknown brand 'y'")
+
+    def test_a_quiet_success_has_no_note(self):
+        rc, why = backfill._run_noting_errors([sys.executable, "-c", "pass"], dict(os.environ), ROOT)
+        self.assertEqual((rc, why), (0, None))

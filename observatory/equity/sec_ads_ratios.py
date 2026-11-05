@@ -428,6 +428,12 @@ def targets(con, tickers=None, limit=400, reread=None):
         counted = {a for (a,) in con.execute("SELECT DISTINCT accn FROM sec_cover_shares").fetchall()} if _has(con, "sec_cover_shares") else set()
         done = {a for a in done if a in counted}
     last = dict(con.execute("SELECT cik, max(checked_at) FROM sec_ads_checks GROUP BY cik").fetchall())
+    # A filing whose read failed is left alone until the company files again
+    # (a failed check newer than the filing date): 2026-10-19 to 2026-11-04 one
+    # malformed XBRL file (RZLV) was the only company due each night, failed
+    # each night, and so marked every run failed. --reread failed asks again.
+    failed_after = dict(con.execute(
+        "SELECT cik, max(checked_at) FROM sec_ads_checks WHERE outcome = 'failed' GROUP BY cik").fetchall())
     out = []
     for cik, ticker, accn, form, filed, country in rows:
         if tickers:
@@ -436,6 +442,9 @@ def targets(con, tickers=None, limit=400, reread=None):
         else:
             foreign = form.startswith("20-F") or (country and country != "US")
             if not foreign or accn in done:
+                continue
+            given_up = failed_after.get(cik)
+            if given_up is not None and reread != "failed" and given_up.date() >= filed:
                 continue
         out.append((cik, ticker, accn, form, filed))
     out.sort(key=lambda x: (last.get(x[0]) or dt.datetime(1970, 1, 1), x[0]))
@@ -448,8 +457,8 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=400, help="companies read this run; 0 for all")
     ap.add_argument("--tickers", help="comma-separated tickers: read just these companies")
     ap.add_argument("--workers", type=int, default=px.WORKERS)
-    ap.add_argument("--reread", choices=["unknown", "nocount"], help="read again filings already read: those whose "
-                    "listing is unknown, or whose cover counts are not on file")
+    ap.add_argument("--reread", choices=["unknown", "nocount", "failed"], help="read again filings already read: "
+                    "those whose listing is unknown, whose cover counts are not on file, or whose read failed")
     args = ap.parse_args(argv)
     ua = os.environ.get("EDGAR_USER_AGENT")
     if not ua:

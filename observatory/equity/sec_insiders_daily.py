@@ -308,6 +308,19 @@ class Archive(object):
                               aws_secret_access_key=os.environ["EDINET_S3_SECRET"],
                               region_name=os.environ.get("EDINET_S3_REGION", "auto"))
 
+    def _get(self, key, tries=3):
+        last = None
+        for n in range(tries):
+            try:
+                return self.c.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+            except self.c.exceptions.NoSuchKey:
+                raise FilingError("not in the archive: %s" % key)
+            except Exception as e:                               # noqa: BLE001
+                last = e
+                if n + 1 < tries:
+                    time.sleep(2 * (n + 1))
+        raise last
+
     def records(self, day, forms_wanted=FORMS):
         """The day's filings of these forms that the capture banked: the forms come
         from the day's SEC index (one object), what was banked from a listing of
@@ -331,12 +344,30 @@ class Archive(object):
         return [{"date": day, "accession": a, "form": f} for a, f in sorted(forms.items()) if a in banked]
 
     def filing(self, rec):
-        meta = json.loads(self.c.get_object(
-            Bucket=self.bucket, Key="%s/meta/%s/%s.json" % (S3_PREFIX, rec["date"], rec["accession"]))["Body"].read())
+        """The filing's bytes, checked against the hash recorded at capture.
+
+        The bucket is reached over the network and a read can be cut short
+        (2026-11-04 and 2026-11-05: botocore RequestCanceled on one object of
+        several hundred, which until then ended the whole run unrecorded). Each
+        object is asked for up to three times; a read that still fails is a
+        FilingError for this filing alone.
+        """
+        try:
+            meta_blob = self._get("%s/meta/%s/%s.json" % (S3_PREFIX, rec["date"], rec["accession"]))
+            meta = json.loads(meta_blob)
+        except FilingError:
+            raise
+        except Exception as e:                                   # noqa: BLE001
+            raise FilingError("archive: %s" % e)
         if meta.get("status") == "fail":
             raise FilingError("the capture recorded a failed fetch")
         key = "%s/docs/%s/%s.txt.gz" % (S3_PREFIX, rec["date"], rec["accession"])
-        blob = gzip.decompress(self.c.get_object(Bucket=self.bucket, Key=key)["Body"].read())
+        try:
+            blob = gzip.decompress(self._get(key))
+        except FilingError:
+            raise
+        except Exception as e:                                   # noqa: BLE001
+            raise FilingError("archive: %s" % e)
         if meta.get("sha256") and hashlib.sha256(blob).hexdigest() != meta["sha256"]:
             raise FilingError("stored file does not match the SHA-256 recorded at capture")
         return blob
@@ -358,6 +389,11 @@ def _days(con, since, today):
     return [start + dt.timedelta(days=i) for i in range((today - start).days + 1)]
 
 
+# Consecutive unreadable filings that mean the archive, not a filing, is the
+# problem; the run stops there rather than spend an hour on refusals.
+ARCHIVE_GIVE_UP = 25
+
+
 def run(con, archive, days, log=print):
     con.execute(RUNS_SQL)
     have = {r[0] for r in con.execute("SELECT accession FROM sec_ins_filings").fetchall()}
@@ -365,8 +401,17 @@ def run(con, archive, days, log=print):
     through = None
     t0 = time.time()
     errors = []
+    archive_down = False
     for day in days:
-        recs = archive.records(day.isoformat())
+        if archive_down:
+            break
+        try:
+            recs = archive.records(day.isoformat())
+        except Exception as e:                                   # noqa: BLE001
+            errors.append("%s: the day's records could not be listed: %s" % (day, e))
+            archive_down = True
+            break
+        run_of_errors = 0
         for rec in recs:
             seen += 1
             if rec["accession"] in have:
@@ -377,13 +422,21 @@ def run(con, archive, days, log=print):
                 have.add(rec["accession"])
                 loaded += 1
                 n_tr += len(rows["transactions"])
+                run_of_errors = 0
             except FilingError as e:
                 failed += 1
                 errors.append("%s: %s" % (rec["accession"], e))
-        if recs:
+                run_of_errors += 1
+                if run_of_errors >= ARCHIVE_GIVE_UP:
+                    # not one bad filing but the archive itself: stop asking,
+                    # keep what landed, and say so in the run record
+                    errors.insert(0, "%d filings in a row could not be read; stopped" % run_of_errors)
+                    archive_down = True
+                    break
+        if recs and not archive_down:
             through = day
         log("  %s: %d Form 3/4/5 filings archived" % (day, len(recs)))
-    status = "ok" if not failed or loaded else "failed"
+    status = "ok" if (not failed or loaded) and not archive_down else "failed"
     con.execute("INSERT INTO sec_ins_daily_runs VALUES (now(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [days[0] if days else None, days[-1] if days else None, through, seen, loaded, n_tr,
                  failed, PARSER_VERSION, status, "; ".join(errors[:5]) or None])

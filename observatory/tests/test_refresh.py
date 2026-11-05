@@ -9,6 +9,7 @@ import datetime
 import os
 import signal
 import unittest
+import unittest.mock
 
 from app import heartbeat, refresh
 
@@ -172,3 +173,32 @@ class ShapeFlagSentences(unittest.TestCase):
         self.assertTrue(any(k.startswith("equity/x:flag:") for k in keys), keys)
         self.assertIn("equity/x:shape:t.c", keys)
 
+
+
+class EquityContact(unittest.TestCase):
+    """Until 2026-11-05 the SEC sets' own stamps — when their last quarterly
+    set landed — were read as when the job last ran, so sec-financials and
+    sec-13f were 'stopped' every healthy day. The journal's stamp comes first."""
+
+    def _report(self, **row):
+        base = {"dataset": "sec-13f", "stale": False, "shape_flags": [],
+                "last_extracted_at": "2026-10-18T12:56:30Z"}
+        base.update(row)
+        return {"equity_extractors": [base]}
+
+    def test_the_journal_stamp_counts_as_contact(self):
+        now = datetime.datetime(2026, 11, 5, 11, 0, tzinfo=datetime.timezone.utc)
+        with unittest.mock.patch.object(refresh, "_utcnow", lambda: now):
+            keys = [k for k, _ in refresh.problems(self._report())]
+            self.assertIn("equity/sec-13f:unchecked", keys)
+            keys = [k for k, _ in refresh.problems(self._report(
+                last_checked_at="2026-11-04T13:58:15Z", last_check_outcome="published"))]
+            self.assertNotIn("equity/sec-13f:unchecked", keys)
+
+    def test_a_failed_run_is_reported_with_its_reason(self):
+        found = refresh.problems(self._report(
+            last_checked_at="2026-11-04T14:00:45Z", last_check_outcome="failed",
+            last_check_detail="sec_insiders_daily.py exited 1"))
+        self.assertIn(("equity/sec-13f:failing",
+                       "equity/sec-13f failed its last run at 2026-11-04T14:00:45Z: sec_insiders_daily.py exited 1"),
+                      found)

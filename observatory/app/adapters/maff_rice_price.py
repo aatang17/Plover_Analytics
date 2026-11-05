@@ -48,6 +48,7 @@ distinguishable in the file, so both stay gaps.
 import base64
 import datetime
 import json
+import os
 import re
 import urllib.parse
 
@@ -97,6 +98,9 @@ _FULLWIDTH_DIGITS = dict(zip("０１２３４５６７８９", "0123456789"))
 # raises for — see the module docstring.
 BRANDS = {
     "あいちのかおり": ("aichinokaori", "Aichi no Kaori"),
+    "あいちのこころ": ("aichinokokoro", "Aichi no Kokoro"),   # first priced 2026-09
+    "ひなたまる": ("hinatamaru", "Hinatamaru"),                # first priced 2026-09
+    "くまさんの輝き": ("kumasannokagayaki", "Kumasan no Kagayaki"),  # Kumamoto; first priced 2026-09
     "あきさかり": ("akisakari", "Akisakari"),
     "あきたこまち": ("akitakomachi", "Akitakomachi"),
     "あきほなみ": ("akihonami", "Akihonami"),
@@ -314,12 +318,54 @@ def _discover():
     return files
 
 
+def _raw_dir():
+    """The ingest's raw archive (app/db.py RAW_DIR): every envelope ever fetched."""
+    root = os.environ.get("OBSERVATORY_DATA_DIR")
+    if not root:
+        here = os.path.dirname(os.path.abspath(__file__))
+        root = os.path.join(here, "..", "..", "data")
+    return os.path.join(root, "raw")
+
+
+def remembered_crop_years(raw_dir=None, slug="rice-prices-jp"):
+    """{crop year: {url, b64}} from the newest archived envelope that holds
+    each year — the copy this ingest itself fetched when MAFF still linked it.
+
+    MAFF's two pages do not list every closed crop year all the time: between
+    21 September and 4 November 2026 the 2025 table left the current page
+    before reaching the archive page, and the 2009 table left the archive
+    page. A closed year's table does not change, and the raw archive on the
+    volume keeps every envelope (failed fetches included, so newest-first
+    and per year), so a year the pages have dropped is read from there.
+    """
+    found = {}
+    directory = raw_dir or _raw_dir()
+    try:
+        names = sorted((n for n in os.listdir(directory)
+                        if n.startswith(slug + "-") and n.endswith(RAW_SUFFIX)), reverse=True)
+    except OSError:
+        return found
+    for name in names:
+        try:
+            with open(os.path.join(directory, name), "rb") as fh:
+                years = json.loads(fh.read().decode("utf-8")).get("crop_years") or {}
+        except (OSError, ValueError):
+            continue
+        for year, entry in years.items():
+            if year.isdigit() and int(year) not in found and entry.get("b64"):
+                found[int(year)] = {"url": entry.get("url"), "b64": entry["b64"]}
+    return found
+
+
 def fetch():
     """Every crop year's workbook, verbatim, in one archived artifact.
 
     The envelope is deterministic — no timestamps, keys sorted — so the
     ingest runner's SHA-256 comparison means "some crop year's table
-    changed", which is exactly when there is something new to publish.
+    changed", which is exactly when there is something new to publish. A
+    closed crop year the pages no longer link comes from the raw archive
+    (remembered_crop_years), under the address it was fetched from, so the
+    bytes are the ones that would have been there had MAFF kept the link.
     """
     files = _discover()
     envelope = {}
@@ -328,6 +374,12 @@ def fetch():
             "url": url,
             "b64": base64.b64encode(boj_ts.fetch_bytes(url)).decode("ascii"),
         }
+    missing = [y for y in range(FIRST_CROP_YEAR, max(files)) if str(y) not in envelope]
+    if missing:
+        remembered = remembered_crop_years()
+        for year in missing:
+            if year in remembered:
+                envelope[str(year)] = remembered[year]
     return json.dumps({"crop_years": envelope}, sort_keys=True).encode("utf-8")
 
 
@@ -391,14 +443,93 @@ def _brand_and_region(brand_ja, region_ja):
     return brand_ja.strip(), (region_ja or "").strip()
 
 
+# Hepburn romanisation of kana, for a brand name written entirely in hiragana
+# or katakana (ひなたまる, にじのきらめき). Kana spell their own sound, so the
+# slug is fixed by the name itself — the same every time, whoever runs it —
+# and a brand MAFF adds in kana no longer stops the ingest for want of a hand
+# entry (2026-11-05: あいちのこころ and ひなたまる did, for a week). A name with
+# any kanji still needs a checked entry in BRANDS: kanji have readings, not
+# spellings. BRANDS always wins: an entry there keeps its published slug
+# (ミルキークイーン is milkyqueen, not the kana's mirukiikuiin), and an entry
+# added for a kana name after it has been published must keep this slug and
+# may only improve the label (word breaks, capitals).
+_KANA = {
+    u"あ": "a", u"い": "i", u"う": "u", u"え": "e", u"お": "o",
+    u"か": "ka", u"き": "ki", u"く": "ku", u"け": "ke", u"こ": "ko",
+    u"さ": "sa", u"し": "shi", u"す": "su", u"せ": "se", u"そ": "so",
+    u"た": "ta", u"ち": "chi", u"つ": "tsu", u"て": "te", u"と": "to",
+    u"な": "na", u"に": "ni", u"ぬ": "nu", u"ね": "ne", u"の": "no",
+    u"は": "ha", u"ひ": "hi", u"ふ": "fu", u"へ": "he", u"ほ": "ho",
+    u"ま": "ma", u"み": "mi", u"む": "mu", u"め": "me", u"も": "mo",
+    u"や": "ya", u"ゆ": "yu", u"よ": "yo",
+    u"ら": "ra", u"り": "ri", u"る": "ru", u"れ": "re", u"ろ": "ro",
+    u"わ": "wa", u"ゐ": "i", u"ゑ": "e", u"を": "o", u"ん": "n",
+    u"が": "ga", u"ぎ": "gi", u"ぐ": "gu", u"げ": "ge", u"ご": "go",
+    u"ざ": "za", u"じ": "ji", u"ず": "zu", u"ぜ": "ze", u"ぞ": "zo",
+    u"だ": "da", u"ぢ": "ji", u"づ": "zu", u"で": "de", u"ど": "do",
+    u"ば": "ba", u"び": "bi", u"ぶ": "bu", u"べ": "be", u"ぼ": "bo",
+    u"ぱ": "pa", u"ぴ": "pi", u"ぷ": "pu", u"ぺ": "pe", u"ぽ": "po",
+    u"ぁ": "a", u"ぃ": "i", u"ぅ": "u", u"ぇ": "e", u"ぉ": "o", u"ゔ": "vu",
+}
+_SMALL_Y = {u"ゃ": "ya", u"ゅ": "yu", u"ょ": "yo"}
+_YOON_STEM = {"ki": "k", "gi": "g", "ni": "n", "hi": "h", "bi": "b", "pi": "p",
+              "mi": "m", "ri": "r", "shi": "sh", "ji": "j", "chi": "ch"}
+
+
+def kana_romaji(text):
+    u"""Hepburn romanisation of an all-kana name, or None if any character is
+    not kana (kanji, a bracket, a Latin letter). Katakana are read as hiragana;
+    っ doubles the next consonant, ー lengthens the last vowel, ・ and spaces
+    are dropped."""
+    out, sokuon = [], False
+    chars = [chr(ord(c) - 0x60) if u"ァ" <= c <= u"ヶ" else c for c in text or ""]
+    for i, c in enumerate(chars):
+        if c in (u"・", u" ", u"　"):
+            continue
+        if c == u"っ":
+            sokuon = True
+            continue
+        if c == u"ー":
+            if not out or not out[-1] or out[-1][-1] not in "aiueo":
+                return None
+            out.append(out[-1][-1])
+            continue
+        if c in _SMALL_Y:
+            if not out or out[-1] not in _YOON_STEM:
+                return None
+            stem = _YOON_STEM[out.pop()]
+            syll = _SMALL_Y[c]
+            out.append(stem + (syll[1:] if stem in ("sh", "j", "ch") else syll))
+            continue
+        romaji = _KANA.get(c)
+        if romaji is None:
+            return None
+        if sokuon:
+            romaji = ("t" if romaji.startswith("ch") else romaji[0]) + romaji
+            sokuon = False
+        out.append(romaji)
+    if sokuon or not out:
+        return None
+    return "".join(out)
+
+
+def brand_slug_label(brand_ja):
+    u"""(slug, English label) for a 産地品種銘柄: the checked entry in BRANDS, or
+    the kana romanisation; a ValidationError for a kanji name nobody has checked."""
+    if brand_ja in BRANDS:
+        return BRANDS[brand_ja]
+    romaji = kana_romaji(brand_ja)
+    if romaji:
+        return romaji, romaji.capitalize()
+    raise ValidationError(
+        "unknown 産地品種銘柄 %r. MAFF publishes no code for a brand, so a "
+        "series code cannot be assigned without a checked romanisation: "
+        "add it to BRANDS in maff_rice_price.py. Nothing is published "
+        "until then and the previous release stays live." % brand_ja)
+
+
 def series_code(pref_code, brand_ja, region_ja):
-    if brand_ja not in BRANDS:
-        raise ValidationError(
-            "unknown 産地品種銘柄 %r. MAFF publishes no code for a brand, so a "
-            "series code cannot be assigned without a checked romanisation: "
-            "add it to BRANDS in maff_rice_price.py. Nothing is published "
-            "until then and the previous release stays live." % brand_ja)
-    slug = BRANDS[brand_ja][0]
+    slug = brand_slug_label(brand_ja)[0]
     if region_ja:
         if region_ja not in REGIONS:
             raise ValidationError("unknown 地域区分 %r; add it to REGIONS" % region_ja)
@@ -456,7 +587,7 @@ def parse(raw):
                 pref_code, pref_en = _PREF_JIS[origin]
                 brand_ja, region_ja = _brand_and_region(brand_ja, region_ja)
                 code = series_code(pref_code, brand_ja, region_ja)
-                label = BRANDS[brand_ja][1]
+                label = brand_slug_label(brand_ja)[1]
                 if region_ja:
                     label += " (%s)" % REGIONS[region_ja][1]
                 entry = {

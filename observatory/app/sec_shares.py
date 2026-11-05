@@ -129,6 +129,7 @@ CONVERSIONS = {
 # count and worth 13% of it — which is why the bar is this low and why Erie
 # has its ratio above.
 NEGLIGIBLE = 1e-5
+KNOWN_AFTER_DAYS = 45    # an undated cover count is taken as public this long after its own date (9 in 10 are within 35)
 
 _LOCK = threading.Lock()
 _MEMO = {}
@@ -173,15 +174,25 @@ def _counts(cur):
     out = {}
     if _has(cur, "sec_cover_shares"):
         ceiling = asof.current()
+        # When a count became public: the filing's date where we hold it (the company-facts
+        # files date every S&P 500 cover back to 2009); else KNOWN_AFTER_DAYS after the count's
+        # own date, or when we first saw it if sooner. Without the fallback a ceiling hid every
+        # frames count before 2023, which carries no filing date.
+        cf = ceiling is not None and _has(cur, "sec_cf_facts")
         rows = cur.execute("""
             WITH k AS (
                 SELECT c.cik, c.accn, c.end_date, c.class_key, c.ticker, c.shares, c.source,
-                       coalesce(f.filed, s.filed, CAST(c.first_seen AS DATE)) AS known,
+                       coalesce(f.filed, s.filed, %s
+                                least(CAST(c.first_seen AS DATE), CAST(c.end_date + INTERVAL %d DAY AS DATE))) AS known,
                        coalesce(f.form, s.form) AS form
                 FROM sec_cover_shares c
                 LEFT JOIN sec_cover_filings f ON f.accn = c.accn
                 LEFT JOIN sec_filings s ON s.adsh = c.accn
-                WHERE c.shares IS NOT NULL AND c.end_date <= current_date),
+                %s
+                WHERE c.shares IS NOT NULL AND c.end_date <= current_date),""" % (
+            "cf.filed," if cf else "", KNOWN_AFTER_DAYS,
+            "LEFT JOIN (SELECT accn, min(filed) AS filed FROM sec_cf_facts WHERE tag = 'EntityCommonStockSharesOutstanding' "
+            "GROUP BY accn) cf ON cf.accn = c.accn" if cf else "") + """
             filings AS (
                 SELECT cik, accn, max(end_date) AS end_date, bool_or(source = 'instance') AS inst
                 FROM k WHERE (CAST(? AS DATE) IS NULL OR known <= ?) GROUP BY cik, accn),
@@ -783,8 +794,28 @@ def health():
                      "archive_read_through": newest.isoformat() if newest else None, "days_behind": days,
                      "stale_after_days": STALE_AFTER_DAYS, "stale": stale,
                      "last_extracted_at": last_ok.isoformat() + "Z" if last_ok else None,
+                     # 20-F filers whose cover and text never say what one listed
+                     # share stands for: a standing count to read, not a fault
+                     # to alarm on every day (it was, until 2026-11-05)
+                     "unreadable_listings": unknown,
+                     "shape_flags": (["latest run failed"] if failed else [])})
+    if _has(cur, "us_mcap_runs") and _has(cur, "us_mcap_days"):
+        # equity/us_market_values.py: stale when the newest close has no stored market values
+        last_ok, last_any = cur.execute(
+            "SELECT max(run_at) FILTER (WHERE status = 'ok'), max(run_at) FROM us_mcap_runs").fetchone()
+        newest, first, n_days = cur.execute("SELECT max(date), min(date), count(*) FROM us_mcap_days").fetchone()
+        last_close = cur.execute("SELECT max(date) FROM us_px_daily").fetchone()[0] if _has(cur, "us_px_daily") else None
+        days = (datetime.datetime.utcnow() - last_ok).days if last_ok else None
+        behind = bool(last_close and (newest is None or newest < last_close))
+        stale = days is None or days > STALE_AFTER_DAYS or behind
+        failed = bool(last_any and (last_ok is None or last_any > last_ok))
+        rows.append({"dataset": "us-market-values", "status": "attention" if (stale or failed) else "ok",
+                     "archive_read_through": newest.isoformat() if newest else None, "days_behind": days,
+                     "stale_after_days": STALE_AFTER_DAYS, "stale": stale,
+                     "last_extracted_at": last_ok.isoformat() + "Z" if last_ok else None,
+                     "archive_read_back_to": first.isoformat() if first else None, "days_stored": n_days,
                      "shape_flags": (["latest run failed"] if failed else []) +
-                                    (["%d companies with an unreadable listing" % unknown] if unknown else [])})
+                                    (["newest close %s has no market values" % last_close] if behind else [])})
     return rows
 
 

@@ -372,6 +372,35 @@ def _run(cmd, env, cwd):
     return -1 if _stopping else rc
 
 
+def _run_noting_errors(cmd, env, cwd):
+    """_run, also returning the child's last line of stderr.
+
+    The line is what the journal, the health report and the alert carry for a
+    failed ingest. Until 2026-11-05 they carried "ingest exited 1" and the
+    reason — a moved file, a renamed workbook, a brand the adapter did not
+    know — was only in the container's log, which a redeploy discards.
+    stderr is relayed to our own as it arrives, so the log keeps it too.
+    """
+    global _child
+    if _stopping:
+        return -1, None
+    _child = subprocess.Popen(cmd, env=env, cwd=str(cwd), stderr=subprocess.PIPE)
+    last = None
+    try:
+        for raw in _child.stderr:
+            sys.stderr.buffer.write(raw)
+            sys.stderr.flush()
+            line = raw.decode("utf-8", "replace").strip()
+            if line and not line.startswith(("File ", "Traceback", "^", "sys.exit", "return ", "raise ")):
+                last = line
+        rc = _child.wait()
+    finally:
+        _child = None
+    if _stopping:
+        return -1, None
+    return rc, (last[:300] if last else None)
+
+
 # --- macro datasets ----------------------------------------------------------
 
 def _release_total(path, dataset):
@@ -474,14 +503,14 @@ def backfill_macro(datasets):
         cmd = [sys.executable, "-m", "app.ingest", ds]
         if prefetched:
             cmd += ["--prefetched", str(fetched)]
-        rc = _run(cmd, env, ROOT)
+        rc, why = _run_noting_errors(cmd, env, ROOT)
         _drop_files(fetched)
         took = time.time() - started
         if rc != 0:
             log("ingest %s did not publish (exit %s, %.0fs); served data untouched"
                 % (ds, rc, took))
             _discard(work)
-            record_check(ds, "failed", "ingest exited %s" % rc)
+            record_check(ds, "failed", "ingest exited %s%s" % (rc, (": " + why) if why else ""))
             if rc == -1:
                 return
             continue
@@ -670,6 +699,7 @@ def backfill_sec(max_quarters, per_slice=2):
             log("US shelf holds %d quarters; cap is %d — history is complete"
                 % (len(before), max_quarters))
             _discard(work)
+            record_check("sec-financials", "unchanged")
             return
         take = min(per_slice, max_quarters - len(before))
         log("US shelf slice %d: %d older quarter(s) below %s"
@@ -682,13 +712,16 @@ def backfill_sec(max_quarters, per_slice=2):
             log("US shelf slice %d did not complete (exit %s, %.0fs); served data untouched"
                 % (n, rc, took))
             _discard(work)
+            record_check("sec-financials", "failed", "sec_extract.py exited %s" % rc)
             return
         after = _sec_quarters(work)
         if after == before:
             log("US shelf slice %d found nothing older on the shelf (%.0fs)" % (n, took))
             _discard(work)
+            record_check("sec-financials", "unchanged")
             return
         swap(work, LIVE_SEC)
+        record_check("sec-financials", "published", ", ".join(sorted(after - before)))
         log("US shelf slice %d landed (%.0fs): %s" % (n, took, ", ".join(sorted(after - before))))
 
 
@@ -1129,8 +1162,11 @@ def refresh_us_listings(limit=400):
     say, the text) of the newest annual report of every 20-F filer and every
     10-K filer incorporated abroad, up to `limit` companies a run, least
     recently checked first; a company is read again only when it files a new
-    annual report. It runs on a copy of data/sec.duckdb that is swapped in
-    when the run recorded itself.
+    annual report. Then equity/us_market_values.py stores each trading day's
+    market value of every company (the newest days again, then up to
+    US_MCAP_MAX_DAYS older ones, default 300, until the history is whole).
+    Both run on one copy of data/sec.duckdb, swapped in when either recorded
+    its run.
     """
     if not os.environ.get("EDGAR_USER_AGENT"):
         record_check("sec-ads-ratios", "failed", "EDGAR_USER_AGENT not set")
@@ -1147,14 +1183,31 @@ def refresh_us_listings(limit=400):
                "--limit", str(limit)], dict(os.environ), ROOT)
     after = _table_count(work, "sec_ads_runs") if rc != -1 else before
     if after > before:
-        swap(work, LIVE_SEC)
         record_check("sec-ads-ratios", "published" if rc == 0 else "failed",
                      None if rc == 0 else "sec_ads_ratios.py exited %s" % rc)
         log("US listings: exit %s in %.0fs" % (rc, time.time() - started))
     else:
-        _discard(work)
         record_check("sec-ads-ratios", "failed", "sec_ads_ratios.py exited %s, nothing recorded" % rc)
-        log("US listings: exit %s, nothing recorded; served data untouched" % rc)
+        log("US listings: exit %s, nothing recorded" % rc)
+    # Each day's market value, on the same copy, so the night's share counts, listings and
+    # closes are all in it and the 2.8 GB file is copied once, not twice.
+    mv_before = _table_count(work, "us_mcap_runs")
+    started = time.time()
+    mrc = _run([sys.executable, str(ROOT / "equity" / "us_market_values.py"), "--db", str(work),
+                "--max-days", os.environ.get("US_MCAP_MAX_DAYS", "300")], dict(os.environ), ROOT)
+    mv_after = _table_count(work, "us_mcap_runs") if mrc != -1 else mv_before
+    if mv_after > mv_before:
+        record_check("us-market-values", "published" if mrc == 0 else "failed",
+                     None if mrc == 0 else "us_market_values.py exited %s" % mrc)
+        log("US market values: exit %s in %.0fs" % (mrc, time.time() - started))
+    else:
+        record_check("us-market-values", "failed", "us_market_values.py exited %s, nothing recorded" % mrc)
+        log("US market values: exit %s, nothing recorded" % mrc)
+    if after > before or mv_after > mv_before:
+        swap(work, LIVE_SEC)
+    else:
+        _discard(work)
+        log("US listings and market values: nothing recorded; served data untouched")
 
 
 def stamp_cycle():

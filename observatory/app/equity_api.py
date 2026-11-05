@@ -128,7 +128,9 @@ EXTRACT_STALE_AFTER_DAYS = 7
 # JPX's earnings-calendar lists are dated by the list itself and re-issued
 # every week or two, with a new month's list early each month; the same 45
 # days gives a missed month room to show before it cries wolf.
-STALE_AFTER_BY_EXTRACTOR = {"classification": 45, "earnings-calendar": 45}
+# bank-balance reads banks' annual and half-year reports (late June and late
+# November/December): the newest bank filing is routinely five months old.
+STALE_AFTER_BY_EXTRACTOR = {"classification": 45, "earnings-calendar": 45, "bank-balance": 200}
 
 
 def coverage():

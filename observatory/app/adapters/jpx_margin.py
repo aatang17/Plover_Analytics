@@ -48,6 +48,19 @@ transaction was applied for, which is how JPX dates the whole table. It is a
 Friday in 1,187 of the 1,225 weeks, and a Thursday or earlier when the market
 closed for a holiday; a week with no entry is absent rather than zero.
 
+**JPX changed the page on 25 September 2026.** The two long-run workbooks were
+frozen at the 2026-09-18 week and a third, one sheet in .xlsx, carries the
+weeks since, cut finer: standardised margin by account (自己, 委託), negotiable
+margin (委託 only — the member firms' own book uses standardised margin), and
+the 合計. Of the eight series kept here six are in that file as published
+(proprietary, negotiable, total — both sides); two are sums of its published
+parts, exact to the unit — customers = standardised 委託 + negotiable 委託, and
+standardised = 自己 + standardised 委託. JPX printed those two totals itself
+until 2026-09-18; from 2026-09-25 they are added here from its own figures
+(the identity that the three parts make the 合計 is checked every week), and
+the methodology page says so. The old files are read from the page while
+JPX leaves them there and from a copy kept under data/raw/ once it does not.
+
 Not ingested here: the per-issue weekly balances (銘柄別信用取引週末残高), which
 are published as a separate per-issue table, and the daily balances for the
 日々公表銘柄 watchlist. Both are per-company data and belong with the equity
@@ -56,21 +69,53 @@ datasets, not in a market aggregate.
 import base64
 import datetime
 import json
+import os
 import re
 import urllib.parse
 
-from . import boj_ts, xls
+from . import boj_ts, xls, xlsx
 
 
 class ValidationError(Exception):
     pass
 
 
-PAGE = "https://www.jpx.co.jp/markets/statistics-equities/margin/06.html"
-DOWNLOAD_URL = PAGE
+# The 過去推移表 page is found from the section index by its name: JPX
+# renumbers these pages (06.html until 2026-09-25, 05.html after) and the
+# number means nothing. PAGE is the last address known, used when the index
+# cannot be read or names no such page.
+INDEX = "https://www.jpx.co.jp/markets/statistics-equities/margin/index.html"
+PAGE = "https://www.jpx.co.jp/markets/statistics-equities/margin/05.html"
+HISTORY_PAGE_NAME = u"過去推移表"
+DOWNLOAD_URL = INDEX
 RAW_SUFFIX = ".json"
 
 _ANCHOR = re.compile(r'href="([^"]+\.xlsx?)"', re.I)
+_PAGE_LINK = re.compile(r'<a\s[^>]*href="([^"]+/margin/[^"/]+\.html)"[^>]*>(.*?)</a>', re.I | re.S)
+_TAG = re.compile(r"<[^>]+>")
+_TITLE = re.compile(r"<title>(.*?)</title>", re.I | re.S)
+
+# Each workbook is told apart by what it is, never by its file name (an opaque
+# CMS id) or its position on the page.
+LAYOUT_ACCOUNT, LAYOUT_KIND, LAYOUT_COMBINED = "account", "kind", "combined"
+CACHE_DIR_NAME = "jpx-margin-books"
+# The combined file's columns, found by their stacked header labels (filled
+# across merged cells), never by letter.
+COMBINED_PATHS = {
+    (u"制度信用取引", u"自己", u"売残高"): "proprietary.sales",
+    (u"制度信用取引", u"自己", u"買残高"): "proprietary.purchases",
+    (u"制度信用取引", u"委託", u"売残高"): "std-customer.sales",
+    (u"制度信用取引", u"委託", u"買残高"): "std-customer.purchases",
+    (u"一般信用取引", u"委託", u"売残高"): "negotiable.sales",
+    (u"一般信用取引", u"委託", u"買残高"): "negotiable.purchases",
+    (u"合計", u"売残高"): "total.sales",
+    (u"合計", u"買残高"): "total.purchases",
+}
+# Sums made here from 2026-09-25, each from published parts (see docstring).
+SUMMED_FROM = {
+    "customer": ("std-customer", "negotiable"),
+    "standardized": ("proprietary", "std-customer"),
+}
 
 # The sheet name is the only reliable identity for each workbook: the file
 # names are opaque CMS ids that change whenever JPX republishes the page.
@@ -158,27 +203,147 @@ PRESENTATION = {
 
 # --- fetching ---------------------------------------------------------------
 
+def history_page(index_html, index_url=INDEX, fetch_page=None):
+    u"""The 過去推移表 page's address, from the section index.
+
+    First by the words of each link; failing that, by the <title> of each
+    linked page in the section (a handful of small pages); failing that, the
+    last address known. The page number is never trusted.
+    """
+    links = []
+    for href, text in _PAGE_LINK.findall(index_html or ""):
+        url = urllib.parse.urljoin(index_url, href)
+        if url not in links:
+            links.append(url)
+        if HISTORY_PAGE_NAME in _TAG.sub("", text):
+            return url
+    fetch_page = fetch_page or (lambda u: boj_ts.fetch_bytes(u).decode("utf-8", "replace"))
+    for url in links:
+        if url == index_url:
+            continue
+        try:
+            m = _TITLE.search(fetch_page(url))
+        except Exception:                                    # noqa: BLE001
+            continue
+        if m and HISTORY_PAGE_NAME in m.group(1):
+            return url
+    return PAGE
+
+
 def workbook_urls(html, page_url):
-    u"""The .xls links on the 過去推移表 page, absolute, in page order."""
+    u"""The workbook links on the 過去推移表 page, absolute, in page order."""
     out = []
     for href in _ANCHOR.findall(html):
         url = urllib.parse.urljoin(page_url, href)
         if url not in out:
             out.append(url)
-    if len(out) < 2:
+    if not out:
         raise ValidationError(
-            "found %d workbooks on %s; the page carries two (by account and by "
-            "kind of margin) — the layout changed" % (len(out), page_url))
+            "no workbooks linked from %s — the layout changed" % page_url)
     return out
 
 
+def _book(raw):
+    u"""{sheet name: grid} whichever of .xls / .xlsx the bytes are."""
+    return xlsx.sheets(raw) if raw[:2] == b"PK" else xls.sheets(raw)
+
+
+def _first_token(text):
+    u"""The Japanese word of a bilingual header: '自己 Proprietary Account' -> 自己."""
+    parts = (text or "").replace(u"\u3000", " ").split()
+    return parts[0] if parts else ""
+
+
+def layout_of(book):
+    u"""Which table a workbook is, from its sheet name and its header row."""
+    if not book:
+        return None
+    name = _squash(list(book.keys())[0])
+    if name == _squash(SHEET_KIND):
+        return LAYOUT_KIND
+    if name != _squash(SHEET_ACCOUNT):
+        return None
+    grid = list(book.values())[0]
+    for row in sorted(grid)[:8]:
+        if _first_token(xls.cell_text(grid[row].get("A"))) == u"月日":
+            head = _first_token(xls.cell_text(grid[row].get("B")))
+            return LAYOUT_COMBINED if head == u"制度信用取引" else LAYOUT_ACCOUNT
+    return None
+
+
+def _cache_dir():
+    root = os.environ.get("OBSERVATORY_DATA_DIR")
+    if not root:
+        here = os.path.dirname(os.path.abspath(__file__))
+        root = os.path.join(here, "..", "..", "data")
+    return os.path.join(root, "raw", CACHE_DIR_NAME)
+
+
+def _cache_path(layout):
+    return os.path.join(_cache_dir(), layout + ".book")
+
+
+def _store(layout, raw):
+    u"""Keep the newest copy of each table, so a file JPX takes down is not lost."""
+    try:
+        if not os.path.isdir(_cache_dir()):
+            os.makedirs(_cache_dir())
+        tmp = _cache_path(layout) + ".part"
+        with open(tmp, "wb") as fh:
+            fh.write(raw)
+        os.replace(tmp, _cache_path(layout))
+    except OSError:
+        pass
+
+
+def _stored(layout):
+    try:
+        with open(_cache_path(layout), "rb") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
 def fetch():
-    u"""Both long-run workbooks, verbatim, with the URLs they came from."""
-    html = boj_ts.fetch_bytes(PAGE).decode("utf-8", "replace")
-    books = []
-    for url in workbook_urls(html, PAGE):
-        books.append({"url": url,
-                      "b64": base64.b64encode(boj_ts.fetch_bytes(url)).decode("ascii")})
+    u"""Every workbook on the 過去推移表 page, verbatim, each labelled with the
+    table it is; a frozen table no longer on the page comes from the copy kept."""
+    try:
+        page = history_page(boj_ts.fetch_bytes(INDEX).decode("utf-8", "replace"))
+    except Exception:                                        # noqa: BLE001
+        page = PAGE
+    html = boj_ts.fetch_bytes(page).decode("utf-8", "replace")
+    books, have = [], set()
+    for url in workbook_urls(html, page):
+        raw = boj_ts.fetch_bytes(url)
+        try:
+            layout = layout_of(_book(raw))
+        except Exception:                                    # noqa: BLE001
+            layout = None
+        if layout is None:
+            continue                 # a workbook that is not one of the three tables
+        _store(layout, raw)
+        have.add(layout)
+        books.append({"url": url, "layout": layout,
+                      "b64": base64.b64encode(raw).decode("ascii")})
+    if LAYOUT_COMBINED in have:
+        # the long-run tables are frozen; if JPX has taken one down, the copy
+        # kept the last time it was up is the only one there is
+        for layout in (LAYOUT_ACCOUNT, LAYOUT_KIND):
+            if layout in have:
+                continue
+            raw = _stored(layout)
+            if raw is None:
+                raise ValidationError(
+                    "the %s table is no longer on %s and no copy was kept — the "
+                    "history before 2026-09-25 cannot be rebuilt" % (layout, page))
+            books.append({"url": "cached:%s" % layout, "layout": layout,
+                          "b64": base64.b64encode(raw).decode("ascii")})
+    missing = {LAYOUT_ACCOUNT, LAYOUT_KIND} - {b["layout"] for b in books}
+    if missing:
+        raise ValidationError(
+            "%s does not carry the %s table(s) — the layout changed"
+            % (page, ", ".join(sorted(missing))))
+    books.sort(key=lambda b: (b["layout"], b["url"]))
     return json.dumps({"books": books}, sort_keys=True).encode("utf-8")
 
 
@@ -210,22 +375,135 @@ def _week(text):
     return EPOCH + datetime.timedelta(days=serial)
 
 
-def _sheet(books, want):
-    u"""The grid of the workbook whose first sheet is named `want`."""
+def _grids(books):
+    u"""{layout: grid} for every table in the envelope. Envelopes written before
+    the layout label existed are told apart the same way fetch() tells them."""
+    out = {}
     for book in books:
         try:
-            sheets = xls.sheets(base64.b64decode(book["b64"]))
+            sheets = _book(base64.b64decode(book["b64"]))
         except Exception as exc:                                 # noqa: BLE001
             raise ValidationError("%s is not a readable workbook: %s"
                                   % (book["url"], exc))
-        if not sheets:
+        layout = book.get("layout") or layout_of(sheets)
+        if layout is None or not sheets:
             continue
-        name = list(sheets.keys())[0]
-        if _squash(name) == _squash(want):
-            return sheets[name]
-    raise ValidationError(
-        "no workbook on the page has a %r sheet; found %r — JPX renamed a "
-        "table or changed the page" % (want, [book["url"] for book in books]))
+        if layout in out:
+            raise ValidationError("two workbooks carry the %s table (%s)" % (layout, book["url"]))
+        out[layout] = list(sheets.values())[0]
+    for layout in (LAYOUT_ACCOUNT, LAYOUT_KIND):
+        if layout not in out:
+            raise ValidationError(
+                "no workbook carries the %s table; found %r — JPX renamed a "
+                "table or changed the page" % (layout, [b["url"] for b in books]))
+    return out
+
+
+def _colnum(col):
+    n = 0
+    for ch in col:
+        n = n * 26 + ord(ch) - 64
+    return n
+
+
+def _fill_across(grid, row):
+    u"""[(column number, label)] for a header row's labelled cells, in order. A
+    merged header holds its label in its first cell only and nothing in the
+    cells it spans, so a column's label is the nearest one at or to its left."""
+    out = []
+    for col, cell in grid.get(row, {}).items():
+        text = _first_token(xls.cell_text(cell))
+        if text:
+            out.append((_colnum(col), text))
+    return sorted(out)
+
+
+def _label_at(filled, col):
+    n, label = _colnum(col), ""
+    for colnum, text in filled:
+        if colnum > n:
+            break
+        label = text
+    return label
+
+
+def _combined_columns(grid):
+    u"""{column: (code, measure)} for the combined table, from its headers."""
+    rows = sorted(grid)
+    head = None
+    for row in rows[:10]:
+        if _first_token(xls.cell_text(grid[row].get("A"))) == u"月日":
+            head = row
+            break
+    if head is None:
+        raise ValidationError("the combined table has no 月日 header row")
+    unit_row = head + 3                      # 株数 / 金額 under three stacked label rows
+    labels = [_fill_across(grid, r) for r in (head, head + 1, head + 2)]
+    columns = {}
+    for col, cell in grid.get(unit_row, {}).items():
+        unit = _first_token(xls.cell_text(cell))
+        measure = SHARES if unit.startswith(u"株数") else VALUE if unit.startswith(u"金額") else None
+        if measure is None:
+            continue
+        path = tuple(_label_at(lab, col) for lab in labels)
+        code = COMBINED_PATHS.get(path) or COMBINED_PATHS.get(path[:2])
+        if code:
+            columns[col] = (code, measure)
+    found = {c for c, _m in columns.values()}
+    want = set(COMBINED_PATHS.values())
+    if found != want:
+        raise ValidationError(
+            "the combined table's headers do not name every column: missing %s"
+            % sorted(want - found))
+    return columns, head
+
+
+def _read_combined(grid):
+    u"""The one-sheet table JPX publishes from 2026-09-25 -> {code: {period: value}}.
+
+    Six codes are the published figures; customer.* and standardized.* are
+    added here from published parts (SUMMED_FROM), after the week's three
+    parts are checked against its published 合計.
+    """
+    columns, head = _combined_columns(grid)
+    values = {}
+    for row in sorted(grid):
+        if row <= head:
+            continue
+        cells = grid[row]
+        period = _week(xls.cell_text(cells.get("A")) if "A" in cells else "")
+        if period is None:
+            continue
+        for col, (code, measure) in columns.items():
+            number = _number(xls.cell_text(cells.get(col)) if col in cells else "")
+            if number is None:
+                continue
+            values.setdefault("%s.%s" % (code, measure), {})[period] = number
+    if not values:
+        raise ValidationError("the combined table carried no dated rows")
+    for side in ("sales", "purchases"):
+        for measure in (SHARES, VALUE):
+            total = values.get("total.%s.%s" % (side, measure), {})
+            for period, whole in total.items():
+                parts = [values.get("%s.%s.%s" % (p, side, measure), {}).get(period)
+                         for p in ("proprietary", "std-customer", "negotiable")]
+                if any(p is None for p in parts):
+                    continue
+                if abs(sum(parts) - whole) > SUM_TOLERANCE:
+                    raise ValidationError(
+                        "%s %s %s: 自己 + 制度委託 + 一般委託 = %s but the published 合計 "
+                        "is %s — the combined table's columns moved"
+                        % (side, measure, period, sum(parts), whole))
+            for whole_code, part_codes in SUMMED_FROM.items():
+                for period in total:
+                    parts = [values.get("%s.%s.%s" % (p, side, measure), {}).get(period)
+                             for p in part_codes]
+                    if any(p is None for p in parts):
+                        continue
+                    values.setdefault("%s.%s.%s" % (whole_code, side, measure), {})[period] = sum(parts)
+    for code in [c for c in values if c.startswith("std-customer.")]:
+        values.pop(code)                     # a part, not a series kept
+    return values
 
 
 def _read(grid, columns, label_prefix):
@@ -267,10 +545,24 @@ def parse(raw):
     envelope = json.loads(raw.decode("utf-8"))
     books = envelope["books"]
 
-    account_values, account_meta = _read(_sheet(books, SHEET_ACCOUNT),
-                                         ACCOUNT_COLUMNS, "account")
-    kind_values, kind_meta = _read(_sheet(books, SHEET_KIND),
-                                   KIND_COLUMNS, "kind")
+    grids = _grids(books)
+    account_values, account_meta = _read(grids[LAYOUT_ACCOUNT], ACCOUNT_COLUMNS, "account")
+    kind_values, kind_meta = _read(grids[LAYOUT_KIND], KIND_COLUMNS, "kind")
+    if LAYOUT_COMBINED in grids:
+        # the weeks since the long-run tables were frozen: a week in both
+        # eras must agree, as the two old workbooks had to
+        for code, weeks in _read_combined(grids[LAYOUT_COMBINED]).items():
+            target = account_values if code.split(".")[0] in ("customer", "proprietary", "total") \
+                else kind_values
+            held = target.setdefault(code, {})
+            for period, value in weeks.items():
+                previous = held.get(period)
+                if previous is not None and abs(previous - value) > SUM_TOLERANCE:
+                    raise ValidationError(
+                        "%s %s: the long-run table says %s, the combined table %s — "
+                        "JPX revised the week; check which is current before storing either"
+                        % (code, period, previous, value))
+                held.setdefault(period, value)
 
     # The second workbook's 合計 columns restate the first's. They are checked
     # in validate() and then dropped: one number, one series.
@@ -492,6 +784,15 @@ RESTATEMENT_NOTE = (
     "rather than reconciled away. An ingest fails if any week's two totals "
     "differ by more than half a percent.")
 
+SUMMED_NOTE = (
+    "From the 2026-09-25 week JPX publishes one finer table in place of the two "
+    "long-run ones and no longer prints the customers' total or the standardised "
+    "total. Those two series continue here as exact sums of its published parts "
+    "— customers = standardised 委託 + negotiable 委託; standardised = 自己 + "
+    "standardised 委託 — after the week's three parts are checked against its "
+    "published 合計. Every other series is the published figure. Weeks to "
+    "2026-09-18 are the published totals, as before.")
+
 SCOPE_NOTE = (
     "Per-issue margin balances — the weekly table by company and the daily one "
     "for the watchlist issues — are not in this dataset. It is the market "
@@ -544,5 +845,5 @@ MANIFEST = {
     "cite": "/margin.html",
     "page": "/margin.html",
     "notes": [CUT_NOTE, UNIT_NOTE, BREAK_NOTE, DATE_NOTE, RESTATEMENT_NOTE,
-              SCOPE_NOTE],
+              SUMMED_NOTE, SCOPE_NOTE],
 }

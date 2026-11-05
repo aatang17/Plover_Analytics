@@ -1203,6 +1203,15 @@
       same published total, and both identities are checked at every ingest, in both units and on
       both sides. Those checks are also what confirm the column mapping: these workbooks label
       their columns with merged header cells that no parser can read unambiguously.</li>
+      <li><b>From the week of 25 September 2026, two of the eight series are sums.</b> JPX froze the
+      two long-run workbooks at the 18 September 2026 week and now publishes one finer table in
+      their place: standardised margin by account (自己, 委託), negotiable margin (委託 only), and
+      the 合計. Six series are its published figures (proprietary, negotiable and total, both
+      sides). Customers and standardised, which JPX printed as totals until then, continue as exact
+      sums of its published parts — <code>customers = standardised 委託 + negotiable 委託</code>,
+      <code>standardised = 自己 + standardised 委託</code> — after each week's three parts are
+      checked against its published 合計. Weeks to 18 September 2026 are the published totals,
+      read from the frozen workbooks (kept here in case JPX removes them).</li>
       <li><b>The two workbooks restate the same total, and disagree in two weeks out of 1,224.</b>
       At 2003-06-13 and 2004-03-12 the account file and the kind file print slightly different
       totals — at most 0.43%. Both are JPX's own figures; the account cut is the one stored, and
@@ -1252,7 +1261,19 @@
       not redundancy: two independently typed copies of one figure must match exactly, and an
       ingest stops if they do not — which is how a revision announces itself. A revision to a
       week that has already fallen off the site cannot reach us, and nothing here pretends
-      otherwise.</li>
+      otherwise. (That held to the week of 7 September 2026; from the week of 28 September each
+      workbook carries one week, so there is no second copy to compare.)</li>
+      <li><b>From the week of 28 September 2026, the aggregates are sums of published parts.</b>
+      JPX replaced the two weekly workbooks (value and volume, four sheets each) with one .xlsx a
+      week that is cut finer — proprietary and individuals each split into cash and margin trades,
+      foreigners into institutions and individuals — and no longer prints the aggregates. The six
+      new splits are stored as published, as series of their own. Total, brokerage, proprietary,
+      institutions, individuals, foreigners and financial institutions continue as exact sums of
+      the published parts, by the same four identities the old files asserted (below) plus the
+      three splits. In every block of a new file the printed 差引 must equal purchases − sales and
+      the printed 合計 sales + purchases, or the file is not published. The weeks of 14 and
+      21 September 2026 left JPX's site between the two formats; the week of 21 September is held
+      from a file JPX named for 24–25 September, and 14 September is a gap.</li>
       <li><b>The table adds up four levels deep, and every level is checked.</b> Proprietary plus
       brokerage make the total; institutions, individuals, foreigners and securities companies
       make brokerage; investment trusts, business corporations, other corporations and financial

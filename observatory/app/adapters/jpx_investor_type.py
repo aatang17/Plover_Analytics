@@ -46,6 +46,22 @@ worse than no column.
 in ¥ thousand and in thousands of shares, each stored in its published unit and
 never rescaled or ranked against the other.
 
+**JPX changed the file in October 2026.** Until the 2026-09-07 week each week
+came as two .xls workbooks (value and volume), four market sheets each, two
+weeks a sheet, with every aggregate printed. From the 2026-09-28 week it is
+one .xlsx a week, one sheet, all four markets and both units, cut finer —
+proprietary and individuals each split into cash and margin trades, foreigners
+into institutions and individuals — and the aggregates are no longer printed.
+The six new splits are kept as series of their own, as published. The seven
+aggregates this dataset has always carried (total, brokerage, proprietary,
+institutions, individuals, foreigners, financial institutions) continue as
+exact sums of the published parts, by the same four identities the old files
+asserted and this adapter checked at every ingest; the methodology page says
+so. Each new file is checked on its own terms: in every block the printed
+差引 must equal purchases − sales and the printed 合計 sales + purchases.
+Weeks 2026-09-14 and 2026-09-21 fell off the site between the two formats
+and are a gap, as the design accepts.
+
 **What the survey covers.** Domestic common stocks only — no preferred shares —
 including ToSTNeT off-auction trades, from participants with at least ¥3bn of
 capital. It is not the whole market, and JPX says so on the file.
@@ -57,7 +73,7 @@ import json
 import os
 import re
 
-from . import boj_ts, xls
+from . import boj_ts, xls, xlsx
 
 
 class ValidationError(Exception):
@@ -70,8 +86,13 @@ BASE = "https://www.jpx.co.jp"
 RAW_SUFFIX = ".json"
 
 # stock_val_1_260901.xls / stock_vol_1_260901.xls — value and volume of the
-# week beginning in that YYMMDD's month, numbered within it.
+# week beginning in that YYMMDD's month, numbered within it (to September 2026).
 _LINK = re.compile(r'href="([^"]*stock_(val|vol)_1_(\d{6})\.xls)"', re.I)
+# stock_1_w_20261019_20261023.xlsx — one workbook for the week those dates
+# bound, both units, all markets (from October 2026).
+_LINK_WEEK = re.compile(r'href="([^"]*stock_1_w_(\d{8})_(\d{8})\.xlsx)"', re.I)
+_WEEK_NAME = re.compile(r"^stock_1_w_(\d{8})_(\d{8})\.xlsx$")
+_PAIR_NAME = re.compile(r"^stock_(val|vol)_(\d{6})\.xls$")
 
 VALUE, VOLUME = "value", "volume"
 UNIT_VALUE, UNIT_VOLUME = "jpy_1000", "thousand shares"
@@ -107,6 +128,48 @@ CATEGORIES = [
 ]
 CATEGORY_BY_LABEL = dict((re.sub(r"\s+", "", ja), (code, name))
                          for ja, code, name in CATEGORIES)
+
+# The weekly .xlsx (from October 2026): each four-column block is named by the
+# Japanese words of the header rows stacked above it, read down and with
+# repeats dropped — ('委託', '海外投資家', '法人') is foreign institutions. Six
+# of the fourteen blocks are finer than anything the old files printed and
+# become series of their own; the other eight are the leaves the old files
+# carried under the same codes.
+WEEK_BLOCKS = [
+    ((u"自己", u"現金取引"),                       "proprietary-cash",        "Proprietary — cash trades"),
+    ((u"自己", u"信用取引"),                       "proprietary-margin",      "Proprietary — margin trades"),
+    ((u"委託", u"個人", u"現金取引"),              "individuals-cash",        "Individuals — cash trades"),
+    ((u"委託", u"個人", u"信用取引"),              "individuals-margin",      "Individuals — margin trades"),
+    ((u"委託", u"海外投資家", u"法人"),            "foreigners-institutions", "Foreigners — institutions"),
+    ((u"委託", u"海外投資家", u"個人"),            "foreigners-individuals",  "Foreigners — individuals"),
+    ((u"委託", u"証券会社"),                       "securities-cos",          None),
+    ((u"委託", u"法人", u"投資信託"),              "investment-trusts",       None),
+    ((u"委託", u"法人", u"事業法人"),              "business-cos",            None),
+    ((u"委託", u"法人", u"その他法人等"),          "other-cos",               None),
+    ((u"委託", u"法人", u"金融機関", u"生保・損保"),     "insurers",         None),
+    ((u"委託", u"法人", u"金融機関", u"都銀・地銀等"),   "banks",            None),
+    ((u"委託", u"法人", u"金融機関", u"信託銀行"),       "trust-banks",      None),
+    ((u"委託", u"法人", u"金融機関", u"その他金融機関"), "other-financials", None),
+]
+WEEK_PATHS = dict((path, code) for path, code, _n in WEEK_BLOCKS)
+SPLIT_CATEGORIES = [(code, name) for _p, code, name in WEEK_BLOCKS if name]
+# The aggregates the old files printed and the new one does not, each the sum
+# of published parts; in dependency order. The same identities SUM_RULES
+# checks on the old files, plus the three splits.
+SUMMED_RULES = [
+    ("proprietary",  ("proprietary-cash", "proprietary-margin")),
+    ("individuals",  ("individuals-cash", "individuals-margin")),
+    ("foreigners",   ("foreigners-institutions", "foreigners-individuals")),
+    ("financials",   ("insurers", "banks", "trust-banks", "other-financials")),
+    ("institutions", ("investment-trusts", "business-cos", "other-cos", "financials")),
+    ("brokerage",    ("institutions", "individuals", "foreigners", "securities-cos")),
+    ("total",        ("proprietary", "brokerage")),
+]
+WEEK_MARKETS = {u"東証プライム": "prime", u"東証スタンダード": "standard",
+                u"東証グロース": "growth", u"二市場": "two-markets"}
+WEEK_MEASURES = {u"株数": "volume", u"金額": "value"}
+BALANCE, TURNOVER = "balance", "turnover"          # printed checks, not stored
+WEEK_SIDES = {u"売": "sales", u"買": "purchases", u"差引": BALANCE, u"合計": TURNOVER}
 
 SALES, PURCHASES = "sales", "purchases"
 SIDE_BY_LABEL = {u"売り": SALES, u"買い": PURCHASES}
@@ -192,23 +255,36 @@ def _cache_dir():
 
 
 def listing(html):
-    u"""{(stamp, kind): url} for every weekly workbook still on the page."""
+    u"""{file name: url} for every weekly workbook still on the page, in either
+    of the two shapes JPX has used. The file name is kept as JPX names it."""
     out = {}
     for href, kind, stamp in _LINK.findall(html):
         url = href if href.startswith("http") else BASE + href
-        out[(stamp, VALUE if kind.lower() == "val" else VOLUME)] = url
+        out["stock_%s_%s.xls" % (kind.lower(), stamp)] = url   # the cache's name since 2026-08
+    for href, start, end in _LINK_WEEK.findall(html):
+        url = href if href.startswith("http") else BASE + href
+        out["stock_1_w_%s_%s.xlsx" % (start, end)] = url
     return out
 
 
-def _cache_name(stamp, kind):
-    return "stock_%s_%s.xls" % ("val" if kind == VALUE else "vol", stamp)
+def _entry(name):
+    u"""The index record for a cached file, or None for a file that is not one
+    of ours. `sort` orders both shapes by the week they belong to."""
+    m = _WEEK_NAME.match(name)
+    if m:
+        return {"file": name, "start": m.group(1), "end": m.group(2), "sort": m.group(1)}
+    m = _PAIR_NAME.match(name)
+    if m:
+        return {"file": name, "stamp": m.group(2),
+                "kind": VALUE if m.group(1) == "val" else VOLUME, "sort": "20" + m.group(2)}
+    return None
 
 
-def _store(stamp, kind, raw):
+def _store(name, raw):
     directory = _cache_dir()
     if not os.path.isdir(directory):
         os.makedirs(directory)
-    path = os.path.join(directory, _cache_name(stamp, kind))
+    path = os.path.join(directory, name)
     tmp = path + ".part"
     with open(tmp, "wb") as fh:     # written whole then renamed: a crash must
         fh.write(raw)               # never leave half a workbook in the cache
@@ -216,18 +292,16 @@ def _store(stamp, kind, raw):
 
 
 def cached():
-    u"""[(stamp, kind, path)] for every workbook held, oldest first."""
+    u"""[(index record, path)] for every workbook held, oldest week first."""
     directory = _cache_dir()
     if not os.path.isdir(directory):
         return []
     out = []
     for name in sorted(os.listdir(directory)):
-        m = re.match(r"^stock_(val|vol)_(\d{6})\.xls$", name)
-        if m:
-            out.append((m.group(2),
-                        VALUE if m.group(1) == "val" else VOLUME,
-                        os.path.join(directory, name)))
-    return sorted(out)
+        entry = _entry(name)
+        if entry:
+            out.append((entry, os.path.join(directory, name)))
+    return sorted(out, key=lambda e: (e[0]["sort"], e[0]["file"]))
 
 
 def fetch():
@@ -248,15 +322,16 @@ def fetch():
     if not live:
         raise ValidationError(
             "no weekly workbooks linked from %s — the page layout changed" % PAGE)
-    for (stamp, kind), url in sorted(live.items()):
-        _store(stamp, kind, boj_ts.fetch_bytes(url))
+    for name, url in sorted(live.items()):
+        _store(name, boj_ts.fetch_bytes(url))
 
     index = []
-    for stamp, kind, path in cached():
+    for entry, path in cached():
         with open(path, "rb") as fh:
-            index.append({"file": os.path.basename(path), "stamp": stamp,
-                          "kind": kind,
-                          "sha256": hashlib.sha256(fh.read()).hexdigest()})
+            record = dict(entry)
+            record.pop("sort")
+            record["sha256"] = hashlib.sha256(fh.read()).hexdigest()
+            index.append(record)
     if not index:
         raise ValidationError("the weekly cache is empty after fetching")
     return json.dumps({"weeks": index}, sort_keys=True).encode("utf-8")
@@ -357,11 +432,156 @@ def _read_sheet(grid, market_code):
     return out
 
 
+def _book(raw):
+    u"""{sheet name: grid} whichever of .xls / .xlsx the bytes are."""
+    return xlsx.sheets(raw) if raw[:2] == b"PK" else xls.sheets(raw)
+
+
+def _first_token(text):
+    u"""The Japanese word of a bilingual header: '売 Sales' -> 売."""
+    parts = (text or "").replace(u"\u3000", " ").replace(u"\xa0", " ").split()
+    return parts[0] if parts else ""
+
+
+def _colnum(col):
+    n = 0
+    for ch in col:
+        n = n * 26 + ord(ch) - 64
+    return n
+
+
+def _fill_across(grid, row):
+    u"""[(column number, label)] for a header row's labelled cells, in order. A
+    merged header holds its label in its first cell and nothing in the cells it
+    spans, so a column's label is the nearest one at or to its left."""
+    out = []
+    for col, cell in grid.get(row, {}).items():
+        text = _first_token(xls.cell_text(cell))
+        if text:
+            out.append((_colnum(col), text))
+    return sorted(out)
+
+
+def _label_at(filled, col):
+    n, label = _colnum(col), ""
+    for colnum, text in filled:
+        if colnum > n:
+            break
+        label = text
+    return label
+
+
+def _week_columns(grid, head):
+    u"""{column: (category code, side)} for the weekly .xlsx, from its headers."""
+    stacked = [_fill_across(grid, r) for r in range(max(1, head - 4), head)]
+    columns = {}
+    for col, cell in grid.get(head, {}).items():
+        side = WEEK_SIDES.get(_first_token(xls.cell_text(cell)))
+        if side is None or col in ("A", "B", "C"):
+            continue
+        path, last = [], None
+        for filled in stacked:
+            label = _label_at(filled, col)
+            if label and label != last:
+                path.append(label)
+            last = label or last
+        code = WEEK_PATHS.get(tuple(path))
+        if code is None:
+            raise ValidationError(
+                "column %s sits under %r, which is not a block this adapter knows — "
+                "JPX changed the table" % (col, tuple(path)))
+        columns[col] = (code, side)
+    for code in WEEK_PATHS.values():
+        for side in (SALES, PURCHASES):
+            if (code, side) not in columns.values():
+                raise ValidationError("the weekly file has no %s column for %s" % (side, code))
+    return columns
+
+
+def _read_week_book(book, named, filename):
+    u"""One weekly .xlsx -> {(period, market, category, side, kind): value}.
+
+    `named` is the first date in the file's name; the week is dated by the
+    Monday it begins, as the old files' weeks were (JPX's first new-format
+    file was named 20260924_20260925 for the holiday-shortened week of
+    2026-09-21). The fourteen published blocks, each checked against its own
+    printed 差引 and 合計; then the seven aggregates as sums of those parts
+    (SUMMED_RULES).
+    """
+    start = named - datetime.timedelta(days=named.weekday())
+    if len(book) != 1:
+        raise ValidationError("%s has %d sheets; the weekly file has one" % (filename, len(book)))
+    grid = list(book.values())[0]
+    rows = sorted(grid)
+    head = None
+    for r in rows[:15]:
+        if _first_token(xls.cell_text(grid[r].get("A"))) == u"年月週":
+            head = r
+            break
+    if head is None:
+        raise ValidationError("%s has no 年月週 header row" % filename)
+    columns = _week_columns(grid, head)
+    out, market, markets = {}, None, set()
+    for r in rows:
+        if r <= head:
+            continue
+        cells = grid[r]
+        label = _first_token(xls.cell_text(cells.get("B")) if "B" in cells else "")
+        if label:
+            market = WEEK_MARKETS.get(label)
+            if market is None:
+                raise ValidationError("%s row %d: market %r is not one of the four" % (filename, r, label))
+        kind = WEEK_MEASURES.get(_first_token(xls.cell_text(cells.get("C")) if "C" in cells else ""))
+        if kind is None or market is None:
+            continue
+        # 2026103 = 2026, October, 3rd week: the file's own word on which
+        # month it belongs to, checked against the dates in its name
+        stamp = _squash(xls.cell_text(cells.get("A")) if "A" in cells else "")
+        if stamp and not (stamp[:4].isdigit() and stamp[4:-1].isdigit()
+                          and int(stamp[:4]) == named.year and int(stamp[4:-1]) == named.month):
+            raise ValidationError(
+                "%s row %d says %r but the file is named for the week of %s" % (filename, r, stamp, named))
+        got = {}
+        for col, (code, side) in columns.items():
+            number = _number(xls.cell_text(cells.get(col)) if col in cells else "")
+            if number is not None:
+                got[(code, side)] = number
+        for code in WEEK_PATHS.values():
+            sales, purchases = got.get((code, SALES)), got.get((code, PURCHASES))
+            if sales is None or purchases is None:
+                raise ValidationError("%s: %s %s %s has no sales or purchases figure"
+                                      % (filename, market, kind, code))
+            balance, turnover = got.get((code, BALANCE)), got.get((code, TURNOVER))
+            if balance is not None and abs((purchases - sales) - balance) > SUM_TOLERANCE:
+                raise ValidationError(
+                    "%s: %s %s %s: purchases − sales = %s but the printed 差引 is %s — the "
+                    "columns are misread" % (filename, market, kind, code, purchases - sales, balance))
+            if turnover is not None and abs((purchases + sales) - turnover) > SUM_TOLERANCE:
+                raise ValidationError(
+                    "%s: %s %s %s: sales + purchases = %s but the printed 合計 is %s"
+                    % (filename, market, kind, code, purchases + sales, turnover))
+            out[(start, market, code, SALES, kind)] = sales
+            out[(start, market, code, PURCHASES, kind)] = purchases
+        for whole, parts in SUMMED_RULES:
+            for side in (SALES, PURCHASES):
+                out[(start, market, whole, side, kind)] = sum(
+                    out[(start, market, part, side, kind)] for part in parts)
+        markets.add((market, kind))
+    want = set((m, k) for _s, m, _n in MARKETS for k in (VALUE, VOLUME))
+    if markets != want:
+        raise ValidationError("%s carries %s, not every market in both units"
+                              % (filename, sorted(want - markets) or sorted(markets - want)))
+    return out
+
+
 def parse(raw):
     index = json.loads(raw.decode("utf-8"))["weeks"]
     directory = _cache_dir()
 
     values, meta, overlaps = {}, {}, []
+    market_names = dict((c, n) for _s, c, n in MARKETS)
+    category_names = dict((c, n) for _j, c, n in CATEGORIES)
+    category_names.update(dict(SPLIT_CATEGORIES))
     for entry in index:
         path = os.path.join(directory, entry["file"])
         if not os.path.exists(path):
@@ -369,34 +589,40 @@ def parse(raw):
                 "%s is in the index but missing from the cache — the volume "
                 "lost a week that JPX has already deleted" % entry["file"])
         with open(path, "rb") as fh:
-            book = xls.sheets(fh.read())
-        kind = entry["kind"]
-        unit = UNIT_VALUE if kind == VALUE else UNIT_VOLUME
-        for sheet_name, market_code, market_name in MARKETS:
-            grid = book.get(sheet_name)
-            if not grid:
-                raise ValidationError(
-                    "%s has no %r sheet; found %s"
-                    % (entry["file"], sheet_name, sorted(book)))
-            for (period, category, side), value in \
-                    _read_sheet(grid, market_code).items():
-                code = "%s.%s.%s.%s" % (market_code, category, side, kind)
-                meta.setdefault(code, {
-                    "code": code,
-                    "name_en": "%s — %s, %s (%s)" % (
-                        market_name,
-                        dict((c, n) for _j, c, n in CATEGORIES)[category],
-                        side,
-                        "¥ thousand" if kind == VALUE else "thousand shares"),
-                    "name_ja": None,
-                    "unit": unit,
-                    "weight_per_10000": None,
-                    "sort_order": 0,
-                })
-                previous = values.setdefault(code, {}).get(period)
-                if previous is not None:
-                    overlaps.append((code, period, previous, value))
-                values[code][period] = value
+            book = _book(fh.read())
+        points = []                     # (period, market, category, side, kind, value)
+        if entry["file"].endswith(".xlsx"):
+            start = datetime.datetime.strptime(entry["start"], "%Y%m%d").date()
+            for (period, market_code, category, side, kind), value in \
+                    _read_week_book(book, start, entry["file"]).items():
+                points.append((period, market_code, category, side, kind, value))
+        else:
+            kind = entry["kind"]
+            for sheet_name, market_code, _market_name in MARKETS:
+                grid = book.get(sheet_name)
+                if not grid:
+                    raise ValidationError(
+                        "%s has no %r sheet; found %s"
+                        % (entry["file"], sheet_name, sorted(book)))
+                for (period, category, side), value in \
+                        _read_sheet(grid, market_code).items():
+                    points.append((period, market_code, category, side, kind, value))
+        for period, market_code, category, side, kind, value in points:
+            code = "%s.%s.%s.%s" % (market_code, category, side, kind)
+            meta.setdefault(code, {
+                "code": code,
+                "name_en": "%s — %s, %s (%s)" % (
+                    market_names[market_code], category_names[category], side,
+                    "¥ thousand" if kind == VALUE else "thousand shares"),
+                "name_ja": None,
+                "unit": UNIT_VALUE if kind == VALUE else UNIT_VOLUME,
+                "weight_per_10000": None,
+                "sort_order": 0,
+            })
+            previous = values.setdefault(code, {}).get(period)
+            if previous is not None:
+                overlaps.append((code, period, previous, value))
+            values[code][period] = value
 
     if not values:
         raise ValidationError("no weeks parsed from the cache")
@@ -404,6 +630,8 @@ def parse(raw):
 
     market_order = dict((c, i) for i, (_s, c, _n) in enumerate(MARKETS))
     category_order = dict((c, i) for i, (_j, c, _n) in enumerate(CATEGORIES))
+    for i, (c, _n) in enumerate(SPLIT_CATEGORIES):
+        category_order[c] = len(CATEGORIES) + i
     for code, m in meta.items():
         market, category, side, kind = code.split(".")
         m["sort_order"] = (market_order[market] * 1000
@@ -471,15 +699,39 @@ def validate(series, observations):
             for side in (SALES, PURCHASES):
                 for kind in (VALUE, VOLUME):
                     expected.add("%s.%s.%s.%s" % (market, category, side, kind))
+    allowed = set()
+    for _s, market, _n in MARKETS:
+        for category, _cn in SPLIT_CATEGORIES:
+            for side in (SALES, PURCHASES):
+                for kind in (VALUE, VOLUME):
+                    allowed.add("%s.%s.%s.%s" % (market, category, side, kind))
     codes = set(s["code"] for s in series)
     missing = expected - codes
     if missing:
         raise ValidationError(
             "%d series the table should carry are absent: %s"
             % (len(missing), sorted(missing)[:6]))
-    extra = codes - expected
+    extra = codes - expected - allowed
     if extra:
         raise ValidationError("unexpected series: %s" % sorted(extra)[:6])
+    # The six finer splits (from October 2026) must add to the aggregate they
+    # split, where both are present.
+    for whole, parts in SUMMED_RULES[:3]:
+        if not all("%s.%s.%s.%s" % ("prime", p, SALES, VALUE) in codes for p in parts):
+            continue
+        for _s, market, _n in MARKETS:
+            for kind in (VALUE, VOLUME):
+                for side in (SALES, PURCHASES):
+                    totals = by_code.get("%s.%s.%s.%s" % (market, whole, side, kind), {})
+                    for period, value in totals.items():
+                        got = [by_code.get("%s.%s.%s.%s" % (market, p, side, kind), {}).get(period)
+                               for p in parts]
+                        if any(g is None for g in got):
+                            continue
+                        if abs(sum(got) - value) > SUM_TOLERANCE:
+                            raise ValidationError(
+                                "%s %s %s %s: %s = %s but %s is %s"
+                                % (market, kind, side, period, " + ".join(parts), sum(got), whole, value))
 
     ordered = sorted(periods)
     for previous, current in zip(ordered, ordered[1:]):
@@ -564,9 +816,23 @@ IDENTITY_NOTE = (
     "and on both sides, and a file that breaks one is not published.")
 
 WEEK_NOTE = (
-    "A week is dated by the Monday it begins, and each workbook carries the "
-    "week it reports plus the week before, so two files publish every week. "
-    "The two copies must agree exactly or the ingest stops.")
+    "A week is dated by the Monday it begins. To September 2026 each workbook "
+    "carried the week it reports plus the week before, so two files published "
+    "every week and the two copies had to agree exactly or the ingest stopped; "
+    "from October 2026 each workbook carries one week.")
+
+FORMAT_NOTE = (
+    "From the week of 2026-09-28 JPX publishes one workbook a week, cut finer "
+    "and without the aggregates it used to print. Proprietary and individuals "
+    "are each split into cash and margin trades, foreigners into institutions "
+    "and individuals; those six splits are kept as series of their own, as "
+    "published. Total, brokerage, proprietary, institutions, individuals, "
+    "foreigners and financial institutions continue as exact sums of the "
+    "published parts, by the identities the old files asserted and this "
+    "adapter has always checked. In every block of the new file the printed "
+    "差引 must equal purchases − sales and the printed 合計 sales + purchases, or "
+    "the ingest stops. The weeks of 2026-09-14 and 2026-09-21 left the site "
+    "between the two formats and are a gap.")
 
 MANIFEST = {
     "id": DATASET["slug"],
@@ -613,5 +879,5 @@ MANIFEST = {
     "cite": "/flows.html",
     "page": "/flows.html",
     "notes": [COVERAGE_NOTE, NET_NOTE, IDENTITY_NOTE, UNIT_NOTE, RATIO_NOTE,
-              WEEK_NOTE, SURVEY_NOTE],
+              WEEK_NOTE, FORMAT_NOTE, SURVEY_NOTE],
 }
