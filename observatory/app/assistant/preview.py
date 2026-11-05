@@ -601,7 +601,31 @@ def _macro_on_topic(q):
     if out is None:
         return None
     from .. import ask_guard
-    return out if ask_guard.macro_on_topic(q, out) else None
+    if not ask_guard.macro_on_topic(q, out):
+        return None
+    # a fixed economy answer may not drop a time the question names: "compare Japan and US inflation in
+    # 2024" was answered with September 2026 (live, 2026-11-06). A year or time phrase the answer does not
+    # carry sends the question to the step route first; if that cannot, the answer says what it did not read.
+    unread = _macro_unread(q, out)
+    if unread:
+        alt = _steps(q, None, HTTPException(422, "the fixed economy answer leaves %s unread" % unread))
+        if alt is not None:
+            return alt
+        out["lead"] = ("Not read: \u201c%s\u201d; this is the latest reading on file. " % unread) + (out.get("lead") or "")
+    return out
+
+
+def _macro_unread(q, out):
+    """The year or time phrase in the question that the fixed answer does not carry; '' when it reads everything."""
+    from .. import us_link
+    ql = (q or "").lower()
+    carried = " ".join([str(out.get("headline") or ""), str(out.get("lead") or "")] +
+                       [str(f.get("as_of") or "") + " " + str(f.get("as_of_label") or "") for f in out.get("figures") or []]).lower()
+    for y in re.findall(r"\b(?:19|20)\d{2}\b", ql):
+        if y not in carried:
+            return y
+    left = us_link.unread_time(q)
+    return left[0] if left else ""
 
 
 def _headline(text):

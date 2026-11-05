@@ -120,9 +120,17 @@ class Shape(unittest.TestCase):
         self.assertIsNone(us_checks.period("how many beat the S&P 500", p, T))
 
     def test_other_market_is_refused_before_anything_else(self):
-        fs = us_checks.check("which Japanese banks are cheapest", plan("SELECT 1"), [["A", 6.2]], ["ticker", "pe_x"], "x", T)
+        fs = us_checks.check("which European banks are cheapest", plan("SELECT 1"), [["A", 6.2]], ["ticker", "pe_x"], "x", T)
         self.assertEqual([f["severity"] for f in fs], ["refuse"])
-        self.assertIn("Japan tab", fs[0]["note"])
+        self.assertIn("European", fs[0]["note"])
+        # Japan is pointed away only while its tables are not in the sandbox (app/us_catalog.py, 2026-11-05)
+        from app import us_tables
+        fs = us_checks.check("which Japanese banks are cheapest", plan("SELECT 1"), [["A", 6.2]], ["ticker", "pe_x"], "x", T)
+        if {"jp", "macro"} & us_tables.attached():
+            self.assertEqual([f for f in fs if f["check"] == "other_market"], [])
+        else:
+            self.assertEqual([f["severity"] for f in fs], ["refuse"])
+            self.assertIn("Japan tab", fs[0]["note"])
         self.assertEqual(us_checks.check("cheapest US banks", plan("SELECT 1"), [["A", 6.2]], ["ticker", "pe_x"], "x", T), [])
 
     def test_refused_headline_is_a_finding(self):

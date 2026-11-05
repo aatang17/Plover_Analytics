@@ -214,7 +214,12 @@ class LaterFixesTest(unittest.TestCase):
         self.assertTrue(us_checks.about_us_listed("Which US companies make the most revenue in India?"))
         self.assertFalse(us_checks.about_us_listed("Best Japanese banks"))
         self.assertFalse(us_checks.about_us_listed("Largest companies in Japan by sales"))
-        self.assertIsNotNone(us_steps.other_market("best japanese banks"))
+        # Japan is pointed away only while its tables are not in the sandbox (app/us_catalog.py, 2026-11-05)
+        from app import us_tables
+        if {"jp", "macro"} & us_tables.attached():
+            self.assertIsNone(us_steps.other_market("best japanese banks"))
+        else:
+            self.assertIsNotNone(us_steps.other_market("best japanese banks"))
 
     def test_the_review_takes_over_a_day_a_deploy_cut_short(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(ask_review.ask_log, "ANALYTICS_DIR", __import__("pathlib").Path(d)), \
@@ -430,8 +435,16 @@ class LiveFiguresTest(unittest.TestCase):
                   "British American Tobacco debt as a share of equity", "Sony capex vs revenue"):
             self.assertIsNone(us_checks.other_market(q, self.cur), q)
             self.assertIsNone(us_steps.other_market(q, self.cur), q)
-        for q in ("best japanese banks", "largest UK companies", "Nikkei performance this year", "Hong Kong stocks", "Largest companies in Japan"):
-            self.assertIsNotNone(us_steps.other_market(q, self.cur) or us_checks.other_market(q, self.cur), q)
+        self.assertIsNotNone(us_steps.other_market("largest UK companies", self.cur) or us_checks.other_market("largest UK companies", self.cur))
+        # Japan and Hong Kong are pointed away only while their tables are not in the sandbox (app/us_catalog.py, 2026-11-05)
+        from app import us_tables
+        covered = bool({"jp", "macro"} & us_tables.attached())
+        for q in ("best japanese banks", "Nikkei performance this year", "Hong Kong stocks", "Largest companies in Japan"):
+            pointed = us_steps.other_market(q, self.cur) or us_checks.other_market(q, self.cur)
+            if covered:
+                self.assertIsNone(pointed, q)
+            else:
+                self.assertIsNotNone(pointed, q)
 
     def test_with_the_model_off_a_line_is_never_answered_as_something_else(self):
         for q in ("Nvidia capital expenditure as a share of revenue", "Alphabet capex vs net income"):

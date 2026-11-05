@@ -325,6 +325,12 @@ def check(question, plan, rows, cols, headline=None, today=None, cur=None):
     wc = wrong_company(question, rows, cols, cur)
     if wc:
         out.append(wc)
+    if rows and headline and "\u2014" in headline and not re.search(r"\bNo\b|\bnone\b|\bnot\b", headline):
+        # a blank filled into the headline: the first row lacks a value the sentence names
+        # (2026-11-06, live: "short holders in Nissan include GOLDMAN SACHS INTERNATIONAL and —")
+        out.append(finding("headline_blank", REVISE, "A value named in the headline is blank.",
+                           "A column the headline names is blank on the row it reads. Filter that column IS NOT NULL "
+                           "(or pick the row that has it) and reply with the whole JSON object again."))
     if rows and headline is None and plan.get("headline"):
         out.append(finding("headline", REVISE, "The headline could not be filled from the result.",
                            "The headline wrote a number of its own, or named a column the query does not return. "

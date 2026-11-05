@@ -5668,12 +5668,14 @@ def _steps_try(cur, question, why, honest=False):
     date, "Plover holds only the latest lists" is the answer, not today's
     figure."""
     from . import us_steps
-    if not us_steps.enabled():
+    if cur is None or not us_steps.enabled():
         return None
     us_steps.log(question, "steps first", why)
     try:
         return us_steps.answer(cur, question)
     except us_steps.StepsError:
+        return None
+    except Exception:                                             # noqa: BLE001 — a failure here leaves the fixed answer or refusal as it was
         return None
     except HTTPException as exc:
         if honest and exc.status_code < 500 and getattr(exc, "miss", None) == "not_held":
