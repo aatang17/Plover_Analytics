@@ -2511,11 +2511,14 @@ pre.code {
 .co-delisted { font-size: 12px; font-weight: 600; color: var(--obs-text-muted); white-space: nowrap; }
 /* on the name's own line: no second line under a table entry */
 td > div:has(+ .co-delisted) { display: inline-block; }
-/* a logo uploaded in the admin console (app/jp_companies.py) */
-.co-logo {
-  width: 32px; height: 32px; object-fit: contain; border-radius: 3px; background: var(--obs-logo-bg);
-  margin-right: 12px; vertical-align: -7px;
+/* The company logo in a company page's header, every market: one size and
+   frame, so Toyota's page and Apple's show their logos alike. The file's
+   blank border is already cropped (app/logo_trim.py). */
+.cp-logo {
+  width: 44px; height: 44px; border: 1px solid var(--obs-border); border-radius: 4px;
+  background: var(--obs-logo-bg); object-fit: contain; flex: 0 0 auto;
 }
+#co-name .cp-logo { margin-right: 14px; vertical-align: middle; }
 .co-id-sub { margin: 7px 0 0; font-size: 12.5px; color: var(--obs-text-muted); }
 .co-id-filing {
   margin-left: auto; text-align: right; font-size: 11.5px; color: var(--obs-text-muted);

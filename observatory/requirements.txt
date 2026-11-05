@@ -26,3 +26,6 @@ openai>=1.40,<2
 # bucket the capture jobs write to. Without EDINET_S3_BUCKET set, the refresh
 # skips itself and nothing here is imported.
 boto3>=1.34,<2
+# Crops the blank border off an uploaded company logo as it is served
+# (app/logo_trim.py); without it a logo is served exactly as uploaded.
+pillow==11.3.0

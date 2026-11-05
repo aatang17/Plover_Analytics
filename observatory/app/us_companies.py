@@ -15,7 +15,7 @@ off-volume backup (app/research_backup.py) carries it. Each company keeps its
 own change history: who changed what, when, from what.
 
 Logo states: no entry (the built-in icon, if any), "uploaded" (served from
-/logos/us/<cik>-<sha>.<ext>) and "hidden" (no logo, even where a built-in
+/logos/us/<cik>-<sha>-<v>.<ext>, border cropped) and "hidden" (no logo, even where a built-in
 one exists — for an icon that is wrong and nothing better is to hand).
 """
 import base64
@@ -27,7 +27,7 @@ import os
 import re
 import tempfile
 
-from . import db, edit_reads
+from . import db, edit_reads, logo_trim
 
 STORE = "us-companies"
 STORE_PATH = db.DATA_DIR / "admin" / "us_companies.json"
@@ -231,19 +231,20 @@ def logo_url(cik):
     if e.get("logo") == "hidden":
         return ""
     if e.get("logo") == "uploaded" and e.get("logo_sha"):
-        return "/logos/us/%d-%s.%s" % (int(cik), e["logo_sha"][:16], e["logo_ext"])
+        return "/logos/us/%d-%s-%d.%s" % (int(cik), e["logo_sha"][:16], logo_trim.VERSION, e["logo_ext"])
     return None
 
 
 def logo_file(name):
     """(bytes, content type) for /logos/us/<name>, or None."""
-    m = re.fullmatch(r"(\d{1,10})-([0-9a-f]{16})\.(png|jpg|gif|webp)", name or "")
+    m = re.fullmatch(r"(\d{1,10})-([0-9a-f]{16})(?:-\d+)?\.(png|jpg|gif|webp)", name or "")
     if not m:
         return None
     e = load()["companies"].get(str(int(m.group(1)))) or {}
     if e.get("logo") != "uploaded" or not (e.get("logo_sha") or "").startswith(m.group(2)):
         return None
-    return base64.b64decode(e["logo_b64"]), TYPES[e["logo_ext"]]
+    # the border cropped (app/logo_trim.py); the stored upload stays as it was
+    return logo_trim.served(e["logo_sha"], base64.b64decode(e["logo_b64"]), TYPES[e["logo_ext"]])
 
 
 def name(cik):

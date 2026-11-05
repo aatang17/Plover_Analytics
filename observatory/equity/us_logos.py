@@ -12,8 +12,9 @@ change rarely and nothing reads them at boot.
            newer than their Wikidata entry)
   icon     Google's site-icon service for that domain, else the site's own
            apple-touch-icon, then the icons its homepage links to; the first
-           at least MIN_PX square is resized to SIZE and saved as PNG, and a
-           16px favicon is the last resort
+           at least MIN_PX square has its blank border cropped by the same
+           rule as an uploaded logo (app/logo_trim.py), is fitted into a
+           SIZE square and saved as PNG, and a 16px favicon is the last resort
 
 sources.json records, for each CIK, the ticker, domain, the URL the icon came
 from, its SHA-256 and the day it was fetched; a company with no usable icon
@@ -22,6 +23,7 @@ is listed with icon null and the page shows no logo for it.
 Usage:
     ./.venv/bin/python equity/us_logos.py                 # S&P 500 members
     ./.venv/bin/python equity/us_logos.py --only NVDA,BRK-B --force
+    ./.venv/bin/python equity/us_logos.py --refit   # re-crop the files on disk, no fetching
 """
 import argparse
 import datetime
@@ -39,6 +41,8 @@ import duckdb
 from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from app import logo_trim                                         # noqa: E402
 OUT = ROOT / "web" / "assets" / "logos" / "us"
 UA = "PloverAnalytics/1.0 (aaron.jy@gmail.com)"
 SIZE = 64
@@ -132,9 +136,22 @@ def _square(data, min_px=MIN_PX):
     w, h = im.size
     if min(w, h) < min_px or max(w, h) > 1.25 * min(w, h):
         return None
-    im = im.resize((SIZE, SIZE), Image.LANCZOS)
     buf = io.BytesIO()
-    im.save(buf, "PNG", optimize=True)
+    im.save(buf, "PNG")
+    return fit(buf.getvalue())
+
+
+def fit(png):
+    """A logo's PNG with its blank border cropped (app/logo_trim.py), fitted
+    into a SIZE-px transparent square."""
+    cropped = logo_trim.crop(png)
+    im = Image.open(io.BytesIO(cropped[0] if cropped else png)).convert("RGBA")
+    k = SIZE / float(max(im.size))
+    im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+    sq = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    sq.paste(im, ((SIZE - im.width) // 2, (SIZE - im.height) // 2))
+    buf = io.BytesIO()
+    sq.save(buf, "PNG", optimize=True)
     return buf.getvalue()
 
 
@@ -193,11 +210,26 @@ def main():
     ap.add_argument("--db", default=str(ROOT / "data" / "sec.duckdb"))
     ap.add_argument("--only", default="", help="comma-separated tickers")
     ap.add_argument("--force", action="store_true", help="refetch icons already on disk")
+    ap.add_argument("--refit", action="store_true",
+                    help="re-crop the icons on disk after app/logo_trim.py changes; fetches nothing")
     a = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
     src_path = OUT / "sources.json"
     sources = json.loads(src_path.read_text()) if src_path.exists() else {}
+    if a.refit:
+        changed = 0
+        for path in sorted(OUT.glob("*.png")):
+            if not logo_trim.crop(path.read_bytes()):
+                continue
+            png = fit(path.read_bytes())
+            path.write_bytes(png)
+            if path.stem in sources:
+                sources[path.stem]["sha256"] = hashlib.sha256(png).hexdigest()
+            changed += 1
+        src_path.write_text(json.dumps(sources, indent=1, sort_keys=True) + "\n")
+        print("%d icons re-cropped" % changed)
+        return 0
     rows = members(a.db)
     if a.only:
         want = {t.strip().upper() for t in a.only.split(",")}

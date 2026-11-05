@@ -11,7 +11,7 @@ permission, like the US half of the tab (app/us_company_admin_api.py).
   POST   /admin/api/jp-companies/{code}/logo the image as the raw body
   POST   /admin/api/jp-companies/{code}/logo/reset   no edit (no logo)
   DELETE /admin/api/jp-companies/{code}/logo show no logo
-  GET    /logos/jp/<code>-<sha>.<ext>        an uploaded logo, for every page
+  GET    /logos/jp/<code>-<sha>-<v>.<ext>    an uploaded logo, border cropped (app/logo_trim.py)
 """
 from typing import Optional
 

@@ -15,7 +15,7 @@ backup (app/research_backup.py) carries the whole curation. Each company keeps
 its own change history.
 
 Logo states: no entry (no logo: none are fetched for Japanese companies yet),
-"uploaded" (served from /logos/jp/<code>-<sha>.<ext>) and "hidden".
+"uploaded" (served from /logos/jp/<code>-<sha>-<v>.<ext>, border cropped) and "hidden".
 """
 import base64
 import copy
@@ -25,7 +25,7 @@ import os
 import re
 import tempfile
 
-from . import db, edit_reads
+from . import db, edit_reads, logo_trim
 from .us_companies import EditError, MAX_LOGO_BYTES, NAME_MAX, TYPES, _now, logo_type  # noqa: F401
 
 STORE = "jp-companies"
@@ -188,19 +188,20 @@ def logo(code):
     """The uploaded logo's address, or None (none uploaded, or hidden)."""
     e = _get(code)
     if e.get("logo") == "uploaded" and e.get("logo_sha"):
-        return "/logos/jp/%s-%s.%s" % (code_of(code), e["logo_sha"][:16], e["logo_ext"])
+        return "/logos/jp/%s-%s-%d.%s" % (code_of(code), e["logo_sha"][:16], logo_trim.VERSION, e["logo_ext"])
     return None
 
 
 def logo_file(name):
     """(bytes, content type) for /logos/jp/<name>, or None."""
-    m = re.fullmatch(r"([0-9][0-9A-Z]{2}[0-9A-Z])-([0-9a-f]{16})\.(png|jpg|gif|webp)", name or "")
+    m = re.fullmatch(r"([0-9][0-9A-Z]{2}[0-9A-Z])-([0-9a-f]{16})(?:-\d+)?\.(png|jpg|gif|webp)", name or "")
     if not m:
         return None
     e = load()["companies"].get(m.group(1)) or {}
     if e.get("logo") != "uploaded" or not (e.get("logo_sha") or "").startswith(m.group(2)):
         return None
-    return base64.b64decode(e["logo_b64"]), TYPES[e["logo_ext"]]
+    # the border cropped (app/logo_trim.py); the stored upload stays as it was
+    return logo_trim.served(e["logo_sha"], base64.b64decode(e["logo_b64"]), TYPES[e["logo_ext"]])
 
 
 def name(code):

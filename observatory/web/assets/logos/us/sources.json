@@ -507,7 +507,7 @@
   "domain": "everestre.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=everestre.com&sz=64",
-  "sha256": "41bf59d29a387926ef580adee13e44a21dc805459ba895258c96f592393f9976",
+  "sha256": "4e5fb352611b8b5f8831288a679a85faae6a476fd7e2c76475daf4b3098a0198",
   "ticker": "EG"
  },
  "1097149": {
@@ -619,7 +619,7 @@
   "domain": "globalpaymentsinc.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=globalpaymentsinc.com&sz=64",
-  "sha256": "97ac0e6f463b3557005bdb556850f430cb0a8f96845ff1143d62dfd6d4720a5e",
+  "sha256": "58061d9e385f0832ba3c46a48ff6f4fa8659fd6890021bcff8505374672e92bc",
   "ticker": "GPN"
  },
  "1126328": {
@@ -696,7 +696,7 @@
   "domain": "mastercard.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=mastercard.com&sz=64",
-  "sha256": "0695999f665efc5b3cd4144ccd3df139203533a9e836734f54b4e81069cd3c83",
+  "sha256": "cd9c733599652db1b2fa63352435bf163e14ecb7ede1b558385dd676299ca5ca",
   "ticker": "MA"
  },
  "1145197": {
@@ -717,7 +717,7 @@
   "domain": "elevancehealth.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=elevancehealth.com&sz=64",
-  "sha256": "e06bdb1dd92d6c93e537a1daa1d1bf2446bf1cd25a55462e3631fe5245f5e933",
+  "sha256": "7dfb4021e6ffa3fdf67df69d654112830ac62bdaf255d0512266514b2fdfba86",
   "ticker": "ELV"
  },
  "1156375": {
@@ -731,7 +731,7 @@
   "domain": "conocophillips.com",
   "fetched": "2026-10-24",
   "icon": "https://www.conocophillips.com/favicons/apple-touch-icon.png",
-  "sha256": "6ca006197e8d28e7dc628a63c66b53c8f32e7672104e8b01c4d2ae9a6368c315",
+  "sha256": "43d301cce02056cad33d03c18a68c49f848b391d938344ac3aa72439666e41ec",
   "ticker": "COP"
  },
  "1164727": {
@@ -815,7 +815,7 @@
   "domain": "t-mobile.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=t-mobile.com&sz=64",
-  "sha256": "b194b662ea328b1634849aa1636031a82e7c6e98150d01ead3c99470aa12bd14",
+  "sha256": "fbf9a15550aa1f2e2f83d5e2b3c2585a06d057cd2d3e5e57937271e857b3e880",
   "ticker": "TMUS"
  },
  "1285785": {
@@ -885,7 +885,7 @@
   "domain": "expediagroup.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=expediagroup.com&sz=64",
-  "sha256": "92e099d6daa6f81dc1de60848d0475986af39e4195f7e5d5f0362f459b1b94e7",
+  "sha256": "a1dd325c68de2c63f56e2d06d51354b8cb68c46094a7126df989d5c31dd2683a",
   "ticker": "EXPE"
  },
  "1326160": {
@@ -899,7 +899,7 @@
   "domain": "meta.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=meta.com&sz=64",
-  "sha256": "48f4451e39cffcf7e0257918b15097142b4c2305d5c15b228a93cd48455f513e",
+  "sha256": "0c46d5974097b12df8c422ac427a7abd2a524714f64ab0650a49c69512f83a90",
   "ticker": "META"
  },
  "1327567": {
@@ -1039,7 +1039,7 @@
   "domain": "visa.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=visa.com&sz=64",
-  "sha256": "0c3b07145507784bce7d50def712a73baabe2e95398ebd37eef4914ed1cd431d",
+  "sha256": "49e04d291cf5b495ca09c9eb681013a2dc2f2585a9ffaeb37f9822801ea31f5c",
   "ticker": "V"
  },
  "1403568": {
@@ -1095,7 +1095,7 @@
   "domain": "drpeppersnapplegroup.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=drpeppersnapplegroup.com&sz=64",
-  "sha256": "4075c9700a4564c6ddcd45b37955d3f8beccd0f086b94bb53b4dc8ad5ac014d4",
+  "sha256": "df3b14b944b5840fc738f6d588f0dfb56a401cbc5ccc3b51ed457b5d3d34822d",
   "ticker": "KDP"
  },
  "14272": {
@@ -1172,7 +1172,7 @@
   "domain": "lyondellbasell.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=lyondellbasell.com&sz=64",
-  "sha256": "2663be3c3f6a8c431b4c147cf3b2b90edf5afea7d72c5aa3e5be7320312c1b49",
+  "sha256": "214b340b3e1224055376714d804f5caf3ae4d9adb0f6b5384a5f4d551e4cc32f",
   "ticker": "LYB"
  },
  "1501585": {
@@ -1186,7 +1186,7 @@
   "domain": "kindermorgan.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=kindermorgan.com&sz=64",
-  "sha256": "339c15770f8019c45a409c059982cca1ae489f5f81643648613c15424dc66977",
+  "sha256": "c5e43823b1cab20ef3921e2d827d44e9c395fa9fab278943e88ff338e42fb3b4",
   "ticker": "KMI"
  },
  "1510295": {
@@ -1361,7 +1361,7 @@
   "domain": "paypal.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=paypal.com&sz=64",
-  "sha256": "33e784d4095b307a0d1f03b6afa8aff7632ac7c12140862721ef0e9f7ef32b51",
+  "sha256": "046f3988f4a25dd5f56720d4a83bb261f3225d664084cd791da042e5bb8d3acd",
   "ticker": "PYPL"
  },
  "1633978": {
@@ -1403,7 +1403,7 @@
   "domain": "bloomenergy.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=bloomenergy.com&sz=64",
-  "sha256": "5b7b2f4d4768f5f5ad6886360216ba6c5c4ae07307166392b1883ac980f34393",
+  "sha256": "e2452ccbd0746815136c759cf9f06d166bbcb9a35cb42dac57ea3f9ead49d32e",
   "ticker": "BE"
  },
  "1666700": {
@@ -1431,7 +1431,7 @@
   "domain": "modernatx.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=modernatx.com&sz=64",
-  "sha256": "f97a7b2143c4c73ae6d8cd8a54453d73e796852ff0fc6aeb3481a9c5ca079ff5",
+  "sha256": "56e64aa06c3a74a97254fc00dc5f6a2c809192805ca77a9aac039255c6274c15",
   "ticker": "MRNA"
  },
  "1687229": {
@@ -1466,7 +1466,7 @@
   "domain": "irco.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=irco.com&sz=64",
-  "sha256": "0309dcfcbeaae3019fb09b0c50544fa870ee7357dede9e5455389167dfa849ea",
+  "sha256": "630dbf98e985cd25ec52134bbc10ab7f3b56f8201081ac581b43e732b25afaf6",
   "ticker": "IR"
  },
  "1701605": {
@@ -1536,7 +1536,7 @@
   "domain": "applovin.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=applovin.com&sz=64",
-  "sha256": "3726e5e5537b6c7511d1d51291d81fe41d2a6e6368c43984ef9857047d23becb",
+  "sha256": "805fafa628daa42bf5f7654e286f013c074908e4ede6eb093883e4177e60bb6e",
   "ticker": "APP"
  },
  "1751788": {
@@ -1550,7 +1550,7 @@
   "domain": "foxcorporation.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=foxcorporation.com&sz=64",
-  "sha256": "4cfca4683dff06c5348bd1e80c26afc2c4a0e5f0a09f612fb3e9ec5d53fd1a1d",
+  "sha256": "6447eb6908c804ea012fca887dfeecf4b903a4252f02f7987a7cb734bf1d3165",
   "ticker": "FOXA"
  },
  "1757898": {
@@ -1655,7 +1655,7 @@
   "domain": "kenvue.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=kenvue.com&sz=64",
-  "sha256": "fadd7faaa4d302ef4daa6dc0ba4e9f074dea55e1e0a2b95a8cbd8d51f2386ccd",
+  "sha256": "ec50020de46fe0d2c66b5dbf22dbc6f412eca863af813b7c43c94f9c34dc1ac1",
   "ticker": "KVUE"
  },
  "19617": {
@@ -1893,7 +1893,7 @@
   "domain": "omnicomgroup.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=omnicomgroup.com&sz=64",
-  "sha256": "883d2a3b43fbbceb1abaf2f5298db6d1d2c05e9873b8736d9444b23e860941c5",
+  "sha256": "e646fc20df3ee8f2a8caacca71fea0148175b05406f9c924340ecc659805c830",
   "ticker": "OMC"
  },
  "310158": {
@@ -2012,7 +2012,7 @@
   "domain": "eqt.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=eqt.com&sz=64",
-  "sha256": "af8100751b2a0407bb41d31197025f6bc2380713348c82808f57beecaf7750eb",
+  "sha256": "3cb774c097deedf2d94d5b5c1e10b04534259d09f9f36e1a9f50d295bcd996df",
   "ticker": "EQT"
  },
  "34903": {
@@ -2229,7 +2229,7 @@
   "domain": "iff.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=iff.com&sz=64",
-  "sha256": "62c3685f30d7a5e59ed0d07d8d23a239583429a82574e603b1a30415f992a3d7",
+  "sha256": "59908fea30f41fc0d175cee6b84e21dac814cc8354c4232efb6f45710528e537",
   "ticker": "IFF"
  },
  "51434": {
@@ -2348,7 +2348,7 @@
   "domain": "3m.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=3m.com&sz=64",
-  "sha256": "d7a8e6d21eb969abded9e9b535d9fe7990fd9496331f27e2a43821b7ad380c77",
+  "sha256": "ed77bb4b37916f919be47753a561ee193cc82317bf51d22a667c66f0aa7231f9",
   "ticker": "MMM"
  },
  "68505": {
@@ -2460,7 +2460,7 @@
   "domain": "paychex.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=paychex.com&sz=64",
-  "sha256": "c42bf6d79d731bbd0f693530cf86b541283da413794fbd39ef777e11328a72da",
+  "sha256": "c1ca9ada9050e60f394d7b2e04ab563e048c038d41c1cc53baeea487335e44fb",
   "ticker": "PAYX"
  },
  "726728": {
@@ -2509,7 +2509,7 @@
   "domain": "northerntrust.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=northerntrust.com&sz=64",
-  "sha256": "cec0b0a68ced8ad396c85a45490d65616bc3464e2d5cf5c82e07fb3b48038054",
+  "sha256": "070eccb657b21a6c87d68328326c53657558adf7c8bad1bbdd9b52d720749dfc",
   "ticker": "NTRS"
  },
  "731766": {
@@ -2691,7 +2691,7 @@
   "domain": "pfizer.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=pfizer.com&sz=64",
-  "sha256": "d58567907ba2b296c8b997c8cfb8ac8966dc6e0b9e0537cc1a048b7ef1c8c105",
+  "sha256": "27bf42e8ee28d1fc3f56d69c7ad3af343cbc01eedb3cabe0fa1980e33fdaef62",
   "ticker": "PFE"
  },
  "783325": {
@@ -2761,7 +2761,7 @@
   "domain": "pg.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=pg.com&sz=64",
-  "sha256": "cef0d437656ab44deae58642d433c096665edb2500a49e0431a6e1bbc6537c1c",
+  "sha256": "0640ad26c22d954551dcd1a9db8e07e03cd475ff1dffce7550727f04c0d19d3c",
   "ticker": "PG"
  },
  "804328": {
@@ -2824,7 +2824,7 @@
   "domain": "amphenol.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=amphenol.com&sz=64",
-  "sha256": "a8dfa62187372b37790db7dcc26bcb18f4409edb70e61cc9fd829d83e251e3fa",
+  "sha256": "ea73d839a9bc8fef72aa476902f7506cd48e5617f1bdaf1bf283385221c5449d",
   "ticker": "APH"
  },
  "820318": {
@@ -3041,7 +3041,7 @@
   "domain": "biogen.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=biogen.com&sz=64",
-  "sha256": "2c85bbb20b20b2d3576cb53578d6a942369d2eb65d649b5cac16f814f6c0da2c",
+  "sha256": "560bc0b191173b820ae2b750b4a42f70b3cd166ca2173a696fb092e5a34a6d84",
   "ticker": "BIIB"
  },
  "875320": {
@@ -3132,7 +3132,7 @@
   "domain": "goldmansachs.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=goldmansachs.com&sz=64",
-  "sha256": "97afc0f08b6b3af5d882e091bfffbceab27eb3dcb857ac0827dad9bd1faedf01",
+  "sha256": "d061d291f090619a68a26c5f35ff683ce9fb1731d07465745f4c57a231019e67",
   "ticker": "GS"
  },
  "895126": {
@@ -3237,7 +3237,7 @@
   "domain": "regencycenters.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=regencycenters.com&sz=64",
-  "sha256": "0b394ec6ed24a19c7826ec2fec4dae702bf71fadac239f42b0b6060f10267075",
+  "sha256": "9a76204d9188b79429bea1d4e7fe3e88222c978d190ad4bd9090c96ea9136fbd",
   "ticker": "REG"
  },
  "91142": {
@@ -3265,7 +3265,7 @@
   "domain": "invesco.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=invesco.com&sz=64",
-  "sha256": "ea2e449e065642ad05c1ad9dfd6496f9ae98e905e82e89fdc073f2a2b9a587de",
+  "sha256": "b988e0e6a8414e416ceebfb3505dc21fb0e121d7d8be1b8baa2b7f7f2321fa8f",
   "ticker": "IVZ"
  },
  "91440": {
@@ -3286,7 +3286,7 @@
   "domain": "albemarle.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=albemarle.com&sz=64",
-  "sha256": "fdfa885d8849879cf40d369c7925e21afba9545d48a04980fbc08f16dd6c8c7c",
+  "sha256": "a6927a46c8f6ee3fcdc7049dcc8086dbede409f2739d5cb695d22a1503fa1b67",
   "ticker": "ALB"
  },
  "916076": {
@@ -3321,7 +3321,7 @@
   "domain": "lennar.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=lennar.com&sz=64",
-  "sha256": "42768a9210c115412a2b0322bc78d659156ada36b3c93351ea78b89167a3d11a",
+  "sha256": "9e8e3205c609ba91adf16f1c545ec07be0c4730eb41c735571ead5c5ef8c34fd",
   "ticker": "LEN"
  },
  "92122": {
@@ -3384,7 +3384,7 @@
   "domain": "chevron.com",
   "fetched": "2026-10-24",
   "icon": "https://www.google.com/s2/favicons?domain=chevron.com&sz=64",
-  "sha256": "c988c894336f0d74afdd379ecf759f7ef2a94e61c4b26c5a5f3e77d0ef6830cb",
+  "sha256": "b3c642dcae11dc4f6b6392446c40850c87a56da0b9a23533f81b7fa8e764814a",
   "ticker": "CVX"
  },
  "93556": {

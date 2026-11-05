@@ -276,8 +276,8 @@ function renderIdentity() {
   // The card's h1 is the page's one name, and the prerenderer has already
   // written it for a crawler — this sets the same name, never a second one.
   // The logo is one uploaded in the admin console (app/jp_companies.py), if any.
-  $("co-name").innerHTML = (c.logo ? '<img class="co-logo" src="' + escapeHtml(c.logo) +
-      '" alt="" width="32" height="32">' : "") +
+  $("co-name").innerHTML = (c.logo ? '<img class="cp-logo" src="' + escapeHtml(c.logo) +
+      '" alt="" width="44" height="44">' : "") +
     '<span class="co-tick">' + escapeHtml(c.sec_code) + "</span>" +
     escapeHtml(c.display_name || displayName(c.name_en) || displayNameJa(c.name) || c.sec_code) + delistedTag(c);
   $("page-asof").textContent = "FY to " + day(f.period) + " · filed " + day(f.filed);
