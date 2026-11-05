@@ -44,6 +44,7 @@ from .facility_api import router as facility_router  # noqa: E402
 from .bank_api import router as bank_router  # noqa: E402
 from .financials_api import router as financials_router  # noqa: E402
 from .governance_api import router as governance_router  # noqa: E402
+from .page_chat import router as page_chat_router  # noqa: E402
 from .lvh_api import router as lvh_router  # noqa: E402
 from .short_api import router as short_router  # noqa: E402
 from .earnings_api import router as earnings_router  # noqa: E402
@@ -331,6 +332,7 @@ app.add_middleware(seo.CanonicalHost)
 # /api/v1/equity/cohorts/... paths must beat /equity/company/{sec_code}.
 app.include_router(cohorts_router)
 app.include_router(governance_router)
+app.include_router(page_chat_router)
 app.include_router(ownership_router)
 app.include_router(lvh_router)
 app.include_router(short_router)

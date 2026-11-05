@@ -152,20 +152,38 @@ def run(cmd, timeout=600):
     return r.returncode, (r.stdout + r.stderr)
 
 
+# Modules nearly every test names (app.main starts the site, "api" and "db" are words in
+# every URL and setUp), so a name match picks the whole suite. 2026-11-05: two lines in
+# main.py ran 115 test files, and a date-dependent test plus another session's unfinished
+# ones blocked the gate on work that had nothing to do with them. A change to one of these
+# runs the tests that are about it instead.
+HUB_TESTS = {
+    "main": ("test_mcp_sync.py", "test_prerender.py"),
+    "api": ("test_manifests.py", "test_adapter_contract.py", "test_observations_csv.py"),
+    "db": ("test_ingest_probe.py", "test_published_at.py"),
+    "cache": ("test_cache_limits.py", "test_cache_warm.py", "test_edit_reads.py"),
+    "registry": ("test_mcp_sync.py", "test_manifests.py"),
+}
+
+
 def related_tests(files):
     """Test files that name a changed app module, plus the page tests for a page."""
     tests_dir = OBS / "tests"
     modules = set()
     pages = False
+    picked = set()
     for f in files:
         rel = f.relative_to(REPO).as_posix()
-        if rel.startswith("observatory/app/") and f.suffix == ".py":
+        # only app/<hub>.py itself: app/assistant/api.py is an ordinary module that happens to share a name
+        if (rel.startswith("observatory/app/") and f.suffix == ".py" and f.stem in HUB_TESTS
+                and f.parent == OBS / "app"):
+            picked.update(tests_dir / n for n in HUB_TESTS[f.stem] if (tests_dir / n).exists())
+        elif rel.startswith("observatory/app/") and f.suffix == ".py":
             modules.add(f.stem)
         if rel.startswith("observatory/tests/") and f.name.startswith("test_"):
             modules.add("__test__" + f.name)
         if rel.startswith("observatory/web/"):
             pages = True
-    picked = set()
     for t in sorted(tests_dir.glob("test_*.py")):
         if "__test__" + t.name in modules:
             picked.add(t)

@@ -189,6 +189,8 @@ NOT_DATASETS = {
     "/api/v1/equity/cohorts": "served by the list_cohorts and compare_cohort tools",
     "/api/v1/equity/calendar/": ("the JPX earnings calendar is not a dataset yet: it has no freshness "
                                  "row in /api/v1/catalog/health, which a manifest would need"),
+    "/api/v1/page-chat": ("the chat panel on a data page: written answers composed from that page's "
+                          "own dataset views (Boards & Pay: equity-governance)"),
     "/api/v1/representation/": "a calculation over population-jp and population-jp-history, both datasets",
     "/api/v1/us/ask": "the question box: written answers, not data",
     "/api/v1/us/build/": "turns a sentence into a chart or screen spec; what it draws comes from datasets",

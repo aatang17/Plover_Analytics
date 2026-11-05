@@ -50,7 +50,7 @@ QUESTIONS = [
     ("market_rank", "Who has the highest buyback yield among companies above $10bn in market value?"),
     ("market_rank", "The ten largest US companies by market value, with P/E and one-year change."),
     ("market_rank", "Which stocks fell most over the past year among companies above $50bn?"),
-    ("insider_buying_market", "Where are insiders buying in the open market this month, above $1m?"),
+    ("insider_buying_market", "Where are insiders buying in the open market in the last 90 days, above $1m?"),
     ("calendar_window", "Which companies report in the next two weeks on Nasdaq?"),
     ("holders_increase_industry", "Biggest 13F position increases last quarter in banks."),
     ("banks_vs_yield", "How have bank profits moved against the 10-year yield since 2018?"),

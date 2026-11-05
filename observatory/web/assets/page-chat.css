@@ -1,0 +1,119 @@
+/* Plover Assistant (page-chat.js): a panel in the corner of a data page.
+   Text on the primary colour uses --obs-surface, as .btn-primary does, so it is white on
+   blue in light mode and dark on light blue in dark mode. */
+.pc-launch {
+  position: fixed; right: 16px; bottom: calc(16px + var(--pc-bar, 0px)); z-index: 60;
+  font: inherit; font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  padding: 11px 18px; border-radius: 4px; cursor: pointer;
+  color: var(--obs-surface); background: var(--obs-primary); border: 2px solid var(--obs-primary-dark);
+}
+.pc-launch:hover { background: var(--obs-primary-dark); }
+.pc-launch .pc-launch-beta { font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  margin-left: 4px; opacity: 0.85; }
+.pc-launch:focus-visible, .pc-panel button:focus-visible, .pc-q:focus-visible, .pc-grip:focus-visible {
+  outline: 2px solid var(--obs-focus); outline-offset: 2px;
+}
+
+.pc-panel {
+  position: fixed; right: 16px; bottom: calc(16px + var(--pc-bar, 0px)); z-index: 60;
+  width: 380px; max-height: min(600px, calc(100vh - 96px - var(--pc-bar, 0px)));
+  display: flex; flex-direction: column;
+  background: var(--obs-surface); color: var(--obs-ink);
+  border: 2px solid var(--obs-primary); border-radius: 4px;
+  animation: pc-rise 180ms ease-out;
+}
+/* a size the reader dragged to (set inline by page-chat.js) replaces the default cap */
+.pc-panel.pc-sized { max-height: none; }
+.pc-panel.pc-dragging { animation: none; user-select: none; }
+.pc-panel[hidden] { display: none; }
+@keyframes pc-rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pc-panel { animation: none; } }
+
+.pc-head {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px 10px 30px; background: var(--obs-primary); color: var(--obs-surface);
+}
+.pc-title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.pc-beta-tag { margin-left: 4px; font-size: 11px; letter-spacing: 0.06em; opacity: 0.85; }
+.pc-close {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--obs-surface);
+  background: none; border: 1px solid var(--obs-surface); border-radius: 4px; padding: 3px 9px;
+}
+.pc-close:hover { background: var(--obs-primary-dark); }
+.pc-beta { flex: 0 0 auto; margin: 0; padding: 7px 14px; font-size: 12px; line-height: 1.4; color: var(--obs-text-muted);
+  border-bottom: 1px solid var(--obs-border); background: var(--obs-surface-subtle); }
+
+/* Resize: a grip in the top-left corner, and the top and left edges. The panel is anchored
+   bottom-right, so dragging up or left makes it bigger. */
+.pc-grip {
+  position: absolute; left: 0; top: 0; width: 26px; height: 26px; z-index: 2;
+  cursor: nwse-resize; touch-action: none;
+}
+.pc-grip::before, .pc-grip::after {
+  content: ""; position: absolute; height: 2px; background: var(--obs-surface); transform: rotate(-45deg);
+  transform-origin: left center;
+}
+.pc-grip::before { left: 5px; top: 17px; width: 15px; }
+.pc-grip::after { left: 5px; top: 11px; width: 8px; }
+.pc-edge { position: absolute; z-index: 1; touch-action: none; }
+.pc-edge-top { left: 26px; right: 0; top: -5px; height: 9px; cursor: ns-resize; }
+.pc-edge-left { top: 26px; bottom: 0; left: -5px; width: 9px; cursor: ew-resize; }
+
+.pc-gate { margin: 12px 0 8px; padding: 12px 0 0; border-top: 1px solid var(--obs-border); }
+.pc-gate p { margin: 0 0 10px; }
+.pc-signup { display: inline-block; text-decoration: none; font-size: 14px; padding: 8px 16px; }
+.pc-signup:hover { text-decoration: none; }
+.pc-small { font-size: 12px; color: var(--obs-text-muted); }
+
+.pc-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 14px 4px; font-size: 14px; line-height: 1.45; }
+.pc-intro { margin: 0 0 10px; color: var(--obs-text); }
+.pc-try { list-style: none; margin: 0 0 12px; padding: 0; }
+.pc-try li + li { margin-top: 6px; }
+.pc-ex {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; font-size: 13.5px; color: var(--obs-primary);
+  background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; padding: 8px 10px;
+}
+.pc-ex:hover { background: var(--obs-surface-subtle); border-color: var(--obs-primary); }
+
+.pc-you { margin: 12px 0 6px; font-weight: 600; }
+.pc-you:first-child { margin-top: 0; }
+.pc-a p { margin: 0 0 8px; }
+.pc-wait { color: var(--obs-text-muted); }
+.pc-err p { color: var(--obs-warn); }
+.pc-tbl { width: 100%; border-collapse: collapse; margin: 0 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pc-tbl th { font-size: 12px; font-weight: 600; color: var(--obs-text-muted); text-align: left;
+  padding: 4px 6px 4px 0; border-bottom: 1px solid var(--obs-border); }
+.pc-tbl td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--obs-grid); vertical-align: top; overflow-wrap: anywhere; }
+.pc-tbl .r { text-align: right; white-space: nowrap; overflow-wrap: normal; }
+.pc-tbl td:last-child, .pc-tbl th:last-child { padding-right: 0; }
+.pc-link { color: var(--obs-primary); }
+.pc-show {
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--obs-primary); cursor: pointer;
+  background: none; border: 0; padding: 0; margin: 0 0 8px;
+}
+.pc-show:hover { text-decoration: underline; }
+.pc-src { font-size: 12px; color: var(--obs-text-muted); margin: 0 0 4px; }
+
+.pc-form { flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--obs-border); }
+.pc-q {
+  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 14px; color: var(--obs-ink);
+  background: var(--obs-surface); border: 1px solid var(--obs-border); border-radius: 4px; padding: 8px 10px;
+}
+.pc-send { flex: 0 0 auto; font-size: 14px; padding: 0 16px; }
+
+/* the heading the answer moved the page to */
+.pc-target { scroll-margin-top: 80px; }
+.pc-flash { background: var(--obs-accent-soft); transition: background 600ms ease-out; }
+
+@media (max-width: 600px) {
+  .pc-launch { right: 12px; bottom: calc(12px + var(--pc-bar, 0px)); }
+  /* a bottom sheet: full width, and its top edge drags its height */
+  .pc-panel { right: 0; left: 0; bottom: var(--pc-bar, 0px); width: auto !important;
+    max-height: min(72vh, calc(100vh - 64px - var(--pc-bar, 0px)));
+    border-width: 2px 0 0; border-radius: 0; }
+  .pc-edge-left { display: none; }
+  .pc-edge-top { left: 0; top: -8px; height: 14px; }
+  .pc-grip { cursor: ns-resize; }
+}
+@media print { .pc-launch, .pc-panel { display: none; } }

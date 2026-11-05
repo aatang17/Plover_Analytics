@@ -68,7 +68,9 @@ NEVER_CACHE = ("/api/v1/catalog/health",)
 # Whole namespaces that are per-reader rather than per-dataset. Excluded by
 # prefix, not by exact path, so that adding a second account endpoint cannot
 # accidentally put one reader's answer in a cache everybody is served from.
-NEVER_CACHE_PREFIXES = ("/api/v1/account/", "/api/v1/assistant/")
+NEVER_CACHE_PREFIXES = ("/api/v1/account/", "/api/v1/assistant/",
+                        # every question to Plover Assistant is logged by the route (app/page_chat.py)
+                        "/api/v1/page-chat")
 # Under an excluded prefix but safe to cache: the front page's preview needs no account and
 # answers from the same data as the box, so a repeat question is served from memory (the
 # reader model is not called again, and the step route's SQL is not rewritten).
