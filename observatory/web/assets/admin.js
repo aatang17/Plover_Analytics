@@ -1214,6 +1214,7 @@ function trafficReview(rv) {
         return "<tr><td>" + escapeHtml(f.question || f.col || "") + "</td><td>" + escapeHtml(String(f.why || "")) + "</td></tr>";
       }).join("") + "</tbody></table></div>"
     : "";
+  var sweep = trafficSweep(rv.sweep);
   var rows = (rv.questions || []).slice().sort(function (x, y) {
     return (ASK_PILE_ORDER[x.pile] - ASK_PILE_ORDER[y.pile]) || (y.times - x.times);
   });
@@ -1224,7 +1225,41 @@ function trafficReview(rv) {
           '<td class="num">' + fmtCount(r.times) + "</td><td>" + escapeHtml(r.said || MISSING) + "</td></tr>";
       }).join("") + "</tbody></table></div>"
     : '<p class="table-empty">Readers had no questions refused in this window.</p>';
-  return head + line + fails + table;
+  return head + line + fails + sweep + table;
+}
+
+/* The nightly sweep (app/ask_review.sweep): every question readers typed in
+   the last 30 days, asked again on tonight's data and compared with last
+   night's answer. A question that stopped answering, or whose answer changed,
+   is listed with both answers so it can be read before a reader finds it. */
+function trafficSweep(sw) {
+  var head = '<div class="admin-section">Nightly Sweep <span class="note">' +
+    (sw ? "run " + escapeHtml(fmtStamp(sw.at)) + ", every reader question of the last " + fmtCount(sw.days) + " days asked again" : "") + "</span></div>";
+  if (!sw) return head + '<p class="table-empty">The first sweep has not run on this server yet; it runs with the daily review.</p>';
+  var line = "<p>" + fmtCount(sw.answered) + " of " + fmtCount(sw.asked) + " questions answered tonight. Since the last sweep: " +
+    fmtCount((sw.regressed || []).length) + " stopped answering, " + fmtCount((sw.changed || []).length) + " changed their answer, " +
+    fmtCount((sw.fixed || []).length) + " now answer.</p>";
+  var diff = (sw.regressed || []).map(function (r) { return { kind: "Stopped Answering", q: r.q, before: r.before, now: r.now, times: r.times }; })
+    .concat((sw.changed || []).map(function (r) { return { kind: "Answer Changed", q: r.q, before: r.before, now: r.now, times: r.times }; }))
+    .concat((sw.fixed || []).map(function (r) { return { kind: "Now Answers", q: r.q, before: "", now: r.now, times: r.times }; }));
+  var table = diff.length
+    ? '<div class="table-wrap"><table class="data"><thead><tr><th>Change</th><th>Question</th><th class="num">Times Asked</th><th>Last Night</th><th>Tonight</th></tr></thead><tbody>' +
+      diff.slice(0, 60).map(function (r) {
+        return "<tr><td>" + escapeHtml(r.kind) + "</td><td>" + escapeHtml(r.q) + '</td><td class="num">' + fmtCount(r.times) + "</td><td>" +
+          escapeHtml(r.before || MISSING) + "</td><td>" + escapeHtml(r.now || MISSING) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : '<p class="table-empty">Every answer is as it was last night.</p>';
+  var misses = (sw.misses || []).slice().sort(function (x, y) {
+    return (ASK_PILE_ORDER[x.pile] - ASK_PILE_ORDER[y.pile]) || (y.times - x.times);
+  });
+  var missTable = misses.length
+    ? '<div class="table-wrap"><table class="data"><thead><tr><th>Not Answered Tonight</th><th>Verdict</th><th class="num">Times Asked</th><th>Says</th></tr></thead><tbody>' +
+      misses.slice(0, 60).map(function (r) {
+        return "<tr><td>" + escapeHtml(r.q) + (r["new"] ? ' <span class="note">new</span>' : "") + '</td><td data-sort="' + ASK_PILE_ORDER[r.pile] + '">' +
+          askLabel(ASK_PILE, r.pile) + '</td><td class="num">' + fmtCount(r.times) + "</td><td>" + escapeHtml(r.said || r.now || MISSING) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+    : "";
+  return head + line + table + missTable;
 }
 var ASK_WHERE = { full: "Full Answer", preview: "Signed-Out Preview" };
 // who a question came from (app/ask_log.py): never more than this one word

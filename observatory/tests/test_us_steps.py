@@ -248,10 +248,20 @@ class LiveTest(unittest.TestCase):
         self.assertRegex(d["headline"], r"^Microsoft beat the S&P 500 in \d+ of \d+ months")
 
     def test_other_markets_point_elsewhere(self):
-        for q in ("which Japanese banks are cheapest", "best Hong Kong stocks this year"):
-            r = self.c.get("/api/v1/us/ask", params={"q": q})
-            self.assertEqual(r.status_code, 422, q)
-            self.assertIn("US-listed companies only", r.json()["detail"])
+        from app import us_tables
+        # Japan and Hong Kong are in the sandbox since 2026-11-05 (app/us_catalog.py): no pointer elsewhere;
+        # a market with no tables is still pointed away
+        us_tables.sandbox(self.cur)
+        if {"jp", "macro"} & us_tables.attached():
+            for q in ("which Japanese banks are cheapest", "best Hong Kong stocks this year"):
+                self.assertIsNone(us_steps.other_market(q, self.cur), q)
+        else:
+            for q in ("which Japanese banks are cheapest", "best Hong Kong stocks this year"):
+                r = self.c.get("/api/v1/us/ask", params={"q": q})
+                self.assertEqual(r.status_code, 422, q)
+                self.assertIn("US-listed companies only", r.json()["detail"])
+        from app import us_checks
+        self.assertIsNotNone(us_checks.other_market("best European banks this year"), "Europe is still pointed away")
         self.assertIsNone(us_steps.other_market("which US banks are cheapest"))
 
     def test_table_has_borrowings_prior_revenue_and_country(self):

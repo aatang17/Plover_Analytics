@@ -38,6 +38,7 @@ _DROP = {"INC", "INCORPORATED", "CORP", "CORPORATION", "CO", "COMPANY", "LTD", "
 _SHARE_CLASS = re.compile(r"\b(CLASS|CL|SERIES)\s+[A-C]\b")
 _WORD = re.compile(r"[A-Z0-9]+")
 _TICKER_TOKEN = re.compile(r"\b[A-Z]{1,5}(?:[.-][A-Z])?\b")
+_AMOUNT_UNITS = {"K", "M", "MM", "MN", "MIL", "MLN", "B", "BN", "BIL", "BLN", "T", "TN", "TR", "TRN"}
 _TICKER_STOP = {"US", "USA", "PE", "P", "E", "A", "I", "IT", "AT", "ON", "OR", "AN", "ALL", "ARE", "BE",
                 "BY", "CEO", "CFO", "ETF", "IPO", "USD", "NYSE", "SEC", "EPS", "ROE", "ROA", "Q", "FY", "CIK", "SIC", "TSR", "YTD", "AI", "EV", "ESG",
                 "TOP", "TEN", "VS", "AND", "THE", "OF", "IN", "TO", "FOR", "WHO", "WHAT", "HOW", "IS",
@@ -516,6 +517,9 @@ def find_companies(cur, question, limit=4):
                 continue                                   # "Berkshire B shares": the class of the company just named
         if re.match(r"[&/]", text[m.end():m.end() + 1]) or (m.start() > 0 and text[m.start() - 1] in "&/"):
             continue
+        # a money unit after an amount is not a ticker: "$25 BN" is not Brookfield ("Q3 NVDA" still is Nvidia)
+        if tok in _AMOUNT_UNITS and re.search(r"\d\s*$", text[:m.start()]):
+            continue
         rec = idx["by_ticker"][tok]
         typed = tok.replace(".", "-")
         if typed != (rec.get("ticker") or "") and typed in (rec.get("tickers") or []):
@@ -598,12 +602,37 @@ def _build_cusips(cur):
         ORDER BY n.cusip, n.n DESC""").fetchall()
     by_cusip, by_cik = {}, {}
     former = _memo(cur, "former_names", _build_former_names)        # managers keep writing the old name for a while
+    # Every spelling of a CUSIP is weighed, not the first that matches a filer:
+    # 09260K101 (BlackRock Science & Technology Term Trust) was written
+    # "BLACKROCK SCIENCE & TECHNOLO" by most managers, which matches no filer
+    # as truncated, and "Blackrock" by one, which matched BlackRock, Inc. The
+    # filer whose name shares the most leading words with the commonest
+    # spelling wins; a one-word filer never takes a many-word security.
+    spellings = {}
     for cusip, name, n_mgrs, value in rows:
-        if cusip in by_cusip:
+        spellings.setdefault(cusip, []).append((name, n_mgrs, value))
+    for cusip, names in spellings.items():
+        commonest = norm_name(names[0][0]).split()                  # rows come commonest first
+        best = None
+        for name, n_mgrs, value in names:
+            rec = idx["by_norm"].get(norm_name(name)) or former.get(norm_name(name))
+            if rec is None:
+                continue
+            rn = norm_name(rec["name"]).split()
+            shared = 0
+            for a, b in zip(commonest, rn):
+                if a == b or (len(a) >= 4 and (a.startswith(b) or b.startswith(a))):
+                    shared += 1
+                else:
+                    break
+            if len(rn) == 1 and len(commonest) > 1 and shared < len(commonest):
+                continue
+            key = (shared, n_mgrs)
+            if best is None or key > best[0]:
+                best = (key, rec, name, value)
+        if best is None:
             continue
-        rec = idx["by_norm"].get(norm_name(name)) or former.get(norm_name(name))
-        if rec is None:
-            continue
+        _, rec, name, value = best
         by_cusip[cusip] = {"cik": rec["cik"], "name": rec["name"], "issuer_name": name, "value": value}
         by_cik.setdefault(rec["cik"], []).append({"cusip": cusip, "issuer_name": name, "value": value or 0})
     for cik in by_cik:
@@ -713,7 +742,7 @@ MANAGER_PEOPLE = {"bill ackman": "PERSHING SQUARE", "ackman": "PERSHING SQUARE",
                   "stanley druckenmiller": "DUQUESNE FAMILY OFFICE", "jim simons": "RENAISSANCE TECHNOLOGIES", "david einhorn": "GREENLIGHT CAPITAL",
                   "einhorn": "GREENLIGHT CAPITAL", "howard marks": "OAKTREE CAPITAL MANAGEMENT", "paul singer": "ELLIOTT INVESTMENT MANAGEMENT",
                   "elliott": "ELLIOTT INVESTMENT MANAGEMENT", "nelson peltz": "TRIAN FUND MANAGEMENT", "peltz": "TRIAN FUND MANAGEMENT",
-                  "chase coleman": "TIGER GLOBAL MANAGEMENT", "tiger global": "TIGER GLOBAL MANAGEMENT", "steve cohen": "POINT72 ASSET MANAGEMENT",
+                  "two sigma": "TWO SIGMA INVESTMENTS", "chase coleman": "TIGER GLOBAL MANAGEMENT", "tiger global": "TIGER GLOBAL MANAGEMENT", "steve cohen": "POINT72 ASSET MANAGEMENT",
                   "point72": "POINT72 ASSET MANAGEMENT", "millennium": "MILLENNIUM MANAGEMENT", "izzy englander": "MILLENNIUM MANAGEMENT",
                   "norges": "NORGES BANK", "norway's oil fund": "NORGES BANK", "norwegian sovereign wealth fund": "NORGES BANK",
                   "saudi pif": "PUBLIC INVESTMENT FUND", "temasek": "TEMASEK HOLDINGS", "gic": "GIC PRIVATE", "softbank": "SOFTBANK GROUP"}
@@ -738,37 +767,137 @@ def manager_by_cik(cur, cik, name):
 
 def resolve_manager(cur, question):
     """A 13F manager named in the question: (manager_cik, name) or None."""
+    found = manager_candidates(cur, question, limit=1)
+    return (found[0]["cik"], found[0]["name"]) if found else None
+
+
+def manager_candidates(cur, question, limit=3):
+    """13F managers the question may name, best first: [{cik, name, value_usd,
+    how}], `how` being 'listed' (a person or fund on the list above), 'full'
+    (the filed name), 'lead' (its first words, as people say it) or 'word'
+    (one distinctive word). One name index for managers, so every route
+    resolves "Saba Capital", "Two Sigma" and "Ackman" the same way."""
     if not sec_api._has(cur, "sec_13f_filings"):
-        return None
+        return []
     pm = _MANAGER_PEOPLE_RE.search(question or "")
     if pm:
         question = MANAGER_PEOPLE[pm.group(1).lower()]              # "Bill Ackman" -> Pershing Square
     qn = norm_name(re.sub(r"(\w)['\u2019]s\b", r"\1", question or ""))      # Vanguard's -> Vanguard
     if not qn:
-        return None
-    rows = cur.execute("""
+        return []
+    rows = _memo(cur, "managers", lambda c: c.execute("""
         SELECT manager_cik, arg_max(manager_name, filed) AS name, max(table_value) AS v
-        FROM sec_13f_filings WHERE NOT amendment GROUP BY manager_cik ORDER BY v DESC NULLS LAST LIMIT 4000""").fetchall()
+        FROM sec_13f_filings WHERE NOT amendment GROUP BY manager_cik ORDER BY v DESC NULLS LAST LIMIT 4000""").fetchall())
+    found = []                                                    # (rank, -length, -value, cik, name, how)
     best = None
+    lead = None
     for cik, name, v in rows:
         n = norm_name(name)
+        if pm and n == qn:                                        # a listed name, as listed: "Two Sigma" is all common words
+            found.append((0, 0, -(v or 0), cik, name, "listed"))
+            continue
         # a name that is nothing but trade words ("Asset Management") matches any
         # question with those words in it: "Scion Asset Management" found Trust
         # Asset Management LLC after Scion stopped filing
         if len(n) < 4 or all(w in _MANAGER_WORDS or w in _GENERIC_NAMES or len(w) < 3 for w in n.split()):
             continue
         if " " + n + " " in " " + qn + " ":
+            found.append((1, -len(n), -(v or 0), cik, name, "full"))
             if best is None or len(n) > len(best[2]):
                 best = (cik, name, n)
-    if best:
-        return best[0], best[1]
-    # "Berkshire" alone: the largest manager whose name starts with the word —
-    # a name word, never an ordinary one ("portfolio", "capital", "partners")
-    for word in [w for w in qn.split() if len(w) >= 5 and w not in _ENGLISH and w not in _GENERIC_NAMES and w not in _MANAGER_WORDS]:
-        for cik, name, v in rows:                  # rows are largest first
-            if (" " + word + " ") in (" " + norm_name(name) + " "):
-                return cik, name
-    return None
+            continue
+        # the name as people say it: its first two or more words. "Saba Capital"
+        # is "Saba Capital Management, L.P." (filed with an L P that nobody types,
+        # and a first word too short for the one-word rule below)
+        words = n.split()
+        for k in range(len(words) - 1, 1, -1):
+            if not any(len(w) >= 3 and w not in _ENGLISH and w not in _GENERIC_NAMES and w not in _MANAGER_WORDS for w in words[:k]):
+                continue                                          # "Capital Management" alone names nobody
+            if " " + " ".join(words[:k]) + " " in " " + qn + " ":
+                found.append((2, -k, -(v or 0), cik, name, "lead"))
+                if lead is None or k > lead[2]:                   # rows are largest first: a tie keeps the larger
+                    lead = (cik, name, k)
+                break
+    if not found:
+        # "Berkshire" alone: the largest manager whose name starts with the word —
+        # a name word, never an ordinary one ("portfolio", "capital", "partners")
+        for word in [w for w in qn.split() if len(w) >= 5 and w not in _ENGLISH and w not in _GENERIC_NAMES and w not in _MANAGER_WORDS]:
+            for cik, name, v in rows:                  # rows are largest first
+                if (" " + word + " ") in (" " + norm_name(name) + " "):
+                    found.append((3, 0, -(v or 0), cik, name, "word"))
+                    if len([f for f in found if f[0] == 3]) >= limit:
+                        break
+            if found:
+                break
+    found.sort()
+    out, seen = [], set()
+    for rank, _, nv, cik, name, how in found:
+        if cik in seen:
+            continue
+        seen.add(cik)
+        out.append({"cik": cik, "name": name, "value_usd": -nv or None, "how": how})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def names_in(cur, question):
+    """Every name the question may carry, from one place: the listed companies
+    (find_companies), the 13F managers (manager_candidates) and the people on
+    the manager list. {'companies': [...], 'managers': [...], 'people': [...]}"""
+    from . import stock_recipes
+    q = question or ""
+    try:
+        companies = find_companies(cur, stock_recipes._without_benchmarks(q)) or []
+    except Exception:                                             # noqa: BLE001 — no company list on this server
+        companies = []
+    people = [m.group(1) for m in _MANAGER_PEOPLE_RE.finditer(q)]
+    japanese = []
+    try:
+        from . import jp_company_ask
+        hit = jp_company_ask.resolve(cur, q)
+        if hit and hit[0]:
+            japanese = [hit[0]]
+    except Exception:                                             # noqa: BLE001 — no Japanese list on this server
+        japanese = []
+    datasets, series = [], None
+    try:
+        from .assistant import preview
+        datasets = sorted(preview._allowed(q) or [])[:6]
+        series = preview.catalogue_hit(q)
+    except Exception:                                             # noqa: BLE001 — no economy catalogue here
+        datasets, series = [], None
+    return {"companies": companies, "managers": manager_candidates(cur, q, limit=3), "people": people,
+            "japanese": japanese, "datasets": datasets, "series": series}
+
+
+def names_doc(cur, question):
+    """The names found, written for the model's prompt; '' when none. When a
+    name fits both a manager and a listed company (Saba Capital), both are
+    listed and the question's verb decides."""
+    n = names_in(cur, question)
+    lines = []
+    for c in n["companies"][:4]:
+        lines.append("- %s: a listed company, ticker %s%s" % (c.get("name"), c.get("ticker"), (", %s" % c["industry"]) if c.get("industry") else ""))
+    for m in n["managers"]:
+        lines.append("- %s: a 13F manager, managers.manager_cik = %d%s%s" % (
+            m["name"], m["cik"], (", $%.1fbn filed" % (m["value_usd"] / 1e9)) if m.get("value_usd") else "",
+            " (matched on its first words)" if m["how"] == "lead" else (" (matched on one word)" if m["how"] == "word" else "")))
+    for p in n["people"]:
+        lines.append("- \"%s\" is the person behind %s" % (p, MANAGER_PEOPLE[p.lower()].title()))
+    for j in n.get("japanese") or []:
+        lines.append("- %s (%s): a Japanese company, jp_companies.sec_code = '%s'%s" % (
+            j.get("name_en"), j.get("name_ja"), j.get("code"), (", %s" % j["industry"]) if j.get("industry") else ""))
+    if n.get("series"):
+        hit = n["series"]
+        lines.append("- the words name an economic series: econ_observations WHERE dataset = '%s' AND code = '%s'" % (hit[0], hit[1]))
+    elif n.get("datasets"):
+        lines.append("- economic datasets the words point to: %s (read econ_series for the series, then econ_observations)" % ", ".join(n["datasets"]))
+    if not lines:
+        return ""
+    return ("NAMES IN THE QUESTION (found by code; use these ids, never a name match of your own)\n" + "\n".join(lines) +
+            "\nA name that fits both a manager and a listed company: what it owns, holds, bought, sold or its portfolio is the manager; "
+            "its revenue, price, value or who owns it is the company.")
 
 
 # ---- money and time --------------------------------------------------------
@@ -886,6 +1015,7 @@ TIME_PHRASE = re.compile(
     r"\b(?:\d{1,3}|%(n)s)[- ](?:days?|weeks?|months?|quarters?|years?|decades?|sessions?|trading days?)\b(?:\s+ago)?|"
     r"\bsince\s+[a-z0-9]+(?:\s+[a-z0-9]+){0,2}|"
     r"\b(?:this|last|next)\s+(?:week|month|quarter|year)\b|\bytd\b|\byear to date\b|\bmonth to date\b|\bmtd\b|\bqtd\b|"
+    r"\b(?:a|an|one)\s+(?:day|week|month|quarter|year|decade)\s+ago\b|"
     r"\bin\s+(?:19|20)\d{2}\b|\byesterday\b|\btoday\b" % {"n": _NUM_ALT})
 
 

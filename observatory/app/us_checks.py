@@ -113,6 +113,15 @@ def about_us_listed(question, cur=None):
 
 
 def other_market(question, cur=None):
+    from . import us_tables
+    covered = us_tables.attached()
+    if ("jp" in covered or "macro" in covered) and re.search(r"\bjapan(ese)?\b|\btokyo\b|\bnikkei\b|\btopix\b|\btse\b|\bhong\s*kong\b|\bhang\s*seng\b|\bhk\b|\bhsi\b", (question or "").lower()) \
+            and not re.search(r"\beurope|\buk\b|\bbritish|\blondon|\bkorea|\btaiwan|\bindia|\baustralia|\bchina\b|\bshanghai", (question or "").lower()):
+        return None                                               # Japan and Hong Kong are in the sandbox now (app/us_catalog.py)
+    return _other_market_uncovered(question, cur)
+
+
+def _other_market_uncovered(question, cur=None):
     ql = (question or "").lower()
     if about_us_listed(question, cur):
         return None

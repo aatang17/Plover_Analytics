@@ -32,6 +32,8 @@ from . import ask_log, ask_miss, sec_api, us_figures
 
 REVIEW_DAYS = 14
 REPLAY_MAX = 40             # questions asked again per day (each can take a few model calls)
+SWEEP_DAYS = 30             # the nightly sweep: every question readers typed in this window, answered or not
+SWEEP_MAX = 120             # asked again per night, most-asked first
 MATRIX_SAMPLE = 30          # model questions per day from the matrix
 CATALOGUE_SAMPLE = 8        # economic datasets asked about per day, so the whole catalogue comes round about weekly
 START_AFTER_SECONDS = 1800  # the first half hour after a boot belongs to readers
@@ -87,6 +89,62 @@ def refused(days=REVIEW_DAYS, today=None):
     return sorted(seen.values(), key=lambda r: r["last"], reverse=True)
 
 
+def asked(days=SWEEP_DAYS, today=None, froms=("reader",)):
+    """Distinct questions readers typed in the window, answered or not, most
+    asked first: [{q, times, last, kind, answered}]. `kind` is the route or
+    miss of the latest asking. Questions answered from the web are left out:
+    asking them again would pay for a search and compare news with news."""
+    today = today or datetime.date.today()
+    start = today - datetime.timedelta(days=days)
+    seen = {}
+    for e in ask_log._read(start, today):
+        if e.get("from") not in froms or e.get("shape") == "web_news" or e.get("route") == "web":
+            continue
+        k = " ".join((e.get("q") or "").split()).lower()
+        if not k:
+            continue
+        row = seen.setdefault(k, {"q": e["q"], "times": 0, "last": "", "kind": e.get("route"), "answered": e.get("answered")})
+        row["times"] += 1
+        if str(e.get("at")) > row["last"]:
+            row.update(last=str(e.get("at")), kind=e.get("route"), answered=e.get("answered"))
+    return sorted(seen.values(), key=lambda r: (-r["times"], r["last"]), reverse=False)
+
+
+def _key(q):
+    return " ".join((q or "").split()).lower()
+
+
+def sweep(cur, today=None, previous=None, froms=("reader",), limit=SWEEP_MAX, ask=None):
+    """The nightly sweep: every reader question of the last SWEEP_DAYS days is
+    asked again on today's data and compared with the last sweep's answer.
+    Returns {at, days, asked, answered, missed, regressed, changed, fixed,
+    misses, results}; a question whose answer stopped, or whose headline
+    changed with no new data behind it, is a miss to file before a reader
+    finds it (2026-11-05: "what does Saba Capital own" went to the web for
+    weeks with the filings on file, and nothing noticed)."""
+    today = today or datetime.date.today()
+    rows = asked(today=today, froms=froms)[:limit]
+    done = replay(cur, rows, ask=ask)
+    before = {_key(r["q"]): r for r in ((previous or {}).get("results") or [])}
+    regressed, changed, fixed, misses = [], [], [], []
+    for r in done:
+        was = before.get(_key(r["q"]))
+        answers = r["now"] == "answers"
+        if answers and was and was.get("now") == "answers" and (was.get("said") or "") != (r.get("said") or ""):
+            changed.append({"q": r["q"], "before": was.get("said"), "now": r.get("said"), "times": r["times"]})
+        if not answers and was and was.get("now") == "answers":
+            regressed.append({"q": r["q"], "before": was.get("said"), "now": r.get("said") or r["now"], "times": r["times"]})
+        if answers and was and was.get("now") != "answers" and was.get("pile") != "fine":
+            fixed.append({"q": r["q"], "now": r.get("said"), "times": r["times"]})
+        if not answers and r.get("pile") != "fine":
+            misses.append({"q": r["q"], "now": r["now"], "said": r.get("said"), "pile": r.get("pile"), "times": r["times"],
+                           "new": was is None})
+    return {"at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds") + "Z",
+            "days": SWEEP_DAYS, "asked": len(done), "answered": len([r for r in done if r["now"] == "answers"]),
+            "missed": len(misses), "regressed": regressed, "changed": changed, "fixed": fixed, "misses": misses,
+            "results": [{"q": r["q"], "now": r["now"], "said": r.get("said"), "pile": r.get("pile"), "times": r["times"]} for r in done]}
+
+
 def _full_answer(cur, question):
     """What a reader gets: the box, then the fixed economy answers the page asks after it."""
     from . import stock_recipes
@@ -97,6 +155,9 @@ def _full_answer(cur, question):
         if exc.detail != stock_recipes.MACRO_MISS:
             raise
         fixed = preview._macro(question)
+        if not fixed:
+            from . import ask_guard
+            fixed = ask_guard._steps_last(cur, question, None, HTTPException(422, "economy: no fixed answer"))
         if not fixed:
             raise
         return fixed
@@ -147,12 +208,18 @@ def run(cur=None, today=None):
     piles = {}
     for r in done:
         piles[r["pile"]] = piles.get(r["pile"], 0) + 1
+    try:
+        sw = sweep(cur, today, (latest() or {}).get("sweep"))
+    except Exception as exc:                                       # noqa: BLE001 — the review still reports the rest
+        print("ask review: sweep failed: %s" % exc)
+        sw = None
     report = {"day": today.isoformat(), "at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds") + "Z",
               "window_days": REVIEW_DAYS, "refused": len(rows), "replayed": len(done), "piles": piles, "questions": done,
               "matrix": {"code_asked": code["asked"], "code_failed": code["failed"], "model_asked": model["asked"],
                          "model_total": model["total"], "model_failed": model["failed"]},
               "catalogue": {"datasets": catalogue["asked"], "failed": catalogue["failed"], "model_asked": catalogue_model["asked"],
-                            "model_failed": catalogue_model["failed"]}}
+                            "model_failed": catalogue_model["failed"]},
+              "sweep": sw}
     os.makedirs(str(ask_log.ANALYTICS_DIR), exist_ok=True)
     tmp = str(report_path()) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -176,9 +243,20 @@ def summary_text(report):
     m = report["matrix"]
     wrong = [r for r in report["questions"] if r["pile"] == "fix"]
     cat = report.get("catalogue") or {}
-    if not wrong and not m["code_failed"] and not m["model_failed"] and not cat.get("failed") and not cat.get("model_failed"):
+    sw = report.get("sweep") or {}
+    if not wrong and not m["code_failed"] and not m["model_failed"] and not cat.get("failed") and not cat.get("model_failed") \
+            and not sw.get("regressed") and not [x for x in sw.get("misses") or [] if x.get("new") and x.get("pile") == "fix"]:
         return None
     lines = ["Ask box review, %s:" % report["day"]]
+    if sw.get("regressed"):
+        lines.append("%d question%s answered last night and not tonight:" % (len(sw["regressed"]), "" if len(sw["regressed"]) == 1 else "s"))
+        lines += ["- %s" % r["q"] for r in sw["regressed"][:6]]
+    new_fix = [x for x in sw.get("misses") or [] if x.get("new") and x.get("pile") == "fix"]
+    if new_fix:
+        lines.append("%d new reader question%s we hold the data for and did not answer:" % (len(new_fix), "" if len(new_fix) == 1 else "s"))
+        lines += ["- %s" % r["q"] for r in new_fix[:6]]
+    if sw.get("changed"):
+        lines.append("%d answer%s changed since last night (new data or a wobble; read them)." % (len(sw["changed"]), "" if len(sw["changed"]) == 1 else "s"))
     if wrong:
         lines.append("%d refused question%s we hold the data for:" % (len(wrong), "" if len(wrong) == 1 else "s"))
         lines += ["- %s" % r["q"] for r in wrong[:8]]
@@ -239,3 +317,27 @@ def _safely():
         print("ask review failed: %s" % exc)
     finally:
         _RUNNING.release()
+
+
+if __name__ == "__main__":
+    # python -m app.ask_review            the whole review, now, on this machine's data
+    # python -m app.ask_review --sweep    the sweep alone, printed
+    import sys
+    _cur = sec_api._require()
+    if "--sweep" in sys.argv:
+        _froms = ("reader", "example", "us") if "--ours" in sys.argv else ("reader",)
+        _sw = sweep(_cur, previous=(latest() or {}).get("sweep"), froms=_froms, limit=int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else SWEEP_MAX)
+        print(json.dumps({k: v for k, v in _sw.items() if k != "results"}, ensure_ascii=False, indent=1))
+        if "--save" in sys.argv:                               # into the report the admin page reads, keeping the rest of it
+            _rep = dict(latest() or {"day": datetime.date.today().isoformat(), "at": _sw["at"], "window_days": REVIEW_DAYS, "refused": 0,
+                                     "replayed": 0, "piles": {}, "questions": [], "matrix": {"code_asked": 0, "code_failed": [], "model_asked": 0,
+                                                                                            "model_total": 0, "model_failed": []}})
+            _rep["sweep"] = _sw
+            os.makedirs(str(ask_log.ANALYTICS_DIR), exist_ok=True)
+            with open(str(report_path()), "w", encoding="utf-8") as _f:
+                json.dump(_rep, _f, ensure_ascii=False)
+        for _r in _sw["results"]:
+            print("%-8s %-3d %s\n         %s" % (_r["now"], _r["times"], _r["q"], (_r["said"] or "")[:150]))
+    else:
+        _rep = run(_cur)
+        print(summary_text(_rep) or "nothing to fix")

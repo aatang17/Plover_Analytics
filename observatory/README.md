@@ -1660,7 +1660,7 @@ many questions took each route and the median wait, so the split can be watched.
 | Japanese companies (`app/jp_company_ask.py`) | Results, figures, owners, 5% stake changes, shorts and buybacks from the Japanese filings, through the `/api/v1/equity` functions | A company with no US-exchange listing; who owns or trades any Japanese company; after a US refusal | under 1 s, no model |
 | Quick lane (`stock_recipes.quick_match`) | A company (or manager, industry, index) plus a few words that name one shape, read by a fixed grammar | The grammar matches the whole question | under 1 s, no model |
 | Reader (`app/us_ask_model.py`) | One short model call fills a form (shape, companies, period, ranking); code runs the shape | The quick lane did not match | 3–8 s, one call, cached per question per day |
-| Steps (`app/us_steps.py`) | The model writes the steps and one SQL query over the sandbox tables; code runs and checks it | The reader names no shape: counts, shares, screens with several conditions, custom maths | 10–30 s, two to four calls, plan cached per question per day |
+| Steps (`app/us_steps.py`) | The model writes the steps and one SQL query over the sandbox: the summary tables, and since 2026-11-05 every table of the US database, attached read-only, with views in readers' words (`app/us_catalog.py`: `fund_positions`, `managers`, `market_value_daily`, `index_members`) and the raw tables listed from the schema; names in the question are found by code first (`us_link.names_doc`) and handed to the model with their ids; code runs and checks the query | The reader names no shape: counts, shares, screens with several conditions, custom maths; and any fixed shape that would drop a date or time phrase, or would refuse for a reason other than policy (`stock_recipes._run_shape`) | 10–30 s, two to four calls, plan cached per question per day |
 | Economic catalogue (`app/econ_ask.py`) | The model picks from every series dataset in the registry, then one calculation from a closed list; code loads the series through `api.observations`, does the arithmetic and writes every figure | Any route above refuses, or a fixed economy answer shows the wrong thing | 5-8 s, two calls, cached per question per day |
 
 Every answer is then read against the question once (`ask_guard.on_topic`: about 0.8 s, one short model call, and it lets the answer through if the model is slow or off). An answer that shows something else, and a refusal, get one more try (`ask_guard.checked`, `_second_try`): the Japanese filings, then steps if steps has not run. If that fails too the reader is told; a different figure is never shown.
@@ -1678,6 +1678,21 @@ Rules of thumb when adding something:
   vary run to run, so never leave a common question there.
 - A question the data cannot answer gets a plain reason, never a guess (`app/ask_miss.py`), and
   is offered questions on its own subject (`ask_miss.TOPICS`), each of which answers by code.
+- The sandbox holds all three databases since 2026-11-05 (`us_catalog.attach_all`: `sec` the US filings,
+  `jp` the Japanese filings, `macro` every statistics dataset), with views in readers' words (`jp_companies`,
+  `jp_key_figures`, `jp_stakes`, `jp_cross_holdings`, `jp_pay`, `jp_shorts`, `econ_series`, `econ_observations`
+  …). So one step route answers across markets, and the Japanese and economy fixed answers follow the
+  same rule as the US ones: a date or time phrase they do not read goes to steps first (`ask_guard._japan`),
+  and a data refusal from any route is tried there last (`ask_guard._steps_last`) before the reader sees it.
+- Never write "not held" for something that is in the database. `us_figures.judge` checks a
+  model's refusal against the table list itself (`schema_names`), and the quick lane and recipes
+  are renderers: a refusal from one of them that is not policy goes to steps first. Adding a
+  table to the US database makes it visible to steps on the next sandbox build; give it a view in
+  `us_catalog.VIEWS` when readers have words for it.
+- Every reader question of the last 30 days is asked again nightly (`ask_review.sweep`, with the
+  daily review) and compared with the night before; regressions and changed answers are on the
+  admin Traffic page, Ask Box tab, and in the review's Telegram message. Run it by hand with
+  `python -m app.ask_review --sweep [--ours] [--limit N] [--save]`.
 
 "How did X do after Y" questions run on the steps route over the `events` table: the days
 things happened, loaded nightly by `equity/us_events.py` into `data/sec.duckdb` (`us_events`;

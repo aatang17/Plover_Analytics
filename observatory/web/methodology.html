@@ -1926,19 +1926,24 @@
       lines as the ready-made answers: capital expenditure, research spending, gross profit and the
       rest, for the latest annual report and year by year.</li>
       <li><b>Every table is available.</b> Since 5 November 2026 the worked-out answer can reach
-      every table in the US database, read-only: each fund manager's 13F positions line by line,
-      daily market values since 2018, index weights, and the raw filings behind the summary tables.
-      The list of tables is written from the database itself, not by hand, so a table added to the
-      database is known to the box the same day.</li>
+      every table in Plover's three databases, read-only: the US filings (each fund manager's 13F
+      positions line by line, daily market values since 2018, index weights), the Japanese filings
+      (annual-report figures harmonised across accounting standards, 5% stake filings, the
+      shareholder register, cross-shareholdings, named pay, boards, risk factors, buybacks, short
+      positions, segments, AGM votes, earnings releases) and every official-statistics series for
+      Japan, the United States and Hong Kong. The list of tables is written from the databases
+      themselves, not by hand, so a table added to a database is known to the box the same day.
+      Tokyo share prices are not held, and the box says so.</li>
       <li><b>Names are found by code.</b> Companies, fund managers and the people behind them
       ("Ackman", "Saba Capital", "Two Sigma") are matched by code before any question is read, and
       the match is shown to the model with its identifier. A name that fits both a manager and a
       listed fund is resolved by what the question asks: what it owns is the manager; its price is
       the fund.</li>
-      <li><b>A ready-made answer may not drop a word.</b> A ready-made answer that would ignore a
-      date or time phrase in the question ("on 2 January 2024", "a year ago") is not given; the
-      question is worked out step by step instead. A ready-made answer that cannot be given is
-      tried step by step before the box says so.</li>
+      <li><b>A ready-made answer may not drop a word.</b> A ready-made answer, for a US company, a
+      Japanese company or an economic series, that would ignore a date or time phrase in the
+      question ("on 2 January 2024", "a year ago") is not given; the question is worked out step by
+      step instead. A ready-made answer that cannot be given is tried step by step before the box
+      says so, whatever the market.</li>
       <li><b>Which years.</b> S&amp;P 500 members from 2009, other companies from about 2021. Each
       year shows its latest filed value. Only US dollar figures are used: a filer in another
       currency is left blank, never converted, and a line a company did not file is blank, never

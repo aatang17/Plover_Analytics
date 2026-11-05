@@ -890,6 +890,25 @@
     "cannot": null
   },
   {
+    "question": "Which tech companies were worth more than $25bn at the start of LAST_YEAR?",
+    "steps": [
+      "A market value on a past date is market_cap_start_usd: the shares filed by then times that day's close.",
+      "Set the period to start on that date, so the first close is that day's (or the next trading day's).",
+      "List technology companies worth more than $25bn then, largest first, with today's value beside it."
+    ],
+    "period": {
+      "from": "LAST_YEAR-01-01",
+      "to": null
+    },
+    "sql": "SELECT ticker, name, market_cap_start_usd, market_cap_usd, market_cap_start_date, count(*) OVER () AS n FROM stocks WHERE sector = 'Technology' AND market_cap_start_usd > 2.5e10 ORDER BY market_cap_start_usd DESC LIMIT 100",
+    "headline": "{n} technology companies were worth more than $25bn on {market_cap_start_date}, led by {name} at {market_cap_start_usd}.",
+    "chart": {
+      "label": "ticker",
+      "value": "market_cap_start_usd"
+    },
+    "cannot": null
+  },
+  {
     "question": "Alphabet capex as a share of revenue",
     "steps": [
       "Take Alphabet's latest annual report.",
@@ -951,5 +970,88 @@
     "headline": "",
     "chart": null,
     "cannot": "Plover can't tell a company with no debt from one that didn't tag it."
+  },
+  {
+    "question": "Which fund managers added the most Nvidia shares last quarter?",
+    "steps": [
+      "Nvidia is ticker NVDA; fund_positions holds every manager's lines for it, newest quarter (quarters_back 1) and the one before (quarters_back 2).",
+      "Sum each manager's shares held outright per quarter (put_call blank), only lines with shares_ok, since a filing with value and shares swapped would top the list.",
+      "Pivot the two quarters onto one row per manager, never grouping by quarter_end, and rank the increase in shares.",
+      "Keep managers with a line in both quarters; a first-time position is a new holder, not an addition."
+    ],
+    "period": {
+      "from": null,
+      "to": null
+    },
+    "sql": "WITH p AS (SELECT manager_cik, any_value(manager) AS manager, max(quarter_end) FILTER (WHERE quarters_back = 1) AS quarter_end, sum(shares) FILTER (WHERE quarters_back = 1) AS shares_now, sum(shares) FILTER (WHERE quarters_back = 2) AS shares_before, sum(value_usd) FILTER (WHERE quarters_back = 1) AS value_now FROM fund_positions WHERE ticker = 'NVDA' AND put_call IS NULL AND shares_ok GROUP BY manager_cik) SELECT manager, quarter_end, shares_now, shares_before, shares_now - shares_before AS shares_added, value_now FROM p WHERE shares_before IS NOT NULL AND shares_now > shares_before ORDER BY shares_added DESC LIMIT 10",
+    "headline": "{manager} added the most Nvidia shares in the quarter to {quarter_end}: {shares_added} more, to {shares_now}.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "What are Saba Capital's ten largest positions?",
+    "steps": [
+      "Find the manager in managers by name (ILIKE '%saba capital%'); take the largest by value_usd if several match.",
+      "Its newest filing's lines are fund_positions WHERE latest; rank by value_usd, options lines (put_call) kept apart from shares held.",
+      "Show each position's share of the filing's total value."
+    ],
+    "period": {
+      "from": null,
+      "to": null
+    },
+    "sql": "WITH m AS (SELECT manager_cik, name, quarter_end, value_usd AS total_usd FROM managers WHERE name ILIKE '%saba capital%' ORDER BY value_usd DESC LIMIT 1) SELECT m.name AS manager, m.quarter_end, p.issuer_name, p.ticker, p.put_call, p.value_usd, p.value_usd / m.total_usd * 100 AS share_of_portfolio_pct FROM fund_positions p JOIN m USING (manager_cik) WHERE p.latest ORDER BY p.value_usd DESC LIMIT 10",
+    "headline": "{manager}'s largest position at {quarter_end} was {issuer_name}, {value_usd} or {share_of_portfolio_pct}% of its filed portfolio.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Toyota's revenue this year and last",
+    "steps": [
+      "Toyota is sec_code '7203' (NAMES block); its headline figures are in jp_key_figures.",
+      "Take the latest report's revenue for year_offset 0 (this year) and -1 (last year).",
+      "Show both and the change."
+    ],
+    "period": {
+      "from": null,
+      "to": null
+    },
+    "sql": "SELECT any_value(fiscal_year_end) AS fiscal_year_end, max(revenue_yen) FILTER (WHERE year_offset = 0) AS revenue_yen, max(revenue_yen) FILTER (WHERE year_offset = -1) AS prior_revenue_yen, (max(revenue_yen) FILTER (WHERE year_offset = 0) / max(revenue_yen) FILTER (WHERE year_offset = -1) - 1) * 100 AS change_pct FROM jp_key_figures WHERE sec_code = '7203' AND latest",
+    "headline": "Toyota's revenue was {revenue_yen} in the year to {fiscal_year_end}, {change_pct}% on {prior_revenue_yen} the year before.",
+    "chart": null,
+    "cannot": null
+  },
+  {
+    "question": "Who holds 5% or more of Sony?",
+    "steps": [
+      "Sony is sec_code '6758'; 5% filings are in jp_stakes.",
+      "Keep each holder's latest filing on the company and rank by stake."
+    ],
+    "period": {
+      "from": null,
+      "to": null
+    },
+    "sql": "SELECT holder, ratio_pct, prior_ratio_pct, filed_date, important_proposal FROM jp_stakes WHERE sec_code = '6758' AND latest AND ratio_pct >= 5 ORDER BY ratio_pct DESC LIMIT 20",
+    "headline": "{holder} holds the largest filed stake in Sony, {ratio_pct}% as of {filed_date}.",
+    "chart": {
+      "label": "holder",
+      "value": "ratio_pct"
+    },
+    "cannot": null
+  },
+  {
+    "question": "How did Japan's inflation compare with the US in 2024?",
+    "steps": [
+      "Headline CPI: Japan's all-items index (dataset cpi-jp) and the US all-items index (cpi-us), from econ_series by name.",
+      "Year-on-year rates from the index levels: each month against the same month a year earlier.",
+      "Average the twelve monthly rates of 2024 for each country."
+    ],
+    "period": {
+      "from": "2024-01-01",
+      "to": "2024-12-31"
+    },
+    "sql": "WITH s AS (SELECT series_id, country FROM econ_series WHERE (dataset = 'cpi-jp' AND name_en ILIKE 'all items' ) OR (dataset = 'cpi-us' AND name_en ILIKE 'all items%' AND name_en NOT ILIKE '%less%')), o AS (SELECT s.country, o.period, o.value, lag(o.value, 12) OVER (PARTITION BY o.series_id ORDER BY o.period) AS year_ago FROM econ_observations o JOIN s USING (series_id)) SELECT avg(CASE WHEN country = 'Japan' THEN (value / year_ago - 1) * 100 END) AS japan_pct, avg(CASE WHEN country = 'United States' THEN (value / year_ago - 1) * 100 END) AS us_pct FROM o WHERE period BETWEEN DATE '2024-01-01' AND DATE '2024-12-31' AND year_ago IS NOT NULL",
+    "headline": "Consumer prices rose {japan_pct}% in Japan and {us_pct}% in the US on average across 2024, year on year.",
+    "chart": null,
+    "cannot": null
   }
 ]

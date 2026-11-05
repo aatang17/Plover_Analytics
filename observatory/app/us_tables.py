@@ -151,8 +151,13 @@ TABLES = {
 }
 TABLES["annual"] = ("Every filed figure year by year, as last filed, in US dollars (one row per company per fiscal year): "
                     "S&P 500 members from 2009, other companies from about 2021. A blank was not filed.", us_figures.annual_columns())
-# tables built by their own route (not from row dicts): see price_table()
-_DIRECT = {"prices"}
+# the views over the attached database file (app/us_catalog.py): listed here so the
+# model reads them with the rest and the query check knows their names
+from . import us_catalog  # noqa: E402
+for _name, (_what, _sql, _cols) in us_catalog.VIEWS.items():
+    TABLES[_name] = (_what, _cols)
+# tables built by their own route (not from row dicts): see price_table() and us_catalog
+_DIRECT = {"prices"} | set(us_catalog.VIEWS)
 
 
 def sources():
@@ -699,6 +704,23 @@ def _build_sandbox(cur, v):
         if name not in _DIRECT:
             _load(db, name, cols, data.get(name) or [])
     _load_filed(db, cur)
+    # the whole database file, read-only, before the lock: every table reachable, views in readers' words
+    catalog_doc = ""
+    attached = us_catalog.attach_all(db) if cur is not None else set()
+    if attached:
+        from . import us_link
+        cusip_rows = []
+        if "sec" in attached:
+            try:
+                by_cik = us_link._build_cusips_memo(cur)["by_cik"]
+                tickers = _tickers(cur)
+                cusip_rows = [{"cusip": c["cusip"], "ticker": tickers.get(cik), "cik": cik} for cik, v in by_cik.items() for c in v]
+            except Exception:                                     # noqa: BLE001 — positions still list, without tickers
+                cusip_rows = []
+        made = us_catalog.create_views(db, cusip_rows, attached)
+        catalog_doc = us_catalog.raw_doc(db, sorted(attached))
+        _STATE["views"] = made
+        _STATE["attached"] = set(attached)
     n_prices = 0
     if cur is not None and _has(cur, "us_px_daily"):
         n_prices = price_table(cur, db, _price_tickers(cur))
@@ -711,8 +733,20 @@ def _build_sandbox(cur, v):
     db.execute("SET enable_external_access=false")
     db.execute("SET lock_configuration=true")
     with _LOCK:
-        _STATE.update(v=v, db=db, counts=dict({k: len(r) for k, r in data.items()}, prices=n_prices))
+        _STATE.update(v=v, db=db, counts=dict({k: len(r) for k, r in data.items()}, prices=n_prices), catalog_doc=catalog_doc)
     return db
+
+
+def catalog_doc():
+    """The raw tables of the attached files, described from the schema, for the model (empty when not attached)."""
+    with _LOCK:
+        return _STATE.get("catalog_doc") or ""
+
+
+def attached():
+    """The catalogs the current sandbox has attached: a subset of {'sec', 'jp', 'macro'}."""
+    with _LOCK:
+        return set(_STATE.get("attached") or set())
 
 
 FILED_TABLE = "stocks_filed"

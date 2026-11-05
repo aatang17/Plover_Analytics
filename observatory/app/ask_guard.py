@@ -153,14 +153,50 @@ def right_currency(out):
     return out
 
 
-def _own_data(question):
+def _own_data(question, cur=None):
     """Cross-shareholdings, read against the question like any other answer: this
-    shows a company's totals, not its stake in one named stock."""
-    own = jp_holdings_ask.answer(question)
+    shows a company's totals, not its stake in one named stock. That detail is
+    worked out step by step (jp_cross_holdings in the sandbox) before the page
+    pointer is shown."""
+    try:
+        own = jp_holdings_ask.answer(question)
+    except HTTPException as exc:
+        # the fixed answer points at the page for detail it does not show: that detail is in the sandbox now
+        if cur is not None and exc.status_code < 500:
+            from . import stock_recipes
+            alt = stock_recipes._steps_try(cur, question, "cross-holdings pointer: %s" % str(exc.detail)[:60], honest=True)
+            if alt is not None:
+                return alt
+        raise
     if own and not on_topic(question, own)[0]:
         _log(question, "off-topic answer stopped", own.get("headline"))
+        if cur is not None:
+            from . import stock_recipes
+            alt = stock_recipes._steps_try(cur, question, "cross-holdings fixed answer off topic", honest=True)
+            if alt is not None:
+                return alt
         raise ask_miss.miss("This box shows a company's yearly totals, not that detail. " + jp_holdings_ask.PAGE_POINTER, "not_held")
     return own
+
+
+def _steps_last(cur, question, prev, exc):
+    """The last resort before a refusal is shown: the step route, which holds
+    every table (app/us_catalog.py), when nothing else has run it and the
+    refusal is one data could answer. None when it cannot either."""
+    from . import stock_recipes, us_steps
+    text = exc.detail if isinstance(exc.detail, str) else ""
+    kind = getattr(exc, "miss", None) or ask_miss.classify(text)
+    if prev or us_steps.tried() or exc.status_code >= 500 or kind not in RETRIED_MISSES:
+        return None
+    if text == stock_recipes.MACRO_MISS or getattr(exc, "question", None):
+        return None                                            # the fixed economy answers read this first (the page, app/assistant/preview.py)
+    out = stock_recipes._steps_try(cur, question, "last resort after: %s" % text[:80])
+    if out is not None and not on_topic(question, out)[0]:
+        _log(question, "off-topic answer stopped", "steps last: %s" % out.get("headline"))
+        return None
+    if out is not None:
+        _log(question, "answered on the last try", "steps: %s" % out.get("headline"))
+    return out
 
 
 def _japan(cur, question, prev):
@@ -169,6 +205,15 @@ def _japan(cur, question, prev):
     if own and not on_topic(question, own)[0]:
         _log(question, "off-topic answer stopped", own.get("headline"))
         return None
+    if own:
+        # a fixed answer may not drop a date or time phrase it does not read: the step route, which
+        # holds the Japanese tables too, is tried first (app/stock_recipes._run_shape has the same rule)
+        from . import stock_recipes
+        unread = stock_recipes._unread_by(question, {"id": "jp_fixed"})
+        if unread:
+            alt = stock_recipes._steps_try(cur, question, "japan fixed leaves %s unread" % unread, honest=True)
+            if alt is not None:
+                return alt
     return own
 
 
@@ -252,8 +297,15 @@ def answer(cur, question, prev, opts, inner):
     `inner` is the routing in stock_recipes (question, prev, opts as it takes them)."""
     question = ask_language.country_as_us(question)
     # written in Japanese, cross-shareholdings are answered in Japanese without a model call
-    if not ask_language.might_be_foreign(question) or ask_language.KANA.search(question):
-        own = _own_data(question)
+    if not ask_language.might_be_foreign(question):
+        own = _own_data(question, cur)
+        if own:
+            return own
+    elif ask_language.KANA.search(question):
+        try:
+            own = _own_data(question, cur)
+        except HTTPException:                                  # ホンダ: filed as 本田技研工業, found by its English name below
+            own = None
         if own:
             return own
     written, language = question, None
@@ -263,7 +315,7 @@ def answer(cur, question, prev, opts, inner):
             raise ask_miss.miss(CANT_READ, "unclear")
         ask_progress.say("Reading your question…")
         question, language = read["english"], read["language"]
-        own = _own_data(question)
+        own = _own_data(question, cur)
         if own:
             own["question"] = written
             own["match"]["read_as"] = question
@@ -277,7 +329,7 @@ def answer(cur, question, prev, opts, inner):
         try:
             out = right_currency(checked(cur, question, inner(cur, question, prev, opts)))
         except HTTPException as exc:
-            out = _second_try(cur, question, prev, exc) or _economy(cur, question, prev, exc)
+            out = _second_try(cur, question, prev, exc) or _economy(cur, question, prev, exc) or _steps_last(cur, question, prev, exc)
             if out is None:
                 if language and not getattr(exc, "question", None):
                     exc.question = question                    # the economy answers read the English

@@ -256,8 +256,23 @@ def _stock(q, prev=None):
         return None, exc                       # a miss: app/ask_miss.py words it for the reader
     except Exception:  # noqa: BLE001 — no SEC database, or a failure: try the next route
         return None, "error"
+    return _as_preview(a, q), None
+
+
+def _steps(q, prev, refusal):
+    """A refusal's last try, step by step, in the front page's short form; None when it cannot."""
+    from .. import ask_guard
+    try:
+        out = ask_guard._steps_last(_cur(), q, prev, refusal)
+    except Exception:  # noqa: BLE001 — a failure here leaves the refusal as it was
+        return None
+    return _as_preview(out, q) if out else None
+
+
+def _as_preview(a, q=None):
+    """The front page's short form of a full answer; None when there is none."""
     if not a or not a.get("headline"):
-        return None, None
+        return None
     figs = []
     for f in (a.get("figures") or [])[:2]:
         figs.append({"label": f.get("label"), "value": f.get("value"), "unit": f.get("unit"),
@@ -277,7 +292,7 @@ def _stock(q, prev=None):
             # the question as the box read it (a follow-up made whole), for the next follow-up
             "question": a.get("question") or q, "recipe": a.get("recipe"),
             # the full answer is the home page itself, signed in (us-stocks.html redirects there)
-            "full_url": "/?q=" + _quote(a.get("question") or q)}, None
+            "full_url": "/?q=" + _quote(a.get("question") or q)}
 
 
 def _quote(q):
@@ -748,6 +763,9 @@ def _preview(q, prev, on, web=True):
             out = _macro_on_topic(q)
         if out is None and prev and not _is_macro(q):
             out = _macro_on_topic(prev + " " + q)
+    if out is None and not declined and isinstance(refusal, HTTPException):
+        # the last resort before the web: worked out step by step over every table (app/us_catalog.py)
+        out = _steps(q, prev or None, refusal)
     if out is None and refusal != "error" and (not isinstance(refusal, HTTPException) or
                                                (refusal.status_code < 500 and _miss_kind(refusal) != "policy")):
         if not web:

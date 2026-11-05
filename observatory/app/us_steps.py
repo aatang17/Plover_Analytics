@@ -128,6 +128,10 @@ STOCK_COLUMNS = [
     ("in_dow", "BOOLEAN", "a member of the Dow Jones Industrial Average (from the DIA fund's holdings)"),
     ("dow_weight_pct", "DOUBLE", "weight in the Dow, % (blank when not a member)"),
     ("market_cap_usd", "DOUBLE", "market value, US$ (latest close x shares)"),
+    ("market_cap_start_usd", "DOUBLE", "market value at the first close of the period you name in \"period\", US$ "
+                                       "(the shares filed by then x that day's close); blank before mid-2018"),
+    ("market_cap_start_date", "DATE", "the trading day market_cap_start_usd is from"),
+    ("market_cap_end_usd", "DOUBLE", "market value at the last close of the period, US$ (market_cap_usd when it runs to today)"),
     ("price_usd", "DOUBLE", "latest close, US$"),
     ("change_period_pct", "DOUBLE", "price change over the period you name in \"period\", %, split-adjusted, before dividends"),
     ("change_ytd_pct", "DOUBLE", "price change since the first close of this year, %"),
@@ -274,6 +278,47 @@ def period_changes(cur, start, end):
     return ch, (lambda t: _ok_change(ch.get(_sym(t)) or ch.get(t), last_day, closed))
 
 
+_MCAP = {}
+_MCAP_LOCK = threading.Lock()
+MCAP_NEAREST_DAYS = 7       # a stored day further than this from the period's edge is not that day's value
+
+
+def stored_market_values(cur, day, first=True):
+    """(trading day, {ticker: market value}) for the first stored trading day on
+    or after `day` (first) or the last on or before it, from
+    equity/us_market_values.py; (None, {}) when no stored day lies within
+    MCAP_NEAREST_DAYS (history not filled that far back yet). Memoised per
+    database version and day."""
+    if day is None or not sec_api._has(cur, "us_mcap_days"):
+        return None, {}
+    key = (sec_api.file_version(), day, first)
+    with _MCAP_LOCK:
+        if key in _MCAP:
+            return _MCAP[key]
+    hit = cur.execute("SELECT min(date) FROM us_mcap_days WHERE date >= ?" if first else
+                      "SELECT max(date) FROM us_mcap_days WHERE date <= ?", [day]).fetchone()[0]
+    out = (None, {})
+    if hit is not None and abs((hit - day).days) <= MCAP_NEAREST_DAYS:
+        out = (hit, {t: v for t, v in cur.execute("SELECT ticker, market_cap FROM us_mcap_daily WHERE date = ?",
+                                                  [hit]).fetchall()})
+    with _MCAP_LOCK:
+        if len(_MCAP) > 16:
+            _MCAP.clear()
+        _MCAP[key] = out
+    return out
+
+
+def period_market_values(cur, start, end):
+    """(the first close's day, ticker -> value at it, ticker -> value at the
+    period's last close or None for today's); missing is None, never zero."""
+    day, s = stored_market_values(cur, start, first=True)
+    e = stored_market_values(cur, end, first=False)[1] if end else None
+
+    def at(m, t):
+        return m.get(t) if m.get(t) is not None else m.get(_sym(t))
+    return day, (lambda t: at(s, t)), ((lambda t: at(e, t)) if e is not None else None)
+
+
 def bench_rows(cur, start, end):
     today = datetime.date.today()
     _, pc = period_changes(cur, start, end)
@@ -345,7 +390,11 @@ def run(cur, sql, start, end=None, look=False):
     if re.search(r"\bdata\b", sql) and not re.search(r"\b(stocks|benchmarks|%s)\b" % "|".join(us_tables.TABLES), sql):
         raise StepsError("Query the tables stocks, benchmarks, %s." % ", ".join(us_tables.TABLES))
     _, pc = period_changes(cur, start, end)
-    stocks = [dict(r, change_period_pct=pc(r["ticker"])) for r in base_rows(cur)]
+    mv_day, mv_start, mv_end = period_market_values(cur, start, end)
+    stocks = [dict(r, change_period_pct=pc(r["ticker"]), market_cap_start_usd=mv_start(r["ticker"]),
+                   market_cap_start_date=mv_day if mv_start(r["ticker"]) is not None else None,
+                   market_cap_end_usd=mv_end(r["ticker"]) if mv_end else r.get("market_cap_usd"))
+              for r in base_rows(cur)]
     con = _connect(stocks, bench_rows(cur, start, end), cur)
     timer = threading.Timer(SECONDS_MAX, con.interrupt)
     timer.start()
@@ -415,6 +464,10 @@ def _table_doc():
     lines.append("benchmarks: one row per index or fund we can compare against.")
     lines += ["  %s %s: %s" % (c, t, d) for c, t, d in BENCH_COLUMNS]
     lines.append(us_tables.doc())
+    raw = us_tables.catalog_doc()
+    if raw:
+        lines.append("")
+        lines.append(raw)
     return "\n".join(lines)
 
 
@@ -454,7 +507,7 @@ def closest_examples(question, n=EXAMPLES_SHOWN, today=None):
     return [ex for _, _, ex in scored[:n]]
 
 
-def prompt(question, last_price_date=None, today=None):
+def prompt(question, last_price_date=None, today=None, names=""):
     today = today or datetime.date.today()
     with open(RULES_FILE, encoding="utf-8") as f:
         rules = _fill_dates(f.read(), today)
@@ -462,8 +515,10 @@ def prompt(question, last_price_date=None, today=None):
     for ex in closest_examples(question, today=today):
         reply = {k: ex.get(k) for k in ("steps", "period", "sql", "headline", "chart", "cannot")}
         shown.append("Q: %s\nA: %s" % (ex["question"], json.dumps(reply, ensure_ascii=False)))
-    return ("You answer questions about US-listed stocks the way a careful analyst would: break the question into "
-            "steps and write them as one DuckDB SQL query over the tables below (join them on ticker). You never write a number "
+    return ("You answer questions about Plover's data the way a careful analyst would: US-listed stocks (tables stocks, benchmarks, "
+            "prices, annual and the rest, joined on ticker), Japanese companies (the jp_ tables, joined on sec_code) and official "
+            "statistics for Japan, the United States and Hong Kong (the econ_ tables, by series_id). Break the question into "
+            "steps and write them as one DuckDB SQL query over the tables below. You never write a number "
             "from the data yourself: the query finds every number, and your headline names the query's result "
             "columns in {braces} for the server to fill in.\n"
             "Today is %s. Daily prices run to %s.\n\n"
@@ -478,9 +533,9 @@ def prompt(question, last_price_date=None, today=None):
             " \"chart\": null or {\"label\": <result column>, \"value\": <result column>} for a list worth drawing as bars,\n"
             " \"cannot\": null, or one sentence for the reader saying what Plover's data does not hold (never \"the tables\"), "
             "or \"unclear\" when the message is not a question}\n\n"
-            "TABLES\n%s\n\nRULES\n%s\n\nWORKED EXAMPLES\n%s"
-            % (today.isoformat(), (last_price_date or today).isoformat(), LOOK_ROWS_SHOWN, LOOKS_MAX, _table_doc(), rules,
-               "\n\n".join(shown)))
+            "TABLES\n%s\n\n%sRULES\n%s\n\nWORKED EXAMPLES\n%s"
+            % (today.isoformat(), (last_price_date or today).isoformat(), LOOK_ROWS_SHOWN, LOOKS_MAX, _table_doc(),
+               (names + "\n\n") if names else "", rules, "\n\n".join(shown)))
 
 
 # ---------------------------------------------------------------- the model
@@ -555,6 +610,19 @@ def _period_words(start, end, today=None):
 _SIGNED = re.compile(r"change|diff|gap|return|vs|minus|excess|relative")
 
 
+def yen(v):
+    """A yen amount in words: ¥50.7tn, ¥1.23bn, ¥850mn."""
+    a = abs(float(v))
+    sign = "−" if v < 0 else ""
+    if a >= 1e12:
+        return "%s¥%.2ftn" % (sign, a / 1e12) if a < 1e13 else "%s¥%.1ftn" % (sign, a / 1e12)
+    if a >= 1e9:
+        return "%s¥%.2fbn" % (sign, a / 1e9) if a < 1e10 else "%s¥%.1fbn" % (sign, a / 1e9)
+    if a >= 1e6:
+        return "%s¥%.0fmn" % (sign, a / 1e6)
+    return "%s¥%s" % (sign, "{:,}".format(int(round(a))))
+
+
 def fmt_value(col, v):
     """A result value in words, by the column's unit suffix."""
     from .stock_recipes import date_words, money, mult, pct
@@ -570,6 +638,8 @@ def fmt_value(col, v):
             return ("+" if v > 0 else "−" if v < 0 else "") + "%.1f pp" % abs(v)
         if c.endswith("_usd"):
             return money(v)
+        if c.endswith("_yen"):
+            return yen(v)
         if c.endswith("_x"):
             return mult(v)
         if c.endswith("year") and float(v).is_integer() and 1800 <= int(v) <= 2200:
@@ -634,14 +704,16 @@ def fill_headline(template, cols, row, words, question, sql=""):
 
 
 _LABELS = {"ticker": "Ticker", "name": "Company", "sector": "Sector", "industry": "Industry", "exchange": "Exchange",
-           "key": "Benchmark", "fund_ticker": "Fund", "n": "Count", "members": "Members"}
+           "key": "Benchmark", "fund_ticker": "Fund", "n": "Count", "members": "Members",
+           "market_cap_start_usd": "Market value then (USD)", "market_cap_start_date": "Value on",
+           "market_cap_end_usd": "Market value at end (USD)"}
 
 
 def label(col):
     if col in _LABELS:
         return _LABELS[col]
     c = col.lower()
-    for suf, unit in (("_pct", " %"), ("_pp", " (pp)"), ("_usd", " (USD)"), ("_x", " (×)")):
+    for suf, unit in (("_pct", " %"), ("_pp", " (pp)"), ("_usd", " (USD)"), ("_yen", " (¥)"), ("_x", " (×)")):
         if c.endswith(suf):
             base = col[:-len(suf)]
             return (base.replace("_", " ").strip().capitalize() or "Value") + unit
@@ -683,11 +755,15 @@ OTHER_MARKETS = [
 
 
 def other_market(question, cur=None):
-    """A pointer when the question names a market this box does not cover, else None."""
+    """A pointer when the question names a market this box does not cover, else None.
+    Japan and Hong Kong are covered once their tables are in the sandbox (app/us_catalog.py)."""
     ql = (question or "").lower()
     if us_checks.about_us_listed(question, cur):
         return None
+    covered = us_tables.attached()
     for pat, where in OTHER_MARKETS:
+        if ("jp" in covered or "macro" in covered) and re.search(r"japan|tokyo|nikkei|topix|hong|hang|\bhk\b|hsi", pat):
+            continue
         if re.search(pat, ql):
             return (OTHER_MARKET_PREFIX + " %s. A Japanese or Hong Kong company appears here only if it "
                     "is also listed in the US (its depositary shares)." % where)
@@ -711,7 +787,11 @@ def answer(cur, question):
     if not sec_api._has(cur, "us_px_daily"):
         raise StepsError("no prices")
     last = us_prices_api.latest_date(cur)
-    messages = [{"role": "system", "content": prompt(question, last)},
+    try:
+        names = us_link.names_doc(cur, question)
+    except Exception:                                             # noqa: BLE001 — the model still has the tables
+        names = ""
+    messages = [{"role": "system", "content": prompt(question, last, names=names)},
                 {"role": "user", "content": (question or "").strip()[:300]}]
     plan, rows, cols, start, end, headline = None, None, None, None, None, None
     findings, verdict, reviewed = [], None, False
@@ -851,7 +931,9 @@ def answer(cur, question):
             _PLANS.clear()
         _PLANS[_plan_key(question)] = {k: plan.get(k) for k in ("steps", "period", "sql", "headline", "chart", "cannot")}
     if not rows or all(v is None for r in rows for c, v in zip(cols, r) if c not in ("ticker", "name")):
-        foreign = _files_in_other_currency(cur, question)
+        # a filer in another currency explains blanks in the filed figures, not an empty 13F or price query
+        reads_filed = re.search(r"\bannual\b|\b(?:%s)\b" % "|".join(re.escape(c) for c in _FILED_COLUMNS), plan.get("sql") or "")
+        foreign = _files_in_other_currency(cur, question) if reads_filed else None
         if foreign:
             from . import ask_miss
             raise ask_miss.miss(foreign, "not_held")
@@ -860,6 +942,16 @@ def answer(cur, question):
     row0 = rows[0] if rows else None
     if not rows:
         headline = "No stock matches that %s." % words if "change_period" in (plan.get("sql") or "") else "Nothing on file matches that."
+        # a name the question carries that is on the SEC's list but not among the operating companies
+        # (a closed-end fund, a trust): say so, rather than "nothing matches"
+        try:
+            listed = {r["ticker"] for r in base_rows(cur)}
+            outside = [c for c in us_link.names_in(cur, question)["companies"] if c.get("ticker") and c["ticker"] not in listed]
+        except Exception:                                         # noqa: BLE001 — the plain headline stands
+            outside = []
+        if outside:
+            headline = ("%s is on the SEC's list but files no operating accounts (a fund, trust or holding vehicle), so Plover has no "
+                        "revenue, profit or balance sheet for it; its share price and who holds it are on file." % outside[0]["name"])
     elif headline is None:
         if len(rows) == 1 and len(cols) <= 3:
             headline = "; ".join("%s: %s" % (label(c), fmt_value(c, v)) for c, v in zip(cols, row0)) + "."

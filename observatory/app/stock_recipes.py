@@ -1556,6 +1556,18 @@ def _share_change(r, num):
     return "%s%s shares%s" % ("+" if change > 0 else "", num(change), " across %d share classes" % r[8] if r[8] > 1 else "")
 
 
+def _manager_filed_total(cur, manager_cik, period):
+    """(lines, value) of the manager's filing for the quarter, options included: what the filing itself says."""
+    try:
+        r = cur.execute("""
+            WITH f AS (SELECT accession FROM sec_13f_filings WHERE manager_cik = ? AND report_period = ? AND NOT amendment
+                       ORDER BY filed DESC LIMIT 1)
+            SELECT count(*), sum(value) FROM sec_13f_holdings JOIN f USING (accession)""", [manager_cik, period]).fetchone()
+    except Exception:                                             # noqa: BLE001 — the long-only figures stand
+        return None
+    return (int(r[0]), float(r[1] or 0)) if r and r[0] else None
+
+
 def r_manager_portfolio(cur, q, e):
     mgr = e.get("manager")
     if not mgr:
@@ -1569,6 +1581,13 @@ def r_manager_portfolio(cur, q, e):
     total = sum(r[2] or 0 for r in cur_rows)
     # "does Berkshire own Apple", "Vanguard's stake in Apple": that one position
     target = next((c for c in (e.get("companies") or []) if c["cik"] != cik), None)
+    if target:
+        # a company found only in the manager's own name is not a second company:
+        # "what does Saba Capital own" also names Saba Capital Income & Opportunities Fund
+        name_words = [w for w in us_link.norm_name(name).split() if len(w) >= 3]
+        rest = re.sub(r"(?i)\b(?:%s)\b" % "|".join(re.escape(w) for w in name_words), " ", q or "") if name_words else (q or "")
+        if not any(c["cik"] == target["cik"] for c in us_link.find_companies(cur, rest)):
+            target = None
     if target:
         cusips = {c["cusip"] for c in us_link.cusips_for(cur, target["cik"])}
         pos = [r for r in rows if r[0] in cusips]
@@ -1603,20 +1622,33 @@ def r_manager_portfolio(cur, q, e):
     bigger = sorted([r for r in held if r[5] and r[3] and r[3] > r[5] * 1.001], key=lambda r: -((r[3] or 0) - (r[5] or 0)) * ((r[2] or 0) / (r[3] or 1)))
     smaller = sorted([r for r in held if r[5] and r[3] is not None and r[3] < r[5] * 0.999], key=lambda r: ((r[3] or 0) - (r[5] or 0)) * ((r[2] or 0) / (r[3] or 1)))
     top = held[0]
-    headline = "%s reported %s across %d positions for the quarter to %s; the largest is %s at %s." % (
-        name.title(), money(total), len(cur_rows), date_words(period), top[1].title(), pct(top[2] / total * 100 if total else None))
+    filed = _manager_filed_total(cur, cik, period)
+    if filed and filed[0] > len(cur_rows):
+        headline = "%s filed %d positions worth %s for the quarter to %s: %d stock positions worth %s, plus %d option lines. The largest stock position is %s at %s of the stock part." % (
+            name.title(), filed[0], money(filed[1]), date_words(period), len(cur_rows), money(total), filed[0] - len(cur_rows),
+            top[1].title(), pct(top[2] / total * 100 if total else None))
+    else:
+        headline = "%s reported %s across %d positions for the quarter to %s; the largest is %s at %s." % (
+            name.title(), money(total), len(cur_rows), date_words(period), top[1].title(), pct(top[2] / total * 100 if total else None))
     bits = []
+    # a prior quarter with a fraction of the positions is another filing entity or a restructure
+    # (Pershing Square Inc. filed 1 position in March 2026 and 15 in June), not a quarter of buying
+    prev_count = len([r for r in rows if r[4] is not None])
+    odd_prior = bool(prev_period) and bool(cur_rows) and prev_count and (prev_count < 0.5 * len(cur_rows) or prev_count > 2 * len(cur_rows))
+    if odd_prior:
+        bits.append("Its filing for the quarter to %s listed %d position%s, against %d now, so the quarter-on-quarter changes below say more about the "
+                    "filing than the portfolio (a new filing entity or a restructure)." % (date_words(prev_period), prev_count, "" if prev_count == 1 else "s", len(cur_rows)))
     ql = (q or "").lower()
-    sells = bool(re.search(r"\b(sold|sell|sells|selling|trimmed|trim|cut|reduced|dropped|exited|dumped|disposed)\b", ql))
-    buys = bool(re.search(r"\b(bought|buy|buys|buying|added|adds|adding|new positions?|increased|raised|built)\b", ql))
-    if prev_period and sells and not buys:
+    sells = bool(re.search(r"\b(sold|sell|sells|selling|trimmed|trim|trims|cut|reduced|reduce|dropped|drop|exited|exit|dumped|disposed|closed)\b", ql))
+    buys = bool(re.search(r"\b(bought|buy|buys|buying|add|added|adds|adding|new positions?|increased|raised|built|opened|initiated)\b", ql))
+    if prev_period and sells and not buys and not odd_prior:
         drop_names = ", ".join(r[1].title() for r in sorted(dropped, key=lambda r: -(r[4] or 0))[:5]) or "none"
         trim_names = ", ".join("%s (%s)" % (r[1].title(), _share_change(r, num)) for r in smaller[:4]) or "none"
         headline = "%s sold out of %d position%s and trimmed %d in the quarter to %s. Sold out: %s. Trimmed most: %s." % (
             name.title(), len(dropped), "" if len(dropped) == 1 else "s", len(smaller), date_words(period), drop_names, trim_names)
         bits.append("Against the quarter to %s. The portfolio held %s across %d positions at the quarter end; the largest is %s at %s." % (
             date_words(prev_period), money(total), len(cur_rows), top[1].title(), pct(top[2] / total * 100 if total else None)))
-    elif prev_period and buys and not sells:
+    elif prev_period and buys and not sells and not odd_prior:
         new_names = ", ".join(r[1].title() for r in sorted(new, key=lambda r: -(r[2] or 0))[:5]) or "none"
         add_names = ", ".join("%s (%s)" % (r[1].title(), _share_change(r, num)) for r in bigger[:4]) or "none"
         headline = "%s opened %d new position%s and added to %d in the quarter to %s. New: %s. Added most: %s." % (
@@ -3033,6 +3065,15 @@ def r_company_history(cur, q, e):
         head = cur.execute("SELECT max(period) FROM sec_filings WHERE cik = ? AND form IN (%s)"
                            % ",".join("?" * len(sec_api.ANNUAL_FORMS)), [rec["cik"]] + list(sec_api.ANNUAL_FORMS)).fetchone()[0]
         hist = annual_history(cur, rec["cik"], hf, head)
+        f = hf.get("figure")
+        if len(cos) == 1 and f and head and (not hist or hist[-1][0].year < head.year):
+            # The latest report carries the figure by segment only (Ford's debt: the car
+            # business and Ford Credit). A company-wide line that stopped years earlier is
+            # some narrower item (Ford's 2018-20 "long-term debt" was $0.3-0.6bn), not this.
+            row = row_for(cur, rec["cik"])
+            if row and _segmented_only(cur, row["adsh"], f):
+                raise HTTPException(404, "%s reports %s by business segment only, with no company-wide line, so there is no "
+                                         "yearly figure to chart; I do not add segments together." % (rec["name"], f["label"]))
         if since:
             hist = [h for h in hist if h[0].year >= since.year]
         if until:
@@ -4831,6 +4872,7 @@ def match(cur, question):
             return BY_ID["company_figure"], e, 0, []
         # No shape word at all: the model may read it (answer() tries that on a
         # 422); only if it cannot does a bare company name mean "what is it worth".
+        _covered_market_or_none(q, e)
         raise HTTPException(422, NO_MATCH_TEXT if not e["companies"] else _BARE_COMPANY)
     best = scored[0][1]
     alts = [{"recipe": r["id"], "label": r["label"]} for s, r in scored[1:3]]
@@ -4838,6 +4880,16 @@ def match(cur, question):
 
 
 _BARE_COMPANY = "bare-company"
+def _covered_market_or_none(q, e):
+    """A question about Japan or Hong Kong, markets the sandbox holds (app/us_catalog.py), is one
+    the step route works out; when that could not run, the reader hears so, never "unclear"."""
+    from . import ask_miss, us_tables
+    if not (e or {}).get("companies") and ({"jp", "macro"} & us_tables.attached()) and \
+            re.search(r"\bjapan(?:ese)?\b|\btokyo\b|\bnikkei\b|\btopix\b|\bhong\s*kong\b|\bhang\s*seng\b|\bhk\b", (q or "").lower()):
+        raise ask_miss.miss("Plover holds the Japanese and Hong Kong filings and statistics that question needs, but couldn't work it out just now. "
+                            "Try naming a company or a figure, for example \u201cToyota revenue\u201d or \u201cwhich Japanese banks have the most assets\u201d.", "unsure")
+
+
 NO_MATCH_TEXT = ("I couldn't match that to a question I can answer. Try a company (a ticker like AAPL works), "
                  "an industry, a manager, or a list such as 'largest US companies by market value'.")
 
@@ -5572,6 +5624,92 @@ def is_macro_question(cur, question):
         return True
 
 
+class _Answered(Exception):
+    """A fixed shape's question was answered step by step instead (see _run_shape)."""
+    def __init__(self, out):
+        Exception.__init__(self, "answered by steps")
+        self.out = out
+
+
+# the shapes that read a calendar day written in the question; any other shape
+# handed "on 2 January 2024" would answer today's figure and drop the date
+_DATE_READS = {"company_price_performance", "company_calendar", "calendar_window", "insider_buying_market", "company_insiders",
+               "index_contribution", "vs_benchmark", "market_rank", "industry_rank", "company_quarters",
+               "holders_increase_industry", "company_as_filed_history", "compare_companies"}
+
+
+# the shapes that read a period or a point in time at all; every other shape answers
+# the latest figure, so any time phrase in its question ("one year ago", "in 2023") is unread
+_TIME_READS = _DATE_READS | {"company_history", "company_growth_margin", "ceo_pay", "company_shareholder_return", "banks_vs_yield",
+                             "company_figure", "manager_portfolio", "company_splits",
+                             "jp_fixed"}        # the Japanese fixed answers read their own windows; only phrases no parser reads count
+
+
+def _unread_by(question, r):
+    """What a fixed shape would drop from the question: a calendar day it does
+    not read, a time phrase no parser reads, or any time phrase when the shape
+    has no notion of time; '' when it reads everything."""
+    ql = (question or "").lower()
+    if us_link.parse_date(question) and r["id"] not in _DATE_READS and \
+            not re.search(r"\bsince\b|\bfrom\b|\bbetween\b|\bafter\b|\bbefore\b", ql):
+        return "the date"
+    if r["id"] not in _TIME_READS:
+        m = us_link.TIME_PHRASE.search(ql)
+        if m and not re.fullmatch(r"(?:this|last|the latest) (?:quarter|year)|today|latest", m.group(0).strip()):
+            return m.group(0).strip()
+    left = us_link.unread_time(question)
+    return ", ".join(left) if left else ""
+
+
+def _steps_try(cur, question, why, honest=False):
+    """The step route's answer, or None when it is off or cannot (the fixed
+    answer or refusal then stands). With `honest`, a believed "not held" from
+    the steps is raised instead of dropped: when a fixed shape would ignore a
+    date, "Plover holds only the latest lists" is the answer, not today's
+    figure."""
+    from . import us_steps
+    if not us_steps.enabled():
+        return None
+    us_steps.log(question, "steps first", why)
+    try:
+        return us_steps.answer(cur, question)
+    except us_steps.StepsError:
+        return None
+    except HTTPException as exc:
+        if honest and exc.status_code < 500 and getattr(exc, "miss", None) == "not_held":
+            raise
+        return None
+
+
+def _run_shape(cur, question, r, e):
+    """Run a fixed shape as a renderer: it may not drop a word of the question
+    and it may not refuse. A date or time phrase it does not read sends the
+    question to the step route first; a refusal that is not a matter of
+    policy (not held, no match) is tried there before the reader sees it.
+    Raises _Answered(out) when the steps answered; _route returns that."""
+    from . import ask_miss
+    unread = _unread_by(question, r)
+    if unread:
+        out = _steps_try(cur, question, "%s leaves %s unread" % (r["id"], unread), honest=True)
+        if out is not None:
+            raise _Answered(out)
+    try:
+        out = r["run"](cur, question, e)
+        if unread:
+            # the steps could not do it either: the fixed answer is shown, and says what it did not read
+            out.setdefault("notes", [])
+            out["notes"].insert(0, "Not read: \u201c%s\u201d. This is the latest figure on file; Plover could not work the question out for that time." % unread)
+        return out
+    except HTTPException as exc:
+        kind = getattr(exc, "miss", None) or ask_miss.classify(exc.detail if isinstance(exc.detail, str) else "")
+        if exc.status_code >= 500 or kind in ("policy", "unclear", "other_market"):
+            raise
+        out = _steps_try(cur, question, "%s refused: %s" % (r["id"], str(exc.detail)[:80]))
+        if out is not None:
+            raise _Answered(out)
+        raise
+
+
 def answer(cur, question, prev=None, opts=None):
     """The box's answer, through the last checks: another language put into English,
     cross-shareholdings from their own data, and an answer that shows a different
@@ -5581,6 +5719,13 @@ def answer(cur, question, prev=None, opts=None):
 
 
 def _route(cur, question, prev=None, opts=None):
+    try:
+        return _route_fixed(cur, question, prev, opts)
+    except _Answered as a:
+        return a.out
+
+
+def _route_fixed(cur, question, prev=None, opts=None):
     """The quick lane first: a company plus a few words naming one shape is
     answered by code at once. Then the reader: a small model fills in the
     question's form (app/us_ask_model.py) and the shape it names runs on the
@@ -5663,7 +5808,7 @@ def _route(cur, question, prev=None, opts=None):
             r, e = quick
             e["opts"] = opts
             ask_progress.say(_doing(r, e))
-            out = r["run"](cur, question, e)
+            out = _run_shape(cur, question, r, e)
             out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "quick", "read_as": None}
             return _finish(out, e)
         lined = line_match(cur, question)
@@ -5671,7 +5816,7 @@ def _route(cur, question, prev=None, opts=None):
             r, e = lined
             e["opts"] = opts
             ask_progress.say(_doing(r, e))
-            out = r["run"](cur, question, e)
+            out = _run_shape(cur, question, r, e)
             out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "quick", "read_as": None}
             return _finish(out, e)
     ask_progress.say("Reading your question…")
@@ -5694,6 +5839,10 @@ def _route(cur, question, prev=None, opts=None):
             # company ("Apple revenue history") goes to the word patterns instead of being refused
             if kind == "unclear" and us_link.find_companies(cur, _without_benchmarks(question)):
                 return _pattern_answer(cur, question, opts)
+            if kind not in ("policy", "unclear"):
+                out = _steps_try(cur, question, "reader refused: " + form["refuse"])
+                if out is not None:
+                    return out
             raise ask_miss.miss(_REFUSALS[form["refuse"]] or ask_miss.UNCLEAR, kind)
         # a follow-up ("and Microsoft?") is answered as the whole question the
         # reader wrote from it and the previous one; the page shows that reading
@@ -5765,7 +5914,7 @@ def _route(cur, question, prev=None, opts=None):
             r = BY_ID[form["shape"]]
             e["opts"] = opts
             ask_progress.say(_doing(r, e))
-            out = r["run"](cur, question, e)
+            out = _run_shape(cur, question, r, e)
             out["match"] = {"recipe": r["id"], "label": r["label"], "score": None, "alternatives": [], "via": "reader",
                             "read_as": form.get("read_as")}
             out["did_you_mean"] = form.get("alternatives") or []
@@ -5784,7 +5933,7 @@ def _route(cur, question, prev=None, opts=None):
                 us_steps.log(question, "no_fit: answered by patterns", recipe["id"])
                 e2["opts"] = opts
                 ask_progress.say(_doing(recipe, e2))
-                out = recipe["run"](cur, question, e2)
+                out = _run_shape(cur, question, recipe, e2)
                 out["match"] = {"recipe": recipe["id"], "label": recipe["label"], "score": score, "alternatives": alts,
                                 "via": "patterns", "read_as": form.get("read_as")}
                 out["did_you_mean"] = form.get("alternatives") or []
@@ -5906,6 +6055,7 @@ def _pattern_answer(cur, question, opts=frozenset()):
         _metric(question)                    # a figure we do not hold says so first, in its own words
         # the reader is off or failed, and the ranking would answer without these words
         from . import ask_miss
+        _covered_market_or_none(question, e)  # a Japanese or Hong Kong ranking is the step route's; it says so when that could not run
         raise ask_miss.miss("I couldn't read “%s” in that question, so I won't rank without it. Try saying it another "
                             "way, for example “best performing stocks outside the technology sector over the past 5 months”."
                             % " ".join(dict.fromkeys(left)), "unclear")

@@ -129,7 +129,7 @@ class RefusalCheckTest(unittest.TestCase):
             return plans.pop(0), "raw"
         patches = [mock.patch.object(us_steps, "_ask_model", fake), mock.patch.object(sec_api, "_has", lambda c, t: True),
                    mock.patch.object(us_steps.us_prices_api, "latest_date", lambda c: datetime.date(2026, 10, 30)),
-                   mock.patch.object(us_steps, "prompt", lambda q, last=None: "p")]
+                   mock.patch.object(us_steps, "prompt", lambda q, last=None, **kw: "p")]
         for p in patches:
             p.start()
         self.addCleanup(lambda: [p.stop() for p in patches])

@@ -114,7 +114,13 @@ class DoorsTest(unittest.TestCase):
         code, d = self.full("asdf qwerty")
         self.assertEqual((code, d["miss"], d["detail"]), (422, "unclear", ask_miss.UNCLEAR))
         code, d = self.full("best japanese banks")
-        self.assertEqual(d["miss"], "other_market")
+        from app import us_tables
+        if {"jp", "macro"} & us_tables.attached():
+            # Japan is in the sandbox (app/us_catalog.py): with the model off the box says it could not work it out, never "another market"
+            self.assertEqual(d["miss"], "unsure")
+            self.assertIn("Japanese", d["detail"])
+        else:
+            self.assertEqual(d["miss"], "other_market")
 
     def test_a_reader_that_calls_a_company_question_unclear_is_overruled(self):
         from app import us_ask_model

@@ -291,7 +291,6 @@ GAPS = [
     r"\bsubscribers?\b|\busers?\b|customer counts?|how many customers|market share|\bpatents?\b|store counts?",
     r"member lists?|members? of the (?:nasdaq|russell)|nasdaq.100 members|russell \d+ members|(?:its|their) members",
     r"pay below|below the executive|pay outside|outside the s&p|non.s&p|workers' pay",
-    r"(?:a |one |single |single fund's )?(?:fund|manager)'?s? (?:own )?portfolio|which fund holds",
     r"before (?:mid.)?(?:19|20)\d\d|prior to (?:19|20)\d\d|earlier than (?:19|20)\d\d|that (?:far|early)|history (?:only )?(?:starts|begins)",
     r"explain why|\bwhy a |\bwhy it |\badvice\b|\brecommend|buy or sell|what will happen|the future",
     r"quarterly (?!revenue|results|earnings|profit|net income|operating income|eps)\w+(?: \w+){0,3}|(?:by|each|per|single) quarter",
@@ -302,6 +301,14 @@ GAPS = [
     r"more than eight quarters|eight quarters|beyond the last",
 ]
 _GAP = re.compile("|".join("(?:%s)" % g for g in GAPS), re.I)
+# a limit of history, not of subject ("holds only the latest holdings list", "the quarters to June 2026 only"):
+# believed when the question asks about a past time; read on the whole sentence, since "only" is where
+# missing_part cuts
+_HISTORY_GAP = re.compile(r"\bholds? only\b|\bonly the (?:latest|last|newest|current|most recent)\b|\b(?:list|lists|quarters?|years?|months?|snapshots?|windows?|data) (?:on file )?only\b|"
+                          r"\b(?:19|20)\d\d(?: (?:and|to|or) (?:\w+ )?(?:19|20)\d\d)? only\b|\bonly (?:from|since|back to|as far back as) (?:\w+ )?(?:19|20)\d\d\b|"
+                          r"\bno (?:earlier|older|past|historical) (?:lists?|snapshots?|data|figures?|values?|quarters?)\b|\bcovers? only\b|\bonly covers?\b|"
+                          r"\b(?:start|starts|begin|begins|run|runs|go|goes) (?:back )?(?:in|from|at|on|to) (?:\w+ )?(?:19|20)\d\d\b", re.I)
+_PAST_ASK = re.compile(r"\b(?:19|20)\d\d\b|\bago\b|\b(?:last|past|previous) (?:year|decade|quarter|month)s?\b|\bback in\b|\bhistor", re.I)
 # the part of a refusal that says what is missing, before it goes on to what it can show
 _CUT = re.compile(r"[;:]|\. | but | however|, so | so it |\bI can\b|\bI do hold\b|\bonly\b|\binstead\b|\bit can\b|\bit does\b|\bnearest\b", re.I)
 # a question naming only what the table has, held outside the filed figures
@@ -319,6 +326,38 @@ HELD_ELSEWHERE = [
 def missing_part(sentence):
     """The words of a refusal saying what is missing, not what it offers instead."""
     return _CUT.split(" ".join(str(sentence or "").split()), maxsplit=1)[0]
+
+
+_SCHEMA_STOP = set("""the a an and or of in on for to by with from as at is are was were be been it its this that these those
+data figure figures number numbers value values plover hold holds held include includes have has does not no any all each per
+one company companies stock stocks share shares us usd date dates day days year years name names table tables row rows
+latest current total count list information detail details filed filing filings report reports""".split())
+
+
+def schema_names(text):
+    """Tables and columns of the step route whose name or description carries a
+    distinctive word of `text`: [{'label', 'where', 'id': None}]. Read from the
+    table list itself (app/us_tables.TABLES, the views over the database file
+    included), so a table added there is known here without a rule."""
+    from . import us_tables
+    words = [w for w in re.findall(r"[a-z][a-z0-9]+", (text or "").lower()) if len(w) >= 4 and w not in _SCHEMA_STOP]
+    if not words:
+        return []
+    stems = {w: (w[:-1] if w.endswith("s") else w) for w in words}
+    out, seen = [], set()
+    # table and column names only, whole words: a description's words ("price" in
+    # "closing price that day") would claim every refusal that mentions a price
+    for table, (_, cols) in us_tables.TABLES.items():
+        names = {table: set(table.split("_"))}
+        for c, _, _ in cols:
+            names[table + "." + c] = set(c.split("_"))
+        for where, toks in names.items():
+            toks = {t[:-1] if t.endswith("s") else t for t in toks}
+            hit = [w for w, st in stems.items() if st in toks]
+            if hit and where not in seen:
+                seen.add(where)
+                out.append({"label": " ".join(hit[:2]), "where": where, "id": None})
+    return out
 
 
 def held_in(text):
@@ -353,6 +392,8 @@ def judge(sentence, question=""):
               that the data lacks it
     """
     part = missing_part(sentence)
+    if _HISTORY_GAP.search(str(sentence or "")) and _PAST_ASK.search(question or ""):
+        return {"verdict": "gap", "names": []}
     named_gap = bool(_GAP.search(part))
     rest = _GAP.sub(" ", part)
     held = held_in(rest)
@@ -360,6 +401,12 @@ def judge(sentence, question=""):
         return {"verdict": "held", "names": held}
     if named_gap:
         return {"verdict": "gap", "names": []}
+    # no listed gap and no catalogue figure: a refusal naming a table or column of
+    # the step route by name ("positions", "weight", "managers") is still "held"
+    # (2026-11-05: the route had no way to know what its own table list holds)
+    by_name = schema_names(rest)
+    if by_name:
+        return {"verdict": "held", "names": by_name[:6]}
     asked = held_in(_GAP.sub(" ", question or ""))
     if asked:
         return {"verdict": "held", "names": asked}
