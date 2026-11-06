@@ -417,6 +417,25 @@ DESCRIPTIONS = {
 
 _TITLE_TAG = re.compile(r'(?is)<title>.*?</title>')
 
+# A page that is both a list and one company's record ships the list showing
+# and the record hidden; its script swaps them when the address names a
+# company. Served that way, a crawler reading the HTML saw the list's heading
+# and filters and the company switched off, and a reader saw the list flash
+# before the company. So a company address is served already swapped; the
+# script then sets what is already set. The list section's id per page.
+COMPANY_VIEW_SWAP = {"us-pay.html": "index-view", "us-company.html": "search-view"}
+_COMPANY_VIEW_HIDDEN = re.compile(r'<section id="company-view" hidden>')
+
+
+def _show_company_view(html, list_id):
+    """The page with its company view showing and its list hidden, or the
+    page unchanged when either section is not where it is expected."""
+    shown = '<section id="%s">' % list_id
+    if html.count(shown) != 1 or len(_COMPANY_VIEW_HIDDEN.findall(html)) != 1:
+        return html
+    html = html.replace(shown, '<section id="%s" hidden>' % list_id, 1)
+    return _COMPANY_VIEW_HIDDEN.sub('<section id="company-view">', html, count=1)
+
 
 def _h1_with_id(h1_id):
     """The <h1> a view's name goes into. Most pages call it co-name; a page
@@ -1681,6 +1700,8 @@ def _inject(html, page_name, canonical=None, query_string=""):
             html = heading.sub(
                 lambda m: m.group(1) + _escape(entity["h1"]) + m.group(3),
                 html, count=1)
+            if page_name in COMPANY_VIEW_SWAP:
+                html = _show_company_view(html, COMPANY_VIEW_SWAP[page_name])
 
     description = (entity or {}).get("description") or DESCRIPTIONS.get(page_name)
     if entity and entity.get("description") and _HAS_DESC.search(html):

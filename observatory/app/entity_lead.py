@@ -50,7 +50,8 @@ US_PAGES = [
     ("us-stock.html", "us-stock.html?t=%s", "Share Price"),
     ("us-pay.html", "us-pay.html?t=%s", "CEO Pay"),
 ]
-PAGES = set(p for p, _, _ in JP_PAGES) | {"us-pay.html"}
+US_LEAD_PAGES = ("us-pay.html", "us-company.html")
+PAGES = set(p for p, _, _ in JP_PAGES) | set(US_LEAD_PAGES)
 
 PEERS = 5
 
@@ -64,6 +65,8 @@ _ANCHORS = {
     "governance.html": (re.compile(r'<p class="filing-meta" id="co-filing"></p>'), "after"),
     "stakes.html": (re.compile(r'<p class="filing-meta" id="co-meta"></p>'), "after"),
     "us-pay.html": (re.compile(r'<p class="cp-msg" id="co-meta"></p>'), "after"),
+    "us-company.html": (re.compile(
+        r'<div class="cp-meta" id="co-meta"></div></div></div></section></div>'), "after"),
 }
 
 # "（常任代理人 株式会社三菱ＵＦＪ銀行）": the custodian's local agent, which a
@@ -145,6 +148,18 @@ def _usd(value):
         return DASH
     sign = "−" if value < 0 else ""
     return "%s$%sm" % (sign, readable.fmt(abs(float(value)) / 1e6, 1))
+
+
+def _usd_scaled(value):
+    """$416.2bn, $5.0tn: the scale a reader says a company's size in."""
+    if value is None:
+        return DASH
+    sign = "−" if value < 0 else ""
+    v = abs(float(value))
+    for size, word in ((1e12, "tn"), (1e9, "bn")):
+        if v >= size:
+            return "%s$%s%s" % (sign, readable.fmt(v / size, 1), word)
+    return _usd(value)
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +305,34 @@ def _us_pay_lead(name, ticker):
         name, _usd(y["values"]["ceo_total_pay"]), _year_to(y["fiscal_year_end"])[4:])]
 
 
+def _us_company_lead(name, ticker):
+    """Revenue and net income from the latest annual report as filed, and the
+    market value on the latest close: the figures the record's header shows,
+    taken from the same /api/v1/us/financials/metrics answer."""
+    from fastapi import HTTPException
+    from . import sec_api
+    try:
+        m = sec_api.metrics(ticker)
+    except HTTPException:
+        return []
+    if m.get("unit") != "USD":
+        return []  # a foreign filer's own currency is not read here
+    size, parts = m.get("size") or {}, []
+    if size.get("revenue") is not None and size.get("net_income") is not None:
+        income = size["net_income"]
+        result = ("net income of %s" % _usd_scaled(income) if income >= 0
+                  else "a net loss of %s" % _usd_scaled(-income))
+        parts.append("reported revenue of %s and %s for %s" % (
+            _usd_scaled(size["revenue"]), result, _year_to(m.get("period_end"))))
+    cap, price = (m.get("metrics") or {}).get("market_cap"), m.get("price") or {}
+    if cap and price.get("date"):
+        parts.append("its shares were worth %s in total at the close on %s" % (
+            _usd_scaled(cap), _day(price["date"])))
+    if not parts:
+        return []
+    return ["%s %s." % (name, ", and ".join(parts))]
+
+
 # ---------------------------------------------------------------------------
 # where to go next
 # ---------------------------------------------------------------------------
@@ -356,13 +399,14 @@ def _jp_peers(page_name, code):
 
 
 def _us_links(page_name, ticker):
+    # Only pages that answer for this company: CEO pay is S&P 500 members only.
     return [(label, template % ticker) for page, template, label in US_PAGES
-            if page != page_name]
+            if page != page_name and _has_page(page, "t=" + ticker)]
 
 
-def _us_peers(ticker):
+def _us_peers(ticker, page_name="us-pay.html"):
     """Up to five S&P 500 members with the same SEC industry code, nearest in
-    index weight first."""
+    index weight first, linked to the same page as the one being read."""
     from . import sec_api
     cur = sec_api._cur()
     rows = cur.execute("""
@@ -380,10 +424,10 @@ def _us_peers(ticker):
     peers, industry = [], None
     for peer, _, ind in rows:
         industry = ind
-        meta = prerender.entity_meta("us-pay.html", "t=" + peer)
+        meta = prerender.entity_meta(page_name, "t=" + peer)
         if not meta or meta.get("noindex") or not meta.get("h1"):
             continue
-        peers.append((meta["h1"], "us-pay.html?t=%s" % peer))
+        peers.append((meta["h1"], "%s?t=%s" % (page_name, peer)))
         if len(peers) >= PEERS:
             break
     return (industry.title() if industry else None), peers
@@ -395,7 +439,7 @@ def _us_peers(ticker):
 
 def _subject(page_name, query):
     """(key, value) naming the company in this address, normalised as the page does."""
-    if page_name == "us-pay.html":
+    if page_name in US_LEAD_PAGES:
         t = (query.get("t") or "").strip().upper().replace(".", "-")
         return ("t", t) if t else None
     code = (query.get("code") or query.get("c") or "").strip().upper()
@@ -416,13 +460,15 @@ def build(page_name, query, entity):
     if not name:
         return None
     from . import prerender
-    version = prerender._sec_version if page_name == "us-pay.html" else prerender._equity_version
+    us = page_name in US_LEAD_PAGES
+    version = prerender._sec_version if us else prerender._equity_version
 
     def make():
-        if page_name == "us-pay.html":
-            sentences = _us_pay_lead(name, value)
+        if us:
+            lead = _us_pay_lead if page_name == "us-pay.html" else _us_company_lead
+            sentences = lead(name, value)
             links = _us_links(page_name, value)
-            peer_label, peers = _us_peers(value)
+            peer_label, peers = _us_peers(value, page_name)
         else:
             sentences = {
                 "company.html": lambda: _company_lead(name, value),
@@ -440,7 +486,7 @@ def build(page_name, query, entity):
             return None
         return {"sentences": sentences, "links": links, "peers": peers,
                 "peer_label": peer_label, "name": name, "value": value,
-                "keys": "t" if page_name == "us-pay.html" else
+                "keys": "t" if us else
                         ("code c" if page_name == "company.html" else "c")}
     return prerender._cached(("lead", page_name, value), version, make)
 

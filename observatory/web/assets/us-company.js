@@ -361,7 +361,9 @@
   function open(t) {
     $("search-view").hidden = true;
     $("company-view").hidden = false;
-    $("co-name").textContent = t;
+    // The server has already written the company's name here (app/prerender.py);
+    // the ticker is only a stand-in for a page that arrived without one.
+    if (!$("co-name").textContent.trim()) $("co-name").textContent = t;
     $("co-meta").textContent = "Loading this company…";
     var quiet = function (p) { return p.catch(function () { return null; }); };
     var since = "2000-01-01";            // every close on file, so any range can be read

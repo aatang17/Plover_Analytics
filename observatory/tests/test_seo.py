@@ -97,6 +97,17 @@ class SitemapTest(unittest.TestCase):
             self.assertNotIn("/admin", body)
         self.assertIn("Disallow: /admin.html", self.client.get("/robots.txt").text)
 
+    def test_robots_keeps_crawlers_off_sign_in(self):
+        self.assertIn("Disallow: /signin.html", self.client.get("/robots.txt").text)
+
+    def test_a_markdown_copy_names_its_page_as_the_original(self):
+        r = self.client.get("/methodology.md")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers["link"],
+                         '<%s/methodology.html>; rel="canonical"' % seo.SITE_BASE_URL)
+        r = self.client.get("/index.md?utm_source=x")
+        self.assertEqual(r.headers["link"], '<%s/>; rel="canonical"' % seo.SITE_BASE_URL)
+
     def test_robots_leaves_the_api_crawlable(self):
         # Pages draw their numbers from /api after load. A crawler forbidden
         # the API renders empty charts and indexes those.

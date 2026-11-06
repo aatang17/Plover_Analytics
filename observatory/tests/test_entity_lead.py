@@ -46,6 +46,12 @@ class WordingTest(unittest.TestCase):
         self.assertEqual(entity_lead._yen(50.7e12), "¥50.7tn")
         self.assertEqual(entity_lead._yen(None), "—")
 
+    def test_large_dollars_are_said_at_their_scale(self):
+        self.assertEqual(entity_lead._usd_scaled(416161000000.0), "$416.2bn")
+        self.assertEqual(entity_lead._usd_scaled(5001541078940.0), "$5.0tn")
+        self.assertEqual(entity_lead._usd_scaled(-2.5e9), "\u2212$2.5bn")
+        self.assertEqual(entity_lead._usd_scaled(None), entity_lead.DASH)
+
     def test_dollars_carry_a_true_minus(self):
         self.assertEqual(entity_lead._usd(74294811), "$74.3m")
         self.assertEqual(entity_lead._usd(-2500000), "−$2.5m")
@@ -137,6 +143,50 @@ class UsPayTest(unittest.TestCase):
                      key=lambda y: y["fiscal_year_end"])
         self.assertIn(entity_lead._usd(latest["values"]["ceo_total_pay"]), lead.group(0))
         self.assertIn('href="us-company.html?t=AAPL"', MORE.search(page).group(0))
+
+
+    def test_company_record_opens_with_its_filed_figures(self):
+        client = TestClient(app)
+        page = client.get("/us-company.html?t=AAPL").text
+        lead = LEAD.search(page)
+        self.assertIsNotNone(lead)
+        m = client.get("/api/v1/us/financials/metrics/AAPL").json()
+        self.assertIn(entity_lead._usd_scaled(m["size"]["revenue"]), lead.group(0))
+        self.assertIn(entity_lead._usd_scaled(m["size"]["net_income"]), lead.group(0))
+        self.assertIn(entity_lead._usd_scaled(m["metrics"]["market_cap"]), lead.group(0))
+        self.assertIn('href="us-pay.html?t=AAPL"', MORE.search(page).group(0))
+
+    def test_company_addresses_are_served_with_the_company_showing(self):
+        client = TestClient(app)
+        for address, listing in (("/us-company.html?t=AAPL", "search-view"),
+                                 ("/us-pay.html?t=AAPL", "index-view")):
+            page = client.get(address).text
+            self.assertIn('<section id="%s" hidden>' % listing, page, address)
+            self.assertIn('<section id="company-view">', page, address)
+        # The list itself still opens on the list.
+        self.assertIn('<section id="company-view" hidden>', client.get("/us-company.html").text)
+
+    def test_a_loss_is_said_as_a_loss(self):
+        metrics = {"unit": "USD", "period_end": "2025-12-31", "metrics": {}, "price": {},
+                   "size": {"revenue": 46.8e6, "net_income": -101.4e6}}
+        with patch("app.sec_api.metrics", return_value=metrics):
+            self.assertEqual(entity_lead._us_company_lead("Rezolve Ai PLC", "RZLV"),
+                             ["Rezolve Ai PLC reported revenue of $46.8m and a net loss of "
+                              "$101.4m for the year to December 2025."])
+
+    def test_a_company_outside_the_index_links_no_ceo_pay_page(self):
+        self.assertFalse(entity_lead._has_page("us-pay.html", "t=ZZZZQ"))
+
+
+class CompanyViewSwapTest(unittest.TestCase):
+
+    def test_an_unexpected_page_is_left_alone(self):
+        from app import prerender
+        page = '<section id="search-view"><section id="company-view">'
+        self.assertEqual(prerender._show_company_view(page, "search-view"), page)
+        page = '<section id="search-view">x</section><section id="company-view" hidden>y</section>'
+        self.assertEqual(prerender._show_company_view(page, "search-view"),
+                         '<section id="search-view" hidden>x</section><section id="company-view">y</section>')
 
 
 if __name__ == "__main__":

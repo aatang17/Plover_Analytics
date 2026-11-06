@@ -45,6 +45,10 @@ SITE_BASE_URL = os.environ.get(
 # every page draws its numbers from it after load, and a crawler that is
 # forbidden the API renders a page of empty charts and indexes that.
 DISALLOWED = ("/admin.html", "/admin/", "/desk.html")
+# Public, but nothing to index: the header links every page to sign-in with
+# that page as ?returnTo=, so Google fetched it about 1,100 times a month
+# (October 2026) for a page that is noindex anyway.
+NOT_CRAWLED = ("/signin.html",)
 
 _NOINDEX = re.compile(
     r"<meta[^>]+name=[\"']robots[\"'][^>]*content=[\"'][^\"']*noindex",
@@ -231,9 +235,9 @@ AI_CRAWLERS = ("GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot",
 def robots():
     lines = ["User-agent: " + agent for agent in AI_CRAWLERS]
     lines += ["Allow: /"]
-    lines += ["Disallow: " + path for path in DISALLOWED]
+    lines += ["Disallow: " + path for path in DISALLOWED + NOT_CRAWLED]
     lines += ["", "User-agent: *", "Allow: /"]
-    lines += ["Disallow: " + path for path in DISALLOWED]
+    lines += ["Disallow: " + path for path in DISALLOWED + NOT_CRAWLED]
     lines += ["", "Sitemap: " + SITE_BASE_URL + "/sitemap.xml"]
     # Not part of the robots standard, and ignored by crawlers that do not know
     # it. It is here because the clients that DO look for llms.txt often read
@@ -597,7 +601,12 @@ def page_markdown(name: str, request: Request):
                               .decode("latin-1"))
     if body is None:
         raise HTTPException(404, "No page named %s.html" % name)
-    return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
+    # A copy of the HTML page, and said so: Google fetched these copies about
+    # 4,500 times in October 2026 with nothing telling it which was the page.
+    query = request.scope.get("query_string", b"").decode("latin-1")
+    original = canonical_url("/" if name == "index" else "/%s.html" % name, query)
+    return PlainTextResponse(body, media_type="text/markdown; charset=utf-8",
+                             headers={"Link": '<%s>; rel="canonical"' % original})
 
 
 @router.get("/llms.txt", include_in_schema=False)
