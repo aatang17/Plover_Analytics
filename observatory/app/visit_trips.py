@@ -177,7 +177,8 @@ def _trip(events):
     # is hidden), carrying the running total: the longest report is the read.
     views = {}
     for event in events:
-        if event.get("kind") != "dwell":
+        # An early report says a browser showed the page, not for how long.
+        if event.get("kind") != "dwell" or event.get("early"):
             continue
         key = event.get("view") or (event.get("path"), event.get("at"))
         held = views.get(key)
@@ -205,9 +206,10 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     cutoff = (now - datetime.timedelta(hours=hours)).isoformat(timespec="seconds") + "Z"
 
-    by_visitor = {}
+    by_visitor, drawn = {}, set()
     for event in _events(cutoff):
         if event.get("kind") == "browser":
+            drawn.add(event.get("visitor"))
             continue
         visitor = event.get("visitor")
         if visitor:
@@ -269,6 +271,10 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
                 "asked": sum(1 for s in steps if s.get("asked")),
                 "here_now": live.get(visitor, 0) >= here,
                 "confirmed": confirmed,
+                # A browser drew a page (it fetched the page's styles or
+                # pixel); for an unconfirmed visit, a person whose scripts
+                # were blocked rather than a script reading the page.
+                "drawn": visitor in drawn,
                 "steps": steps[:MAX_STEPS],
             })
             continue

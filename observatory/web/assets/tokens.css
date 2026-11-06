@@ -220,3 +220,18 @@
     --obs-down: #f08a5d;
   }
 }
+
+/* Proof that a browser drew this page, which arrives even where an office
+   network blocks the page's scripts: one invisible pixel, never cached, so it
+   is asked for on every page (app/visits_api.py, app/visits.py DRAWN_PATH).
+   Here because every page loads this file. Out of the flow, so nothing moves. */
+body::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  background: url("/api/v1/visit/drawn") no-repeat;
+  pointer-events: none;
+}

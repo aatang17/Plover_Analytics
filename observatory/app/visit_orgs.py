@@ -17,6 +17,8 @@ import functools
 import re
 import unicodedata
 
+from . import geoip
+
 # The kinds, as the admin page names them.
 ORGANISATION = "organisation"
 SECURITY = "security"      # a company's web security service: the company is hidden
@@ -126,6 +128,8 @@ def kind(network):
         return SECURITY
     if is_hosting(network) or is_google_machine(network):
         return HOSTING
+    if network == geoip.RELAY_NETWORK:
+        return PROVIDER  # Apple's relay for Safari readers, not a data centre
     padded = " " + name + " "
     if any(word in padded for word in PROVIDER_WORDS):
         return PROVIDER

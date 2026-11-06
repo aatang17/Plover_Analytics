@@ -26,6 +26,13 @@ attributes its whole /64, which is immaterial at the resolution this feeds.
 
 Data: DB-IP Lite, CC BY 4.0. Attribution is shown wherever the results are
 (the Traffic page and its exports) — see https://db-ip.com.
+
+Apple's iCloud Private Relay hands Safari readers an address belonging to
+Cloudflare, Akamai or Fastly, which the traffic test reads as a data centre.
+Apple publishes the addresses it uses, with the country each one serves
+(RELAY_URL); an address on that list is reported as RELAY_NETWORK in that
+country instead. Fetched weekly, loaded beside the DB-IP tables, and like
+them never a reason for a request to wait or fail.
 """
 import array
 import bisect
@@ -46,6 +53,9 @@ SOURCE = "DB-IP Lite (CC BY 4.0) — https://db-ip.com"
 COUNTRY_URL = "https://download.db-ip.com/free/dbip-country-lite-%s.csv.gz"
 ASN_URL = "https://download.db-ip.com/free/dbip-asn-lite-%s.csv.gz"
 
+RELAY_URL = "https://mask-api.icloud.com/egress-ip-ranges.csv"
+RELAY_NETWORK = "iCloud Private Relay"
+
 DOWNLOAD_TIMEOUT = 120
 # Yield to the event loop every so many rows: parsing 1.2m ranges is seconds
 # of tight Python, and the serving thread must not queue behind it.
@@ -56,7 +66,8 @@ NOT_A_COUNTRY = ("ZZ", "")
 
 _LOCK = threading.Lock()
 _STATE = {"tables": None, "edition": None, "started": False,
-          "error": None, "ranges": 0}
+          "error": None, "ranges": 0, "relay": None, "relay_edition": None,
+          "relay_error": None}
 
 
 class _Ranges(object):
@@ -206,6 +217,98 @@ def _build():
           % _STATE["error"])
 
 
+def _relay_edition():
+    """The ISO week: Apple changes its list often, and a week-old copy is
+    close enough for telling readers from data centres."""
+    year, week, _ = datetime.date.today().isocalendar()
+    return "%d-W%02d" % (year, week)
+
+
+def _relay_path(edition):
+    return GEO_DIR / ("icloud-relay-%s.csv" % edition)
+
+
+def _parse_relay(raw):
+    """Apple's CSV, one range a line: `prefix,country,region,city,`. Sorted
+    here, since bisect needs it and the file promises no order."""
+    v4, v6 = [], []
+    for n, line in enumerate(raw.decode("utf-8", "replace").splitlines()):
+        if n % YIELD_EVERY == 0:
+            time.sleep(0)
+        parts = line.split(",")
+        try:
+            network = ipaddress.ip_network(parts[0].strip(), strict=False)
+        except ValueError:
+            continue
+        # Blank, not None: find() returns None only for "not on the list".
+        country = parts[1].strip().upper() if len(parts) > 1 else ""
+        low, high = int(network.network_address), int(network.broadcast_address)
+        if network.version == 4:
+            v4.append((low, high, country))
+        else:
+            v6.append((low >> 64, high >> 64, country))
+    table = _Ranges()
+    index = {}
+    for rows, starts, ends, ids in ((v4, table.v4_start, table.v4_end, table.v4_id),
+                                    (v6, table.v6_start, table.v6_end, table.v6_id)):
+        rows.sort()
+        for low, high, country in rows:
+            ident = index.get(country)
+            if ident is None:
+                ident = index[country] = len(table.values)
+                table.values.append(country)
+            starts.append(low)
+            ends.append(high)
+            ids.append(ident)
+    return table
+
+
+def _build_relay():
+    edition = _relay_edition()
+    path = _relay_path(edition)
+    try:
+        if path.exists():
+            with open(str(path), "rb") as f:
+                raw = f.read()
+        else:
+            try:
+                request = urllib.request.Request(
+                    RELAY_URL, headers={"User-Agent": "plover-analytics/1.0"})
+                with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
+                    raw = response.read()
+                GEO_DIR.mkdir(parents=True, exist_ok=True)
+                tmp = str(path) + ".part"
+                with open(tmp, "wb") as f:
+                    f.write(raw)
+                os.replace(tmp, str(path))
+            except Exception:
+                # Apple unreachable: last week's copy is far better than none.
+                older = sorted(GEO_DIR.glob("icloud-relay-*.csv"))
+                if not older:
+                    raise
+                path, edition = older[-1], older[-1].stem[len("icloud-relay-"):]
+                with open(str(path), "rb") as f:
+                    raw = f.read()
+        table = _parse_relay(raw)
+    except Exception as exc:  # noqa: BLE001 — the relay list is never worth a failure
+        with _LOCK:
+            _STATE["relay_error"] = str(exc)
+        print("ICLOUD RELAY LIST UNAVAILABLE (%s): Private Relay readers will "
+              "be taken for data centres" % exc)
+        return
+    with _LOCK:
+        _STATE["relay"] = table
+        _STATE["relay_edition"] = edition
+        _STATE["relay_error"] = None
+    try:
+        for old in GEO_DIR.glob("icloud-relay-*.csv"):
+            if old != path:
+                old.unlink()
+    except OSError:
+        pass
+    print("geoip: iCloud Private Relay %s loaded (%d ranges)" % (edition, len(table)))
+
+
 def prepare():
     """Start loading, once per process, off the serving thread."""
     with _LOCK:
@@ -214,13 +317,14 @@ def prepare():
         _STATE["started"] = True
     thread = threading.Thread(target=_build, name="geoip-load", daemon=True)
     thread.start()
+    threading.Thread(target=_build_relay, name="geoip-relay", daemon=True).start()
 
 
 def lookup(ip):
     """(country, network) for an address — (None, None) until the tables are
     loaded, for a private address, or for anything not in them."""
     with _LOCK:
-        tables = _STATE["tables"]
+        tables, relay = _STATE["tables"], _STATE["relay"]
     if tables is None or not ip:
         return None, None
     try:
@@ -231,6 +335,10 @@ def lookup(ip):
             or address.is_link_local):
         return None, None
     country, asn = tables
+    if relay is not None:
+        served = relay.find(address)
+        if served is not None:
+            return served or country.find(address), RELAY_NETWORK
     return country.find(address), asn.find(address)
 
 
@@ -240,4 +348,7 @@ def status():
                 "edition": _STATE["edition"],
                 "ranges": _STATE["ranges"],
                 "error": _STATE["error"],
-                "source": SOURCE}
+                "source": SOURCE,
+                "relay_edition": _STATE["relay_edition"],
+                "relay_ranges": len(_STATE["relay"]) if _STATE["relay"] is not None else 0,
+                "relay_error": _STATE["relay_error"]}

@@ -60,6 +60,10 @@ MAX_PATH_CHARS = 200
 # says nothing if it leaks and can be thrown away by clearing cookies.
 PING_PATH = "/api/v1/visit/ping"
 CONSENT_PATH = "/api/v1/visit/consent"
+# One invisible pixel every page's styles ask for (web/assets/tokens.css):
+# counted as a browser like any other asset, but never cached, so it still
+# arrives when the scripts are blocked and the styles came from the cache.
+DRAWN_PATH = "/api/v1/visit/drawn"
 
 CONSENT_COOKIE = "pa_consent"
 VISITOR_COOKIE = "pa_vid"
@@ -468,13 +472,15 @@ def live():
     }
 
 
-def record_dwell(scope, path, seconds, view=None):
+def record_dwell(scope, path, seconds, view=None, early=False):
     """One page, closed, after this many seconds visible. Reported by the page
     itself at the moment it goes away — the server cannot see reading, only
     requests, and a reader on one page for ten minutes makes none.
 
     The report is also the evidence that a script ran in a real browser,
-    which is one of the three tests behind the People figure in summary()."""
+    which is one of the three tests behind the People figure in summary().
+    An `early` report is sent five seconds into a view, because the closing
+    one is often lost: it is that evidence, but not a reading time."""
     try:
         seconds = int(float(seconds))
     except (TypeError, ValueError):
@@ -506,6 +512,8 @@ def record_dwell(scope, path, seconds, view=None):
         "country": country,
         "network": network,
     }
+    if early:
+        event["early"] = True
     if visitor != sender:
         # Sent from another address than the page view it is filed under.
         event["rejoined"] = True
@@ -689,6 +697,10 @@ def is_hosting(network):
     it is not a person either: a reader needs a placed network."""
     if not network:
         return False
+    if network == geoip.RELAY_NETWORK:
+        # Apple's iCloud Private Relay: Safari readers whose addresses are
+        # Cloudflare's, Akamai's or Fastly's, told apart by Apple's own list.
+        return False
     name = network.lower()
     for marker in HOSTING_MARKERS:
         if marker in name:
@@ -719,6 +731,8 @@ def _kind(path):
         return None  # the console, the research desk and Send to Plover are not traffic
     if path.startswith("/healthz"):
         return None  # the proxy asks every second; that is not a reader
+    if path == DRAWN_PATH:
+        return "asset"
     if path.startswith(PING_PATH) or path.startswith(CONSENT_PATH):
         # The page telling us it is open, and the reader answering the banner.
         # Both are handled where they land; counting them here would turn one
@@ -1171,7 +1185,7 @@ def _fold_publication(d, event, at):
     kind = event.get("kind")
     if kind == "dwell":
         seconds = event.get("seconds")
-        if isinstance(seconds, (int, float)) and seconds > 0:
+        if isinstance(seconds, (int, float)) and seconds > 0 and not event.get("early"):
             key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
             held = d["pub_dwell"].get(key)
             if not held or seconds > held[1]:
@@ -1225,7 +1239,7 @@ def _fold_reader(d, event, at):
     # counted when the page was asked for.
     if kind == "dwell":
         seconds = event.get("seconds")
-        if isinstance(seconds, (int, float)) and seconds > 0:
+        if isinstance(seconds, (int, float)) and seconds > 0 and not event.get("early"):
             key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
             held = d["dwell_views"].get(key)
             if not held or seconds > held[1]:

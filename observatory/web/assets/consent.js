@@ -18,6 +18,7 @@
   var PING = "/api/v1/visit/ping";
   var CONSENT = "/api/v1/visit/consent";
   var HEARTBEAT_MS = 60000;
+  var EARLY_SECONDS = 5;
   var METHODOLOGY = "methodology.html#cookies";
   var ADS = !!document.querySelector('script[data-reddit-ads="enabled"]');
   var ADS_COOKIE = "pa_reddit_consent";
@@ -84,6 +85,23 @@
     }
   });
   window.addEventListener("pagehide", function () { report(true); });
+
+  /* Five seconds in view: an early report, written to the log. The closing
+     report is often lost (an app's built-in browser shut with the app, a
+     phone that kills the tab), and without one a reader who stayed was taken
+     for a machine. This one only says a browser showed the page; the closing
+     report alone says how long. */
+  var earlySent = false;
+  function early() {
+    if (earlySent) return;
+    if (visibleSeconds() >= EARLY_SECONDS) {
+      earlySent = true;
+      send({ path: path, view: view, seconds: visibleSeconds(), early: true }, false);
+      return;
+    }
+    window.setTimeout(early, 1000);
+  }
+  window.setTimeout(early, EARLY_SECONDS * 1000);
 
   /* Here, and still here. The first report is what puts a reader in the
      "right now" count at all (a page that never runs this is not counted);

@@ -55,9 +55,9 @@ async def ping(request: Request):
         if data.get("task"):
             # a step in one of the front page's tasks (app/task_log.py)
             task_log.record(request.scope, data)
-        elif data.get("closed"):
+        elif data.get("closed") or data.get("early"):
             visits.record_dwell(request.scope, path, data.get("seconds"),
-                                data.get("view"))
+                                data.get("view"), early=bool(data.get("early")))
         else:
             visits.heartbeat(request.scope, path)
     except Exception as exc:  # noqa: BLE001 — counting is never fatal
@@ -65,6 +65,22 @@ async def ping(request: Request):
     # A 204 carries no body. JSONResponse(None) sent "null", and uvicorn
     # raised "Response content longer than Content-Length" on every ping.
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
+# The smallest transparent GIF: what tokens.css asks for on every page.
+_DRAWN_GIF = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00"
+              b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+              b"\x00\x02\x02D\x01\x00;")
+
+
+@router.get("/drawn")
+async def drawn():
+    """A page's styles asking for one invisible pixel: proof that a browser
+    drew the page, which arrives even where an office network blocks the
+    page's scripts. Counted as a browser by app/visits.py (DRAWN_PATH); never
+    stored, so it is asked for again on every page a returning reader opens."""
+    return Response(content=_DRAWN_GIF, media_type="image/gif",
+                    headers={"Cache-Control": "no-store"})
 
 
 @router.post("/consent")

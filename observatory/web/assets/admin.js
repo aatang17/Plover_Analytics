@@ -1725,8 +1725,13 @@ function recentMarkup(r) {
       '<td class="num">' + fmtCount(x.pages) + "</td>" +
       (x.confirmed
         ? '<td class="num">' + fmtDuration(x.seconds) + "</td>"
-        : '<td class="num muted" title="The page never reported in from a browser. Office ' +
-          'networks often block that report, so it is listed, but it is not counted as a ' +
+        : x.drawn
+        ? '<td class="num muted" title="A browser drew the page, but the page\'s script never ' +
+          'reported in. Most likely a person on an office network that blocks scripts. Listed, ' +
+          'but not counted as a reader anywhere on this page.">Scripts blocked</td>'
+        : '<td class="num muted" title="Neither the page\'s script nor its styles reported in ' +
+          'from a browser: usually a script reading the page, sometimes a browser showing a ' +
+          'saved copy. Listed because the network names an organisation, but not counted as a ' +
           'reader anywhere on this page.">Not confirmed</td>') +
       "<td>" + (x.member_domain ? escapeHtml(x.member_domain) : x.member ? "Yes" : MISSING) +
       "</td>" + openButton(key, "Show Trip", "Hide Trip") + "</tr>" +

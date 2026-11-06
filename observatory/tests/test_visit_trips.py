@@ -250,5 +250,113 @@ class AccountDomainTest(unittest.TestCase):
         accounts._LIVE_SESSIONS.clear()
 
 
+class ReaderEvidenceTest(unittest.TestCase):
+    """The three ways a real reader used to be lost (November 2026): a closing
+    report that never arrived, a network that blocks the page's scripts, and
+    Apple's iCloud Private Relay read as a data centre."""
+
+    def setUp(self):
+        visits.flush()
+        visits._VIEWS.clear()
+        visits._ALIASES.clear()
+
+    def place(self, table):
+        return mock.patch.object(visits.geoip, "lookup", side_effect=lambda ip: table.get(ip, (None, None)))
+
+    def test_an_early_report_confirms_a_reader_without_a_reading_time(self):
+        places = {"203.0.113.90": ("CA", "Bell Canada")}
+        with self.place(places):
+            visits.observe(scope("/evidence-early.html", "203.0.113.90"), 200)
+            visits.record_dwell(scope("/api/v1/visit/ping", "203.0.113.90"),
+                                "/evidence-early.html", 5, "e1", early=True)
+        early = [e for e in _events() if e.get("view") == "e1"]
+        self.assertTrue(early and early[0]["early"])
+        row = [r for r in visit_trips.recent()["readers"]
+               if r["steps"][0]["path"] == "/evidence-early.html"][0]
+        self.assertTrue(row["confirmed"], "the closing report was lost; the early one is proof enough")
+        self.assertIsNone(row["seconds"], "five seconds in is not how long they read")
+
+    def test_the_closing_report_still_sets_the_reading_time(self):
+        places = {"203.0.113.91": ("CA", "Bell Canada")}
+        with self.place(places):
+            visits.observe(scope("/evidence-closed.html", "203.0.113.91"), 200)
+            ping = scope("/api/v1/visit/ping", "203.0.113.91")
+            visits.record_dwell(ping, "/evidence-closed.html", 5, "e2", early=True)
+            visits.record_dwell(ping, "/evidence-closed.html", 40, "e2")
+        row = [r for r in visit_trips.recent()["readers"]
+               if r["steps"][0]["path"] == "/evidence-closed.html"][0]
+        self.assertEqual(row["seconds"], 40)
+
+    def test_the_summary_reading_times_leave_early_reports_out(self):
+        _forget()
+        places = {"203.0.113.92": ("CA", "Bell Canada")}
+        with self.place(places):
+            visits.observe(scope("/evidence-median.html", "203.0.113.92"), 200)
+            visits.record_dwell(scope("/api/v1/visit/ping", "203.0.113.92"),
+                                "/evidence-median.html", 5, "e3", early=True)
+        visits._reset_folds()
+        before = visits.summary(7)["dwell"]["samples"]
+        with self.place(places):
+            visits.record_dwell(scope("/api/v1/visit/ping", "203.0.113.92"),
+                                "/evidence-median.html", 30, "e3")
+        visits._reset_folds()
+        self.assertEqual(visits.summary(7)["dwell"]["samples"], before + 1)
+
+    def test_a_drawn_page_tells_blocked_scripts_from_a_script(self):
+        places = {"203.0.113.93": ("MY", "Universiti Teknikal Malaysia Melaka"),
+                  "203.0.113.94": ("MY", "Universiti Teknikal Malaysia Melaka")}
+        with self.place(places):
+            visits.observe(scope("/evidence-blocked.html", "203.0.113.93"), 200)
+            visits.observe(scope(visits.DRAWN_PATH, "203.0.113.93"), 200)
+            visits.observe(scope("/evidence-script.html", "203.0.113.94"), 200)
+        readers = visit_trips.recent()["readers"]
+        blocked = [r for r in readers if r["steps"][0]["path"] == "/evidence-blocked.html"][0]
+        script = [r for r in readers if r["steps"][0]["path"] == "/evidence-script.html"][0]
+        self.assertFalse(blocked["confirmed"])
+        self.assertTrue(blocked["drawn"])
+        self.assertFalse(script["drawn"])
+        self.assertEqual([s["path"] for s in blocked["steps"]], ["/evidence-blocked.html"],
+                         "the pixel is not a page they read")
+
+    def test_the_pixel_is_an_uncached_gif(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from app.visits_api import router
+        api = FastAPI()
+        api.include_router(router)
+        response = TestClient(api).get(visits.DRAWN_PATH)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/gif")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertTrue(response.content.startswith(b"GIF89a"))
+        css = (pathlib.Path(__file__).resolve().parents[1] / "web" / "assets" / "tokens.css").read_text()
+        self.assertIn(visits.DRAWN_PATH, css, "every page asks for it through tokens.css")
+
+
+class PrivateRelayTest(unittest.TestCase):
+    """Apple's list turns a Cloudflare address into a Safari reader."""
+
+    LIST = (b"172.224.226.0/27,GB,GB-EN,London,\n"
+            b"2a02:26f7:b3c0:4000::/64,JP,JP-13,Tokyo,\n"
+            b"104.28.0.0/31,,,,\n")
+
+    def test_listed_addresses_are_the_relay_in_their_own_country(self):
+        relay = visits.geoip._parse_relay(self.LIST)
+        dbip = (visits.geoip._Ranges(), visits.geoip._Ranges())
+        with mock.patch.dict(visits.geoip._STATE, {"tables": dbip, "relay": relay}):
+            self.assertEqual(visits.geoip.lookup("172.224.226.5"), ("GB", visits.geoip.RELAY_NETWORK))
+            self.assertEqual(visits.geoip.lookup("2a02:26f7:b3c0:4000::1"),
+                             ("JP", visits.geoip.RELAY_NETWORK))
+            self.assertEqual(visits.geoip.lookup("104.28.0.1")[1], visits.geoip.RELAY_NETWORK,
+                             "a range with no country is still the relay")
+            self.assertEqual(visits.geoip.lookup("172.224.227.5"), (None, None))
+
+    def test_the_relay_is_a_provider_and_its_readers_count(self):
+        self.assertFalse(visits.is_hosting(visits.geoip.RELAY_NETWORK))
+        self.assertEqual(visit_orgs.kind(visits.geoip.RELAY_NETWORK), visit_orgs.PROVIDER)
+        self.assertTrue(visits._is_reader(True, visits.geoip.RELAY_NETWORK))
+        self.assertFalse(visits._is_reader(True, "Cloudflare, Inc."))
+
+
 if __name__ == "__main__":
     unittest.main()
