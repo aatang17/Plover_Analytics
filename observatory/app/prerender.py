@@ -22,8 +22,10 @@ So three things are written into the HTML on the way out:
   * on the landing page, the four coverage counts the script counts up to.
 
 The links go inside the header element whose innerHTML nav.js assigns on
-load (nav.js:192), and that script is synchronous and sits immediately
-after the element, so a browser never paints the plain list. The figures
+load, and that script is synchronous and sits immediately after the element.
+A browser still paints what it has parsed while the script downloads, so
+app.css hides the list (.site-nav-fallback) and readers never see it; a
+crawler reads the HTML, not the paint. The figures
 used to sit in <noscript>, which a browser never renders — but a number of
 the crawlers behind AI assistants strip <noscript> too, so they now sit in
 the page proper: a collapsed <details> after the last section, in the same

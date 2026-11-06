@@ -54,7 +54,16 @@ html { scroll-padding-top: 66px; }
      against the white page and only shows as a seam where the two navies meet. */
   border-bottom: 1px solid var(--obs-header-border);
   color: var(--obs-header-text);
+  /* The bar's height before nav.js fills it, so the page below does not jump
+     down when the real header lands. Matches .inner (72px from 769px up). */
+  min-height: 52px;
 }
+/* The server writes every page's links into the header as plain anchors for
+   crawlers that run no scripts (app/prerender.py). nav.js replaces them on
+   load, but a browser paints what it has parsed while that script is still
+   downloading, so on a fresh visit a reader saw 65 bare link words for a
+   moment. They are for crawlers, which read the HTML, not the paint. */
+.site-nav-fallback { display: none; }
 
 /* the bar is dark in both themes, so the default focus ring is invisible on it */
 .site-header :focus-visible { box-shadow: 0 0 0 2px var(--obs-header-focus); }
@@ -2900,6 +2909,7 @@ details.readable .source-line a { color: var(--obs-primary); }
 
 /* Larger bar on every wide screen. */
 @media (min-width: 769px) {
+  .site-header { min-height: 72px; }
   .site-header .inner { height: 72px; gap: 32px; }
   .brand { font-size: 19px; gap: 10px; }
   .brand-mark { width: 28px; height: 28px; }
