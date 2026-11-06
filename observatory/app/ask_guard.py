@@ -188,8 +188,11 @@ def _steps_last(cur, question, prev, exc):
     kind = getattr(exc, "miss", None) or ask_miss.classify(text)
     if prev or us_steps.tried() or exc.status_code >= 500 or kind not in RETRIED_MISSES:
         return None
-    if text == stock_recipes.MACRO_MISS or getattr(exc, "question", None):
-        return None                                            # the fixed economy answers read this first (the page, app/assistant/preview.py)
+    if getattr(exc, "question", None):
+        return None                                            # a follow-up read whole: the economy answers took it
+    # an economy refusal (MACRO_MISS) is not skipped: the fixed economy answers and the catalogue have had
+    # their turn by now (_economy above; _macro_on_topic on the page), and on 2026-11-06 "compare Japan and
+    # US inflation in 2024" went to a web search live while the step route held both series
     out = stock_recipes._steps_try(cur, question, "last resort after: %s" % text[:80])
     if out is not None and not on_topic(question, out)[0]:
         _log(question, "off-topic answer stopped", "steps last: %s" % out.get("headline"))
