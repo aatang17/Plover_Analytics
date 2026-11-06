@@ -27,7 +27,7 @@ import math
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import cohorts, equity_api, fin_metrics
+from . import cohorts, equity_api, fin_metrics, plausibility
 from .equity_api import _cur, _rows
 
 router = APIRouter(prefix="/api/v1/equity/cohorts", tags=["Peer groups"])
@@ -97,13 +97,14 @@ FAMILY_LABELS = {
 
 _GOV_SQL = """
     SELECT sec_code, board_size, avg_director_age, directors_70_plus,
-           female_ratio_filed, avg_salary_yen, gender_pay_gap_all,
+           female_ratio_filed, salary_checked AS avg_salary_yen, gender_pay_gap_all,
            employees_consolidated, period_end
     FROM (
-        SELECT *, row_number() OVER (PARTITION BY sec_code
-                   ORDER BY period_end DESC, filed_date DESC) AS rn
-        FROM eq_company_year
-        WHERE sec_code IS NOT NULL AND status IN ('clean','partial')
+        SELECT g.*, """ + plausibility.salary_ok("g.avg_salary_yen", "g") + """ AS salary_checked,
+               row_number() OVER (PARTITION BY g.sec_code
+                   ORDER BY g.period_end DESC, g.filed_date DESC) AS rn
+        FROM eq_company_year g
+        WHERE g.sec_code IS NOT NULL AND g.status IN ('clean','partial')
     ) WHERE rn = 1
 """
 _OWN_SQL = """
@@ -179,13 +180,17 @@ def panel(cur):
         row = slot(r["sec_code"])
         row.setdefault("name", None)
         row["governance_period_end"] = r["period_end"]
-        row["board_size"] = r["board_size"]
+        # A filed figure that cannot be what it says (a salary of trillions, a
+        # share of women above 1) is not compared, as with the policy totals
+        # below; the company's own page shows it as filed and flagged.
+        row["board_size"] = r["board_size"] or None
         row["avg_director_age"] = r["avg_director_age"]
-        row["avg_salary_yen"] = r["avg_salary_yen"]
-        row["gender_pay_gap_all"] = r["gender_pay_gap_all"]
+        row["avg_salary_yen"] = plausibility.in_range(r["avg_salary_yen"], *plausibility.SALARY_BAND)
+        gap = r["gender_pay_gap_all"]
+        row["gender_pay_gap_all"] = gap if gap is not None and 0 < gap <= plausibility.PAY_GAP_MAX else None
         row["employees_consolidated"] = r["employees_consolidated"]
-        row["female_officer_pct"] = (None if r["female_ratio_filed"] is None
-                                     else 100.0 * r["female_ratio_filed"])
+        share = plausibility.in_range(r["female_ratio_filed"], 0, 1)
+        row["female_officer_pct"] = None if share is None else 100.0 * share
         row["directors_70_plus_pct"] = _pct_of(r["directors_70_plus"],
                                                r["board_size"])
 
@@ -193,9 +198,9 @@ def panel(cur):
         row = slot(r["sec_code"])
         row["ownership_period_end"] = r["period_end"]
         for key in ("foreign_pct", "financial_institutions_pct",
-                    "individuals_pct", "other_corporations_pct",
-                    "shareholders_total"):
-            row[key] = r[key]
+                    "individuals_pct", "other_corporations_pct"):
+            row[key] = plausibility.in_range(r[key], 0, 100)
+        row["shareholders_total"] = r["shareholders_total"]
 
     for r in _rows(cur, _XS_SQL):
         row = slot(r["sec_code"])

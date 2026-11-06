@@ -27,11 +27,29 @@ whole archive's observed range, and the constant carries the observation:
     officers          largest real board + auditors in 21,176 filings:     52
     salary            1st..99th percentile of average pay:  3.6m .. 13.8m yen
     pay per officer   largest package ever disclosed in Japan:        ~13.4bn
+    share of women    a share of a board or of managers is 0..1; the ten
+                      filings above 1 (2026-11-07) typed the percentage
+                      itself (I-PEX's 20.0 for 20%, so 2,000%)
+    pay gap           women's pay as a share of men's, 0.07..1.47 across
+                      8,036 filings except one at 71.4 (a percentage)
+
+Where a number is used to rank, average or answer a question, the SQL
+helpers below (pct_ok, ratio_ok, salary_ok, pay_gap_ok) give NULL for an
+impossible figure, so it is left out instead of leading the list. Pages that
+show one company still show the filed figure, with its flag.
 """
 
 MAX_OFFICERS = 100
 SALARY_BAND = (500000, 100000000)
 MAX_PAY_PER_OFFICER = 3000000000
+PAY_GAP_MAX = 3.0
+# An average salary eight times above or below the same company's other years.
+# Every jump of 4x or more in the archive (8 of ~25,000, 2026-11-07) is a
+# tenfold slip that reverts the next year: 加藤製作所 ¥5.9m, then ¥60.0m.
+SALARY_OWN_YEARS_FACTOR = 8.0
+
+# Shares of a whole, filed as a fraction (0.2 = 20%).
+RATIO_FIELDS = ("female_ratio_filed", "female_ratio_calc", "female_managers_ratio")
 
 
 def _add(row, field, reason):
@@ -41,8 +59,9 @@ def _add(row, field, reason):
         row["flags"].append(entry)
 
 
-def company_year(row):
-    u"""Flag a governance row against the board it describes."""
+def company_year(row, other_salaries=None):
+    u"""Flag a governance row against the board it describes (and, given the
+    company's other years' average salaries, against those)."""
     if not row:
         return row
     officers = row.get("officers_tagged")
@@ -57,6 +76,22 @@ def company_year(row):
              "average annual pay of %d yen per employee is outside every "
              "reported range; the filing has stated it on the wrong scale"
              % salary)
+    else:
+        why = salary_vs_own_years(salary, other_salaries)
+        if why:
+            _add(row, "avg_salary_yen", why)
+    for field in RATIO_FIELDS:
+        v = row.get(field)
+        if v is not None and not 0 <= v <= 1:
+            _add(row, field,
+                 "%s is %s; a share of a board or of managers is between 0 and "
+                 "1, so the filing has typed the percentage (%s%%) in its place"
+                 % (field, v, v))
+    gap = row.get("gender_pay_gap_all")
+    if gap is not None and not 0 < gap <= PAY_GAP_MAX:
+        _add(row, "gender_pay_gap_all",
+             "women's pay as a share of men's is filed as %s; every other "
+             "filing is below 1.5, so this one has typed the percentage" % gap)
     return row
 
 
@@ -85,6 +120,14 @@ def lvh_rows(rows):
                  "same form; the statutory denominator already includes the "
                  "holder's potential shares, so one of the two is wrong"
                  % (held, out))
+        # A joint holder's line can be negative as filed (a broker netting
+        # shares it must deliver), so only the top of the range is impossible.
+        for field in ("ratio_pct", "prior_ratio_pct", "holder_ratio_pct", "holder_prior_ratio_pct"):
+            v = row.get(field)
+            if v is not None and v > 100:
+                _add(row, field,
+                     "%s is %s%%; a holding cannot exceed the shares in issue, "
+                     "so the filing has put a count in the percentage" % (field, v))
     return rows
 
 
@@ -92,6 +135,55 @@ def pct_ok(col):
     u"""SQL: the percentage where it is one (0-100), else NULL — for ranking
     and averaging. The filed value itself is published unchanged."""
     return "CASE WHEN %s BETWEEN 0 AND 100 THEN %s END" % (col, col)
+
+
+def ratio_ok(col):
+    u"""SQL: a share filed as a fraction where it is one (0-1), else NULL."""
+    return "CASE WHEN %s BETWEEN 0 AND 1 THEN %s END" % (col, col)
+
+
+def salary_ok(col, row=None, table="eq_company_year"):
+    u"""SQL: an average salary inside the band any filing has reported, else NULL.
+
+    With `row` (the alias of the eq_company_year row the column comes from) it
+    is also tested against the median of the same company's other years."""
+    test = "%s BETWEEN %d AND %d" % (col, SALARY_BAND[0], SALARY_BAND[1])
+    if row:
+        test += (" AND coalesce(%s / nullif((SELECT median(o.avg_salary_yen) FROM %s o"
+                 " WHERE o.edinet_code = %s.edinet_code AND o.doc_id <> %s.doc_id"
+                 " AND o.avg_salary_yen BETWEEN %d AND %d), 0) BETWEEN %s AND %s, TRUE)"
+                 % (col, table, row, row, SALARY_BAND[0], SALARY_BAND[1],
+                    1 / SALARY_OWN_YEARS_FACTOR, SALARY_OWN_YEARS_FACTOR))
+    return "CASE WHEN %s THEN %s END" % (test, col)
+
+
+def salary_vs_own_years(salary, others):
+    u"""Why an average salary cannot be right against the company's other
+    years (a list of their salaries), or None."""
+    vals = sorted(v for v in others or () if v is not None and SALARY_BAND[0] <= v <= SALARY_BAND[1])
+    if salary is None or not vals:
+        return None
+    mid = vals[len(vals) // 2] if len(vals) % 2 else (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]) / 2.0
+    if mid and not 1 / SALARY_OWN_YEARS_FACTOR <= salary / float(mid) <= SALARY_OWN_YEARS_FACTOR:
+        return ("average annual pay of %d yen per employee is %.0f times the company's "
+                "other years (median %d yen); the filing has stated it on the wrong scale"
+                % (salary, max(salary / float(mid), mid / float(salary)), mid))
+    return None
+
+
+def pay_gap_ok(col):
+    u"""SQL: women's pay as a share of men's where it can be one, else NULL."""
+    return "CASE WHEN %s > 0 AND %s <= %s THEN %s END" % (col, col, PAY_GAP_MAX, col)
+
+
+def per_officer_ok(col):
+    u"""SQL: pay per officer below the wrong-scale line, else NULL."""
+    return "CASE WHEN %s <= %d THEN %s END" % (col, MAX_PAY_PER_OFFICER, col)
+
+
+def in_range(v, lo, hi):
+    u"""Python twin of the SQL helpers: v where lo <= v <= hi, else None."""
+    return v if v is not None and lo <= v <= hi else None
 
 
 # The register's shareholder-category percentages, each a share of one total.

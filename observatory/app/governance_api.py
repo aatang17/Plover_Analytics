@@ -165,7 +165,7 @@ NAMES_EN_NOTE = (
 
 CALC = {
     "age_at_period_end": "fiscal period end − date of birth, whole years",
-    "female_ratio_calc": "female officers ÷ tagged board rows × 100",
+    "female_ratio_calc": "female officers ÷ (female + male officers) × 100, the filer's own denominator",
     "per_head_yen": "category total ÷ officers paid in that category",
     "directors_70_plus_pct": "directors aged 70 or over ÷ tagged board rows × 100",
 }
@@ -263,10 +263,10 @@ def summary(year: str = Query("", description="fiscal year, e.g. 2026; default l
                avg(avg_director_age)                      AS avg_director_age,
                100.0 * sum(directors_70_plus) / nullif(sum(board_size), 0)
                                                           AS directors_70_plus_pct,
-               100.0 * avg(female_ratio_filed)            AS avg_female_officer_pct,
+               100.0 * avg(""" + plausibility.ratio_ok("female_ratio_filed") + """) AS avg_female_officer_pct,
                sum(CASE WHEN female_officers = 0 THEN 1 ELSE 0 END) AS boards_with_no_women,
-               median(avg_salary_yen)                     AS median_employee_salary_yen,
-               median(gender_pay_gap_all)                 AS median_gender_pay_gap,
+               median(""" + plausibility.salary_ok("avg_salary_yen") + """) AS median_employee_salary_yen,
+               median(""" + plausibility.pay_gap_ok("gender_pay_gap_all") + """) AS median_gender_pay_gap,
                sum(named_count)                           AS named_individuals,
                sum(CASE WHEN named_exceeds_category THEN 1 ELSE 0 END)
                                                           AS filings_named_exceeds_category,
@@ -348,7 +348,11 @@ def company(sec_code: str,
     f.pop("rn", None)
     f.pop("filer_key", None)
     f["industry_en"] = INDUSTRY_EN.get(f.get("industry"))
-    plausibility.company_year(f)
+    others = [r["avg_salary_yen"] for r in _rows(cur, """
+        SELECT avg_salary_yen FROM eq_company_year
+        WHERE edinet_code = ? AND doc_id <> ? AND status IN ('clean','partial')""",
+        [f.get("edinet_code"), f["doc_id"]])]
+    plausibility.company_year(f, others)
     doc = f["doc_id"]
 
     f["board"] = person_en.fix_rows(_rows(cur, """
@@ -411,6 +415,8 @@ def history(sec_code: str = Query(..., description="4-digit securities code")):
         .replace("{NOTOFWHICH}", NOT_OF_WHICH), [code])
     if not series:
         raise HTTPException(404, "no extracted board or pay filings for %s" % code)
+    for row in series:
+        plausibility.company_year(row, [o["avg_salary_yen"] for o in series if o is not row])
     return {"sec_code": code, "series": series,
             "panel_note": ("A trend must compare the same company to itself. "
                            "Missing years mean the filing was not extractable, "
@@ -427,7 +433,10 @@ SCREENS = {
                         "Lowest average director age"),
     "no_women": ("board_size DESC", "female_officers = 0",
                  "Boards with no women, largest first"),
-    "most_female": ("female_ratio_filed DESC", "female_ratio_filed IS NOT NULL",
+    # A filed figure that cannot be what it says (a share above 1, a salary of
+    # trillions) is left out of a ranking rather than leading it; the company's
+    # own page still shows it as filed, flagged (app/plausibility.py).
+    "most_female": ("female_ratio_filed DESC", "female_ratio_filed BETWEEN 0 AND 1",
                     "Highest female officer ratio"),
     "largest_boards": ("board_size DESC", "board_size IS NOT NULL", "Largest boards"),
     "oldest_directors": ("directors_70_plus DESC", "directors_70_plus > 0",
@@ -438,9 +447,11 @@ SCREENS = {
     "highest_pay_per_officer": ("pay_per_officer_yen DESC",
                                 "g.pay_category_total_yen IS NOT NULL",
                                 "Highest filed pay per officer (all categories)"),
-    "highest_employee_pay": ("avg_salary_yen DESC", "avg_salary_yen IS NOT NULL",
+    "highest_employee_pay": ("avg_salary_yen DESC",
+                             plausibility.salary_ok("g.avg_salary_yen", "g") + " IS NOT NULL",
                              "Highest average employee salary"),
-    "widest_gender_pay_gap": ("gender_pay_gap_all ASC", "gender_pay_gap_all IS NOT NULL",
+    "widest_gender_pay_gap": ("gender_pay_gap_all ASC", "gender_pay_gap_all > 0 AND gender_pay_gap_all <= %s"
+                              % plausibility.PAY_GAP_MAX,
                               "Lowest female-to-male wage ratio"),
 }
 
@@ -523,9 +534,9 @@ def trend(years_back: int = Query(5, ge=2, le=6),
                avg(y.avg_director_age) AS avg_director_age,
                100.0 * sum(y.directors_70_plus) / nullif(sum(y.board_size), 0)
                    AS directors_70_plus_pct,
-               100.0 * avg(y.female_ratio_filed) AS female_officer_pct,
+               100.0 * avg(""" + plausibility.ratio_ok("y.female_ratio_filed") + """) AS female_officer_pct,
                median(y.board_size) AS median_board_size,
-               median(y.avg_salary_yen) AS median_employee_salary_yen,
+               median(""" + plausibility.salary_ok("y.avg_salary_yen") + """) AS median_employee_salary_yen,
                median((SELECT sum(p.total_yen) / nullif(sum(p.headcount), 0)
                          FROM eq_pay_category p WHERE p.doc_id = y.doc_id
                           AND {NOTOFWHICH}

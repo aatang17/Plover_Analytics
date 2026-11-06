@@ -371,7 +371,11 @@ def build(doc_id, company, people, pay, named, period_end):
     if n_board and officers is not None and n_board > officers:             # G1
         problems.append("G1 %d board rows > %d tagged officers" % (n_board, officers))
     filed = to_num(company.get("female_ratio_filed", ""))
-    calc = (female / n_board) if (n_board and female is not None) else None
+    # The filer's ratio is women among ALL its officers (male + female), which
+    # counts executive officers off the board. Dividing by board rows instead
+    # gave 味の素 82% (9 of 11) against a filed 27.2% (9 of 33).
+    denom = officers or n_board
+    calc = (female / denom) if (denom and female is not None) else None
     if filed is not None and calc is not None and officers == n_board:      # G2
         if abs(calc - filed) >= 10.0 ** -stated_dp(filed):
             problems.append("G2 female ratio filed %s vs recomputed %.4f" % (filed, calc))
@@ -400,7 +404,9 @@ def build(doc_id, company, people, pay, named, period_end):
 
     ages = [r[9] for r in board if r[9] is not None]
     agg = {
-        "board_size": n_board,
+        # No tagged board is an unknown board, not a board of nobody: the
+        # officers table was a text block (status no_tagged_board).
+        "board_size": n_board or None,
         "officers_tagged": to_int(officers),
         "officers_untagged": (to_int(officers) - n_board) if (officers is not None and n_board) else None,
         "male_officers": to_int(male), "female_officers": to_int(female),
@@ -497,6 +503,16 @@ def main():
 
     con = duckdb.connect(args.db)
     con.execute(SCHEMA_SQL)
+    # Rows written before 2026-11-07 stored 0 for a board the filing did not
+    # tag (12,385 of them, 9,522 listed). Missing is NULL, never zero; this is
+    # a no-op once they are cleared.
+    con.execute("UPDATE eq_company_year SET board_size = NULL WHERE board_size = 0")
+    # Same day: female_ratio_calc divided by board rows, not by every officer.
+    # Recomputed from the stored counts; a no-op once right.
+    con.execute("""UPDATE eq_company_year
+        SET female_ratio_calc = round(female_officers / (male_officers + female_officers), 4)
+        WHERE male_officers + female_officers > 0
+          AND female_ratio_calc IS DISTINCT FROM round(female_officers / (male_officers + female_officers), 4)""")
 
     def fetch_and_parse(t):
         doc_id, rec, m = t

@@ -34,6 +34,8 @@ another file, write one, or change a setting; a query is one SELECT
 import os
 import re
 
+from . import plausibility as _pl
+
 CATALOG = "sec"                      # kept for callers that know only the US file
 CATALOGS = ("sec", "jp", "macro")
 
@@ -143,8 +145,9 @@ VIEWS = {
                    FROM {jp}.eq_filings WHERE status <> 'failed')
         SELECT e.sec_code, e.edinet_code, e.name_en, e.name_ja, e.industry, e.listed,
                f.period_end AS fiscal_year_end, f.issued_shares, f.treasury_shares, f.equity_yen, f.total_assets_yen,
-               y.employees_consolidated AS employees, y.board_size, y.female_officers, y.avg_director_age,
-               y.avg_salary_yen, y.avg_employee_age, y.avg_tenure_years
+               y.employees_consolidated AS employees, nullif(y.board_size, 0) AS board_size, y.officers_tagged AS officers,
+               y.female_officers, 100 * """ + _pl.ratio_ok("y.female_ratio_filed") + """ AS female_officer_pct, y.avg_director_age,
+               """ + _pl.salary_ok("y.avg_salary_yen", "y", "{jp}.eq_company_year") + """ AS avg_salary_yen, y.avg_employee_age, y.avg_tenure_years
         FROM {jp}.eq_entities e
         LEFT JOIN f ON f.edinet_code = e.edinet_code AND f.rn = 1
         LEFT JOIN {jp}.eq_company_year y ON y.edinet_code = e.edinet_code AND y.period_end = f.period_end
@@ -156,9 +159,11 @@ VIEWS = {
          ("fiscal_year_end", "DATE", "the latest annual report's year end"),
          ("issued_shares", "DOUBLE", "shares issued"), ("treasury_shares", "DOUBLE", "treasury shares"),
          ("equity_yen", "DOUBLE", "shareholders' equity, yen"), ("total_assets_yen", "DOUBLE", "total assets, yen"),
-         ("employees", "DOUBLE", "consolidated employees"), ("board_size", "INTEGER", "directors and officers on the board"),
-         ("female_officers", "INTEGER", "women among them"), ("avg_director_age", "DOUBLE", "average director age"),
-         ("avg_salary_yen", "DOUBLE", "average employee salary, yen"), ("avg_employee_age", "DOUBLE", "average employee age"),
+         ("employees", "DOUBLE", "consolidated employees"), ("board_size", "INTEGER", "directors and officers on the board; blank when the report lists them only as text"),
+         ("officers", "INTEGER", "every officer in the filer's own count: the board plus executive officers and auditors, so often more than board_size"),
+         ("female_officers", "INTEGER", "women among the officers (not only the board); never divide it by board_size"),
+         ("female_officer_pct", "DOUBLE", "women as % of the officers, as the filing states it; use this for a share of women"), ("avg_director_age", "DOUBLE", "average director age"),
+         ("avg_salary_yen", "DOUBLE", "average employee salary, yen; blank where the filing states it on the wrong scale"), ("avg_employee_age", "DOUBLE", "average employee age"),
          ("avg_tenure_years", "DOUBLE", "average years of service")]),
     "jp_figures": (
         "Every figure in Japanese annual reports (XBRL), this year (year_offset 0) and last (−1): net sales, operating profit, "
@@ -219,19 +224,22 @@ VIEWS = {
                           row_number() OVER (PARTITION BY coalesce(sec_code, edinet_code) ORDER BY period_end DESC, filed_date DESC) AS rn
                    FROM {jp}.eq_own_filings WHERE status <> 'failed')
         SELECT o.sec_code, o.filer_name AS company, o.period_end AS fiscal_year_end, o.rn = 1 AS latest,
-               m.rank, m.name_base AS holder, m.name_raw AS holder_raw, m.holder_kind, m.shares, m.ratio_pct, m.holder_sec_code
+               m.rank, m.name_base AS holder, m.name_raw AS holder_raw, m.holder_kind, m.shares, """ + _pl.pct_ok("m.ratio_pct") + """ AS ratio_pct, m.holder_sec_code
         FROM {jp}.eq_major_shareholders m JOIN o USING (doc_id)
         """,
         _CO + [("rank", "INTEGER", "1 = largest"), ("holder", "VARCHAR", "holder's name, cleaned"),
                ("holder_raw", "VARCHAR", "as printed"), ("holder_kind", "VARCHAR", "trust bank account, company, individual…"),
-               ("shares", "DOUBLE", "shares held"), ("ratio_pct", "DOUBLE", "% of shares outstanding, as filed"),
+               ("shares", "DOUBLE", "shares held"), ("ratio_pct", "DOUBLE", "% of shares outstanding, as filed; blank where the filing's figure is outside 0–100"),
                ("holder_sec_code", "VARCHAR", "the holder's own stock code when it is a listed company")]),
     "jp_shareholder_mix": (
-        "Who holds each Japanese company by type, from its annual report: foreigners, financial institutions, other companies, individuals.",
+        "Who holds each Japanese company by type, from its annual report: foreigners, financial institutions, other companies, individuals. "
+        "A percentage is blank where the filing typed a count into it (it would read thousands of percent).",
         """
         SELECT sec_code, filer_name AS company, period_end AS fiscal_year_end,
                row_number() OVER (PARTITION BY coalesce(sec_code, edinet_code) ORDER BY period_end DESC, filed_date DESC) = 1 AS latest,
-               shareholders_total, foreign_pct, financial_institutions_pct, other_corporations_pct, individuals_pct, securities_firms_pct, government_pct
+               shareholders_total, """ + ", ".join("%s AS %s" % (_pl.pct_ok(c), c) for c in (
+                   "foreign_pct", "financial_institutions_pct", "other_corporations_pct", "individuals_pct",
+                   "securities_firms_pct", "government_pct")) + """
         FROM {jp}.eq_own_filings WHERE status <> 'failed'
         """,
         _CO + [("shareholders_total", "DOUBLE", "number of shareholders"),
@@ -243,7 +251,11 @@ VIEWS = {
         "A holder's current stake: WHERE latest; who is buying or selling: ratio_change_pp by filed_date.",
         """
         SELECT issuer_sec_code AS sec_code, issuer_name_raw AS company, filer_name AS holder, filer_edinet_code AS holder_edinet_code,
-               report_type, filed_date, ratio_pct, prior_ratio_pct, ratio_change_pp, shares_held, shares_outstanding,
+               report_type, filed_date,
+               CASE WHEN ratio_pct <= 100 THEN ratio_pct END AS ratio_pct,
+               CASE WHEN prior_ratio_pct <= 100 THEN prior_ratio_pct END AS prior_ratio_pct,
+               CASE WHEN coalesce(ratio_pct, 0) <= 100 AND coalesce(prior_ratio_pct, 0) <= 100 THEN ratio_change_pp END AS ratio_change_pp,
+               shares_held, shares_outstanding,
                purpose_ja, important_proposal,
                row_number() OVER (PARTITION BY issuer_sec_code, filer_edinet_code ORDER BY filed_date DESC) = 1 AS latest
         FROM {jp}.eq_lvh_filings WHERE status <> 'failed' AND issuer_sec_code IS NOT NULL
@@ -282,7 +294,9 @@ VIEWS = {
         "Board pay by category (directors, outside directors, auditors) at Japanese companies: headcount and totals, yen.",
         "WITH f AS " + _LATEST_FILING + """
         SELECT f.sec_code, f.filer_name AS company, f.period_end AS fiscal_year_end, f.rn = 1 AS latest,
-               c.category_en AS category, c.headcount, c.total_yen, c.per_head_yen, c.fixed_yen, c.performance_yen, c.bonus_yen
+               c.category_en AS category, c.headcount,
+               CASE WHEN c.per_head_yen IS NULL OR c.per_head_yen <= """ + str(_pl.MAX_PAY_PER_OFFICER) + """ THEN c.total_yen END AS total_yen,
+               """ + _pl.per_officer_ok("c.per_head_yen") + """ AS per_head_yen, c.fixed_yen, c.performance_yen, c.bonus_yen
         FROM {jp}.eq_pay_category c JOIN f USING (doc_id)
         """,
         _CO + [("category", "VARCHAR", "directors, outside directors, audit…"),
@@ -421,12 +435,16 @@ VIEWS = {
 }
 
 # the raw tables the views are built from are still listed, so a question the views do not fit can reach them
+_RAW_WARN = (" Raw figures as filed, a few of them impossible (a percentage of thousands, a salary of trillions: the "
+             "filing's own scale slip); the jp_ views leave those blank, so prefer them.")
 _RAW_NOTES = {
     "sec_13f_filings": "one row per 13F filing (manager, quarter, filed date)",
-    "sec_13f_holdings": "every 13F line as filed; join sec_13f_filings USING (accession)",
+    "sec_13f_holdings": "every 13F line as filed; join sec_13f_filings USING (accession). A few filers typed value or shares on "
+                        "the wrong scale (Nvidia at $4.9m a share); fund_positions marks them with shares_ok",
     "sec_ins_filings": "one row per insider filing (Forms 3, 4, 5): issuer, filed date",
     "sec_ins_owners": "the insider on each filing: name, title, director / officer / 10% owner",
-    "sec_ins_transactions": "each trade on an insider filing: date, code (P purchase, S sale, A award, M option exercise, F tax withholding, G gift), shares, price",
+    "sec_ins_transactions": "each trade on an insider filing: date, code (P purchase, S sale, A award, M option exercise, F tax withholding, G gift), shares, price. "
+                            "Some filers typed the total into the price box: leave out price > 1e6 and shares × price > 2e10",
     "sec_ins_holdings": "shares the insider held after each filing",
     "sec_companies": "every SEC filer with a ticker: name, exchange, SIC industry code",
     "sec_sic": "SIC industry codes and their titles",
@@ -437,24 +455,26 @@ _RAW_NOTES = {
     "sec_segments": "the segment each fact belongs to",
     "sec_cf_facts": "every reported figure from the SEC's company facts feed, point in time (filed date), S&P 500 companies",
     "sec_cf_companies": "the companies in the company facts feed",
-    "sec_cover_shares": "shares outstanding by class from each filing's cover page",
+    "sec_cover_shares": "shares outstanding by class from each filing's cover page. A count 1,000 or 1,000,000 times the same "
+                        "company's next filing is the filer's scale slip, not a share count",
     "sec_px_facts": "proxy statement (DEF 14A) figures: executive pay by person",
     "sec_px_names": "the people named in each proxy statement",
     "sec_ads_ratios": "ADR ratios (depositary shares per ordinary share) for foreign companies",
     "us_events": "dated events: FOMC statement days, CPI release mornings, shutdowns, results days",
-    "us_px_daily": "daily closing prices (the prices table is built from it)",
+    "us_px_daily": "daily closing prices (the prices table is built from it). A close of 0 is a day with no price, never a price "
+                   "of zero: always filter close > 0",
     "us_mcap_daily": "daily market values (market_value_daily is built from it)",
     "us_index_members": "index membership lists by snapshot (index_members is the latest)",
     "us_index_snapshots": "when each index list was taken",
     "eq_entities": "every EDINET filer (jp_companies is built from it)",
     "eq_filings": "one row per Japanese annual report: filer, year end, shares, equity, assets",
-    "eq_company_year": "per annual report: board, employees, pay totals, diversity figures",
+    "eq_company_year": "per annual report: board, employees, pay totals, diversity figures (jp_companies)." + _RAW_WARN,
     "eq_fin_facts": "every XBRL figure in Japanese annual reports (jp_figures keeps this year and last)",
     "eq_fin_elements": "what each XBRL element means",
     "eq_fin_filings": "the annual reports the figures come from",
-    "eq_lvh_filings": "5% large-shareholding filings (jp_stakes)", "eq_lvh_holders": "each holder named on a 5% filing (joint holders)",
-    "eq_major_shareholders": "the shareholder register's top ten (jp_major_shareholders)", "eq_own_filings": "the register's filing and holder mix (jp_shareholder_mix)",
-    "eq_own_category": "holders by category and share class",
+    "eq_lvh_filings": "5% large-shareholding filings (jp_stakes)", "eq_lvh_holders": "each holder named on a 5% filing (joint holders); a broker's line can be negative as filed." + _RAW_WARN,
+    "eq_major_shareholders": "the shareholder register's top ten (jp_major_shareholders)", "eq_own_filings": "the register's filing and holder mix (jp_shareholder_mix)." + _RAW_WARN,
+    "eq_own_category": "holders by category and share class." + _RAW_WARN,
     "eq_holdings": "cross-shareholdings line by line (jp_cross_holdings)", "eq_filing_totals": "cross-shareholding totals per report", "eq_filing_flows": "shares bought and sold in the year",
     "eq_pay_named": "named officer pay (jp_pay)", "eq_pay_category": "board pay by category (jp_pay_categories)", "eq_board": "board seats (jp_board)",
     "eq_risk_items": "risk factor headings and text (jp_risks)", "eq_risk_filings": "the reports they come from, with the full text",

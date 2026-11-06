@@ -231,6 +231,12 @@ _LIMITS = [
     (re.compile(r"margin_pct$", re.I), -1000.0, 100.0, "a margin outside −1,000% to 100%"),
     (re.compile(r"yield_pct$", re.I), 0.0, 50.0, "a yield above 50%"),
     (re.compile(r"roe_pct$", re.I), -1000.0, 1000.0, "a return on equity beyond ±1,000%"),
+    # Shares of a whole. A Japanese register can type a count into its percentage
+    # column (Sportsfield's 5,860% foreign; 2026-11-06 live, it led an answer).
+    (re.compile(r"(foreign|individuals?|financial_institutions|other_corporations|securities_firms|government|nominee|"
+                r"ratio|stake|ownership|holding|weight|approval)\w*_pct$", re.I), -100.0, 100.0, "a share above 100%"),
+    (re.compile(r"female\w*_ratio|ratio_filed$", re.I), 0.0, 1.0, "a share of women above 1"),
+    (re.compile(r"salary_yen$", re.I), 500000.0, 100000000.0, "an average salary outside ¥0.5m–¥100m"),
 ]
 
 

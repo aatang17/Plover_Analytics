@@ -533,7 +533,9 @@ def holder(key: str,
                 ORDER BY event_date DESC, filed_date DESC, doc_id DESC, holder_no) AS rn
             FROM book)
         WHERE rn = 1
-        ORDER BY ratio_pct DESC NULLS LAST""", [k])
+        ORDER BY CASE WHEN ratio_pct <= 100 THEN ratio_pct END DESC NULLS LAST""", [k])
+    plausibility.lvh_rows(rows)
+    plausibility.lvh_rows(current)
     first = current[0]
     profile = _label({"holder_edinet_code": first["holder_edinet_code"],
                       "holder_key": first["holder_key"],
@@ -599,7 +601,7 @@ ENTITY_ROLLUP = """
            max(h.business_ja) AS business_ja,
            count(*) AS reports,
            count(DISTINCT coalesce(f.issuer_sec_code, f.issuer_name_raw)) AS issuers,
-           max(h.ratio_pct) AS max_ratio_pct,
+           max(CASE WHEN h.ratio_pct <= 100 THEN h.ratio_pct END) AS max_ratio_pct,
            sum(CASE WHEN h.important_proposal THEN 1 ELSE 0 END) AS proposal_reports,
            max({EVENT}) AS latest_report
     FROM eq_lvh_holders h JOIN eq_lvh_filings f USING (doc_id)

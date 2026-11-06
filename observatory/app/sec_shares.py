@@ -572,10 +572,36 @@ def _cover_totals(cur):
                 WHERE shares IS NOT NULL AND (class_key = '' OR class_key NOT LIKE '%=%')
                 GROUP BY cik, accn, end_date ORDER BY cik, end_date""").fetchall():
             out.setdefault(cik, []).append((end, n))
+    out = {cik: drop_slips(counts) for cik, counts in out.items()}
     with _LOCK:
         _SPLIT_MEMO.clear()
         _SPLIT_MEMO[key] = out
     return out
+
+
+SLIP = 50.0      # a cover count this far from both neighbours, which agree, is a scale slip
+
+
+def drop_slips(counts):
+    """[(date, shares)] oldest first, without the one-off scale slips.
+
+    A cover count 50 or more times off the counts either side of it, while
+    those two agree within 10x, is a figure tagged in the wrong scale that the
+    next filing reverses (ResMed 145,681 between 145.5m and 145.7m; Farmer
+    Brothers 21.6 trillion between 21.6m and 21.7m): 114 of them in the SEC
+    frames files, 2026-11-07. A split is not dropped, because the count stays
+    where it moved. Each count is judged against the neighbour already kept,
+    so alternating slips do not condemn the good counts between them. The
+    first and newest counts have one neighbour and are kept; the newest is
+    tested against the balance sheet and the price history in basis()."""
+    kept = []
+    for i, (d, n) in enumerate(counts):
+        prev = kept[-1][1] if kept else None
+        nxt = counts[i + 1][1] if i + 1 < len(counts) else None
+        if prev and nxt and n and 0.1 <= prev / nxt <= 10 and not 1 / SLIP < n / prev < SLIP:
+            continue
+        kept.append((d, n))
+    return kept
 
 
 def split_evidence(cur, cik, day, ratio):

@@ -282,6 +282,16 @@ def _listed_only(con, exchange):
     con.execute("DELETE FROM raw_px WHERE symbol NOT IN (SELECT symbol FROM listed)")
 
 
+def blank_zero_prices(con):
+    """A price of 0 in the feed is a day with no price (a halted, delisted or
+    test symbol), never a price of zero: stored as missing. Bars loaded
+    before 2026-11-07 kept the 0 (249,342 rows, 3,621 symbols); this clears
+    them and is a no-op afterwards. The volume on those rows is kept."""
+    con.execute("""UPDATE us_px_daily
+        SET open = nullif(open, 0), high = nullif(high, 0), low = nullif(low, 0), close = nullif(close, 0)
+        WHERE open = 0 OR high = 0 OR low = 0 OR close = 0""")
+
+
 def load(con, gz_path, start, end, pull_id):
     con.execute("""CREATE OR REPLACE TEMP TABLE raw_px AS
         SELECT * FROM read_csv(?, header=true, all_varchar=true)""", [gz_path])
@@ -308,8 +318,9 @@ def load(con, gz_path, start, end, pull_id):
             con.execute("DELETE FROM us_px_daily WHERE date >= ? AND date <= ?", [start, end])
         con.execute("""
             INSERT INTO us_px_daily
-            SELECT symbol, CAST(substr(ts_event, 1, 10) AS DATE), try_cast(open AS DOUBLE),
-                   try_cast(high AS DOUBLE), try_cast(low AS DOUBLE), try_cast(close AS DOUBLE),
+            SELECT symbol, CAST(substr(ts_event, 1, 10) AS DATE), nullif(try_cast(open AS DOUBLE), 0),
+                   nullif(try_cast(high AS DOUBLE), 0), nullif(try_cast(low AS DOUBLE), 0),
+                   nullif(try_cast(close AS DOUBLE), 0),
                    try_cast(volume AS BIGINT), try_cast(instrument_id AS BIGINT),
                    try_cast(publisher_id AS INTEGER), ?
             FROM raw_px WHERE try_cast(close AS DOUBLE) IS NOT NULL AND symbol IS NOT NULL""", [pull_id])
@@ -353,6 +364,7 @@ def main(argv=None):
     con = duckdb.connect(args.db)
     try:
         con.execute(SCHEMA_SQL)
+        blank_zero_prices(con)
         yesterday = dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)
         end = dt.date.fromisoformat(args.end) if args.end else yesterday
         if args.start:

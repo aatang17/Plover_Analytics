@@ -369,6 +369,14 @@
     function withUnit(v, text, unit) {
       return v == null ? MISSING : text + '<span class="unit"> ' + unit + "</span>";
     }
+    // A figure the filing cannot support (app/plausibility.py) is shown as
+    // filed, and said to be on the wrong scale right beside it.
+    var SCALE_LABELS = { avg_salary_yen: "Average salary", female_ratio_filed: "Female officers",
+      female_managers_ratio: "Women in management", gender_pay_gap_all: "Female-to-male wage ratio",
+      officers_tagged: "Officer count" };
+    var wrongScale = {};
+    (d.flags || []).forEach(function (f) { if (SCALE_LABELS[f.field]) wrongScale[f.field] = f.reason; });
+    function scaleNote(field) { return wrongScale[field] ? " — wrong scale in the filing" : ""; }
     $("co-facts").innerHTML =
       fact("Board size", count(d.board_size), d.officers_untagged
         ? count(d.officers_tagged) + " officers in the filer's own count — " +
@@ -378,10 +386,12 @@
         count(d.directors_70_plus) + " aged 70 or over (calculated)") +
       fact("Female officers", d.female_ratio_filed == null ? MISSING
              : ratioPct(d.female_ratio_filed) + '<span class="unit">%</span>',
-        count(d.female_officers) + " of " + count(d.officers_tagged || d.board_size) + ", as filed") +
+        count(d.female_officers) + " of " + count(d.officers_tagged || d.board_size) + ", as filed" +
+          scaleNote("female_ratio_filed")) +
       fact("Employees", count(d.employees_consolidated),
         (d.avg_salary_yen == null ? "average salary not stated"
-          : "average salary ¥" + yenM(d.avg_salary_yen, 2) + "m at the filer (as filed)")) +
+          : "average salary ¥" + yenM(d.avg_salary_yen, 2) + "m at the filer (as filed)" +
+            scaleNote("avg_salary_yen"))) +
       fact("Officer pay, filed total",
         withUnit(d.pay_category_total_yen, "¥" + yenM(d.pay_category_total_yen), "m"),
         count(d.named_count) + " individuals disclosed separately on a consolidated basis");
@@ -390,11 +400,20 @@
         '<span class="qual">' + qual + "</span></dd></div>";
     }
 
+    var flagText = [];
     if (d.pay_consistency_flag) {
-      $("co-flag").innerHTML = "<b>This filing's own pay figures contradict each other.</b> " +
-        esc(d.pay_consistency_flag) + " " + esc(d.pay_consistency_note);
-      $("co-flag").hidden = false;
+      flagText.push("<b>This filing's own pay figures contradict each other.</b> " +
+        esc(d.pay_consistency_flag) + " " + esc(d.pay_consistency_note));
     }
+    var scaled = Object.keys(wrongScale).map(function (k) { return SCALE_LABELS[k]; });
+    if (scaled.length) {
+      flagText.push("<b>" + esc(scaled.join(", ")) + (scaled.length > 1 ? " are" : " is") +
+        " filed on the wrong scale.</b> The figure cannot be right as stated: a share above 100%, " +
+        "or an average salary many times off the company's other years or every filing's range. " +
+        "It is shown exactly as filed and left out of rankings and averages.");
+    }
+    $("co-flag").innerHTML = flagText.join(" ");
+    $("co-flag").hidden = !flagText.length;
 
     // board
     $("board-count").textContent = d.board.length + " directors as at the filing date";

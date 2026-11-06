@@ -420,7 +420,9 @@ def _r_owners(row, question):
     else:
         headline = "%s's largest registered holders are custody accounts, which hold for clients, so the owners behind them aren't named." % who
     bits = ["5% filings give the latest position and count a holder's vehicles together; the rest is the shareholder register from the annual report."]
-    if reg.get("foreign_pct") is not None:
+    # A register can type a count into its percentage column (Sportsfield's
+    # 5,860%); such a figure is not a share and is not quoted.
+    if reg.get("foreign_pct") is not None and 0 <= reg["foreign_pct"] <= 100:
         bits.append("Foreign investors held %s of the shares at %s." % (_pct(reg["foreign_pct"]), _day(period)))
     notes = ["A custody account is a bank holding for its clients, so it does not show who really owns the shares."] if nominees else []
     notes.append("Register figures and 5% figures use slightly different denominators, so they don't add to a total.")
