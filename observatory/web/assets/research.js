@@ -207,6 +207,9 @@ var researchChart = (function () {
         series: t.names.map(function (n, i) { return { name: n, slot: i + 1, points: t.values[i] }; }),
         unitSuffix: pct ? "%" : unit,
         labelInterval: t.labels.length > 12 ? "auto" : undefined,
+        // Sector or country names, not periods: every one is needed, wrapped
+        // under its own column rather than printed over its neighbours.
+        wrapLabels: !t.dates && t.labels.length <= 12,
       }) };
     }
     return { kind: "line", table: t, cfg: Object.assign(common, {

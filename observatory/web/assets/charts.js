@@ -665,8 +665,22 @@ function distOptions(cfg, pal, narrow) {
    Grouped vertical bars: two flows measured in the same unit over the same
    months, side by side rather than stacked — they are different acts and their
    sum means nothing. Zero baseline always; a bar axis is never truncated. */
-function colsOptions(cfg, pal, narrow, below) {
+function colsOptions(cfg, pal, narrow, below, width) {
   const dp = cfg.dp === undefined ? 1 : cfg.dp;
+  // cfg.wrapLabels: named categories (sectors, countries), each label kept and
+  // wrapped between words to its column's width, a size smaller if that is
+  // what fits the longest word; where nothing fits, the labels stand upright
+  // (a tilted first label runs off the left edge). Without it a long name
+  // runs into the next. Measured in sans-serif, the font ECharts draws in.
+  const slot = cfg.wrapLabels && width ? (width - 48) / Math.max(1, cfg.categories.length) - 2 : 0;
+  const words = cfg.wrapLabels ? [].concat.apply([], cfg.categories.map(c => String(c).split(/\s+/))) : [];
+  // the longest word may use the 2px gap, but never more than its column's pitch
+  const word = size => measureTextWidth(words, size, "sans-serif");
+  const fits = size => slot + 2 >= word(size);
+  const wrap = !cfg.wrapLabels ? null
+    : fits(11) ? { interval: 0, width: Math.max(slot, word(11)), overflow: "break", lineHeight: 13 }
+    : fits(10) ? { interval: 0, width: Math.max(slot, word(10)), overflow: "break", lineHeight: 12, fontSize: 10 }
+    : { interval: 0, rotate: 90, width: 160, overflow: "truncate", ellipsis: "…" };
   const suffix = cfg.unitSuffix ? " " + cfg.unitSuffix : "";
   const fmt = v => (v === null || v === undefined ? "—" : fmtNum(v, dp) + suffix);
   return {
@@ -684,12 +698,12 @@ function colsOptions(cfg, pal, narrow, below) {
     xAxis: Object.assign(axisCommon(pal), {
       type: "category", data: cfg.categories,
       splitLine: { show: false },
-      axisLabel: { color: pal.muted, fontSize: 11,
+      axisLabel: Object.assign({ color: pal.muted, fontSize: 11,
                    // a month label per bar is unreadable at phone width.
                    // cfg.labelInterval ("auto") opts a long run of periods
                    // into ECharts' own overlap thinning at every width.
                    interval: cfg.labelInterval !== undefined ? cfg.labelInterval
-                     : (narrow ? 2 : 0), rotate: narrow ? 0 : 0 },
+                     : (narrow ? 2 : 0), rotate: narrow ? 0 : 0 }, wrap || {}),
     }),
     yAxis: Object.assign(axisCommon(pal), {
       // Bars keep a zero baseline; a series that goes negative (credit costs,
@@ -765,7 +779,7 @@ function colsOptions(cfg, pal, narrow, below) {
    Chart layout that guesses at text width gets it wrong in one direction or
    the other; the canvas knows. Falls back to a character estimate where no
    2d context is available. */
-function measureTextWidth(strings, fontSize) {
+function measureTextWidth(strings, fontSize, family) {
   let ctx = measureTextWidth._ctx;
   if (ctx === undefined) {
     try {
@@ -778,7 +792,7 @@ function measureTextWidth(strings, fontSize) {
   if (!ctx) {
     return strings.reduce((m, s) => Math.max(m, s.length), 0) * fontSize * 0.56;
   }
-  ctx.font = fontSize + "px " + getComputedStyle(document.body).fontFamily;
+  ctx.font = fontSize + "px " + (family || getComputedStyle(document.body).fontFamily);
   return strings.reduce((m, s) => Math.max(m, ctx.measureText(s).width), 0);
 }
 
@@ -944,7 +958,7 @@ function obsChart(el, kind, cfg) {
                                                    kind === "stack" ? 8 : 10) + 6 : 0;
     if (kind === "line") return lineOptions(cfg, pal, narrow, below);
     if (kind === "stack") return stackOptions(cfg, pal, narrow, below);
-    if (kind === "cols") return colsOptions(cfg, pal, narrow, below);
+    if (kind === "cols") return colsOptions(cfg, pal, narrow, below, width);
     if (kind === "dist") return distOptions(cfg, pal, narrow);
     if (kind === "rank") return rankOptions(cfg, pal, narrow);
     return barOptions(cfg, pal);
@@ -1096,7 +1110,8 @@ function obsChart(el, kind, cfg) {
     const now = layoutNarrow(el.clientWidth);
     const lg = chart.getOption().legend;
     const hidden = lg && lg[0] && lg[0].show === false;
-    if (now !== drawnNarrow && !hidden && el.clientWidth > 0) {
+    // wrapped category labels are cut to the column width, so they follow every resize
+    if ((now !== drawnNarrow || cfg.wrapLabels) && !hidden && el.clientWidth > 0) {
       chart.setOption(optionsFor(readPalette()), { notMerge: true });
       drawnNarrow = now;
     }
