@@ -438,7 +438,7 @@
          <p class="wd-stat-foot"><button type="button" class="btn sm" id="wd-stat-png">Download PNG</button>
          <button type="button" class="btn sm" id="wd-stat-csv">Download CSV</button></p>` +
         table + `<div class="wd-stat-pair">${small("Where Readers Came From", "Source", d.referrers, k => SOURCE_NAMES[k] || k)}${small("Countries", "Country", d.countries, countryLabel)}</div>` +
-        `<p class="wd-stat-note">Source: this site's own visit log${d.counting_since ? ", kept since " + esc(fmtDay(d.counting_since)) : ""}. Not an official statistic. A view is one opening of a page in a browser. Robots, data centres and people who write for a publication here are left out. Someone who returns on another day counts as a new reader unless they accepted the cookie. Reading time is how long the page was on screen, and is available from November 2026.</p>`;
+        `<p class="wd-stat-note">Source: this site's own visit log${d.counting_since ? ", kept since " + esc(fmtDay(d.counting_since)) : ""}. Not an official statistic. A view is one opening of a page in a browser that drew it, loading its styles or running its script; a program that fetches the page's text alone is left out, as are robots, data centres and people who write for a publication here. Someone who returns on another day counts as a new reader unless they accepted the cookie. Reading time is how long the page was on screen, and is available from November 2026.</p>`;
 
       const stem = `${pub.slug || "publication"}-statistics-${d.from}-to-${d.to}`;
       const known = d.daily.filter(r => r.views !== null).length;
@@ -452,7 +452,7 @@
       $("#wd-stat-csv", body).addEventListener("click", () => {
         const lines = [`# ${pub.name}: statistics, ${d.from} to ${d.to}`,
           "# Source: the site's own visit log. Not an official statistic.",
-          "# A view is one opening of a page in a browser; robots, data centres and people who write here are left out.",
+          "# A view is one opening of a page in a browser that drew it (loaded its styles or ran its script); programs fetching the text alone, robots, data centres and people who write here are left out.",
           "# Median reading time is in seconds. An empty cell means no report, or a day before counting began; neither is zero.",
           "",
           "article,last_published,views,readers,median_reading_seconds"];

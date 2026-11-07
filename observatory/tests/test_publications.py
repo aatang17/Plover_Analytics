@@ -315,6 +315,8 @@ class StatisticsTest(PubBase):
     def read(self, path):
         visits._record({"at": self.at, "visitor": path, "path": path, "kind": "page", "status": 200,
                         "ref": None, "internal": False, "country": "JP", "network": "NTT", "bot": False})
+        visits._record({"at": self.at, "visitor": path, "kind": "browser",
+                        "country": "JP", "network": "NTT", "bot": False})
         visits.flush()
 
     def test_owner_writer_and_stranger_see_what_they_should(self):

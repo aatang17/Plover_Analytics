@@ -1107,7 +1107,7 @@ def _new_day():
         "first": None, "last": None,
         # Publication pages for the Writer Desk (_fold_publication). Kept apart
         # from the reader totals, which _settle rebuilds and these do not join.
-        "pub_pages": {}, "pub_dwell": {},
+        "pub_views": [], "pub_drawn": set(), "pub_dwell": {},
         # Page reads from networks that name an organisation (visit_orgs).
         # Kept apart like the publication pages: a bank's network often stops
         # the page's own report, so these do not wait for the reader test;
@@ -1177,14 +1177,26 @@ def _fold_publication(d, event, at):
     Not the Traffic page's test. That one needs the page's own script to have
     reported in, and these pages did not load the script before November 2026,
     so a reader who opened one article and left would never pass it. Here a
-    view is a page served to a browser on a placed network that is not a data
-    centre, the same test for every month. Robots are already gone (_fold)."""
+    view is a page served on a placed network that is not a data centre, to a
+    visitor whose browser drew a page that day: it fetched the styles or the
+    pixel, its script called us, or it is signed in. Scrapers that say they
+    are Chrome fetch the HTML alone (24 of the 30 "readers" of one article in
+    November 2026). The same test for every month: the asset note is logged
+    since counting began. Robots are already gone (_fold)."""
+    kind = event.get("kind")
+    if (kind in ("browser", "dwell") or event.get("member")
+            or (kind == "api" and event.get("internal"))):
+        d["pub_drawn"].add(event.get("visitor"))
     path = event.get("path") or ""
     if not path.startswith(PUBLICATION_PATHS):
         return
-    kind = event.get("kind")
     if kind == "dwell":
         seconds = event.get("seconds")
+        # A data centre's report is a link scanner's as often as a reader's
+        # (LinkedIn's runs on Microsoft's cloud); reports carry a network
+        # since November 2026, and older ones are kept as before.
+        if is_hosting(event.get("network")):
+            return
         if isinstance(seconds, (int, float)) and seconds > 0 and not event.get("early"):
             key = event.get("view") or ("%s|%s" % (visitor_of(event), at))
             held = d["pub_dwell"].get(key)
@@ -1197,13 +1209,9 @@ def _fold_publication(d, event, at):
     network = event.get("network")
     if not network or is_hosting(network):
         return
-    row = d["pub_pages"].setdefault(path, {"views": 0, "visitors": set(), "refs": {}, "countries": {}})
-    row["views"] += 1
-    row["visitors"].add(event["visitor"])
+    # Counted when read (publication_stats): the proof usually lands after the view.
     sender = event.get("ref") or ("site" if event.get("internal") else "direct")
-    row["refs"][sender] = row["refs"].get(sender, 0) + 1
-    if event.get("country"):
-        row["countries"][event["country"]] = row["countries"].get(event["country"], 0) + 1
+    d["pub_views"].append((event["visitor"], path, sender, event.get("country")))
 
 
 def _settle(d, final):
@@ -1617,19 +1625,19 @@ def publication_stats(pages, days=30, top=15):
             cursor += datetime.timedelta(days=1)
             d = _DAYS.get(key) or {}
             views = 0
-            for path, row in (d.get("pub_pages") or {}).items():
+            drawn = d.get("pub_drawn") or set()
+            for visitor, path, sender, country in d.get("pub_views") or ():
                 target = pages.get(_VERSION_SUFFIX.sub("", path.rstrip("/")))
-                if target is None:
+                if target is None or visitor not in drawn:
                     continue
                 held = rows.setdefault(target, {"views": 0, "visitors": set()})
-                held["views"] += row["views"]
-                held["visitors"] |= row["visitors"]
-                seen |= row["visitors"]
-                views += row["views"]
-                for name, n in row["refs"].items():
-                    refs[name] = refs.get(name, 0) + n
-                for name, n in row["countries"].items():
-                    countries[name] = countries.get(name, 0) + n
+                held["views"] += 1
+                held["visitors"].add(visitor)
+                seen.add(visitor)
+                views += 1
+                refs[sender] = refs.get(sender, 0) + 1
+                if country:
+                    countries[country] = countries.get(country, 0) + 1
             for view, held in (d.get("pub_dwell") or {}).items():
                 if view not in dwell or held[1] > dwell[view][1]:
                     dwell[view] = held

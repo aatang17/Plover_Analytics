@@ -605,11 +605,14 @@ class PublicationStatsTest(unittest.TestCase):
         visits._reset_folds()
         self.at = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
-    def page(self, path, visitor="ps-a", **over):
+    def page(self, path, visitor="ps-a", drawn=True, **over):
         event = {"at": self.at, "visitor": visitor, "path": path, "kind": "page", "status": 200,
                  "ref": None, "internal": False, "country": "JP", "network": "NTT", "bot": False}
         event.update(over)
         visits._record(event)
+        if drawn:   # the browser fetched the page's styles
+            visits._record({"at": self.at, "visitor": visitor, "kind": "browser",
+                            "country": "JP", "network": event["network"], "bot": event["bot"]})
 
     def stats(self, days=7):
         visits.flush()
@@ -620,6 +623,24 @@ class PublicationStatsTest(unittest.TestCase):
         got = self.stats()
         self.assertEqual((got["views"], got["readers"]), (1, 1))
         self.assertIsNone(got["rows"][1]["reading_median"])
+
+    def test_a_fetch_of_the_html_alone_does_not(self):
+        # A scraper that says it is Chrome, on a home network: no styles, no script.
+        self.page("/research/a", visitor="ps-s", drawn=False)
+        self.assertEqual((self.stats()["views"], self.stats()["readers"]), (0, 0))
+
+    def test_a_script_call_or_a_signed_in_reader_is_proof_enough(self):
+        self.page("/research/a", visitor="ps-c", drawn=False)
+        visits._record({"at": self.at, "visitor": "ps-c", "path": "/api/v1/account/me", "kind": "api",
+                        "status": 401, "internal": True, "bot": False})
+        self.page("/research/a", visitor="ps-m", drawn=False, member=True)
+        self.assertEqual(self.stats()["readers"], 2)
+
+    def test_a_data_centres_reading_report_is_not_a_reading_time(self):
+        self.page("/research/a")
+        visits._record({"at": self.at, "visitor": "ps-x", "kind": "dwell", "path": "/research/a",
+                        "seconds": 27, "view": "v9", "network": "Microsoft Corporation", "bot": False})
+        self.assertEqual(self.stats()["rows"][1]["reading_samples"], 0)
 
     def test_robots_data_centres_and_failed_requests_do_not(self):
         self.page("/research/a", bot=True)
