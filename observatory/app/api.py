@@ -2091,6 +2091,7 @@ def observations(dataset,
                  fy_end: int = Query(3, ge=1, le=12,
                                      description="Month the fiscal year ends (3 = March)"),
                  format: str = Query("json", description="'json' or 'csv'"),
+                 notes: int = Query(1, ge=0, le=1, description="CSV only: 0 leaves out the '#' notes block and makes column names Stata-safe, for Stata's import delimited"),
                  request: Request = None):
     """Published values for up to eight series (more are answered with the
     first eight and a `series_not_returned` list naming the rest).
@@ -2112,6 +2113,9 @@ def observations(dataset,
     that states the source, the release, the formula and the vintage, so a
     file saved from this URL is citable on its own. pandas reads it with
     ``read_csv(url, comment="#")``, R with ``read.csv(url, comment.char="#")``.
+    Stata's ``import delimited`` cannot skip comment lines or take a dotted
+    column name, so ``notes=0`` drops the block and renames the columns; the
+    chart's Copy Code puts the source and release in the do-file instead.
     """
     adapter = _dataset_or_404(dataset)
     if format not in ("json", "csv"):
@@ -2232,7 +2236,7 @@ def observations(dataset,
                             "them in a second request." % (
                                 MAX_OBSERVATION_SERIES, ", ".join(not_returned)))
         if format == "csv":
-            return _observations_csv(body, adapter, request)
+            return _observations_csv(body, adapter, request, notes=bool(notes))
         return body
     finally:
         con.close()
@@ -2243,7 +2247,26 @@ def _csv_cell(text):
     return '"' + text.replace('"', '""') + '"' if any(c in text for c in ',"\n') else text
 
 
-def _observations_csv(body, adapter, request):
+def _stata_names(codes):
+    """Series codes as Stata variable names: letters, digits and underscores,
+    not starting with a digit, at most 32 characters, no two alike."""
+    out, seen = [], set()
+    for code in codes:
+        name = re.sub(r"[^A-Za-z0-9_]", "_", code)
+        if not name or not (name[0].isalpha() or name[0] == "_"):
+            name = "s" + name
+        name = base = name[:32]
+        n = 2
+        while name.lower() in seen:
+            suffix = "_%d" % n
+            name = base[:32 - len(suffix)] + suffix
+            n += 1
+        seen.add(name.lower())
+        out.append(name)
+    return out
+
+
+def _observations_csv(body, adapter, request, notes=True):
     """The observations response as a wide CSV under a ``#`` metadata block.
 
     The block is the trust contract in file form: a reader who saves this
@@ -2311,10 +2334,12 @@ def _observations_csv(body, adapter, request):
         if fiscal_labels:
             for (p, _v), label in zip(s["points"], s.get("labels") or []):
                 labels[p] = label
+    codes = [s["code"] for s in body["series"]]
     header = ["period"] + (["label"] if fiscal_labels else []) + \
-             [s["code"] for s in body["series"]]
+             (codes if notes else _stata_names(codes))
     out = io.StringIO()
-    out.write("\n".join(lines) + "\n")
+    if notes:
+        out.write("\n".join(lines) + "\n")
     out.write(",".join(_csv_cell(h) for h in header) + "\n")
     for p in sorted(periods):
         # daily series keep the full date; monthly keep YYYY-MM, as the

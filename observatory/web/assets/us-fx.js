@@ -194,6 +194,10 @@ async function renderChart() {
     "Retrieved: " + fmtStamp(rel.retrieved_at),
     "Permalink: " + location.href,
   ]);
+  obsCodeButton(document.getElementById("main-csv"), () => ({
+    url: "/api/v1/" + DATASET + "/observations?series=" + pair.code + "&measure=index",
+    start: start, release: rel, source: cfg.sourceLine,
+  }));
 }
 
 /* ---- provenance ---- */

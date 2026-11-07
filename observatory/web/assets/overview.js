@@ -267,6 +267,10 @@ async function renderMain() {
       "Retrieved: " + fmtStamp(OV.release.retrieved_at),
       "Permalink: " + location.href,
     ]);
+  obsCodeButton(document.getElementById("main-csv"), () => ({
+    url: "/api/v1/" + DATASET + "/observations?series=" + mainCodes(OV) + "&measure=" + state.measure,
+    start: start, release: data.release, source: cfg.sourceLine,
+  }));
   if (document.getElementById("compare-chart")) await renderCompare();
 }
 

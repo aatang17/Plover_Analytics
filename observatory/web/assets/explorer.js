@@ -445,6 +445,13 @@ function applyDetailRange() {
       "Retrieved: " + fmtStamp(ALL.release.retrieved_at),
       "Permalink: " + location.href,
     ]);
+  // The rate is computed server-side over the full history; the window is a trim.
+  const obsUrl = apiBase() + "/observations?series=" + detailMeta.code + "&measure=" + measure +
+    (w.to !== w.last ? "&end=" + w.to : "");
+  obsCodeButton(document.getElementById("detail-csv"), () => ({
+    url: obsUrl, start: w.from !== w.first ? w.from : null,
+    release: detailData.release, source: src,
+  }));
 }
 
 async function renderDetail() {

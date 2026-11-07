@@ -468,3 +468,197 @@ function obsExportMenu(filename, renderPNG, fallbackAnchor, fixedSize) {
   const first = el.querySelector("[data-do]");
   if (first) first.focus();
 }
+
+/* ---------- Copy Code: the chart's data in Stata, R or Python ----------
+
+   A researcher works in Stata or R, not on our page. Copy Code hands over
+   one command that pulls the series on the chart from the public
+   /observations endpoint, which needs no key. The spec a page passes:
+
+     url      the /api/v1/<dataset>/observations?… request the chart was drawn
+              from (series and measure; any other parameters it used)
+     start    first period on screen, when the page trims the range itself
+     release  the response's release object, for the label and the freeze date
+     source   the chart's source line, put in the code as a comment
+
+   "Freeze" adds as_of = the day the shown release arrived, so the command
+   returns these numbers after any later revision. A date covers the whole
+   day, so that day's release is the one read back. */
+const CODE_LANGS = [["stata", "Stata"], ["r", "R"], ["python", "Python"]];
+
+function codeLangNow() {
+  try {
+    const v = localStorage.getItem("obs-code-lang");
+    if (CODE_LANGS.some(l => l[0] === v)) return v;
+  } catch (e) { /* storage off: default */ }
+  return "stata";
+}
+
+function rememberCodeLang(v) {
+  try { localStorage.setItem("obs-code-lang", v); } catch (e) { /* storage off */ }
+}
+
+function codeFreezeDate(release) {
+  const at = release && (release.known_at || release.ingested_at || release.retrieved_at);
+  return at ? String(at).slice(0, 10) : null;
+}
+
+function codeQueryValue(v) {
+  return encodeURIComponent(v).replace(/%2C/gi, ",");
+}
+
+function obsCodeURL(spec, lang, freeze) {
+  const u = new URL(spec.url, location.origin);
+  const params = [];
+  u.searchParams.forEach((v, k) => {
+    if (["format", "notes", "as_of"].includes(k)) return;
+    if (k === "start" && spec.start) return;
+    params.push([k, v]);
+  });
+  if (spec.start) params.push(["start", spec.start]);
+  const day = freeze ? codeFreezeDate(spec.release) : null;
+  if (day) params.push(["as_of", day]);
+  params.push(["format", "csv"]);
+  if (lang === "stata") params.push(["notes", "0"]);
+  return u.origin + u.pathname + "?" +
+    params.map(p => p[0] + "=" + codeQueryValue(p[1])).join("&");
+}
+
+function obsCodeText(spec, lang, freeze) {
+  const url = obsCodeURL(spec, lang, freeze);
+  const rel = spec.release || {};
+  const day = freeze ? codeFreezeDate(rel) : null;
+  // The chart's source line also carries the release, retrieval time and trust
+  // label; the publisher is its first part, and the release has a line of its own.
+  const about = [
+    (spec.source || (rel.source_name ? "Source: " + rel.source_name : ""))
+      .split(" · ")[0].replace(/\.?\s*Data through .*$/, "").replace(/\s+/g, " ").trim(),
+    "Plover Analytics, release \"" + (rel.label || "latest") + "\"" +
+      (day ? ", frozen as of " + day : ", latest values each time it runs"),
+  ].filter(Boolean);
+  if (lang === "stata") {
+    return about.map(l => "* " + l).join("\n") + "\n" +
+      'import delimited "' + url + '", clear';
+  }
+  const head = about.map(l => "# " + l).join("\n") + "\n";
+  if (lang === "r") return head + 'd <- read.csv("' + url + '", comment.char = "#")';
+  return head + "import pandas as pd\n" + 'd = pd.read_csv("' + url + '", comment="#")';
+}
+
+function codeDayLabel(day) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || "");
+  if (!m) return day;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return Number(m[3]) + " " + months[Number(m[2]) - 1] + " " + m[1];
+}
+
+function obsCodeMenu(spec, anchor) {
+  const reopening = exportMenu && exportMenu.anchor === anchor;
+  closeExportMenu();
+  if (reopening || !anchor) return;
+  let lang = codeLangNow();
+  let freeze = !!codeFreezeDate(spec.release);
+  const day = codeFreezeDate(spec.release);
+
+  const el = document.createElement("div");
+  el.className = "export-menu code-menu";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "Copy code");
+  el.innerHTML =
+    '<div class="code-menu-top">' +
+    '<div class="code-langs" role="group" aria-label="Language">' +
+    CODE_LANGS.map(l => '<button type="button" class="code-lang" data-lang="' + l[0] + '">' +
+      l[1] + "</button>").join("") +
+    "</div>" +
+    (day ? '<label class="code-freeze"><input type="checkbox" checked> Freeze to this release (' +
+      escapeHtml(codeDayLabel(day)) + ")</label>" : "") +
+    "</div>" +
+    '<pre class="code-menu-code"><code></code></pre>' +
+    '<div class="export-menu-acts export-menu-acts-only">' +
+    '<button type="button" class="btn btn-primary" data-do="copy">Copy Code</button></div>' +
+    '<p class="export-menu-foot">The series and dates on the chart, from the public API; ' +
+    'no account needed. <a href="/api.html#code">API Reference</a></p>';
+  document.body.appendChild(el);
+
+  const codeEl = el.querySelector("code");
+  const copyBtn = el.querySelector('[data-do="copy"]');
+  const paint = () => {
+    codeEl.textContent = obsCodeText(spec, lang, freeze);
+    Array.prototype.forEach.call(el.querySelectorAll(".code-lang"), b =>
+      b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+    copyBtn.textContent = "Copy Code";
+  };
+  paint();
+  placeExportMenu(el, anchor);
+  anchor.setAttribute("aria-expanded", "true");
+
+  const onDown = e => { if (!el.contains(e.target) && e.target !== anchor) closeExportMenu(); };
+  const onKey = e => {
+    if (e.key !== "Escape") return;
+    closeExportMenu();
+    if (anchor.focus) anchor.focus();
+  };
+  document.addEventListener("mousedown", onDown, true);
+  document.addEventListener("keydown", onKey, true);
+  window.addEventListener("resize", closeExportMenu);
+  window.addEventListener("scroll", closeExportMenu, true);
+  exportMenu = { el: el, anchor: anchor, onDown: onDown, onKey: onKey };
+
+  const box = el.querySelector(".code-freeze input");
+  if (box) box.addEventListener("change", () => { freeze = box.checked; paint(); });
+  el.addEventListener("click", e => {
+    const pick = e.target.closest(".code-lang");
+    if (pick) {
+      lang = pick.dataset.lang;
+      rememberCodeLang(lang);
+      paint();
+      placeExportMenu(el, anchor);
+      return;
+    }
+    if (!e.target.closest('[data-do="copy"]')) return;
+    const text = codeEl.textContent;
+    const selectCode = () => {
+      const range = document.createRange();
+      range.selectNodeContents(codeEl);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+    let done;
+    try { done = navigator.clipboard.writeText(text); } catch (err) { done = Promise.reject(err); }
+    done.then(() => { copyBtn.textContent = "Copied"; }, () => {
+      // No clipboard access (an unfocused document, an old browser): select
+      // the code so one keystroke copies it, and say so.
+      selectCode();
+      copyBtn.textContent = "Selected: press Ctrl+C or ⌘C";
+    });
+  });
+  copyBtn.focus();
+}
+
+/* Put a "Copy Code ▾" button after a chart's Download CSV button.
+
+   getSpec() is called on each click, so a page whose chart changes series,
+   measure or range hands over what is on screen now; it returns null while
+   the chart has no data. Calling this again for the same button rebinds it. */
+function obsCodeButton(csvBtn, getSpec) {
+  if (!csvBtn || !csvBtn.parentNode) return null;
+  let btn = csvBtn.nextElementSibling;
+  if (!btn || !btn.classList.contains("code-btn")) {
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = (csvBtn.className || "btn") + " code-btn";
+    btn.removeAttribute("id");
+    btn.textContent = "Copy Code ▾";
+    btn.setAttribute("aria-haspopup", "dialog");
+    btn.setAttribute("aria-expanded", "false");
+    csvBtn.parentNode.insertBefore(btn, csvBtn.nextSibling);
+  }
+  btn.onclick = e => {
+    e.preventDefault();
+    const spec = getSpec();
+    if (spec && spec.url) obsCodeMenu(spec, btn);
+  };
+  return btn;
+}

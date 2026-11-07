@@ -45,6 +45,29 @@ class ObservationsCsv(unittest.TestCase):
         self.assertIn("# Point in time: the data as it stood on 2026-08-20", r.text)
         self.assertIn("asof-2026-08-20.csv", r.headers["content-disposition"])
 
+    def test_notes_off_is_stata_ready(self):
+        # Stata's import delimited reads the first line as names and cannot
+        # skip comments: notes=0 drops the block and makes the names legal,
+        # while the numbers stay exactly those of the annotated file.
+        full = self.client.get(URL + "&format=csv").text
+        r = self.client.get(URL + "&format=csv&notes=0")
+        self.assertEqual(r.status_code, 200)
+        lines = r.text.splitlines()
+        self.assertFalse(any(l.startswith("#") for l in lines))
+        self.assertEqual(lines[0], "period,s0001,s0161")
+        self.assertEqual(lines[1:], [l for l in full.splitlines()
+                                     if not l.startswith("#")][1:])
+        r = self.client.get("/api/v1/job-openings-jp/observations"
+                            "?series=sa.active.incl_part&format=csv&notes=0")
+        if r.status_code == 200:
+            self.assertEqual(r.text.splitlines()[0], "period,sa_active_incl_part")
+        self.assertEqual(self.client.get(URL + "&format=csv&notes=2").status_code, 422)
+
+    def test_stata_names(self):
+        from app.api import _stata_names
+        self.assertEqual(_stata_names(["0001", "a.b", "a-b", "_x", "y" * 40]),
+                         ["s0001", "a_b", "a_b_2", "_x", "y" * 32])
+
     def test_bad_format(self):
         r = self.client.get("/api/v1/cpi-jp/observations?series=0001&format=xlsx")
         self.assertEqual(r.status_code, 400)

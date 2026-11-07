@@ -131,7 +131,11 @@
   <code>period</code> column and one column per series, under a <code>#</code> metadata block that
   states the source, the release, the formula, the vintage and the URL it was retrieved from. The
   block is what makes a saved file citable on its own. Readers skip it with
-  <code>comment="#"</code> in pandas and <code>comment.char="#"</code> in R.</p>
+  <code>comment="#"</code> in pandas and <code>comment.char="#"</code> in R. Stata cannot skip
+  it, so add <code>&amp;notes=0</code>: the block is left out and the column names become Stata
+  variable names (<code>0001</code> → <code>s0001</code>, <code>sa.active.incl_part</code> →
+  <code>sa_active_incl_part</code>). Every chart's <b>Copy Code</b> button writes these commands
+  for the series on screen.</p>
 
   <h3 id="errors">Errors</h3>
   <p>Errors are JSON with a <code>detail</code> field and the usual status codes:
@@ -208,6 +212,13 @@ cpi &lt;- read.csv(paste0(base, "/api/v1/cpi-jp/observations?series=0001,0161&am
 library(jsonlite)
 curve &lt;- fromJSON(paste0(base, "/api/v1/jgb-yields/curve"))
 us_curve &lt;- fromJSON(paste0(base, "/api/v1/ust-yields/curve"))</code></pre>
+
+  <h3>Stata</h3>
+<pre class="code"><code>* Japan CPI, headline and core, year over year, frozen as the data stood on 20 Aug 2026
+import delimited "https://ploveranalytics.com/api/v1/cpi-jp/observations?series=0001,0161&amp;measure=yoy&amp;start=2015-01&amp;as_of=2026-08-20&amp;format=csv&amp;notes=0", clear
+gen month = monthly(period, "YM")
+format month %tm
+tsset month</code></pre>
 
   <h3>Shell</h3>
 <pre class="code"><code>BASE=https://ploveranalytics.com

@@ -513,6 +513,58 @@ input[type="search"] { width: 300px; max-width: 100%; }
   color: var(--obs-text-muted);
 }
 
+/* Copy Code: the chart's data as a Stata / R / Python command. Shares the
+   export menu's shell (fixed, on <body>, opens below its button). */
+.code-menu { width: 560px; max-width: calc(100vw - 16px); box-sizing: border-box; }
+.code-menu-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.code-langs { display: flex; gap: 4px; }
+.code-lang {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--obs-ink);
+  background: var(--obs-surface);
+  border: 1px solid var(--obs-border);
+  border-radius: 3px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.code-lang:hover { background: var(--obs-surface-subtle); }
+.code-lang[aria-pressed="true"] {
+  border-color: var(--obs-primary);
+  color: var(--obs-primary);
+  font-weight: 600;
+}
+.code-freeze {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--obs-ink);
+  cursor: pointer;
+}
+.code-freeze input { margin: 0; accent-color: var(--obs-primary); }
+.code-menu-code {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--obs-ink);
+  background: var(--obs-surface-subtle);
+  border: 1px solid var(--obs-border);
+  border-radius: 3px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.code-menu .export-menu-acts .btn { flex: 0 0 auto; min-width: 140px; }
+
 /* ---------- ask (floating assistant) ---------- */
 
 .btn-primary {

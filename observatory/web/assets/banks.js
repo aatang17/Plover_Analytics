@@ -358,6 +358,12 @@ function renderNpl() {
     "for each lender group, as released by the FSA. Not computed here. Groups by bank type " +
     "separately begin at March 2002; all banks begin at March 1999. A half-year is dated to its " +
     "closing month.</p>";
+  obsCodeButton($("npl-csv"), () => periods.length ? {
+    url: NPL + "/observations?series=" + NPL_GROUPS.map(g => g.code + ".npl-ratio").join(",") +
+      "&measure=index",
+    start: urlState().range === "10" ? periods[0].slice(0, 7) : null,
+    release: D.rel.npl, source: cfg.sourceLine,
+  } : null);
 }
 
 /* ---- earnings by group ---- */

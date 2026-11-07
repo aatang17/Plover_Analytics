@@ -561,6 +561,15 @@ function renderMonthly() {
         : "") +
       "<br>Inputs: official counts from release “" + escapeHtml(AV.release.label) +
       "” (sha256 " + AV.release.sha256.slice(0, 12) + "…).</div>";
+
+  // Only the counts view is a plain /observations read (same values, same
+  // release as /arrivals); the 2019 index and the by-year layout are built here.
+  const from = rangeStart(state.range);
+  const codeBtn = obsCodeButton(document.getElementById("monthly-csv"), () => state.view === "level" ? {
+    url: API + "/observations?series=" + codes.join(",") + "&measure=index",
+    start: from > 0 ? PERIODS[from] : null, release: AV.release, source: cfg.sourceLine,
+  } : null);
+  if (codeBtn) codeBtn.hidden = state.view !== "level";
 }
 
 /* ---- contributions to the headline growth rate ---- */

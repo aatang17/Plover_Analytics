@@ -38,7 +38,7 @@ const DP = { "us-avg-prices": 3, "us-wages": 2, "cpi-us-weights": 3, "us-wage-tr
 /* Datasets whose series share a currency but not a quantity (a dozen eggs, a
    gallon of milk; an hour and a week of pay): their levels may be charted one
    at a time only, and several at once as rates of change. */
-const SINGLE_LEVEL = { "us-avg-prices": true, "us-wages": true };
+const SINGLE_LEVEL = { "us-avg-prices": true, "us-wages": true, "us-labour": true };
 /* A dataset with no entry in DP mixes units (Japan's wage survey carries yen,
    hours, days, headcounts and indices), so precision follows each series'
    unit, as published: yen to the yen, headcounts whole, indices and hours to
@@ -271,8 +271,9 @@ async function renderChart() {
     : "";
   if (!codes.length) return;
   const seq = ++chartSeq;
-  const data = await getJSON(api("/observations?series=" + encodeURIComponent(codes.join(",")) +
-                                 "&measure=" + measure));
+  const obsUrl = api("/observations?series=" + encodeURIComponent(codes.join(",")) +
+                     "&measure=" + measure);
+  const data = await getJSON(obsUrl);
   if (seq !== chartSeq) return;
   OBS = data;
   // A one-line chart has no legend, so the caption names the series.
@@ -338,6 +339,9 @@ async function renderChart() {
     "Retrieved: " + fmtStamp(data.release.retrieved_at),
     "Permalink: " + location.href,
   ]);
+  obsCodeButton(document.getElementById("main-csv"), () => ({
+    url: obsUrl, start: start, release: data.release, source: cfg.sourceLine,
+  }));
 }
 
 /* ---- table ---- */

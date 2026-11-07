@@ -126,14 +126,19 @@
       "</div>";
   }
 
+  function rangeCutoff() {
+    if (!OBS || !OBS.series || !OBS.series.length || range === "max") return null;
+    const all = OBS.series[0].points;
+    if (!all.length) return null;
+    const last = all[all.length - 1][0];
+    return (parseInt(last.slice(0, 4), 10) - parseInt(range, 10)) + last.slice(4);
+  }
+
   function points() {
     if (!OBS || !OBS.series || !OBS.series.length) return [];
+    const cutoff = rangeCutoff();
     const all = OBS.series[0].points;
-    if (range === "max") return all;
-    const years = parseInt(range, 10);
-    const last = all[all.length - 1][0];
-    const cutoff = (parseInt(last.slice(0, 4), 10) - years) + last.slice(4);
-    return all.filter(p => p[0] >= cutoff);
+    return cutoff ? all.filter(p => p[0] >= cutoff) : all;
   }
 
   function drawChart() {
@@ -183,6 +188,11 @@
       BLOCK && BLOCK.calc ? BLOCK.calc : "Values as published.",
       "Page: " + location.origin + "/" + SLUG + ".html",
     ]);
+    obsCodeButton(csv, () => OBS && OBS.series && OBS.series.length ? {
+      url: "/api/v1/" + DATASET + "/observations?series=" + encodeURIComponent(SERIES) +
+        "&measure=" + MEASURE,
+      start: rangeCutoff(), release: OBS.release, source: sourceLine(),
+    } : null);
   }
 
   async function load() {

@@ -174,6 +174,26 @@ async function loadSeries(dataset, codes, measure) {
   return codes.map(c => D.points[dataset + "|" + c + "|" + measure] || []);
 }
 
+/* "Copy Code" for a chart of published series as loaded: one request, and
+   one start date only when every line ends in the same month (cut() trims
+   each from its own last month). Null when one request cannot reproduce it. */
+function codeSpec(dataset, codes, measure, loaded, years, source) {
+  if (batchCodes(codes).length !== 1) return null;
+  const ends = loaded.filter(p => p.length).map(p => p[p.length - 1][0]);
+  if (years !== "max" && ends.some(e => e !== ends[0])) return null;
+  return {
+    url: API + dataset + "/observations?series=" + codes.join(",") + "&measure=" + measure,
+    start: years === "max" || !ends.length ? null
+      : (Number(ends[0].slice(0, 4)) - Number(years)) + ends[0].slice(4),
+    release: D.releases[dataset], source: source,
+  };
+}
+
+function codeButton(csvId, spec) {
+  const btn = obsCodeButton($(csvId), () => spec);
+  if (btn) btn.style.display = spec ? "" : "none";
+}
+
 function cut(points, years) {
   if (years === "max") return points;
   const n = Number(years);
@@ -400,6 +420,7 @@ async function renderBrands() {
       "Data through " + fmtPeriodLong(rel.latest_period) + ".",
   };
   if (brandChart) brandChart.render(cfg); else brandChart = obsChart($("brand-chart"), "line", cfg);
+  codeButton("brand-csv", codeSpec(PRICES, codes, st.measure, loaded, st.range, cfg.sourceLine));
 
   $("brands-note").textContent = codes.length + " of " +
     fmtNum((D.brands.series || []).length, 0) + " brands";
@@ -543,6 +564,8 @@ async function renderStock() {
       "Data through " + fmtPeriodLong(rel.latest_period) + ".",
   };
   if (stockChart) stockChart.render(cfg); else stockChart = obsChart($("stock-chart"), "line", cfg);
+  codeButton("stock-csv", codeSpec(STOCK, defs.map(d => d.code), "index", loaded, st.srange,
+    cfg.sourceLine));
 
   $("stock-note").textContent = "through " + fmtPeriod(rel.latest_period);
   $("stock-source").innerHTML = escapeHtml(cfg.sourceLine) + " " + trustBadge("official");
@@ -564,7 +587,7 @@ let termsChart = null;
 async function renderTerms() {
   const st = urlState();
   const rel = D.releases[TERMS];
-  let series, yAxisName, trust, calcHtml, unitSuffix, dp, refLabel;
+  let series, yAxisName, trust, calcHtml, unitSuffix, dp, refLabel, spec = null;
 
   if (st.tview === "terms") {
     const loaded = await loadSeries(TERMS, ["out.total", "in.total"], "index");
@@ -591,6 +614,7 @@ async function renderTerms() {
     series = defs.map((d, i) => ({
       name: d.label, slot: d.slot, points: cut(loaded[i], st.trange),
     }));
+    spec = { codes: defs.map(d => d.code), loaded: loaded };
     yAxisName = "Index, 2020 = 100";
     refLabel = "2020 = 100";
     trust = "official";
@@ -608,6 +632,9 @@ async function renderTerms() {
       "Data through " + fmtPeriodLong(rel.latest_period) + ".",
   };
   if (termsChart) termsChart.render(cfg); else termsChart = obsChart($("terms-chart"), "line", cfg);
+  // The terms-of-trade view is a ratio calculated here, so it gets no code.
+  codeButton("terms-csv", spec &&
+    codeSpec(TERMS, spec.codes, "index", spec.loaded, st.trange, cfg.sourceLine));
 
   $("terms-note").textContent = "through " + fmtPeriod(rel.latest_period);
   $("terms-source").innerHTML = escapeHtml(cfg.sourceLine) + " " +

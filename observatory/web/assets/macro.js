@@ -25,7 +25,9 @@ function unitSpan(v, unit) {
   return v + '<span class="unit">' + escapeHtml(unit) + "</span>";
 }
 
-function mountChart(elId, cfg, pngId, csvId, filename, csvHeader) {
+/* codeSpec, when given, is the one /observations request the chart draws
+   unchanged; it puts "Copy Code" beside the CSV button. */
+function mountChart(elId, cfg, pngId, csvId, filename, csvHeader, codeSpec) {
   const el = document.getElementById(elId);
   el.innerHTML = "";
   const handle = obsChart(el, "line", cfg);
@@ -34,6 +36,7 @@ function mountChart(elId, cfg, pngId, csvId, filename, csvHeader) {
   const csv = document.getElementById(csvId);
   png.addEventListener("click", e => { e.preventDefault(); handle.exportPNG(filename + ".png"); });
   csv.addEventListener("click", e => { e.preventDefault(); handle.exportCSV(filename + ".csv", csvHeader); });
+  if (codeSpec) obsCodeButton(csv, () => codeSpec);
   return handle;
 }
 
@@ -86,8 +89,9 @@ async function fillCpi() {
   const wanted = ov.main_series.filter(m => m.role === "headline" || m.role === "core");
   const start = (Number(ov.release.latest_period.slice(0, 4)) - 10) +
     ov.release.latest_period.slice(4, 7);
-  const obs = await getJSON("/api/v1/cpi-jp/observations?series=" +
-    wanted.map(m => m.code).join(",") + "&measure=yoy&start=" + start);
+  const obsUrl = "/api/v1/cpi-jp/observations?series=" +
+    wanted.map(m => m.code).join(",") + "&measure=yoy&start=" + start;
+  const obs = await getJSON(obsUrl);
 
   const byCode = {};
   wanted.forEach(m => { byCode[m.code] = m; });
@@ -103,7 +107,7 @@ async function fillCpi() {
     "source: Statistics Bureau of Japan, via e-Stat (" + ov.release.source_id + ")",
     "trust: derived · " + obs.calc,
     "retrieved: " + ov.release.retrieved_at,
-  ]);
+  ], { url: obsUrl, start: null, release: obs.release, source: source.replace(/<[^>]+>/g, "") });
   document.getElementById("cpi-source").innerHTML = source;
 }
 
@@ -151,8 +155,9 @@ async function fillBoj() {
 
 async function fillRates() {
   const startYear = new Date().getFullYear() - 10;
-  const obs = await getJSON("/api/v1/jgb-yields/observations?series=10Y,2Y&measure=index&start=" +
-    startYear + "-01");
+  const obsUrl = "/api/v1/jgb-yields/observations?series=10Y,2Y&measure=index&start=" +
+    startYear + "-01";
+  const obs = await getJSON(obsUrl);
   noteStale(obs, "JGB yields");
   const last = code => {
     const s = obs.series.find(x => x.code === code);
@@ -183,7 +188,7 @@ async function fillRates() {
     "source: Ministry of Finance, Japan",
     "trust: official · yields exactly as published; can be negative",
     "retrieved: " + obs.release.retrieved_at,
-  ]);
+  ], { url: obsUrl, start: null, release: obs.release, source: source.replace(/<[^>]+>/g, "") });
   document.getElementById("rates-source").innerHTML = source;
 }
 
