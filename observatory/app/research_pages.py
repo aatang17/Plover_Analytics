@@ -303,11 +303,14 @@ def _key_points(body_html):
     body = (body_html or "").lstrip()
     if not body.startswith("<ul>"):
         return body_html
-    end = body.index("</ul>") + len("</ul>")
-    if body[:end].count("<li>") < 2:
+    # A blank line typed between the opening bullets splits them into several
+    # lists; they are still one set of key points.
+    lead = re.match(r"(?:<ul>.*?</ul>\s*)+", body, re.S)
+    items = "".join(re.findall(r"<ul>(.*?)</ul>", lead.group(0), re.S))
+    if items.count("<li>") < 2:
         return body_html
-    return ('<aside class="rs-keypoints" aria-label="Key points"><p class="rs-keypoints-h">Key Points</p>%s'
-            '</aside>%s' % (body[:end], body[end:]))
+    return ('<aside class="rs-keypoints" aria-label="Key points"><p class="rs-keypoints-h">Key Points</p><ul>%s</ul>'
+            '</aside>%s' % (items, body[lead.end():]))
 
 
 def article_main(v, versions, current_version, notice="", preview=False, pub=None):

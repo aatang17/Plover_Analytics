@@ -530,6 +530,27 @@ class FootnoteMarkdownTest(unittest.TestCase):
         self.assertNotIn("&lt;em", html)
 
 
+class KeyPointsTest(unittest.TestCase):
+    """An article that opens with bullets shows them as Key Points, even when a
+    blank line was typed between them (article 44, 7 Nov 2026: the box vanished)."""
+
+    def test_blank_line_between_bullets_keeps_one_list(self):
+        d = rd.import_markdown("# T\n\n*Dek*\n\n- One\n\n- Two\n- Three\n\nText.\n\n1. A\n\n- B\n")
+        lists = [b for b in d["blocks"] if b["type"] == "list"]
+        self.assertEqual([len(b["items"]) for b in lists], [3, 1, 1])
+        self.assertEqual([b["style"] for b in lists], ["bullet", "number", "bullet"])
+
+    def test_opening_lists_split_by_a_blank_line_are_one_key_points_box(self):
+        out = rp._key_points("<ul><li>One</li></ul>\n<ul><li>Two</li><li>Three</li></ul><p>Text.</p>")
+        self.assertTrue(out.startswith('<aside class="rs-keypoints"'))
+        self.assertIn("<ul><li>One</li><li>Two</li><li>Three</li></ul></aside><p>Text.</p>", out)
+
+    def test_a_single_opening_bullet_is_not_key_points(self):
+        body = "<ul><li>Only one</li></ul><p>Text.</p>"
+        self.assertEqual(rp._key_points(body), body)
+        self.assertEqual(rp._key_points("<p>No list</p>"), "<p>No list</p>")
+
+
 if __name__ == "__main__":
     unittest.main()
 

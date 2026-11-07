@@ -1326,6 +1326,7 @@ def import_markdown(text):
             flush()
             style = "number" if re.match(r"^\d+[.)]\s+", s) else "bullet"
             items = []
+            item_re = r"^\d+[.)]\s+(.*)$" if style == "number" else r"^[-*+]\s+(.*)$"
             while i < len(body):
                 t = body[i].strip()
                 m = re.match(r"^(?:[-*+]|\d+[.)])\s+(.*)$", t)
@@ -1333,6 +1334,16 @@ def import_markdown(text):
                     items.append(m.group(1))
                 elif t and items and body[i].startswith((" ", "\t")):
                     items[-1] += " " + t
+                elif not t and items:
+                    # blank lines between items of the same kind keep one list,
+                    # as in Markdown; anything else after them ends it
+                    j = i
+                    while j < len(body) and not body[j].strip():
+                        j += 1
+                    if j < len(body) and re.match(item_re, body[j].strip()):
+                        i = j
+                        continue
+                    break
                 else:
                     break
                 i += 1
