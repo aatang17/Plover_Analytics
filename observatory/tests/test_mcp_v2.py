@@ -54,6 +54,21 @@ class Base(unittest.TestCase):
 
 
 class ProtocolTest(Base):
+    def test_openai_domain_challenge_is_the_bare_token(self):
+        path = "/.well-known/openai-apps-challenge"
+        os.environ.pop("OPENAI_APPS_CHALLENGE", None)
+        if not mcp.CHALLENGE_FILE.exists():
+            self.assertEqual(self.client.get(path).status_code, 404)
+        # the environment wins over the checked-in file
+        os.environ["OPENAI_APPS_CHALLENGE"] = " tok-123\n"
+        try:
+            r = self.client.get(path)
+        finally:
+            os.environ.pop("OPENAI_APPS_CHALLENGE", None)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.text, "tok-123")
+        self.assertTrue(r.headers["content-type"].startswith("text/plain"))
+
     def test_initialize_instructions_name_every_available_dataset(self):
         os.environ["MCP_TOOLSET"] = "v2"
         _, body = rpc(self.client, "initialize", {"protocolVersion": "2025-06-18"})
@@ -151,6 +166,9 @@ class ProtocolTest(Base):
                 self.assertTrue(set(enum) <= set(live))
         for t in d.values():
             self.assertTrue(t["annotations"]["readOnlyHint"])
+            # the ChatGPT directory needs all three hints as explicit booleans
+            self.assertIs(t["annotations"]["destructiveHint"], False)
+            self.assertIs(t["annotations"]["openWorldHint"], False)
 
 
 class ToolTest(Base):
@@ -195,6 +213,16 @@ class ToolTest(Base):
         self.assertEqual(data["data"]["series"][0]["points"][-1],
                          v1["series"][0]["points"][-1])
         self.assertEqual(data["vintage"]["latest_period"], v1["as_of_release"])
+
+    @unittest.skipUnless(_data.MACRO, _data.NO_MACRO)
+    def test_get_series_takes_a_list_of_codes(self):
+        # a client may send a JSON list for the comma-separated codes
+        listed, err = call(self.client, "get_series", dataset="cpi-jp",
+                           series=["0001", "0161"], measure="yoy")
+        self.assertFalse(err, listed)
+        joined, _ = call(self.client, "get_series", dataset="cpi-jp",
+                         series="0001,0161", measure="yoy")
+        self.assertEqual(listed["data"]["series"], joined["data"]["series"])
 
     @unittest.skipUnless(_data.MACRO, _data.NO_MACRO)
     def test_get_series_as_of_and_refusals(self):

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Plover Analytics">
+  <title>Plover Analytics</title>
+  <defs><clipPath id="pa-disc"><circle cx="64" cy="64" r="55"/></clipPath></defs>
+  <g clip-path="url(#pa-disc)">
+    <rect width="128" height="128" fill="#eaf1f8"/>
+    <path d="M2 68 L26 45 L42 58 L58 40 L76 59 L94 44 L126 66 L126 72 L2 72 Z" fill="#a9c0d6"/>
+    <path d="M2 72 L22 56 L44 70 L64 50 L86 68 L106 54 L126 70 L126 78 L2 78 Z" fill="#6f90b2"/>
+    <path d="M0 78 L20 62 L38 76 L38 84 L0 84 Z" fill="#2f4e70"/>
+    <path d="M82 84 L98 60 L118 74 L128 68 L128 86 L82 86 Z" fill="#2f4e70"/>
+    <rect y="78" width="128" height="50" fill="#bed3e6"/>
+    <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9">
+      <path d="M16 88 H56"/><path d="M72 88 H110"/>
+      <path d="M30 98 H64"/><path d="M80 98 H104"/>
+      <path d="M44 108 H74"/>
+    </g>
+    <path d="M26 78 L50 52 L64 63 L84 45 L94 52 L112 33" fill="none" stroke="#ffffff"
+          stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+    <g fill="#ffffff" stroke="#2f4e70" stroke-width="2.4">
+      <circle cx="50" cy="52" r="4.4"/><circle cx="84" cy="45" r="4.4"/><circle cx="112" cy="33" r="4.4"/>
+    </g>
+  </g>
+  <circle cx="64" cy="64" r="57" fill="none" stroke="#2c4a6b" stroke-width="7"/>
+</svg>

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "plover-analytics",
+  "version": "1.0.0",
+  "description": "Official statistics and company filings for Japan, the United States and Hong Kong, each figure with its source and date.",
+  "author": {
+    "name": "Plover Analytics",
+    "email": "info@ploveranalytics.com",
+    "url": "https://ploveranalytics.com"
+  },
+  "homepage": "https://ploveranalytics.com",
+  "keywords": ["economics", "inflation", "company filings", "Japan", "United States", "shareholders"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Plover Analytics",
+        "shortDescription": "Japan & US data with sources",
+        "longDescription": "Plover Analytics answers questions about the markets and economies of Japan, the United States and Hong Kong from official statistics and company filings.\n\nAsk for inflation, wages, jobs, GDP, government bond yields and central-bank data. Ask about a company's financial results, executive pay, cross-shareholdings, 5% shareholder filings, buybacks and shareholder votes. Or ask for a ranked list, such as the largest cross-shareholders or the highest-paid boards.\n\nEvery figure comes with its source, its date and a link to the page it came from. Official figures are shown exactly as published, and a calculated figure, such as a year-on-year rate, says how it was worked out. Each past release is kept, so you can see what the data said on an earlier date.\n\nFor investors, analysts, economists, journalists and researchers.\n\nLimitations: Plover reports published data and figures calculated from it. It does not give investment advice, place trades or forecast prices. US company coverage is deepest for the S&P 500. Japanese company data comes from filings on EDINET, Japan's disclosure system.",
+        "developerName": "Plover Analytics",
+        "category": "Finance",
+        "capabilities": ["Economic statistics", "Company filings", "Shareholder filings", "Ranked screens", "Release history"],
+        "websiteURL": "https://ploveranalytics.com",
+        "supportURL": "https://ploveranalytics.com/contact.html",
+        "privacyPolicyURL": "https://ploveranalytics.com/privacy.html",
+        "termsOfServiceURL": "https://ploveranalytics.com/terms.html",
+        "defaultPrompt": [
+          "What was Japan's core inflation rate in the latest month?",
+          "Who has filed 5% shareholder reports on Kioxia, and how have their stakes changed?",
+          "How has the US 10-year Treasury yield moved over the past year?"
+        ],
+        "brandColor": "#2C4A6B",
+        "brandColorDark": "#A9C0D6",
+        "composerIcon": "./assets/icon.svg",
+        "logo": "./assets/logo.svg"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Latest Japanese core inflation rate",
+              "prompt": "What was Japan's core inflation rate in the latest month?",
+              "tools_triggered": "get_overview",
+              "expected_behavior": "Returns the year-on-year rate for core CPI (all items less fresh food) for the latest published month, names the month, says it is calculated from the Statistics Bureau's published index, and links to the Plover CPI page."
+            },
+            {
+              "description": "5% shareholder filings on one company",
+              "prompt": "Who has filed 5% shareholder reports on Kioxia, and how have their stakes changed?",
+              "tools_triggered": "search, get_company",
+              "expected_behavior": "Finds Kioxia Holdings, then lists the holders who filed large-shareholding reports, such as Bain Capital's BCPE Pangea Cayman, each with its latest stake, its previous stake and the filing date, with links to the filings' page."
+            },
+            {
+              "description": "Ranked list of cross-shareholdings",
+              "prompt": "Which Japanese companies hold the largest cross-shareholdings by book value?",
+              "tools_triggered": "screen",
+              "expected_behavior": "Returns a ranked list of companies by the book value of shares held for business reasons in their latest annual report, led by companies such as Toyota Motor, MS&AD Insurance and Sumitomo Mitsui Financial Group, with values in yen and the fiscal year."
+            },
+            {
+              "description": "US Treasury yield history",
+              "prompt": "How has the US 10-year Treasury yield moved over the past year?",
+              "tools_triggered": "search, get_series",
+              "expected_behavior": "Finds the 10-year constant-maturity yield and returns its daily values for the past year as published by the US Treasury, with the latest date and a link to the Plover Treasury page."
+            },
+            {
+              "description": "Release history of a statistic",
+              "prompt": "When was each version of Japan's GDP data published?",
+              "tools_triggered": "get_vintages",
+              "expected_behavior": "Lists the stored releases of Japan's quarterly GDP data, newest first, each with the latest quarter it covers and the date it was recorded."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Placing a trade is not supported",
+              "prompt": "Buy 100 shares of Toyota for me."
+            },
+            {
+              "description": "A question outside markets and economics",
+              "prompt": "What will the weather be in Tokyo tomorrow?"
+            },
+            {
+              "description": "Personal investment advice is not given",
+              "prompt": "Should I sell my Nvidia shares this week?"
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "This plugin does not sell products or process payments."
+      },
+      "publication": {
+        "release_notes": "First release: official statistics, company filings and shareholder data for Japan, the United States and Hong Kong, read only."
+      }
+    }
+  }
+}

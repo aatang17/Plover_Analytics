@@ -194,7 +194,9 @@ def _descriptors(schemas):
                                  entry["function"]["name"]),
         "description": entry["function"]["description"],
         "inputSchema": entry["function"]["parameters"],
-        "annotations": {"readOnlyHint": True, "openWorldHint": False},
+        # all three hints explicit: the ChatGPT directory rejects a tool missing one
+        "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                        "openWorldHint": False},
     } for entry in schemas]
 
 
@@ -621,3 +623,20 @@ def mcp_get():
 def mcp_delete():
     # No sessions exist, so there is nothing to terminate.
     return JSONResponse(_STATELESS, status_code=405, headers={"Allow": "POST"})
+
+
+CHALLENGE_FILE = pathlib.Path(__file__).with_name("openai_apps_challenge.txt")
+
+
+@router.get("/.well-known/openai-apps-challenge")
+def openai_apps_challenge():
+    # OpenAI's plugin portal proves we own this domain by fetching a token it
+    # issued: the bare token as plain text, nothing else. The environment
+    # (OPENAI_APPS_CHALLENGE) wins, so a new token needs no deploy; otherwise
+    # the token checked in beside this module. It is public by design.
+    token = os.environ.get("OPENAI_APPS_CHALLENGE", "").strip()
+    if not token and CHALLENGE_FILE.exists():
+        token = CHALLENGE_FILE.read_text(encoding="utf-8").strip()
+    if not token:
+        return Response(status_code=404)
+    return Response(token, media_type="text/plain")

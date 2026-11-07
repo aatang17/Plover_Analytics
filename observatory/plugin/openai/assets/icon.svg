@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Plover Analytics">
+  <title>Plover Analytics</title>
+  <!-- The tab-sized mark. logo.svg is the same disc with its landscape intact,
+       which at 32px collapses into texture; here only the ring, the trace and
+       one point survive, in the full logo's own navy so the two read as one
+       brand. The disc stays light so the ring holds its edge on a dark tab
+       strip as well as a light one. -->
+  <circle cx="64" cy="64" r="56" fill="#eaf1f8" stroke="#2c4a6b" stroke-width="11"/>
+  <path d="M32 84 L55 60 L74 73 L94 48" fill="none" stroke="#2c4a6b"
+        stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="94" cy="48" r="10" fill="#eaf1f8" stroke="#2c4a6b" stroke-width="7"/>
+</svg>

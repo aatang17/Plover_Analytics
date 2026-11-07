@@ -1246,7 +1246,10 @@ def get_series(dataset, series, measure="index", start="", end="", as_of="",
                                   if registry.get(i)["shape"] == "series")))
     if not registry.available(dataset):
         return _unavailable(m)
-    codes = ",".join([c.strip() for c in (series or "").split(",") if c.strip()][:6])
+    # a client may send a list for "comma-separated codes"; take it as meant
+    if isinstance(series, (list, tuple)):
+        series = ",".join(str(c) for c in series)
+    codes = ",".join([c.strip() for c in str(series or "").split(",") if c.strip()][:6])
     if not codes:
         return _fail("Give one to six series codes, comma-separated. Use search to find them.")
     measure = (measure or "index").strip()
@@ -1710,7 +1713,8 @@ def descriptors():
                          or api.ADAPTERS[i].PRESENTATION.get("main_series")))]
     breakdown_ids = [i for i in series_ids if _breakdowns_for(i)]
     all_cuts = sorted(set(c for i in breakdown_ids for c, _f, _w in _breakdowns_for(i)))
-    ro = {"readOnlyHint": True, "openWorldHint": False}
+    # all three hints explicit: the ChatGPT directory rejects a tool missing one
+    ro = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
     return [
         {"name": "list_datasets", "title": "List datasets",
          "description": ("Every dataset this server publishes, compactly: id, section, "
