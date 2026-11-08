@@ -165,10 +165,20 @@ function applyTableState(state) {
   const rows = bodyRows(table);
   rows.forEach((tr, i) => { if (tr._srcIndex === undefined) tr._srcIndex = i; });
 
-  const q = state.query.trim().toLowerCase();
+  // Every word typed, in any order, and a hyphen for the dash a range is
+  // printed with: "women 25-34" finds "Participation rate, women, aged 25–34".
+  // A Latin word or a number matches from the start of a word, so "men" is
+  // not found inside "women" nor "65" inside "1965"; Japanese, which has no
+  // spaces between words, matches anywhere.
+  const fold = s => s.toLowerCase().replace(/[‐-―−]/g, "-");
+  const q = fold(state.query.trim());
+  const words = q.split(/\s+/).filter(Boolean).map(w => /^[a-z0-9]/.test(w)
+    ? new RegExp("(^|[^a-z0-9])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    : w);
   let shown = 0;
   rows.forEach(tr => {
-    const hit = !q || (tr.textContent || "").toLowerCase().indexOf(q) >= 0;
+    const text = q ? fold(tr.textContent || "") : "";
+    const hit = !q || words.every(w => typeof w === "string" ? text.indexOf(w) >= 0 : w.test(text));
     tr.hidden = !hit;
     if (hit) shown++;
   });

@@ -1028,6 +1028,11 @@ table.data tbody tr:hover .note-mark { color: var(--obs-ink); }
   font-weight: 600;
   border-bottom-color: var(--obs-primary);
 }
+/* Four tabs (Labour: Unemployment, By Age and Sex, Job Openings, Wages) are
+   wider than a phone at the desktop padding. */
+@media (max-width: 480px) {
+  .seg-flush button { padding: 0 12px; }
+}
 
 .search-field {
   flex: 1;

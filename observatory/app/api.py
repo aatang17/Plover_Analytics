@@ -46,7 +46,8 @@ from .adapters import (boj_assets, cpi_jp, cpi_jp_goods_services, cpi_jp_items,
                        jpx_margin, jpx_investor_type,
                        cpi_us, cpi_us_sa, cpi_us_areas, cpi_us_weights,
                        us_avg_prices, us_wages, us_wage_tracker, us_labour, fed_h10,
-                       lfs_unemployment, mhlw_job_openings, mhlw_monthly_labour, mhlw_vital_stats,
+                       lfs_unemployment, lfs_age, mhlw_job_openings, mhlw_monthly_labour,
+                       mhlw_vital_stats,
                        estat_population_age,
                        cpi_hk, cpi_hk_rates, gdp_hk, labour_hk, retail_hk, trade_hk)
 
@@ -110,6 +111,8 @@ ADAPTERS = {"cpi-jp": cpi_jp, "cpi-jp-items": cpi_jp_items, "boj-assets": boj_as
             # US dollar exchange rates from the Federal Reserve Board (fed_h10.py).
             "us-fx": fed_h10,
             "unemployment-jp": lfs_unemployment,
+            # The same survey by age group and sex (lfs_age.py).
+            "labour-force-age-jp": lfs_age,
             "job-openings-jp": mhlw_job_openings,
             "wages-jp": mhlw_monthly_labour,
             # Births, deaths and marriages by month (mhlw_vital_stats.py).
