@@ -394,6 +394,9 @@ DESCRIPTIONS = {
     "api.html":
         "The read-only JSON API for Japanese statistics and company filings. No key, stable "
         "URLs, one contract across every dataset.",
+    "researchers.html":
+        "Load Japanese, US and Hong Kong official statistics and company filings into Stata, "
+        "R or Python, freeze the release you used, and cite it.",
 }
 
 

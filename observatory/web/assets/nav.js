@@ -277,6 +277,7 @@ var NAV_SECTIONS = [
       { id: "manual", label: "Manual", href: "manual.html" },
       { id: "api", label: "API Reference", href: "api.html" },
       { id: "methodology", label: "Methodology", href: "methodology.html" },
+      { id: "researchers", label: "For Researchers", href: "researchers.html" },
     ],
   },
 ];

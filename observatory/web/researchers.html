@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>For Researchers · Plover Analytics</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<header class="site-header" data-section="connect" data-page="researchers"></header>
+<script src="assets/nav.js"></script>
+
+<main class="container docs-layout">
+  <aside class="docs-side" aria-label="Docs"></aside>
+  <div class="docs-body">
+  <div class="page-head">
+    <h1>For Researchers</h1>
+    <p class="page-sub">Official statistics and company filings for Japan, the United States and Hong Kong, exactly as published: load them into Stata, R or Python, freeze the release you used, and cite it.</p>
+  </div>
+
+  <div class="prose">
+
+  <section class="doc-panel">
+  <h2 id="overview">Overview</h2>
+  <p>Every figure on this site is the publisher's own value, read from the agency's file and
+  archived with its checksum. Rates such as year-on-year changes are calculated from those
+  values, and each one states its formula. Every release is kept, so any series can be read
+  as it stood on an earlier date. Reading pages, downloading files and calling the API are
+  free and need no account or key.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="coverage">Coverage</h2>
+  <ul>
+    <li><b>Japan, labour and population:</b> the Monthly Labour Survey (wages, hours, employment)
+    from 1952, the Labour Force Survey from 1953, the job openings-to-applicants ratio from
+    1963, monthly births, deaths, marriages and divorces from 2005 (preliminary and revised),
+    population by single year of age from 1980, and population by prefecture with age, sex,
+    nationality and migration.</li>
+    <li><b>Japan, prices and the economy:</b> the CPI at item level from 1970 and all items from
+    1946, GDP, the Bank of Japan, government finance, trade and visitor arrivals.</li>
+    <li><b>Japanese companies, in English:</b> cross-shareholdings, 5% shareholder filings,
+    buybacks, boards and pay, shareholder votes and business risks, read from annual reports
+    and filings on EDINET.</li>
+    <li><b>United States and Hong Kong:</b> SEC financials, CEO pay, insider trades, 13F holdings,
+    Treasury yields and BLS prices and jobs; Hong Kong's official statistics.</li>
+  </ul>
+  <p>The full list, with how far back each dataset runs and when it was last updated, is on
+  <a href="datasets.html">Datasets</a>.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="load">Loading Data into Stata, R or Python</h2>
+  <p>Charts that draw published series as they are have a <b>Copy Code</b> button beside
+  Download CSV. It writes one command for the series, measure and dates on screen. The same
+  commands, for Japan's job openings-to-applicants ratio since 1963:</p>
+
+  <h3>Stata</h3>
+<pre class="code"><code>* Source: Ministry of Health, Labour and Welfare, Employment Referrals for General Workers
+import delimited "https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv&amp;notes=0", clear
+gen month = monthly(period, "YM")
+format month %tm
+tsset month</code></pre>
+
+  <h3>R</h3>
+<pre class="code"><code>jo &lt;- read.csv("https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv",
+               comment.char = "#")</code></pre>
+
+  <h3>Python</h3>
+<pre class="code"><code>import pandas as pd
+jo = pd.read_csv("https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv",
+                 comment="#")</code></pre>
+
+  <p>The file opens with lines starting <code>#</code> that name the source table, the release,
+  the formula and the date it was retrieved; R and Python skip them with the comment option.
+  Stata cannot, so its command adds <code>notes=0</code>, which leaves them out and turns the
+  series codes into Stata variable names (<code>sa.active.incl_part</code> becomes
+  <code>sa_active_incl_part</code>). Blank cells are values not published; they are never
+  zero. Up to eight series fit in one request; the <a href="api.html">API Reference</a> covers
+  the rest.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="freeze">Freezing a Release</h2>
+  <p>Government series are revised: seasonally adjusted figures are recalculated every January,
+  and agencies replace their files. Add <code>as_of=YYYY-MM-DD</code> to any data address and it
+  returns the values as they stood on that date, today and in any later year. The date covers
+  the whole day, so the release that arrived that morning is included. Copy Code adds it for
+  you, set to the day the release on screen arrived; untick <b>Freeze</b> to fetch the latest
+  values instead.</p>
+  <p>Two addresses show the history behind a series:</p>
+  <ul>
+    <li><a href="/api/v1/job-openings-jp/releases"><code>/api/v1/job-openings-jp/releases</code></a>:
+    every release of a dataset, with the date it arrived and the checksum of the source file.</li>
+    <li><a href="/api/v1/wages-jp/revisions?series=real_wage_yoy.all.5plus.all"><code>/api/v1/wages-jp/revisions?series=…</code></a>:
+    how one series changed from release to release.</li>
+  </ul>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="cite">Citing</h2>
+  <p>Cite the publisher as the source, and Plover with the release you used and its frozen
+  address. For example:</p>
+<pre class="code"><code>Ministry of Health, Labour and Welfare. Employment Referrals for General Workers:
+active openings-to-applicants ratio, including part-time, seasonally adjusted,
+January 1963 – September 2026. Plover Analytics, release “Data through September 2026”,
+as of 30 October 2026.
+https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;as_of=2026-10-30&amp;format=csv</code></pre>
+  <p>Some publishers ask for a specific credit line, and the Bank of Japan's data comes with
+  conditions of its own; each one is listed under
+  <a href="methodology.html#license">Attribution</a> in the Methodology.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="calculated">Calculated Figures</h2>
+  <p>Published values carry the Official Statistic label. Year-on-year, month-on-month and
+  three-month annualised rates are calculated here from the published values, and state their
+  formula under Show calculation and in every download. A rate calculated from rounded
+  published indices can differ from the agency's own published rate by up to 0.1 percentage
+  point; where the agency publishes the rate itself, use that figure. The
+  <a href="methodology.html">Methodology</a> gives every formula and the known breaks in each
+  series.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="ask">Asking in Plain English</h2>
+  <p>The question box on the <a href="/">front page</a> answers from this site's data and names
+  each figure's source and date. It helps to find the right series before loading it. A free
+  account raises the number of questions you can ask in a day.</p>
+  </section>
+
+  <section class="doc-panel">
+  <h2 id="requests">Requests and Corrections</h2>
+  <p>If a table you need is missing, or a figure looks wrong, write to us through
+  <a href="contact.html">Contact</a> with the series and the publisher's table. We add official
+  tables researchers ask for, and we answer corrections with the source file we read.</p>
+  </section>
+
+  </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    Sources: every publisher is credited under <a href="methodology.html#license">Attribution</a> in the Methodology.
+  </div>
+</footer>
+
+<script src="assets/format.js"></script>
+<script src="assets/ask.js"></script>
+<script>
+initThemeToggle();
+</script>
+</body>
+</html>
