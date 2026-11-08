@@ -59,18 +59,18 @@
 
   <h3>Stata</h3>
 <pre class="code"><code>* Source: Ministry of Health, Labour and Welfare, Employment Referrals for General Workers
-import delimited "https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv&amp;notes=0", clear
+import delimited "https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv&amp;notes=0&amp;ref=code", clear
 gen month = monthly(period, "YM")
 format month %tm
 tsset month</code></pre>
 
   <h3>R</h3>
-<pre class="code"><code>jo &lt;- read.csv("https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv",
+<pre class="code"><code>jo &lt;- read.csv("https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv&amp;ref=code",
                comment.char = "#")</code></pre>
 
   <h3>Python</h3>
 <pre class="code"><code>import pandas as pd
-jo = pd.read_csv("https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv",
+jo = pd.read_csv("https://ploveranalytics.com/api/v1/job-openings-jp/observations?series=sa.active.incl_part&amp;start=1963-01&amp;as_of=2026-10-30&amp;format=csv&amp;ref=code",
                  comment="#")</code></pre>
 
   <p>The file opens with lines starting <code>#</code> that name the source table, the release,

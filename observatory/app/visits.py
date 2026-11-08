@@ -92,6 +92,8 @@ LIVE_MAX = 5000
 # is read too, since ad platforms write their own links that way.
 SOURCE_PARAMS = ("ref", "utm_source")
 _SOURCE_TAG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
+# The tag on every data address a chart's Copy Code writes (format.js).
+CODE_TAG = "code"
 # Held in memory so a sign-up later the same day can say which tag brought the
 # reader (app/accounts.py). Visitor -> (tag, day). Gone on a restart, which
 # loses only the tag of a reader who signs up after one.
@@ -878,6 +880,12 @@ def observe(scope, status, seconds=None):
         if tag:
             event["src"] = tag
             _note_source(visitor, tag, day)
+    elif kind == "api":
+        # Copy Code tags its addresses (&ref=code); Stata, R and pandas then
+        # fetch them, usually looking like scripts, so the tag is kept either way.
+        tag = source_tag(scope.get("query_string"))
+        if tag:
+            event["src"] = tag
     # Only recorded when the reader has answered the banner: the absence of
     # these two is what "has not chosen yet" looks like in the log.
     if choice:
@@ -1108,6 +1116,9 @@ def _new_day():
         # Publication pages for the Writer Desk (_fold_publication). Kept apart
         # from the reader totals, which _settle rebuilds and these do not join.
         "pub_views": [], "pub_drawn": set(), "pub_dwell": {},
+        # Data fetched by a command from a chart's Copy Code (&ref=code), by
+        # network. Counted before the robot test: Stata and R are scripts.
+        "code_runs": {},
         # Page reads from networks that name an organisation (visit_orgs).
         # Kept apart like the publication pages: a bank's network often stops
         # the page's own report, so these do not wait for the reader test;
@@ -1141,6 +1152,9 @@ def _fold(d, event, at):
         d["first"] = at
     if d["last"] is None or at > d["last"]:
         d["last"] = at
+    if (event.get("kind") == "api" and event.get("src") == CODE_TAG
+            and not is_google_machine(event.get("network"))):
+        _count(d["code_runs"], event.get("network") or "", event.get("visitor"))
     # Decided when the log is read, not stamped when it was written, so the
     # weeks logged before the rule existed are cleaned up too.
     if event.get("bot") or is_google_machine(event.get("network")):
@@ -1404,6 +1418,8 @@ def _window_totals(start, today, wanted):
             for k in ("pages", "refs", "sources", "countries", "networks", "direct_networks", "direct_pages"):
                 for key, row in d[k].items():
                     _join(w[k].setdefault(key, {"views": 0, "visitors": set()}), row)
+            for key, row in d["code_runs"].items():
+                _join(w["code_runs"].setdefault(key, {"views": 0, "visitors": set()}), row)
             for k in ("orgs", "domains"):
                 for key, row in d[k].items():
                     _join_org(w[k].setdefault(key, {"views": 0, "visitors": set(), "pages": {},
@@ -1506,6 +1522,18 @@ def summary(days=30, top=15):
                             "asked": len(v["visitors"] & askers)})
     source_rows.sort(key=lambda r: (-r["visitors"], r["key"]))
 
+    # Copy Code commands run in Stata, R or Python: requests, the distinct
+    # machines that sent them, and the networks, named where they belong to
+    # an organisation such as a university.
+    code_users = set()
+    code_networks = []
+    for key, v in w["code_runs"].items():
+        code_users |= v["visitors"]
+        code_networks.append({"key": key or "Unknown network", "runs": v["views"],
+                              "users": len(v["visitors"]),
+                              "organisation": bool(key) and visit_orgs.kind(key) == visit_orgs.ORGANISATION})
+    code_networks.sort(key=lambda r: (-r["runs"], r["key"]))
+
     referrer_rows = ranked(w["refs"])
     for row in referrer_rows:
         row["ai"] = is_ai_referrer(row["key"])
@@ -1529,6 +1557,8 @@ def summary(days=30, top=15):
         "top_pages": ranked(w["pages"], page_dwell),
         "top_referrers": referrer_rows,
         "sources": source_rows[:100],
+        "code_runs": {"runs": sum(r["runs"] for r in code_networks), "users": len(code_users),
+                      "networks": code_networks[:50]},
         # Arrivals carrying no referring link, and the only things known about
         # them. Without this the referrer table silently omits most arrivals
         # and an empty table reads as broken detection.

@@ -511,7 +511,7 @@ function obsCodeURL(spec, lang, freeze) {
   const u = new URL(spec.url, location.origin);
   const params = [];
   u.searchParams.forEach((v, k) => {
-    if (["format", "notes", "as_of"].includes(k)) return;
+    if (["format", "notes", "as_of", "ref"].includes(k)) return;
     if (k === "start" && spec.start) return;
     params.push([k, v]);
   });
@@ -520,6 +520,8 @@ function obsCodeURL(spec, lang, freeze) {
   if (day) params.push(["as_of", day]);
   params.push(["format", "csv"]);
   if (lang === "stata") params.push(["notes", "0"]);
+  // Counted on Admin Traffic as Code Runs: a fetch from the copied command.
+  params.push(["ref", "code"]);
   return u.origin + u.pathname + "?" +
     params.map(p => p[0] + "=" + codeQueryValue(p[1])).join("&");
 }

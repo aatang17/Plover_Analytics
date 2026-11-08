@@ -1100,7 +1100,7 @@ function trafficTab(d, tab) {
   if (tab === "arrivals") {
     return '<div class="admin-section">How Readers Arrived <span class="note">only the sending ' +
       "site is recorded, never the page a reader came from</span></div>" +
-      trafficArrivals(d) + trafficSources(d) + trafficDirect(d);
+      trafficArrivals(d) + trafficSources(d) + trafficCodeRuns(d) + trafficDirect(d);
   }
   if (tab === "places") return trafficPlaces(d);
   if (tab === "visits") {
@@ -1180,6 +1180,28 @@ function trafficSources(d) {
     body + "</tbody></table></div>" +
     (signups ? "" : '<p class="source-line">Sign-ups are not shown: accounts are switched ' +
       "off on this server.</p>");
+}
+
+/* Commands from a chart's Copy Code, run in Stata, R or Python: each fetch of
+   a tagged data address (&ref=code), and the networks they came from. A copy
+   that is never run does not appear; a do-file run ten times counts ten. */
+function trafficCodeRuns(d) {
+  var c = d.code_runs || { runs: 0, users: 0, networks: [] };
+  var head = '<div class="admin-section">Code Runs <span class="note">data fetched by a ' +
+    "command copied from a chart, in Stata, R or Python</span></div>";
+  if (!c.runs) {
+    return head + '<p class="table-empty">No copied command has fetched data in this window. ' +
+      "Each run of a command from a chart's Copy Code shows up here.</p>";
+  }
+  var body = c.networks.map(function (r) {
+    return "<tr><td>" + escapeHtml(r.key) + (r.organisation ? ' <span class="note">organisation</span>' : "") +
+      '</td><td class="num">' + fmtCount(r.runs) + '</td><td class="num">' + fmtCount(r.users) + "</td></tr>";
+  }).join("");
+  return head + '<p class="source-line">' + fmtCount(c.runs) + " runs from " + fmtCount(c.users) +
+    " machines.</p>" +
+    '<div class="table-wrap"><table class="data"><thead><tr><th>Network</th>' +
+    '<th class="num">Runs</th><th class="num">Machines</th></tr></thead><tbody>' +
+    body + "</tbody></table></div>";
 }
 
 /* The front page's question box: how often it was asked, by how many
