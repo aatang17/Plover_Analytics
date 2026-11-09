@@ -78,6 +78,10 @@ EXTRACTORS = [
     ("event_extract.py",      "corporate-events",     []),
     # Segment notes (revenue by region, named customers, product segments).
     ("seg_extract.py",        "segments",             ["--all"]),
+    # Borrowings from the IFRS financial-liabilities note, for net cash where
+    # the balance sheet prints no borrowing line. After financials: it reads
+    # only the IFRS filings that extractor has stored, against their face.
+    ("debt_note_extract.py",  "debt-notes",           []),
     # Business risks (事業等のリスク): the section's text, cut into the filer's
     # own items. Same t1 package and cold-start budget as the extractors
     # above; companies with a securities code only (see the module docstring).

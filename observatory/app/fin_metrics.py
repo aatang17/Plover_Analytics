@@ -185,7 +185,7 @@ FORMULAS = {
     "fcf_yen": "operating cash flow − capital expenditure (purchases of property, plant and equipment and of intangible assets, from the cash flow statement); not computed where no capex line is tagged, or for banks, insurers and brokers",
     "fcf_margin_pct": "free cash flow ÷ revenue × 100",
     "liquid_cash_yen": "Japan GAAP: cash and deposits + short-term securities (有価証券, current assets; nil where the balance sheet prints none). IFRS: cash and cash equivalents only — IFRS balance sheets put short-term investments in 'other financial assets' with derivatives and loans. Closing balances; not computed for banks, insurers and brokers",
-    "net_cash_yen": "liquid cash − interest-bearing debt (short- and long-term borrowings, bonds, convertible bonds and commercial paper, current and non-current, including non-recourse loans; lease liabilities excluded). Negative means net debt. Consolidated, so a captive finance arm's borrowing counts as debt (carmakers' auto-loan funding). Not computed where the balance sheet folds borrowings and leases into one line — including an IFRS interest-bearing liabilities line with no separate lease line — where an IFRS balance sheet prints no borrowing line but does print (other) financial liabilities, which can hold bonds and loans, or for banks, insurers and brokers",
+    "net_cash_yen": "liquid cash − interest-bearing debt (short- and long-term borrowings, bonds, convertible bonds and commercial paper, current and non-current, including non-recourse loans; lease liabilities excluded). Negative means net debt. Consolidated, so a captive finance arm's borrowing counts as debt (carmakers' auto-loan funding). Not computed where the balance sheet folds borrowings and leases into one line — including an IFRS interest-bearing liabilities line with no separate lease line — or for banks, insurers and brokers. Where an IFRS balance sheet prints no borrowing line but does print (other) financial liabilities, which can hold bonds and loans, debt is the borrowing rows of the note that itemises those lines (its totals equal to the balance sheet's), or nil where the financing-activities reconciliation lists leases alone; with neither, not computed",
     "investment_securities_yen": "investment securities (投資有価証券, non-current assets) as printed on the Japan GAAP balance sheet — shareholdings in other companies, cross-shareholdings among them, and bonds held for over a year; not included in liquid or net cash. Not available under IFRS, which has no equivalent line",
     "cash_to_assets_pct": "liquid cash ÷ total assets × 100, closing balances",
     "net_cash_to_assets_pct": "net cash ÷ total assets × 100, closing balances",
@@ -360,9 +360,15 @@ def _capex(facts):
     return ppe + intang, ppe_el + " + " + int_el
 
 
-def cash_position(face, financial):
+def cash_position(face, financial, note=None):
     """Liquid cash, interest-bearing debt and investment securities from the
     face of one balance sheet ({element: current-year value}).
+
+    note: the filing's borrowings as equity/debt_note_extract.py read them
+    from its notes ({source, tied_lines, debt_yen, debt_rows}), or None. Used
+    only where the face prints no borrowing line but does print (other)
+    financial liabilities, and only when the note itemises every one of those
+    lines — or the financing-activities reconciliation lists leases alone.
 
     Returns {name: (value, element description)} and {check: note}."""
     out, notes = {}, {}
@@ -394,8 +400,19 @@ def cash_position(face, financial):
     # a borrowing line printed with no value this year (repaid) still says the
     # filer shows its borrowings separately
     borrowing_printed = any(el in DEBT_ELEMENTS or other_debt_line(el) == "debt" for el in face)
-    catchall = [] if borrowing_printed else sorted(el for el in face if _FIN_LIAB_CATCHALL.search(el))
-    if mixed or ib_with_leases or catchall:
+    # a catch-all line printed with no balance this year hides nothing
+    catchall = [] if borrowing_printed else sorted(el for el, v in face.items()
+                                                   if v and _FIN_LIAB_CATCHALL.search(el))
+    if catchall and not (mixed or ib_with_leases) and note and note.get("debt_yen") is not None \
+            and (note.get("source") == "reconciliation"
+                 or set(catchall) <= set((note.get("tied_lines") or "").split(","))):
+        out["interest_bearing_debt"] = (
+            note["debt_yen"],
+            ("note to %s: %s" % (", ".join(catchall), note["debt_rows"])) if note.get("debt_rows") else
+            ("note itemising %s lists no borrowing" % ", ".join(catchall))
+            if note.get("source") == "note" else
+            "financing-activities reconciliation lists leases only")
+    elif mixed or ib_with_leases or catchall:
         notes["net_cash_withheld"] = (
             "the balance sheet puts borrowings and leases in one line, so debt cannot be separated"
             if mixed else
@@ -414,6 +431,31 @@ def cash_position(face, financial):
                                         or ("borrowing line printed with no balance" if borrowing_printed
                                             else "no borrowing line printed"))
     return out, notes
+
+
+_NOTE_MEMO = {"version": None, "rows": {}}
+_NOTE_LOCK = threading.Lock()
+
+
+def note_debt(doc_id):
+    """The clean read of a filing's borrowings note (eq_debt_note_filings),
+    or None. Loaded once per database version; a database without the table
+    gives None for every filing, which leaves net cash as the face says."""
+    version = equity_api._version()
+    with _NOTE_LOCK:
+        if _NOTE_MEMO["version"] != version:
+            rows = {}
+            try:
+                cur = equity_api._cur()
+                if cur.execute("SELECT count(*) FROM duckdb_tables() "
+                               "WHERE table_name = 'eq_debt_note_filings'").fetchone()[0]:
+                    for r in equity_api._rows(cur, "SELECT doc_id, source, tied_lines, debt_yen, debt_rows "
+                                                   "FROM eq_debt_note_filings WHERE status = 'clean'"):
+                        rows[r.pop("doc_id")] = r
+            except Exception:                                    # noqa: BLE001
+                rows = {}
+            _NOTE_MEMO["version"], _NOTE_MEMO["rows"] = version, rows
+        return _NOTE_MEMO["rows"].get(doc_id)
 
 
 def compute_row(head, summary_rows, bs_facts_by_basis, bs_face_by_basis=None):
@@ -460,7 +502,8 @@ def compute_row(head, summary_rows, bs_facts_by_basis, bs_face_by_basis=None):
     operating_income = take("operating_income", op, 0)
     cfo = take("cf_operating", s0.get("cf_operating", (None, None)), 0)
     financial = (head.get("industry") or "") in NO_FCF_INDUSTRIES
-    pos, pos_notes = cash_position((bs_face_by_basis or {}).get(basis, {}), financial)
+    pos, pos_notes = cash_position((bs_face_by_basis or {}).get(basis, {}), financial,
+                                   note_debt(head.get("doc_id")) if basis == "consolidated" else None)
     liquid = take("liquid_cash", pos.get("liquid_cash", (None, None)), 0)
     debt = take("interest_bearing_debt", pos.get("interest_bearing_debt", (None, None)), 0)
     inv_sec = take("investment_securities", pos.get("investment_securities", (None, None)), 0)

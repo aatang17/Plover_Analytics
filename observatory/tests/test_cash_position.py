@@ -86,6 +86,34 @@ class CashPositionTest(unittest.TestCase):
                                     "jpigp_cor:FinancialLiabilitiesNCLIFRS": 31 * BN}, False)
         self.assertIn("net_cash_withheld", notes)
 
+    def test_note_settles_a_withheld_balance_sheet(self):
+        face = {"jpigp_cor:CashAndCashEquivalentsIFRS": 893 * BN,
+                "jpigp_cor:OtherFinancialLiabilitiesCLIFRS": 151 * BN,
+                "jpigp_cor:OtherFinancialLiabilitiesNCLIFRS": 141 * BN}
+        both = "jpigp_cor:OtherFinancialLiabilitiesCLIFRS,jpigp_cor:OtherFinancialLiabilitiesNCLIFRS"
+        out, notes = cash_position(face, False, {"source": "note", "tied_lines": both,
+                                                 "debt_yen": 211 * BN, "debt_rows": "有利子負債"})
+        self.assertEqual(out["interest_bearing_debt"][0], 211 * BN)
+        self.assertEqual(notes, {})
+        # a note that itemises only the current line leaves the other unknown
+        out, notes = cash_position(face, False, {"source": "note", "debt_yen": 0.0, "debt_rows": None,
+                                                 "tied_lines": "jpigp_cor:OtherFinancialLiabilitiesCLIFRS"})
+        self.assertNotIn("interest_bearing_debt", out)
+        self.assertIn("net_cash_withheld", notes)
+        # a financing reconciliation listing leases alone covers every line
+        out, _ = cash_position(face, False, {"source": "reconciliation", "tied_lines": None,
+                                             "debt_yen": 0.0, "debt_rows": None})
+        self.assertEqual(out["interest_bearing_debt"][0], 0)
+
+    def test_note_never_overrides_a_mixed_line(self):
+        el = "jpcrp030000-asr_E01264-000:BondsBorrowingsAndLeaseLiabilitiesCLIFRS"
+        out, notes = cash_position({"jpigp_cor:CashAndCashEquivalentsIFRS": 50 * BN, el: 5 * BN,
+                                    "jpigp_cor:OtherFinancialLiabilitiesCLIFRS": 1 * BN}, False,
+                                   {"source": "reconciliation", "tied_lines": None,
+                                    "debt_yen": 0.0, "debt_rows": None})
+        self.assertNotIn("interest_bearing_debt", out)
+        self.assertIn("net_cash_withheld", notes)
+
     def test_repaid_borrowing_line_keeps_net_cash(self):
         # Advantest-shaped: the borrowing line is printed with no value this year.
         out, notes = cash_position({"jpigp_cor:CashAndCashEquivalentsIFRS": 400 * BN,

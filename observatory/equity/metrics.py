@@ -69,6 +69,7 @@ OWNED = {
                          "eq_event_officers", "eq_event_parties"],
     "segments": ["eq_seg_filings", "eq_seg_regions", "eq_seg_customers",
                  "eq_seg_products"],
+    "debt-notes": ["eq_debt_note_filings", "eq_debt_note_rows"],
     "buybacks": ["eq_buyback_filings", "eq_buyback_programs",
                  "eq_buyback_treasury"],
     "classification": ["eq_classification", "eq_index_member"],
