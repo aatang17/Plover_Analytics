@@ -136,11 +136,17 @@ DEBT_ELEMENTS = [
 # A borrowing-like liability line outside that list — usually one the filer
 # named itself — is debt when its name is borrowing alone (Sony's and
 # Hitachi's CurrentPortionOfLongTermDebt, a non-recourse loan, a convertible's
-# current portion). One whose name mixes in leases or "other financial
-# liabilities" cannot be split, so net cash is withheld rather than computed
-# with a lease left in or a debt left out.
+# current portion, Honda's and Subaru's FinancingLiabilities — 資金調達に係る
+# 債務, the finance arm's borrowing). One whose name mixes in leases or "other
+# financial liabilities" cannot be split, so net cash is withheld rather than
+# computed with a lease left in or a debt left out.
 _MIXED = re.compile(r"Lease|OtherFinancial")
-_DEBT_LIKE = re.compile(r"Loan|Borrowing|Bond|CommercialPaper|Debt")
+_DEBT_LIKE = re.compile(r"Loan|Borrowing|Bond|CommercialPaper|Debt|FinancingLiabilit")
+# An IFRS balance sheet with no borrowing line at all may still owe money: some
+# filers print bonds and loans inside "(other) financial liabilities" beside
+# deposits received and derivatives (Fast Retailing's bonds, NSK's borrowings).
+# Absent there means unknown, not none.
+_FIN_LIAB_CATCHALL = re.compile(r"FinancialLiabilities(CL|NCL)?IFRS$")
 _LIABILITY = re.compile(r"(CL|NCL|Liabilities)(IFRS)?$|Payable|Borrowing")
 _NOT_DEBT = re.compile(r"Receivable|Assets?(IFRS)?$|N?CA(IFRS)?$|IOA$|DA$|BadDebt|Allowance|"
                        r"Provision|Reserve|InterestPayable|Guarantee|Deposit")
@@ -179,7 +185,7 @@ FORMULAS = {
     "fcf_yen": "operating cash flow − capital expenditure (purchases of property, plant and equipment and of intangible assets, from the cash flow statement); not computed where no capex line is tagged, or for banks, insurers and brokers",
     "fcf_margin_pct": "free cash flow ÷ revenue × 100",
     "liquid_cash_yen": "Japan GAAP: cash and deposits + short-term securities (有価証券, current assets; nil where the balance sheet prints none). IFRS: cash and cash equivalents only — IFRS balance sheets put short-term investments in 'other financial assets' with derivatives and loans. Closing balances; not computed for banks, insurers and brokers",
-    "net_cash_yen": "liquid cash − interest-bearing debt (short- and long-term borrowings, bonds, convertible bonds and commercial paper, current and non-current, including non-recourse loans; lease liabilities excluded). Negative means net debt. Consolidated, so a captive finance arm's borrowing counts as debt (carmakers' auto-loan funding). Not computed where the balance sheet folds borrowings and leases into one line — including an IFRS interest-bearing liabilities line with no separate lease line — or for banks, insurers and brokers",
+    "net_cash_yen": "liquid cash − interest-bearing debt (short- and long-term borrowings, bonds, convertible bonds and commercial paper, current and non-current, including non-recourse loans; lease liabilities excluded). Negative means net debt. Consolidated, so a captive finance arm's borrowing counts as debt (carmakers' auto-loan funding). Not computed where the balance sheet folds borrowings and leases into one line — including an IFRS interest-bearing liabilities line with no separate lease line — where an IFRS balance sheet prints no borrowing line but does print (other) financial liabilities, which can hold bonds and loans, or for banks, insurers and brokers",
     "investment_securities_yen": "investment securities (投資有価証券, non-current assets) as printed on the Japan GAAP balance sheet — shareholdings in other companies, cross-shareholdings among them, and bonds held for over a year; not included in liquid or net cash. Not available under IFRS, which has no equivalent line",
     "cash_to_assets_pct": "liquid cash ÷ total assets × 100, closing balances",
     "net_cash_to_assets_pct": "net cash ÷ total assets × 100, closing balances",
@@ -385,19 +391,28 @@ def cash_position(face, financial):
     # them inside (Toyota, JAL, SoftBank Corp).
     if not any(_LEASE_LINE.search(el) for el in face):
         ib_with_leases = sorted(el for el in face if el.startswith(_IB_PREFIX))
-    if mixed or ib_with_leases:
+    # a borrowing line printed with no value this year (repaid) still says the
+    # filer shows its borrowings separately
+    borrowing_printed = any(el in DEBT_ELEMENTS or other_debt_line(el) == "debt" for el in face)
+    catchall = [] if borrowing_printed else sorted(el for el in face if _FIN_LIAB_CATCHALL.search(el))
+    if mixed or ib_with_leases or catchall:
         notes["net_cash_withheld"] = (
             "the balance sheet puts borrowings and leases in one line, so debt cannot be separated"
             if mixed else
             "the balance sheet's interest-bearing liabilities have no separate lease line beside "
-            "them, so they most likely include leases")
-        notes["net_cash_withheld_lines"] = ", ".join(mixed + ib_with_leases)
+            "them, so they most likely include leases"
+            if ib_with_leases else
+            "the balance sheet prints no borrowing line, and any bonds or loans would sit inside "
+            "its financial liabilities beside other items, so debt cannot be separated")
+        notes["net_cash_withheld_lines"] = ", ".join(mixed + ib_with_leases + catchall)
     else:
         debt = [(el, face[el]) for el in DEBT_ELEMENTS if face.get(el) is not None]
         debt += sorted((el, v) for el, v in face.items()
                        if v is not None and other_debt_line(el) == "debt")
         out["interest_bearing_debt"] = (sum(v for _, v in debt),
-                                        " + ".join(el for el, _ in debt) or "no borrowing line printed")
+                                        " + ".join(el for el, _ in debt)
+                                        or ("borrowing line printed with no balance" if borrowing_printed
+                                            else "no borrowing line printed"))
     return out, notes
 
 
