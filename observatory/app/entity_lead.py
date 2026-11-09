@@ -334,6 +334,201 @@ def _us_company_lead(name, ticker):
 
 
 # ---------------------------------------------------------------------------
+# what a crawler reads: the company's own tables
+# ---------------------------------------------------------------------------
+#
+# The page's own tables arrive from /api after load, so a crawler that runs no
+# scripts used to find, under "Latest values as text and table", the market-
+# wide summary of the page it landed on: asked who holds 5% of Toyota, it read
+# how many reports exist in all of Japan. These are the company's own rows,
+# from the functions that serve the page, as filed. (2026-11-09: ChatGPT sent
+# readers to the one page whose served text stated its own numbers.)
+
+ROWS = 10
+
+def _row_name(row):
+    return _company_name(row.get("holder_sec_code"), _holder_name(row),
+                         row.get("holder_edinet_code"))
+
+
+def _block(heading, sentence, table, json_path, calc=None):
+    return {"heading": heading, "sentence": sentence, "table": table, "calc": calc,
+            "credit": readable._CREDIT, "release": "", "links": [("JSON", json_path)],
+            "csv": None}
+
+
+def _ownership_tables(name, code):
+    from . import ownership_api
+    head = ownership_api.company(code, year="")
+    holders = [r for r in head.get("holders") or [] if r.get("ratio_pct") is not None]
+    if not holders:
+        return []
+    facts = []
+    if head.get("shareholders_total") is not None:
+        facts.append("%s shareholders on the register" % readable.fmt_int(head["shareholders_total"]))
+    if head.get("majors_ratio_filed_pct") is not None:
+        facts.append("the ten largest hold %s of shares, the filing's own total"
+                     % _pct(head["majors_ratio_filed_pct"]))
+    if head.get("foreign_pct") is not None:
+        facts.append("foreign investors hold %s of all issued shares" % _pct(head["foreign_pct"]))
+    period = _year_to(head.get("period_end"))
+    sentence = (("Register for %s: " % period if period else "") + "; ".join(facts) + ".") \
+        if facts else ""
+    sentence = sentence[:1].upper() + sentence[1:]
+
+    def who(r):
+        kind = _KIND_WORDS.get(r.get("holder_kind"))
+        return "%s (%s)" % (_row_name(r), kind) if kind else _row_name(r)
+    records = [{"rank": r.get("rank"), "name": who(r), "shares": r.get("shares"),
+                "pct": r.get("ratio_pct")} for r in holders[:ROWS]]
+    table = readable._table(
+        "Ten largest shareholders as filed (% of shares in issue excluding treasury shares)",
+        ["Rank", "Holder", "Shares", "% of shares"], records,
+        [("rank", "raw"), ("name", "raw"), ("shares", "int"), ("pct", "pct2")])
+    return [_block("Major shareholders of " + name, sentence, table,
+                   "/api/v1/equity/ownership/company/%s" % code,
+                   "A custody, trust or employee account in brackets is this platform's "
+                   "reading of the holder's name, not a filed field.")]
+
+
+def _stakes_tables(name, code):
+    from . import lvh_api
+    s = lvh_api.company(code, history=1)
+    groups = s.get("groups") or []
+    if not groups:
+        return []
+    groups = sorted(groups, key=lambda g: (not g.get("is_current"), -(g.get("ratio_pct") or 0)))
+    current = [g for g in groups if g.get("is_current")]
+    if current:
+        top = current[0]
+        sentence = ("%s holding group%s report%s 5%% or more of %s in %s latest report. "
+                    "The largest is %s, with %s, filed %s." % (
+                        readable.fmt_int(len(current)), "" if len(current) == 1 else "s",
+                        "s" if len(current) == 1 else "", name,
+                        "its" if len(current) == 1 else "their",
+                        _filer_name(top.get("filer_name")), _pct(top.get("ratio_pct")),
+                        _day(top.get("filed_date"))))
+    else:
+        sentence = ("No holder reports 5%% or more of %s in its latest filing; the groups "
+                    "below last reported crossing or leaving 5%%." % name)
+    def proposal(g):
+        # The page's three states: the special-reporting form institutions
+        # file never asks the question, which is not the same as "no".
+        if g.get("important_proposal") is True:
+            return "Yes"
+        if g.get("important_proposal") is False:
+            return "None stated"
+        if g.get("proposal_asked") is False:
+            return "Not on this form"
+        return "Not stated"
+    records = [{"name": _filer_name(g.get("filer_name")), "pct": g.get("ratio_pct"),
+                "change": g.get("ratio_change_pp"), "filed": g.get("filed_date"),
+                "status": "5% or more" if g.get("is_current") else "Below 5%",
+                "proposal": proposal(g)}
+               for g in groups[:ROWS]]
+    columns = ["Holder (filing group)", "Stake (%)", "Change (pp)", "Filed", "Latest stake"]
+    fields = [("name", "raw"), ("pct", "pct2"), ("change", "pp"), ("filed", "raw"),
+              ("status", "raw")]
+    if any(r["proposal"] != "Not stated" for r in records):
+        columns.append("May make important proposals")
+        fields.append(("proposal", "raw"))
+    table = readable._table("Each holding group's latest 5% report, as filed",
+                            columns, records, fields)
+    return [_block("5% shareholders of " + name, sentence, table,
+                   "/api/v1/equity/stakes/company/%s" % code,
+                   "Change (pp): the stake in this report minus the stake in the group's "
+                   "previous report, both as filed.")]
+
+
+def _holdings_tables(name, code):
+    from . import equity_api
+    doc = equity_api.company(code)
+    held = sorted([h for h in doc.get("holdings") or [] if h.get("book_value_yen") is not None],
+                  key=lambda h: -float(h["book_value_yen"]))
+    if not held:
+        return []
+    sentence = ""
+    records = [{"name": _company_name(h.get("held_sec_code"),
+                                      h.get("held_name_en") or h.get("held_name_raw")),
+                "shares": h.get("shares"), "book": h.get("book_value_yen"),
+                "pct": h.get("pct_outstanding"),
+                "mutual": {"有": "Yes", "無": "No"}.get(h.get("reciprocal"), DASH)}
+               for h in held[:ROWS]]
+    table = readable._table(
+        "Ten largest cross-shareholdings by book value, as filed",
+        ["Company held", "Shares", "Book value (¥bn)", "% of its shares",
+         "Holds this company back"], records,
+        [("name", "raw"), ("shares", "int"), ("book", "yen_bn"), ("pct", "pct"),
+         ("mutual", "raw")])
+    calc = doc.get("ownership_calc")
+    return [_block("Cross-shareholdings of " + name, sentence, table,
+                   "/api/v1/equity/company/%s" % code,
+                   ("% of its shares is calculated: " + calc) if calc else None)]
+
+
+def _governance_tables(name, code):
+    from . import governance_api
+    g = governance_api.company(code, year="")
+    board = g.get("board") or []
+    if not board:
+        return []
+    facts = ["a board of %s directors" % readable.fmt_int(g.get("board_size") or len(board))]
+    men, women = g.get("male_officers"), g.get("female_officers")
+    if men is not None and women is not None:
+        # The filing's count is of all its officers, executive officers
+        # included, which can be more people than sit on the board.
+        facts.append("the filing counts %s women among its %s officers"
+                     % (readable.fmt_int(women), readable.fmt_int(men + women)))
+    if g.get("avg_salary_yen"):
+        facts.append("average employee salary \u00a5%s million"
+                     % readable.fmt(g["avg_salary_yen"] / 1e6, 1))
+    period = _year_to(g.get("period_end"))
+    sentence = "%s, as filed in its annual securities report for %s: %s." % (
+        name, period or "its latest year", "; ".join(facts))
+    pay = dict((p.get("person_key"), p.get("consolidated_pay_yen"))
+               for p in g.get("pay_named") or [] if p.get("consolidated_pay_yen"))
+    records = [{"name": b.get("name_en") or b.get("name_ja"),
+                "title": b.get("title_ja") or _label_role(b.get("role")),
+                "age": b.get("age_at_period_end"), "shares": b.get("shares_held"),
+                "pay": pay.get(b.get("person_key"))} for b in board[:20]]
+    board_table = readable._table(
+        "Officers as filed, with pay where the company discloses it individually (¥100mn or more)",
+        ["Name", "Title as filed", "Age", "Shares held", "Pay (¥mn)"], records,
+        [("name", "raw"), ("title", "raw"), ("age", "int"), ("shares", "int"),
+         ("pay", "yen_mn")])
+    return [_block("Board and pay of " + name, sentence, board_table,
+                   "/api/v1/equity/governance/company/%s" % code,
+                   "Age is calculated from the filed date of birth at the fiscal year end.")]
+
+
+def _label_role(role):
+    return readable._label(role) if role else DASH
+
+
+_TABLES = {
+    "ownership.html": _ownership_tables,
+    "stakes.html": _stakes_tables,
+    "holdings.html": _holdings_tables,
+    "governance.html": _governance_tables,
+}
+
+
+def tables(page_name, code, name):
+    """The company's own readable blocks for one Japanese company page, or []."""
+    make = _TABLES.get(page_name)
+    if not make or not code or not name:
+        return []
+    from . import prerender
+
+    def build():
+        try:
+            return make(name, code)
+        except Exception:  # noqa: BLE001 — no table beats a wrong one
+            return []
+    return prerender._cached(("tables", page_name, code), prerender._equity_version, build) or []
+
+
+# ---------------------------------------------------------------------------
 # where to go next
 # ---------------------------------------------------------------------------
 

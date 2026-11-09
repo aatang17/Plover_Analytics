@@ -93,6 +93,30 @@ class AnswerPageTest(unittest.TestCase):
             self.assertIn("/" + q["page"], pages)
             self.assertIn("/" + q["page"], llms)
 
+    def test_a_published_rate_is_stated_as_published_and_never_recomputed(self):
+        block = answers.answer("japan-unemployment-rate.html")
+        if block is None:
+            self.skipTest(_data.NO_MACRO)
+        r = self.client.get("/api/v1/unemployment-jp/observations?series=sa.unemployment_rate.total")
+        latest = [p for p in r.json()["series"][0]["points"] if p[1] is not None][-1][1]
+        self.assertIn("was %.1f%%" % latest, block["sentence"])
+        self.assertEqual(block["trust"], "official")
+        self.assertIsNone(block["calc"])
+
+    def test_a_ratio_keeps_its_two_published_decimals(self):
+        block = answers.answer("japan-jobs-to-applicants-ratio.html")
+        if block is None:
+            self.skipTest(_data.NO_MACRO)
+        self.assertRegex(block["sentence"], r"ratio was \d\.\d\d in ")
+
+    def test_a_rate_column_gets_no_percent_change_of_itself(self):
+        # The unemployment rate going from 2.6% to 2.4% is not "−7.7%".
+        from app import readable
+        block = readable.macro_block("unemployment-jp")
+        if block is None:
+            self.skipTest(_data.NO_MACRO)
+        self.assertFalse(any("YoY" in c["label"] for c in block["table"]["columns"]))
+
 
 class SinceTest(unittest.TestCase):
 

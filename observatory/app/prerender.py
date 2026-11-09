@@ -138,6 +138,11 @@ def _format(value, unit):
         # A rate keeps its decimal: 2.0% and 2% do not say the same thing
         # about precision, and the visible tile shows the first.
         shown = "%.1f" % value
+    elif unit == "ratio":
+        # Published to two decimals (1.19 openings per applicant); one
+        # would round the month's news away. The word "ratio" after the
+        # number adds nothing the label has not said.
+        shown, unit = "%.2f" % value, ""
     elif abs(value) >= 1000:
         shown = "{:,.0f}".format(value)
     else:
@@ -1842,12 +1847,28 @@ def page_blocks(html, page_name, entity, datasets, query_string=""):
             if _SEC_CODE.match(code.strip()):
                 blocks.extend(readable.company_blocks(code.strip()))
             return blocks
+        from . import entity_lead
+        if page_name in entity_lead._TABLES:
+            # One company's page carries that company's rows, never the
+            # market-wide summary of the page it is on.
+            code = (dict(parse_qsl(query_string, keep_blank_values=True)).get("c") or "").strip()
+            if _SEC_CODE.match(code):
+                blocks.extend(entity_lead.tables(page_name, code, entity.get("h1")))
+            return blocks
     from . import api
     found = _DEFAULT_FLOW.search(html)
     equity_done = False
     for mid in (datasets or EXTRA_PAGE_DATASETS.get(page_name) or [])[:4]:
         if mid in api.ADAPTERS:
-            blocks.append(readable.macro_block(mid, found.group(1) if found else None))
+            block = readable.macro_block(mid, found.group(1) if found else None)
+            # The answer pages this dataset feeds, linked from the page a
+            # crawler already reads: nothing else on the site points at them.
+            answer_links = [(q["question"], "/" + q["page"])
+                            for q in answers.QUESTIONS
+                            if q["dataset"] == mid and q["page"] != page_name]
+            if block and answer_links:
+                block = dict(block, links=list(block.get("links") or []) + answer_links)
+            blocks.append(block)
         elif not equity_done:
             # A filings dataset has no macro adapter; its page has one
             # summary, however many datasets the registry maps to it.

@@ -43,6 +43,12 @@ log = logging.getLogger(__name__)
 #   level   a stock in yen, stated at the end of the period
 #   count   a published count of people or nights, in the period or on a date
 #   yield   a percentage per year, daily, compared in percentage points
+#   reading a rate or ratio the publisher states itself (the unemployment
+#           rate, the jobs-to-applicants ratio, the published growth of
+#           real wages), compared with the month before and a year earlier
+#           in its own units. ``percent`` says whether it is a percentage;
+#           ``change`` that it is the publisher's own change on a year
+#           earlier, which the sentence words as higher or lower.
 #
 # subject       what the sentence is about ("Japan's consumer prices")
 # series_name   what the figure is, for the clause after the number
@@ -188,6 +194,76 @@ QUESTIONS = [
         "series_name": "the Ministry of Finance's daily reference yield curve",
         "chart_title": "10-Year JGB Yield, Daily",
         "section": "macro", "nav_page": "rates",
+    },
+    {
+        "page": "japan-unemployment-rate.html",
+        "question": "What is Japan's unemployment rate?",
+        "short": "Japan unemployment rate",
+        "description": "Japan's unemployment rate in the latest month, seasonally adjusted, "
+                       "from the Statistics Bureau's Labour Force Survey, with the month "
+                       "before, a year earlier and the last thirteen months.",
+        "dataset": "unemployment-jp", "code": "sa.unemployment_rate.total", "kind": "reading",
+        "percent": True, "decimals": 1,
+        "subject": "Japan's unemployment rate",
+        "series_name": "the Statistics Bureau of Japan's Labour Force Survey, seasonally adjusted",
+        "also": [("sa.unemployment_rate.male", "the rate for men", "Men"),
+                 ("sa.unemployment_rate.female", "the rate for women", "Women")],
+        "column": "Unemployment rate",
+        "chart_title": "Unemployment Rate, Seasonally Adjusted, Monthly",
+        "section": "macro", "nav_page": "labour",
+    },
+    {
+        "page": "japan-jobs-to-applicants-ratio.html",
+        "question": "What is Japan's jobs-to-applicants ratio?",
+        "short": "Japan jobs-to-applicants ratio",
+        "description": "Japan's active job openings-to-applicants ratio in the latest month, "
+                       "seasonally adjusted, from the Ministry of Health, Labour and Welfare's "
+                       "public employment offices, with the new-openings ratio beside it.",
+        "dataset": "job-openings-jp", "code": "sa.active.incl_part", "kind": "reading",
+        "percent": False, "decimals": 2,
+        "subject": "Japan's jobs-to-applicants ratio",
+        "series_name": "the Ministry of Health, Labour and Welfare's count of active job "
+                       "openings per active applicant at public employment offices, part-time "
+                       "included, seasonally adjusted",
+        "also": [("sa.new.incl_part", "the ratio of new openings to new applications",
+                  "New openings per new application")],
+        "column": "Openings per applicant",
+        "chart_title": "Active Openings-to-Applicants Ratio, Seasonally Adjusted",
+        "section": "macro", "nav_page": "labour",
+    },
+    {
+        "page": "japan-real-wages.html",
+        "question": "Are Japan's real wages rising?",
+        "short": "Japan real wages",
+        "description": "Japan's real wages, total cash earnings adjusted for prices, against a "
+                       "year earlier, as published in the Ministry of Health, Labour and "
+                       "Welfare's Monthly Labour Survey (final figures), with nominal earnings "
+                       "beside it.",
+        "dataset": "wages-jp", "code": "real_wage_yoy.all.5plus.all", "kind": "reading",
+        "percent": True, "decimals": 1, "change": True,
+        "subject": "Japan's real wages",
+        "series_name": "the Ministry of Health, Labour and Welfare's Monthly Labour Survey",
+        "also": [("cash_earnings_yoy.all.5plus.all",
+                  "nominal total cash earnings, before adjusting for prices,",
+                  "Nominal, change on a year")],
+        "column": "Real, change on a year",
+        "chart_title": "Real Wages, Change on a Year Earlier, Monthly",
+        "section": "macro", "nav_page": "labour",
+    },
+    {
+        "page": "japan-rice-prices.html",
+        "question": "How have rice prices in Japan changed over the past year?",
+        "short": "Japan rice prices",
+        "description": "The change in Japanese consumer prices for rice against a year "
+                       "earlier, from the rice index in the Statistics Bureau's national CPI, "
+                       "with the last twelve months and the series since 1970.",
+        "dataset": "cpi-jp-items", "code": "0004", "kind": "rate",
+        "subject": "Rice prices in Japan",
+        "series_name": "the rice index in the national Consumer Price Index published by the "
+                       "Statistics Bureau of Japan",
+        "also": [("0001", "headline CPI (all items)")],
+        "chart_title": "Rice in the CPI, Year over Year",
+        "section": "macro", "nav_page": "inflation",
     },
 ]
 
@@ -394,10 +470,12 @@ def _build(spec):
             return None
         raw = api._values(con, main["series_id"])
         also = []
-        for code, label in spec.get("also") or []:
-            s = _series(con, dataset, code)
+        columns_also = []
+        for item in spec.get("also") or []:
+            s = _series(con, dataset, item[0])
             if s:
-                also.append((label, api._values(con, s["series_id"])))
+                also.append((item[1], api._values(con, s["series_id"])))
+                columns_also.append(item[2] if len(item) > 2 else item[1])
     finally:
         con.close()
 
@@ -574,6 +652,60 @@ def _build(spec):
         columns += [{"label": "Yield (% per year)", "num": True}]
         cells = [[v for _, v in levels]]
         decimals = [3]
+
+    elif kind == "reading":
+        d = spec.get("decimals", 1)
+        pct = spec.get("percent", True)
+
+        def show(v):
+            return fmt(v, d) + ("%" if pct else "")
+
+        def earlier(p):
+            return _month(p) if frequency == "monthly" else _label(p, frequency)
+        if spec.get("change"):
+            word = _direction(latest_v, "higher", "lower", None)
+            if word is None:
+                sentence = "%s were unchanged %s from a year earlier, as published in %s." % (
+                    spec["subject"], when, spec["series_name"])
+            else:
+                sentence = "%s were %s %s %s than a year earlier, as published in %s." % (
+                    spec["subject"], show(abs(latest_v)), word, when, spec["series_name"])
+        else:
+            sentence = "%s was %s %s, on %s." % (
+                spec["subject"], show(latest_v), when, spec["series_name"])
+        parts = []
+        prev = levels[-2] if len(levels) > 1 else (None, None)
+        if prev[1] is not None:
+            parts.append("That compares with %s in %s" % (show(prev[1]), earlier(prev[0])))
+        ya_p, ya_v = _year_ago(levels, latest_p, frequency)
+        if ya_v is not None:
+            parts.append("%s a year earlier" % show(ya_v))
+        context = (" and ".join(parts) + ".") if parts else ""
+        sup = _superlative(levels, frequency)
+        if sup:
+            context = (context + " " if context else "") + "It is " + sup + "."
+        extras = []
+        for label, values in also:
+            v = values.get(latest_p)
+            if v is not None:
+                if spec.get("change"):
+                    extras.append("%s %s on a year earlier" % (
+                        label, ("rose " if v > 0 else "fell ") + show(abs(v)) if v
+                        else "were unchanged"))
+                else:
+                    extras.append("%s was %s" % (label, show(v)))
+        if extras:
+            extra = " and ".join(extras)
+            context = (context + " " if context else "") + extra[:1].upper() + extra[1:] + "."
+        unit_label = "(%)" if pct else ""
+        columns += [{"label": ("%s %s" % (spec.get("column", "Value"), unit_label)).strip(),
+                     "num": True}]
+        cells = [[v for _, v in levels]]
+        decimals = [d]
+        for column, (_, values) in zip(columns_also, also):
+            columns.append({"label": column + (" (%)" if pct else ""), "num": True})
+            cells.append([values.get(p) for p, _ in levels])
+            decimals.append(d)
 
     else:
         return None

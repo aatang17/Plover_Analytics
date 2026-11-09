@@ -129,6 +129,23 @@ class ServedTest(unittest.TestCase):
         self.assertIsNone(self._lead("/ownership.html?c=ZZZZ"))
         self.assertIsNone(self._lead("/company.html"))
 
+    def test_the_text_a_crawler_reads_is_the_companys_not_the_markets(self):
+        # 2026-11-09: stakes.html?c=7203 served the count of every 5% report
+        # in Japan under "Latest values as text and table".
+        md = self.client.get("/ownership.md?c=7203").text
+        head = self.client.get("/api/v1/equity/ownership/company/7203").json()
+        self.assertIn("## Major shareholders of", md)
+        self.assertIn("| 1 | ", md)
+        self.assertIn("%.2f" % head["holders"][0]["ratio_pct"], md)
+        self.assertNotIn("Shareholder registers:", md)  # the market-wide summary
+        for page, heading in (("stakes", "5% shareholders of"), ("holdings", "Cross-shareholdings of"),
+                              ("governance", "Board and pay of")):
+            md = self.client.get("/%s.md?c=7203" % page).text
+            self.assertIn("## " + heading, md, page)
+        # the market view keeps its summary
+        self.assertIn("Shareholder registers:", self.client.get("/ownership.md").text)
+
+
 
 @unittest.skipUnless(_data.SEC, "data/sec.duckdb not built")
 class UsPayTest(unittest.TestCase):

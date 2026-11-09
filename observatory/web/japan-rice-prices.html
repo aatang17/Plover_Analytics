@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How have rice prices in Japan changed over the past year? · Plover Analytics</title>
+<meta name="description" content="The change in Japanese consumer prices for rice against a year earlier, from the rice index in the Statistics Bureau's national CPI, with the last twelve months and the series since 1970.">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<header class="site-header" data-section="macro" data-page="inflation"></header>
+<script src="assets/nav.js"></script>
+
+<!-- An answer page: app/answers.py writes the lead, the comparison line, the
+     table and the citation into the elements below before the page is
+     served; assets/answer.js draws the chart and fills any element the
+     server left empty. -->
+<main class="container answer" data-answer="japan-rice-prices" data-dataset="cpi-jp-items" data-series="0004"
+      data-measure="yoy" data-series-label="YoY (%)" data-y-axis="%"
+      data-file-tag="japan-rice-prices" data-default-range="10">
+  <div class="metric-card">
+    <div class="metric-card-head">
+      <h1>How have rice prices in Japan changed over the past year?</h1>
+      <span class="metric-asof" id="page-asof"></span>
+    </div>
+    <p class="answer-lead" id="answer-lead"></p>
+    <p class="answer-context" id="answer-context"></p>
+    <p class="answer-asof" id="answer-asof"></p>
+    <details class="calc" id="answer-calc"></details>
+    <p class="answer-links" id="answer-links"></p>
+  </div>
+
+  <section aria-labelledby="h-def">
+    <h2 id="h-def">Definition</h2>
+    <div class="prose">
+      <p>The rice index is the rice group of Japan's national Consumer Price Index, compiled by the Statistics Bureau of Japan from the prices households pay in shops. It is published monthly, in the second half of the following month, on a 2025 = 100 base.</p>
+      <p>The rate quoted here compares the rice index with the same month a year earlier. Headline CPI, all items, is shown beside it for comparison.</p>
+      <p>Index levels are published to one decimal place. Rates on this page are calculated from those published levels, so a rate can differ from the Bureau's own published rate by up to 0.1 percentage points; the method is stated under Show calculation.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-hist">
+    <h2 id="h-hist">Rice in the CPI, Year over Year</h2>
+    <div class="chart-panel">
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Date range" id="range-seg">
+        <button type="button" data-range="5">5Y</button>
+        <button type="button" data-range="10">10Y</button>
+        <button type="button" data-range="20">20Y</button>
+        <button type="button" data-range="max">Max</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="answer-png">Download PNG</button>
+      <button type="button" class="btn" id="answer-csv">Download CSV</button>
+    </div>
+    <div class="chart" id="answer-chart"><div class="skeleton" style="width:100%;height:100%"></div></div>
+    <p class="source-line" id="answer-source"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-latest">
+    <h2 id="h-latest">Latest Readings</h2>
+    <div class="answer-table" id="answer-table"></div>
+  </section>
+
+  <section aria-labelledby="h-cite">
+    <h2 id="h-cite">How to Cite</h2>
+    <p class="answer-cite" id="answer-cite"></p>
+    <p class="source-line">The full series, every earlier release and a CSV with its sources in the
+      header are on the <a href="cpi.html">data page</a>. Values can be read as they stood on any
+      earlier date through the <a href="api.html">API</a>; guidance for quoting is in
+      <a href="llms.txt">llms.txt</a>.</p>
+  </section>
+
+  <section aria-label="Data source and provenance" class="prov">
+    <div id="prov-card"></div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="inner">
+    Source: Statistics Bureau of Japan.
+    <a href="methodology.html">Methodology</a>
+  </div>
+</footer>
+
+<script src="assets/echarts.min.js"></script>
+<script src="assets/format.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/answer.js"></script>
+</body>
+</html>

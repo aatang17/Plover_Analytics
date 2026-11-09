@@ -50,6 +50,9 @@ FALLBACK_HEADLINES = {
     "margin-jp": ["customer.purchases.value", "customer.sales.value"],
 }
 
+# Units whose values are already rates or ratios.
+_RATE_UNITS = ("percent", "pct", "%", "ratio", "births per woman")
+
 _TRADE_PARTNER = re.compile(r"\u2014 (?:exports to|imports from) (.+?) \((?:value|quantity)\)\s*$")
 
 
@@ -110,8 +113,14 @@ def _column_decimals(values, curve=False):
     present = [abs(float(v)) for v in values if v is not None]
     if not present:
         return 1
+    # The precision the values were published to, where they show one: a
+    # ratio filed as 1.19 is not 1.2. Values with more places than any
+    # publisher prints fall back to the rule below.
     if max(present) >= 1000:
         return 0
+    for places in range(4):
+        if all(abs(v - round(v, places)) < 1e-9 for v in present):
+            return max(places, 3 if curve else 1)
     return 3 if curve else 1
 
 
@@ -305,6 +314,11 @@ def _macro_block(dataset, default_flow):
         cells.append([values.get(s["series_id"], {}).get(p) for p in periods])
     calc = None
     yoy = measures.get("yoy")
+    # A change in percent of a rate or a ratio is not a figure anyone uses:
+    # the unemployment rate going from 2.6% to 2.4% is not "−7.7%", and a
+    # published growth rate's own growth is noise.
+    if heads and heads[0][0].get("unit") in _RATE_UNITS:
+        yoy = None
     if yoy and frequency in ("monthly", "quarterly", "semiannual", "annual"):
         head_series, head_label = heads[0]
         points = dict(api._measure_points(values.get(head_series["series_id"], {}), "yoy"))
@@ -373,7 +387,8 @@ _CREDIT = ("Source: company filings on EDINET "
 def _table(caption, columns, records, fields, decimals=None):
     """A small table from a list of dicts. `fields` are (key, kind) pairs where
     kind is 'raw' (as filed), 'text' (a slug made readable), 'int', 'pct',
-    'yen_bn' or 'num'."""
+    'pct2' (two decimals, as a register prints them), 'pp' (a signed change
+    in percentage points), 'yen_bn', 'yen_mn' or 'num'."""
     if not records:
         return None
     cols = [{"label": c, "num": kind not in ("text", "raw")}
@@ -391,8 +406,14 @@ def _table(caption, columns, records, fields, decimals=None):
                 row.append(fmt_int(v))
             elif kind == "pct":
                 row.append(fmt(v, 1))
+            elif kind == "pct2":
+                row.append(fmt(v, 2))
+            elif kind == "pp":
+                row.append(("+" if v is not None and float(v) > 0 else "") + fmt(v, 2))
             elif kind == "yen_bn":
                 row.append(fmt(None if v is None else float(v) / 1e9, 1))
+            elif kind == "yen_mn":
+                row.append(fmt(None if v is None else float(v) / 1e6, 0))
             else:
                 row.append(fmt(v, decimals if decimals is not None else 1))
         rows.append(row)
