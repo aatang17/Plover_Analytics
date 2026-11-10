@@ -160,6 +160,55 @@ class TripTest(unittest.TestCase):
         self.assertEqual(dwell["visitor"], first["visitor"])
         self.assertNotIn("rejoined", dwell)
 
+    def test_a_data_centre_view_never_takes_a_carriers_report(self):
+        # 2026-11-10: OVH swept the site, then a SaskTel reader's ping on / was filed with the sweep.
+        places = {"198.51.100.90": ("CA", "OVH SAS"),
+                  "198.51.100.91": ("CA", "Saskatchewan Telecommunications")}
+        with self.place(places):
+            visits.observe(scope("/trip-dc.html", "198.51.100.90"), 200)
+            visits.record_dwell(scope("/api/v1/visit/ping", "198.51.100.91"), "/trip-dc.html", 1, "dc1")
+        view, dwell = [e for e in _events() if e.get("path") == "/trip-dc.html"]
+        self.assertNotEqual(dwell["visitor"], view["visitor"])
+        self.assertNotIn("rejoined", dwell)
+
+    def test_a_report_on_the_same_data_centre_still_joins(self):
+        # A reader on a VPN whose exit address changes stays one trip.
+        places = {"198.51.100.92": ("CA", "OVH SAS"), "198.51.100.93": ("CA", "OVH SAS")}
+        with self.place(places):
+            visits.observe(scope("/trip-vpn.html", "198.51.100.92"), 200)
+            visits.record_dwell(scope("/api/v1/visit/ping", "198.51.100.93"), "/trip-vpn.html", 8, "vpn1")
+        view, dwell = [e for e in _events() if e.get("path") == "/trip-vpn.html"]
+        self.assertEqual(dwell["visitor"], view["visitor"])
+
+    def test_a_fast_crawl_is_listed_with_the_machines(self):
+        # The 10 Nov log as written: pages a second apart, plus a reader's report filed with them.
+        start = datetime.datetime.utcnow().replace(microsecond=0) - datetime.timedelta(minutes=5)
+        for i in range(12):
+            at = (start + datetime.timedelta(seconds=i // 2)).isoformat() + "Z"
+            visits._record({"at": at, "visitor": "crawl-1", "path": "/trip-crawl-%d.html" % i,
+                            "kind": "page", "status": 200, "ref": None, "internal": False,
+                            "country": "CA", "network": "OVH SAS", "bot": False})
+        visits._record({"at": (start + datetime.timedelta(minutes=4)).isoformat() + "Z",
+                        "visitor": "crawl-1", "kind": "dwell", "path": "/trip-crawl-0.html",
+                        "seconds": 1, "bot": False, "country": "CA",
+                        "network": "Saskatchewan Telecommunications", "rejoined": True})
+        # A person clicking quickly through twelve pages over two minutes is still a person.
+        for i in range(12):
+            at = (start + datetime.timedelta(seconds=10 * i)).isoformat() + "Z"
+            visits._record({"at": at, "visitor": "quick-1", "path": "/trip-quick-%d.html" % i,
+                            "kind": "page", "status": 200, "ref": None, "internal": False,
+                            "country": "CA", "network": "Saskatchewan Telecommunications", "bot": False})
+        visits._record({"at": (start + datetime.timedelta(minutes=2)).isoformat() + "Z",
+                        "visitor": "quick-1", "kind": "dwell", "path": "/trip-quick-11.html",
+                        "seconds": 20, "bot": False})
+        recent = visit_trips.recent()
+        listed = [r["visitor"] for r in recent["readers"]]
+        self.assertNotIn("crawl-1", listed)
+        self.assertIn("quick-1", listed)
+        crawl = [m for m in recent["machines"] if m["name"] == visit_trips.CRAWL_NAME]
+        self.assertEqual(len(crawl), 1)
+        self.assertEqual(crawl[0]["visitors"], 1)
+
     def test_the_trip_lists_pages_in_order_with_their_times(self):
         places = {"203.0.113.40": ("JP", "Saba Capital Management, L.P.")}
         with self.place(places):

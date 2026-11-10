@@ -31,6 +31,12 @@ MAX_VISITORS = 100
 MAX_STEPS = 60
 # Bytes read from the end of a log file at a time, walking back to the window.
 _CHUNK = 256 * 1024
+# Pages no person opens this fast: CRAWL_PAGES reads within CRAWL_SECONDS is a
+# program walking the links. (2026-11-10: 85 pages in 11 seconds from OVH, in
+# the order of the site's menu, looked like a browser and was listed as a reader.)
+CRAWL_PAGES = 10
+CRAWL_SECONDS = 10
+CRAWL_NAME = "Fast crawl: 10 or more pages in 10 seconds"
 
 # Machines, named by what they are. A link preview is a site fetching the page
 # to draw the card when somebody pastes the link into a post or a message: it
@@ -160,6 +166,15 @@ def _is_read(event):
     return not (event.get("path") or "").lower().endswith(visits.ASSET_SUFFIXES)
 
 
+def _crawled(events):
+    """True when any CRAWL_PAGES page reads in a row fall within CRAWL_SECONDS."""
+    times = [visits._epoch(e["at"]) for e in events if _is_read(e)]
+    for i in range(CRAWL_PAGES - 1, len(times)):
+        if times[i] - times[i - CRAWL_PAGES + 1] <= CRAWL_SECONDS:
+            return True
+    return False
+
+
 def _trip(events):
     """A reader's page reads in order, each with the time it stayed open."""
     steps = []
@@ -234,7 +249,9 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
         named = visit_orgs.kind(network) in (visit_orgs.ORGANISATION, visit_orgs.SECURITY)
         # The .md copies of pages are read by scripts and assistants, not people.
         opened = any(_is_read(e) and not (e.get("path") or "").endswith(".md") for e in events)
-        if confirmed or (not robot and named and opened):
+        # A signed-in account stays listed: it was opened from its own inbox.
+        crawl = not member and _crawled(events)
+        if not crawl and (confirmed or (not robot and named and opened)):
             steps = _trip(events)
             reads = [s for s in steps if not s.get("asked")]
             if not reads:
@@ -280,7 +297,9 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
             continue
         name = _machine_name(next((e for e in events if e.get("agent")), events[0]), network)
         if name is None:
-            if robot:
+            if crawl:
+                name = CRAWL_NAME
+            elif robot:
                 name = "Other robot on " + (visit_orgs.label(network) or "an unplaced network")
             elif visit_orgs.kind(network) == visit_orgs.HOSTING:
                 name = "Unconfirmed: from a data centre or VPN"

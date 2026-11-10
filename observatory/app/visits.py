@@ -359,7 +359,12 @@ def _rejoin(visitor, path, country, network, day):
     after N seconds) belongs to. Usually the sender; but when the sender has
     opened no page in the last half hour, the most recent view of the same
     page, from the same country, that no report has claimed yet — the same
-    network preferred. Nothing matching: the sender, as before."""
+    network preferred. Nothing matching: the sender, as before.
+
+    A view from a data centre is never given another network's report: a
+    phone moves between home and mobile networks, not into a server farm.
+    (2026-11-10: a reader's ping on a Canadian carrier was filed with a
+    scraper's 85-page sweep from OVH, which then showed as that reader.)"""
     now = time.time()
     with _LOCK:
         held = _ALIASES.get(visitor)
@@ -374,7 +379,8 @@ def _rejoin(visitor, path, country, network, day):
                 if entry[2] == path:
                     entry[5] = True
             elif (not own and entry[2] == path and not entry[5] and country
-                  and entry[3] == country):
+                  and entry[3] == country
+                  and (entry[4] == network or not is_hosting(entry[4]))):
                 if found is None or (entry[4] == network and found[4] != network):
                     found = entry
         if own or found is None:
