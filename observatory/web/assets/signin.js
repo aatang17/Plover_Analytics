@@ -37,6 +37,8 @@ function safeReturnTo(raw) {
 const params = new URLSearchParams(location.search);
 const token = (params.get("token") || "").trim();
 const returnTo = safeReturnTo(params.get("returnTo"));
+// Sent by a company page's Follow button (co-head.js): say what the account is for.
+const following = /[?&]follow=1(&|#|$)/.test(returnTo);
 
 function render(html) { card.innerHTML = html; }
 
@@ -53,8 +55,12 @@ function field(value, error) {
     (inviteOnly
       ? '<p class="auth-hint">Accounts are by invitation for now. Every answer still shows its ' +
         "start without one.</p>"
-      : '<p class="auth-hint">A free account shows the full answer to every question: the chart, ' +
-        "the table and how each figure was worked out.</p>");
+      : following
+        ? '<p class="auth-hint">A free account keeps a Watchlist of the companies you follow: each ' +
+          "one's next results date, its share price this year and recent insider trades. You come " +
+          "back to the company page already following it.</p>"
+        : '<p class="auth-hint">A free account shows the full answer to every question: the chart, ' +
+          "the table and how each figure was worked out.</p>");
 }
 
 function askState(value, error) {
