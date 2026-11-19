@@ -222,12 +222,19 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
     cutoff = (now - datetime.timedelta(hours=hours)).isoformat(timespec="seconds") + "Z"
 
     by_visitor, drawn = {}, set()
+    # A report the server failed to file with its page view is put back with
+    # it here (visits.rejoined_visitor), so the reader is listed once.
+    rejoin = visits.rejoin_state()
     for event in _events(cutoff):
         if event.get("kind") == "browser":
             drawn.add(event.get("visitor"))
             continue
         visitor = event.get("visitor")
         if visitor:
+            joined = visits.rejoined_visitor(rejoin, event, visits._epoch(event["at"]))
+            if joined != visitor:
+                event = dict(event, visitor=joined, rejoined=True)
+                visitor = joined
             by_visitor.setdefault(visitor, []).append(event)
 
     with visits._LOCK:

@@ -354,7 +354,7 @@ def _member_domain(headers):
         return None
 
 
-def _rejoin(visitor, path, country, network, day):
+def _rejoin(visitor, path, country, network, day, claim=True):
     """The visitor whose page view a page's own report (still here, closed
     after N seconds) belongs to. Usually the sender; but when the sender has
     opened no page in the last half hour, the most recent view of the same
@@ -364,7 +364,14 @@ def _rejoin(visitor, path, country, network, day):
     A view from a data centre is never given another network's report: a
     phone moves between home and mobile networks, not into a server farm.
     (2026-11-10: a reader's ping on a Canadian carrier was filed with a
-    scraper's 85-page sweep from OVH, which then showed as that reader.)"""
+    scraper's 85-page sweep from OVH, which then showed as that reader.)
+
+    `claim` is False for the keep-alive. The page sends one the moment it
+    opens, from the address it opened on, and that ping used to mark the view
+    as claimed; a phone whose address changed before its five-second report
+    then had that report turned away, and the reader vanished from Latest
+    Visits (7 readers 5-18 Nov 2026; one on AviationAI from Google, 18 Nov).
+    Only a page report claims a view now."""
     now = time.time()
     with _LOCK:
         held = _ALIASES.get(visitor)
@@ -376,7 +383,7 @@ def _rejoin(visitor, path, country, network, day):
                 break
             if entry[1] == visitor:
                 own = True
-                if entry[2] == path:
+                if entry[2] == path and claim:
                     entry[5] = True
             elif (not own and entry[2] == path and not entry[5] and country
                   and entry[3] == country
@@ -392,6 +399,58 @@ def _rejoin(visitor, path, country, network, day):
         while len(_ALIASES) > ALIASES_MAX:
             _ALIASES.pop(next(iter(_ALIASES)))
         return found[1]
+
+
+def rejoin_state():
+    """Memory for rejoined_visitor over one run through the log, in time order."""
+    return {"views": collections.deque(), "seen": set(), "alias": {}}
+
+
+def rejoined_visitor(state, event, at_epoch):
+    """The visitor a logged line belongs to, with a report that _rejoin missed
+    put back with its page view. Lines logged before 2026-11-18 lost it
+    (see `claim` in _rejoin), so the repair is made when the log is read, for
+    every figure on the Traffic page, past days included.
+
+    _rejoin's rules, made stricter because the claiming ping was not logged: a
+    report from a visitor who opened no page that day joins the latest view of
+    the same page, from the same country, in the half hour before, whose own
+    visitor never reported on that page and that no other report took. A data
+    centre's view only takes a report from that same network."""
+    visitor = event.get("visitor")
+    visitor = state["alias"].get(visitor, visitor)
+    kind = event.get("kind")
+    path = event.get("path")
+    if kind == "page":
+        if not event.get("bot") and (event.get("status") or 0) < 400:
+            views = state["views"]
+            while views and at_epoch - views[0][0] > REJOIN_SECONDS:
+                views.popleft()
+            views.append([at_epoch, visitor, path, event.get("country"),
+                          event.get("network"), False])
+            state["seen"].add(visitor)
+        return visitor
+    if kind != "dwell" or event.get("rejoined"):
+        return visitor
+    if visitor in state["seen"]:
+        for entry in state["views"]:
+            if entry[1] == visitor and entry[2] == path:
+                entry[5] = True  # its own view reported: nobody else's report takes it
+        return visitor
+    country, network = event.get("country"), event.get("network")
+    found = None
+    for entry in reversed(state["views"]):
+        if at_epoch - entry[0] > REJOIN_SECONDS:
+            break
+        if (entry[2] == path and not entry[5] and country and entry[3] == country
+                and (entry[4] == network or not is_hosting(entry[4]))):
+            if found is None or (entry[4] == network and found[4] != network):
+                found = entry
+    if found is None:
+        return visitor
+    found[5] = True
+    state["alias"][event.get("visitor")] = found[1]
+    return found[1]
 
 
 def consent_value(vid, since):
@@ -552,7 +611,8 @@ def heartbeat(scope, path):
     country, network = geoip.lookup(ip)
     day = now.strftime("%Y-%m-%d")
     path = (path or "/")[:MAX_PATH_CHARS]
-    visitor = _rejoin(identify(ip, user_agent, headers, day)[0], path, country, network, day)
+    visitor = _rejoin(identify(ip, user_agent, headers, day)[0], path, country, network, day,
+                      claim=False)
     _touch_live(visitor, path, country, network, scripted=True, member=_signed_in(headers))
 
 
@@ -1119,6 +1179,9 @@ def _new_day():
         # probe: visitor -> [script reported, network, signed in].
         "raw": {}, "probe": {}, "dirty": False, "settled": None,
         "first": None, "last": None,
+        # Reports put back with their page views as the day is read
+        # (rejoined_visitor); let go once the day is settled.
+        "rejoin": rejoin_state(),
         # Publication pages for the Writer Desk (_fold_publication). Kept apart
         # from the reader totals, which _settle rebuilds and these do not join.
         "pub_views": [], "pub_drawn": set(), "pub_dwell": {},
@@ -1169,6 +1232,11 @@ def _fold(d, event, at):
     visitor = event.get("visitor")
     if not visitor:
         return  # nothing to test, so never shown as a reader
+    if d.get("rejoin") is not None:
+        joined = rejoined_visitor(d["rejoin"], event, _epoch(at))
+        if joined != visitor:
+            event = dict(event, visitor=joined, rejoined=True)
+            visitor = joined
     _fold_publication(d, event, at)
     if (event.get("kind") == "page" and (event.get("status") or 0) < 400
             and visit_orgs.kind(event.get("network")) in (visit_orgs.ORGANISATION, visit_orgs.SECURITY)
@@ -1251,7 +1319,7 @@ def _settle(d, final):
                               if v not in readers and scripted and is_hosting(network))
     d["dirty"] = False
     if final:
-        d["settled"], d["raw"] = readers, {}
+        d["settled"], d["raw"], d["rejoin"] = readers, {}, None
 
 
 def _fold_reader(d, event, at):

@@ -180,6 +180,60 @@ class TripTest(unittest.TestCase):
         view, dwell = [e for e in _events() if e.get("path") == "/trip-vpn.html"]
         self.assertEqual(dwell["visitor"], view["visitor"])
 
+    def test_the_opening_ping_does_not_turn_away_a_report_from_a_new_address(self):
+        # 2026-11-18: a reader from Google on AviationAI. The page's first
+        # keep-alive left over the address it opened on; its five-second report
+        # over another, and was filed as a second visitor who never opened a page.
+        places = {"203.0.113.60": ("US", "AviationAI"), "203.0.113.61": ("US", "AviationAI")}
+        with self.place(places):
+            visits.observe(scope("/trip-ping.html", "203.0.113.60"), 200)
+            visits.heartbeat(scope("/api/v1/visit/ping", "203.0.113.60"), "/trip-ping.html")
+            visits.record_dwell(scope("/api/v1/visit/ping", "203.0.113.61"),
+                                "/trip-ping.html", 5, "ping1", early=True)
+        view, dwell = [e for e in _events() if e.get("path") == "/trip-ping.html"]
+        self.assertEqual(dwell["visitor"], view["visitor"])
+        row = [r for r in visit_trips.recent()["readers"] if r["visitor"] == view["visitor"]][0]
+        self.assertTrue(row["confirmed"])
+
+    def test_a_report_logged_apart_is_put_back_when_the_log_is_read(self):
+        # Lines written before the fix: the view and its report under two visitors.
+        _forget()
+        now = datetime.datetime.utcnow().replace(microsecond=0)
+        stamp = lambda s: (now + datetime.timedelta(seconds=s)).isoformat() + "Z"
+        base = {"country": "US", "network": "AviationAI", "bot": False}
+        visits._record(dict(base, at=stamp(0), visitor="oldview00001", kind="page", status=200,
+                            path="/trip-old.html", ref="www.google.com", internal=False))
+        visits._record(dict(base, at=stamp(6), visitor="oldreport001", kind="dwell",
+                            path="/trip-old.html", seconds=5, early=True, view="old1"))
+        rows = visit_trips.recent()["readers"]
+        self.assertEqual([r["visitor"] for r in rows if r["steps"][0]["path"] == "/trip-old.html"],
+                         ["oldview00001"])
+        self.assertNotIn("oldreport001", [r["visitor"] for r in rows])
+        visits._reset_folds()
+        pages = [p["key"] for p in visits.summary(7, top=500)["top_pages"]]
+        self.assertIn("/trip-old.html", pages, "the day's totals count the reader too")
+
+    def test_the_repair_keeps_the_live_rules(self):
+        state = visits.rejoin_state()
+        line = lambda who, kind, path, country, network, **more: dict(
+            visitor=who, kind=kind, path=path, country=country, network=network, status=200, **more)
+        join = lambda event, t: visits.rejoined_visitor(state, event, t)
+        # A view whose own visitor reported keeps it; another report is not given it.
+        join(line("a", "page", "/p", "JP", "KDDI CORPORATION"), 0)
+        join(line("a", "dwell", "/p", "JP", "KDDI CORPORATION"), 5)
+        self.assertEqual(join(line("b", "dwell", "/p", "JP", "KDDI CORPORATION"), 6), "b")
+        # Another country, a data centre's view, or more than half an hour: no.
+        join(line("c", "page", "/q", "JP", "KDDI CORPORATION"), 10)
+        self.assertEqual(join(line("d", "dwell", "/q", "US", "Comcast Cable Communications, LLC"), 12), "d")
+        join(line("e", "page", "/r", "CA", "OVH SAS"), 20)
+        self.assertEqual(join(line("f", "dwell", "/r", "CA", "Saskatchewan Telecommunications"), 22), "f")
+        join(line("g", "page", "/s", "GB", "BT"), 30)
+        self.assertEqual(join(line("h", "dwell", "/s", "GB", "BT"), 30 + visits.REJOIN_SECONDS + 1), "h")
+        # The same page, same country, nobody's yet: joined, and its later reports follow.
+        join(line("i", "page", "/t", "JP", "SoftBank Corp."), 2000)
+        self.assertEqual(join(line("j", "dwell", "/t", "JP", "NTT DOCOMO, INC."), 2005), "i")
+        self.assertEqual(join(line("j", "dwell", "/t", "JP", "NTT DOCOMO, INC."), 2060), "i")
+
     def test_a_fast_crawl_is_listed_with_the_machines(self):
         # The 10 Nov log as written: pages a second apart, plus a reader's report filed with them.
         start = datetime.datetime.utcnow().replace(microsecond=0) - datetime.timedelta(minutes=5)
