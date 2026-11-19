@@ -19,6 +19,7 @@ var ADMIN_NAV = [
     { id: "vintages", label: "Release History", hash: "#vintages", perm: "operations" },
     { id: "traffic", label: "Traffic", hash: "#traffic", perm: "operations" },
     { id: "members", label: "Members", hash: "#members", perm: "team" },
+    { id: "demos", label: "Demo Accounts", hash: "#demos", perm: "team" },
   ]},
   { group: "Research", pages: [
     // articles live in the Writer Desk now (write.html), with every publication's
@@ -311,6 +312,7 @@ function route() {
   else if (view === "traffic") viewTraffic(target, arg, arg2);
   else if (view === "audit") viewAudit(target);
   else if (view === "members") viewMembers(target);
+  else if (view === "demos") viewDemos(target);
   else if (view === "queue") viewQueue(target);
   else if (view === "companies") viewUsCompanies(target, arg, arg2);
   else if (view === "parties") {

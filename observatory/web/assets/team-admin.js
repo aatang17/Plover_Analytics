@@ -402,3 +402,128 @@ function renderSetup(token) {
     showLoginAlert(err.message);
   });
 }
+
+/* ---------- Demo Accounts ---------- */
+
+/* A tester's Your Plover account with more AI questions for a month
+   (app/demo_accounts.py). The sign-in link is emailed when the server can,
+   and always shown, so it can be sent by hand as well. */
+function demoLinkBox(res) {
+  var d = res.demo, hours = res.expires_hours;
+  var head = res.emailed
+    ? "Sign-in link emailed to " + escapeHtml(d.email) + "."
+    : "Demo ready for " + escapeHtml(d.email) + ". Send them this sign-in link.";
+  return '<div class="admin-alert setup-link" role="status"><span class="head">' + head + "</span> " +
+    "It works once, for " + hours + " hours, and opens Your Plover. The demo runs until " +
+    escapeHtml(d.ends_at.slice(0, 10)) + "." +
+    (res.emailed ? " You can also copy the link and send it yourself:" : "") +
+    '<div class="setup-link-row"><input type="text" readonly value="' + escapeHtml(res.signin_url) +
+    '" aria-label="Sign-in link"><button type="button" class="btn" data-copy>Copy Link</button></div></div>';
+}
+
+function viewDemos(target, flash) {
+  target.innerHTML = '<div class="admin-loading">Loading demo accounts…</div>';
+  api("/demo-accounts").then(function (data) {
+    var head = '<div class="admin-page-head"><h1>Demo Accounts</h1>' +
+      '<p class="admin-page-sub">Give a tester a Your Plover account with ' +
+      (data.tries || 100) + " AI questions a day instead of the usual allowance, for " +
+      (data.days || 30) + " days. After that it stays theirs as a normal free account.</p></div>";
+    if (!data.enabled) {
+      target.innerHTML = head + '<p class="table-empty">Reader accounts are switched off on this ' +
+        "server, so demo accounts cannot be made here.</p>";
+      return;
+    }
+    function when(iso) { return iso ? escapeHtml(iso.slice(0, 16).replace("T", " ")) : MISSING; }
+    var STATUS = {
+      active: function (d) {
+        return '<span class="badge badge-ok">Active · ' + d.days_left + " day" +
+          (d.days_left === 1 ? "" : "s") + " left</span>";
+      },
+      expired: function () { return '<span class="badge badge-neutral">Finished</span>'; },
+      ended: function () { return '<span class="badge badge-neutral">Ended Early</span>'; },
+    };
+    var active = data.demos.filter(function (d) { return d.status === "active"; }).length;
+    var rows = data.demos.map(function (d) {
+      var acts = d.status === "active"
+        ? '<button type="button" class="btn" data-link="' + d.id + '">New Sign-in Link</button> ' +
+          '<button type="button" class="btn" data-end="' + d.id + '">End Demo</button>'
+        : "";
+      return "<tr><td>" + escapeHtml(d.email) + "</td>" +
+        "<td>" + (d.note ? escapeHtml(d.note) : MISSING) + "</td>" +
+        '<td class="num">' + when(d.created_at) + "</td>" +
+        '<td class="num">' + when(d.ends_at) + "</td>" +
+        '<td class="num"' + (d.last_seen ? "" : ' title="Not signed in since the demo was made"') + ">" +
+        when(d.last_seen) + "</td>" +
+        "<td>" + STATUS[d.status](d) + "</td>" +
+        '<td class="row-acts">' + acts + "</td></tr>";
+    }).join("");
+    target.innerHTML = head + (flash || "") +
+      '<div class="admin-section">New Demo Account</div>' +
+      '<form id="add-demo" class="team-form"><div class="form-grid">' +
+      '<div class="field"><label for="nd-email">Tester’s Email</label>' +
+      '<input type="text" id="nd-email" inputmode="email" autocomplete="off" required ' +
+      'placeholder="name@company.com"></div>' +
+      '<div class="field"><label for="nd-note">Who They Are (optional)</label>' +
+      '<input type="text" id="nd-note" maxlength="200" placeholder="e.g. PM at a Tokyo fund"></div>' +
+      "</div>" +
+      '<div id="nd-alert"></div>' +
+      '<div class="edit-acts">' +
+      '<button type="submit" class="btn btn-primary" id="nd-btn" style="margin-top:0">Create Demo Account</button>' +
+      '<span class="hint">' +
+      (data.email_delivery ? "We email them a sign-in link, and show it here too."
+        : "Email is not set up on this server: you will get a link to send yourself.") + "</span></div>" +
+      "</form>" +
+      '<div class="admin-section">Demo Accounts <span class="note">' + active + " active of " +
+      data.demos.length + "</span></div>" +
+      (data.demos.length
+        ? '<div class="table-wrap"><table class="data team-table" data-no-enhance><thead><tr><th>Email</th>' +
+          '<th>Who</th><th class="num">Made (UTC)</th><th class="num">Ends (UTC)</th>' +
+          '<th class="num">Last Signed In (UTC)</th><th>Status</th><th></th></tr></thead><tbody>' +
+          rows + "</tbody></table></div>"
+        : '<p class="table-empty">No demo accounts yet. Make the first one above.</p>');
+    wireCopy(target);
+
+    function fail(box, err) {
+      box.innerHTML = '<div class="login-alert" role="alert">' + escapeHtml(err.message) + "</div>";
+    }
+    var alertBox = document.getElementById("nd-alert");
+    document.getElementById("add-demo").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var btn = document.getElementById("nd-btn");
+      btn.disabled = true;
+      btn.textContent = "Creating…";
+      post("/demo-accounts", {
+        email: document.getElementById("nd-email").value,
+        note: document.getElementById("nd-note").value,
+      }).then(function (res) {
+        viewDemos(target, demoLinkBox(res));
+      }).catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = "Create Demo Account";
+        fail(alertBox, err);
+      });
+    });
+    function each(attr, fn) {
+      var btns = target.querySelectorAll("[" + attr + "]");
+      for (var i = 0; i < btns.length; i++) btns[i].addEventListener("click", fn);
+    }
+    each("data-link", function (e) {
+      var btn = e.currentTarget;
+      btn.disabled = true;
+      post("/demo-accounts/" + btn.getAttribute("data-link") + "/link").then(function (res) {
+        viewDemos(target, demoLinkBox(res));
+      }).catch(function (err) { btn.disabled = false; fail(alertBox, err); });
+    });
+    each("data-end", function (e) {
+      var btn = e.currentTarget;
+      btn.disabled = true;
+      post("/demo-accounts/" + btn.getAttribute("data-end") + "/end").then(function (res) {
+        viewDemos(target, '<div class="admin-alert" role="status"><span class="head">Demo ended.</span> ' +
+          escapeHtml(res.demo.email) + " is back to a normal free account. To give them another month, " +
+          "create a new demo for the same address.</div>");
+      }).catch(function (err) { btn.disabled = false; fail(alertBox, err); });
+    });
+  }).catch(function (err) {
+    target.innerHTML = loadFailed("the demo accounts", err);
+  });
+}

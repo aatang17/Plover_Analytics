@@ -16,6 +16,10 @@ Two limits, both server settings the owner sets:
     sign-ups cannot run up an unbounded bill. When the day's are gone, the
     message says to come back tomorrow or add a key.
 
+A demo account (app/demo_accounts.py, made in the Admin Console) gets
+DEMO_TRIES (default 100) a day for its month instead, and the site-wide cap
+counts its questions but never refuses them.
+
 Demand is kept for the charging decision: ia_free_uses.used counts every
 question a person has had on the house, for good; ia_free_account_days and
 ia_free_days count each day's.
@@ -30,9 +34,11 @@ A try is taken before the work starts and given back if the work fails, so
 two clicks at once cannot both use the last one, and an error costs nothing.
 """
 import datetime
+import logging
 import os
 
 from . import codex, gateway, store
+from .. import demo_accounts
 
 _KEY_ENV = (("deepseek", "DEEPSEEK_API_KEY"), ("openai", "OPENAI_API_KEY"),
             ("anthropic", "ANTHROPIC_API_KEY"))
@@ -56,6 +62,21 @@ def limit():
 
 def per_day():
     return _int_env("FREE_TRIES_PER_DAY", 200)
+
+
+def _allowance(account_id):
+    """(questions a day, the running demo or None). A demo account
+    (app/demo_accounts.py) gets DEMO_TRIES a day while its month runs, and the
+    site-wide cap does not stop it."""
+    try:
+        demo = demo_accounts.demo_info(account_id)
+    except Exception:                                        # noqa: BLE001
+        # a broken demo lookup must not stop anyone's questions
+        logging.getLogger(__name__).exception("demo account lookup failed")
+        demo = None
+    if demo is not None:
+        return demo["tries"], demo
+    return limit(), None
 
 
 def house():
@@ -101,10 +122,11 @@ def used_ever(account_id):
 
 def status(account_id):
     """What the page shows: how many of today's questions on Plover this person has left."""
-    on = limit() > 0 and house() is not None
+    cap, demo = _allowance(account_id)
+    on = cap > 0 and house() is not None
     n = used(account_id)
-    return {"on": on, "limit": limit(), "per": "day", "used": n, "left": max(0, limit() - n) if on else 0,
-            "ever": used_ever(account_id)}
+    return {"on": on, "limit": cap, "per": "day", "used": n, "left": max(0, cap - n) if on else 0,
+            "ever": used_ever(account_id), "demo": demo}
 
 
 class NoTries(Exception):
@@ -115,7 +137,8 @@ def take(account_id):
     """Use one free try. Returns the server's key for this one piece of work;
     raises NoTries, worded for the reader, when none is left."""
     key = house()
-    if limit() <= 0 or key is None:
+    cap, demo = _allowance(account_id)
+    if cap <= 0 or key is None:
         raise NoTries("Answers run on your own AI key. Add one in the AI Key section, then try again.")
     db, t, day = store.conn(), store.now(), _today()
     with store._lock:
@@ -125,12 +148,13 @@ def take(account_id):
                    (account_id, day))
         db.execute("INSERT OR IGNORE INTO ia_free_days (day, used) VALUES (?, 0)", (day,))
         mine = db.execute("UPDATE ia_free_account_days SET used = used + 1 "
-                          "WHERE account_id = ? AND day = ? AND used < ?", (account_id, day, limit())).rowcount
+                          "WHERE account_id = ? AND day = ? AND used < ?", (account_id, day, cap)).rowcount
         if not mine:
             db.commit()
-            raise NoTries(USED_UP % limit())
+            raise NoTries(USED_UP % cap)
+        # a demo is counted in the day's total but never refused by it
         everyone = db.execute("UPDATE ia_free_days SET used = used + 1 WHERE day = ? AND used < ?",
-                              (day, per_day())).rowcount
+                              (day, 2 ** 62 if demo else per_day())).rowcount
         if not everyone:
             db.rollback()
             raise NoTries(DAY_FULL)

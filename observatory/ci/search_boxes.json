@@ -327,6 +327,7 @@
     "my.html#ov-q": "The question box on Your Plover's Overview, for a signed-in reader. It sends its question into a new chat through the same send() as the chat box on the same page (my.html#my-q), so it answers exactly as that box does; the reader check cannot sign in."
   },
   "not_searches": {
+    "team-admin.js#nd-note": "Admin Demo Accounts: an optional note on who the tester is; it does not search.",
     "assistant.js#l-name": "A name for a new list.",
     "assistant.js#class=st-name": "Studies: a short name the query uses for a series (e.g. japan).",
     "assistant.js#class=st-ref": "Studies: the dataset:code of a series, typed or set by the Analyst; it does not search.",

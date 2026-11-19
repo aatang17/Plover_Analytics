@@ -31,7 +31,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from . import accounts, db, filer_labels, mailer, parties, registry, seo, staff, task_log, vintages, visit_trips, visits
+from . import accounts, db, demo_accounts, filer_labels, mailer, parties, registry, seo, staff, task_log, vintages, visit_trips, visits
 from .api import ADAPTERS, health
 from .equity_api import DB_PATH as EQUITY_DB_PATH
 
@@ -773,6 +773,87 @@ def member_list(request: Request):
         "members": [{"email": r["email"], "signed_up": _iso(r["created_at"]),
                      "last_seen": _iso(r["last_seen_at"]), "source": r["source"]} for r in rows],
     }
+
+
+# --- demo accounts --------------------------------------------------------------
+#
+# A tester's Your Plover account with more AI questions for 30 days
+# (app/demo_accounts.py). The sign-in link is emailed when a mailbox is set up
+# and always handed back too, so it can be sent by hand.
+
+class NewDemo(BaseModel):
+    email: str
+    note: Optional[str] = ""
+
+
+def _demo_link(request, demo, actor):
+    url = accounts.issue_link(demo["email"], "/my.html", accounts.base_url(request))
+    sender = None if actor.get("shared") else actor
+    who = (sender or {}).get("name") or "The Plover team"
+    ends = demo["ends_at"][:10]
+    emailed = mailer.send_link(
+        demo["email"], "Your Plover demo account",
+        ["%s has set up a Plover demo account for you. Until %s you can ask Plover up to %d "
+         "questions a day, on top of the free stock answers." % (who, ends, demo_accounts.tries()),
+         "Click below to sign in. The link works once, within %d hours."
+         % (accounts.INVITE_TTL_SECONDS // 3600)],
+        url, "Sign In to Plover",
+        ["After %s the account stays yours as a free account; nothing in it is deleted." % ends],
+        reply_to=(sender or {}).get("email"))
+    return {"signin_url": url, "emailed": emailed, "expires_hours": accounts.INVITE_TTL_SECONDS // 3600}
+
+
+@router.get("/demo-accounts")
+def demo_list(request: Request):
+    _require_admin(request, "team")
+    if not accounts.enabled():
+        return {"enabled": False, "demos": []}
+    return {"enabled": True, "demos": demo_accounts.list_all(), "days": demo_accounts.DEMO_DAYS,
+            "tries": demo_accounts.tries(), "email_delivery": mailer.configured()}
+
+
+@router.post("/demo-accounts")
+def demo_create(body: NewDemo, request: Request):
+    actor = _require_admin(request, "team")
+    if not accounts.enabled():
+        raise HTTPException(400, "Reader accounts are switched off on this server, so a demo "
+                                 "account cannot be made. Set ACCOUNTS_ENABLED first.")
+    try:
+        demo = demo_accounts.create(body.email, body.note, staff.actor_label(actor))
+    except demo_accounts.DemoError as exc:
+        raise HTTPException(400, str(exc))
+    out = _demo_link(request, demo, actor)
+    audit("demo_created", "%s until %s%s" % (demo["email"], demo["ends_at"][:10],
+                                            ", emailed" if out["emailed"] else ""),
+          _client_ip(request), by=staff.actor_label(actor))
+    out["demo"] = demo
+    return out
+
+
+@router.post("/demo-accounts/{demo_id}/link")
+def demo_new_link(demo_id: int, request: Request):
+    actor = _require_admin(request, "team")
+    demo = demo_accounts.get(demo_id)
+    if demo is None:
+        raise HTTPException(404, "That demo account no longer exists. Reload the page.")
+    if demo["status"] != "active":
+        raise HTTPException(400, "That demo has finished. Make a new demo for this address instead.")
+    out = _demo_link(request, demo, actor)
+    audit("demo_link_issued", demo["email"] + (", emailed" if out["emailed"] else ""),
+          _client_ip(request), by=staff.actor_label(actor))
+    out["demo"] = demo
+    return out
+
+
+@router.post("/demo-accounts/{demo_id}/end")
+def demo_end(demo_id: int, request: Request):
+    actor = _require_admin(request, "team")
+    try:
+        demo = demo_accounts.end(demo_id, staff.actor_label(actor))
+    except demo_accounts.DemoError as exc:
+        raise HTTPException(400, str(exc))
+    audit("demo_ended", demo["email"], _client_ip(request), by=staff.actor_label(actor))
+    return {"demo": demo}
 
 
 # --- equity reads for the classification queue --------------------------------
