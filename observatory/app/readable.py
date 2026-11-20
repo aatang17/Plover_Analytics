@@ -288,6 +288,8 @@ def _macro_block(dataset, default_flow):
     adapter = api._dataset_or_404(dataset)
     frequency = manifest.get("frequency") or adapter.DATASET.get("frequency")
     measures = dict((m["id"], m) for m in manifest.get("measures") or [])
+    if "net" in adapter.PRESENTATION:
+        return _net_block(dataset, adapter, manifest, frequency, measures)
     con = api._con()
     try:
         release = api._release(con, dataset)
@@ -369,6 +371,94 @@ def _macro_block(dataset, default_flow):
         "table": {"caption": caption or "Latest values, as published",
                   "columns": columns, "rows": rows},
         "calc": calc,
+        "credit": source.get("credit") or "",
+        "release": (release or {}).get("label") or "",
+        "links": links,
+        "csv": csv_path,
+    }
+
+
+def _week_text(period):
+    """2026-11-02 -> '2 Nov 2026': a week is named by the day it begins."""
+    return "%d %s" % (period.day, period.strftime("%b %Y"))
+
+
+def _net_block(dataset, adapter, manifest, frequency, measures):
+    """The block for a dataset published as gross purchases and sales, led by
+    the net — who bought — the way its page leads. PRESENTATION["net"] names
+    the series; the net is calculated, so its formula goes with it."""
+    from . import api
+    hint = adapter.PRESENTATION["net"]
+    investors = hint["investors"]
+    codes = []
+    for key, _ in investors:
+        for side in (hint["buy"], hint["sell"]):
+            codes.append(hint["code"].format(investor=key, side=side))
+    con = api._con()
+    try:
+        release = api._release(con, dataset)
+        found = dict((s["code"], s) for s in _by_codes(con, dataset, codes))
+        values = api._values_bulk(con, [s["series_id"] for s in found.values()])
+    finally:
+        con.close()
+
+    def side(key, which):
+        s = found.get(hint["code"].format(investor=key, side=hint[which]))
+        return values.get(s["series_id"], {}) if s else {}
+
+    nets = []  # per investor: {period: net in the stated unit}
+    for key, _ in investors:
+        buy, sell = side(key, "buy"), side(key, "sell")
+        net = {}
+        for p in set(buy) & set(sell):
+            if buy[p] is not None and sell[p] is not None:
+                net[p] = (float(buy[p]) - float(sell[p])) / hint["divisor"]
+        nets.append(net)
+    periods = sorted(set().union(*[set(n) for n in nets]))
+    if not periods or not nets[0]:
+        return None
+    periods = periods[-ROWS_BY_FREQUENCY.get(frequency, 8):]
+
+    latest = periods[-1]
+    def said(i):
+        v = nets[i].get(latest)
+        if v is None:
+            return None
+        return "net %s %s%s%s" % ("bought" if v >= 0 else "sold", hint["unit"][:1],
+                                  fmt(abs(v), 1), hint["unit"][1:])
+    lead, second = said(0), said(1) if len(investors) > 1 else None
+    sentence = None
+    if lead:
+        sentence = "In the week beginning %s, %s %s of %s %s" % (
+            _week_text(latest), investors[0][1].lower(), lead, hint["what"], hint["where"])
+        if second:
+            sentence += ", while %s %s" % (investors[1][1].lower(), second)
+        sentence += ". Net purchases are calculated from the published gross figures."
+
+    columns = [{"label": "Week beginning", "num": False}]
+    for _, label in investors:
+        columns.append({"label": "%s, net purchases (%s)" % (label, hint["unit"]), "num": True})
+    rows = []
+    for p in reversed(periods):  # newest first, the way the page's own tables read
+        rows.append([_week_text(p)] + [fmt(n.get(p), 1) for n in nets])
+
+    endpoints = manifest.get("endpoints") or {}
+    links = []
+    csv_path = None
+    if endpoints.get("series"):
+        links.append(("JSON", endpoints["series"]))
+        first = hint["code"].format(investor=investors[0][0], side=hint["buy"])
+        csv_path = "/api/v1/%s/observations?series=%s&format=csv" % (dataset, quote(first, safe=""))
+        links.append(("CSV", csv_path))
+    calc = (measures.get("net") or {}).get("calc")
+    source = manifest.get("source") or {}
+    return {
+        "heading": (manifest.get("name") or {}).get("en") or dataset,
+        "sentence": sentence,
+        "table": {"caption": "Net purchases by investor type, %s, weekly (calculated)"
+                             % hint["where"].replace("on the ", ""),
+                  "columns": columns, "rows": rows},
+        "calc": ("Net: " + calc) if calc else None,
         "credit": source.get("credit") or "",
         "release": (release or {}).get("label") or "",
         "links": links,
@@ -468,6 +558,13 @@ def _equity(page_name):
         table = _table("Reports by type", ["Report type", "Reports"],
                        s.get("by_report_type") or [],
                        [("report_type", "text"), ("n", "int")])
+        # What is new comes first: a reader (or an assistant quoting the
+        # page) asking about 5% filings wants this week's, not the archive's.
+        week = _stakes_week(s.get("latest_filed"))
+        if week:
+            sentence = (week[0] + " All 5% reports archived: "
+                        + sentence[len("5% shareholding reports: "):])
+            table = week[1]
         return "5% shareholding reports", sentence, table, "/api/v1/equity/stakes/summary"
     if page_name == "governance.html":
         s = governance_api.summary(year="", listed="")
@@ -565,6 +662,111 @@ def _equity(page_name):
         return "Short positions", "Short positions as disclosed: " + "; ".join(facts) + ".", \
             None, "/api/v1/equity/shorts/summary"
     return None
+
+
+STAKES_WEEK_DAYS = 7
+STAKES_WEEK_ROWS = 5  # of each: new holders, increases
+
+
+def _day_text(value):
+    """2026-11-18 (a date or its ISO text) -> '18 Nov 2026'."""
+    if isinstance(value, str):
+        value = datetime.date.fromisoformat(value[:10])
+    return "%d %s" % (value.day, value.strftime("%b %Y"))
+
+
+def _stakes_week(latest_filed):
+    """(sentence, table) for the 5% reports filed in the seven days to the
+    latest filing date, or None. Drawn from the tape the page shows
+    (/api/v1/equity/stakes/recent); every stake and change is as filed, and
+    a percentage outside 0-100 (a filing error) is never ranked."""
+    from . import entity_lead, lvh_api
+    from .jp_names import display_name, display_name_ja
+    if not latest_filed:
+        return None
+    if isinstance(latest_filed, str):
+        latest_filed = datetime.date.fromisoformat(latest_filed[:10])
+    start = latest_filed - datetime.timedelta(days=STAKES_WEEK_DAYS - 1)
+    rows, offset = [], 0
+    while offset is not None and offset < 20000:
+        tape = lvh_api.recent(limit=1000, offset=offset, activist="", min_ratio=0.0,
+                              min_change=0.0, report_type="", since=start.isoformat(),
+                              until=latest_filed.isoformat())
+        rows.extend(tape.get("filings") or [])
+        offset = tape.get("next_offset")
+    # Listed companies only: a four-character stock code. Reports on unlisted
+    # companies carry a shorter code, and a founder's 99.98% of a private firm
+    # is not the news a reader of this page is after.
+    rows = [r for r in rows if len((r.get("issuer_sec_code") or "").strip()) == 4]
+    if not rows:
+        return None
+
+    def ok(v):
+        return v is not None and 0 <= float(v) <= 100
+
+    def latest_per_holder(picked):
+        """One report per holder per company: a holder that files twice in
+        the week (a refiling, a second change) is one stake, at its latest."""
+        best = {}
+        for r in picked:
+            key = (r.get("issuer_sec_code"), r.get("filer_edinet_code") or r.get("filer_name"))
+            when = (str(r.get("filed_date") or ""), str(r.get("doc_id") or ""))
+            if key not in best or when > best[key][0]:
+                best[key] = (when, r)
+        return [r for _, r in best.values()]
+
+    new = sorted(latest_per_holder(
+        [r for r in rows if r.get("report_type") == "initial"
+         and ok(r.get("ratio_pct")) and float(r["ratio_pct"]) >= lvh_api.THRESHOLD_PCT]),
+        key=lambda r: -float(r["ratio_pct"]))
+    moved = [r for r in rows if r.get("report_type") == "change" and ok(r.get("ratio_pct"))
+             and r.get("ratio_change_pp") is not None]
+    up = sorted(latest_per_holder([r for r in moved if float(r["ratio_change_pp"]) > 0]),
+                key=lambda r: -float(r["ratio_change_pp"]))
+    down = latest_per_holder([r for r in moved if float(r["ratio_change_pp"]) < 0])
+
+    def company(r):
+        return (display_name(r.get("issuer_name_en")) or display_name_ja(r.get("issuer_name_raw"))
+                or r.get("issuer_sec_code") or DASH)
+
+    def holder(r):
+        return entity_lead._filer_name(r.get("filer_name"), r.get("filer_name_en")) or DASH
+
+    window = "%s to %s" % (_day_text(start), _day_text(latest_filed))
+    total = len(rows)
+    def n(count, one, many):
+        return "%s %s" % (fmt_int(count), one if count == 1 else many)
+    parts = ["In the seven days %s, %s filed on listed companies: %s crossed 5%% for the "
+             "first time, %s raised a stake and %s cut one."
+             % (window, n(total, "5% report was", "5% reports were"),
+                n(len(new), "holder", "holders"), n(len(up), "holder", "holders"),
+                n(len(down), "holder", "holders"))]
+    if new:
+        r = new[0]
+        parts.append("The largest new stake is %s with %s%% of %s" % (
+            holder(r), fmt(r["ratio_pct"], 2), company(r)))
+        if not parts[-1].endswith("."):  # "Co., Ltd." already ends the sentence
+            parts[-1] += "."
+    if up:
+        r = up[0]
+        parts.append("The largest increase is %s in %s, up %s percentage points to %s%%." % (
+            holder(r), company(r), fmt(r["ratio_change_pp"], 2), fmt(r["ratio_pct"], 2)))
+
+    records = []
+    for kind, picked in (("New 5% holder", new[:STAKES_WEEK_ROWS]),
+                         ("Increase", up[:STAKES_WEEK_ROWS])):
+        for r in picked:
+            records.append({"filed": _day_text(r["filed_date"]) if r.get("filed_date") else None,
+                            "company": company(r), "code": r.get("issuer_sec_code"),
+                            "holder": holder(r), "kind": kind, "pct": r.get("ratio_pct"),
+                            "change": r.get("ratio_change_pp") if kind == "Increase" else None})
+    table = _table("Largest new stakes and increases in listed companies, filed %s, "
+                   "as filed" % window,
+                   ["Filed", "Company", "Code", "Holder", "Report", "Stake (%)", "Change (pp)"],
+                   records,
+                   [("filed", "raw"), ("company", "raw"), ("code", "raw"), ("holder", "raw"),
+                    ("kind", "raw"), ("pct", "pct2"), ("change", "pp")])
+    return " ".join(parts), table
 
 
 def equity_block(page_name):

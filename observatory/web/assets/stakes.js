@@ -167,7 +167,7 @@
              esc(r.detail || "") + "'>Partial</span>" : "") +
           "</td><td>" + nameCell(r.issuer_name_en, r.issuer_name_raw,
               r.issuer_sec_code ? "stakes.html?c=" + esc(r.issuer_sec_code) : null) +
-          "</td><td>" + nameCell(null, r.filer_name,
+          "</td><td>" + nameCell(r.filer_name_en, r.filer_name,
               r.filer_edinet_code ? "stakes.html?h=" + esc(r.filer_edinet_code) : null) +
           "</td><td" + (r.change_no ? " title='Change report No. " + esc(r.change_no) + "'" : "") + ">" +
           esc(REPORT_LABEL[r.report_type] || r.report_type) +
@@ -343,6 +343,17 @@
   }
 
   // ---- company view --------------------------------------------------------
+  /* A filing group's name: English where the filer has one (filer_name_en),
+     with the Japanese as filed beside it, muted, so either can be searched. */
+  function groupName(g) {
+    var ja = displayNameJa(g.filer_name) || "";
+    var en = displayName(g.filer_name_en);
+    if (!en) return esc(ja || MISSING);
+    // "アセット・バリュー…(Asset Value Investors Limited)": the English is already shown.
+    ja = ja.replace(/\s*[(（]\s*[A-Za-z][^()（）]*[)）]\s*$/, "");
+    return esc(en) + (ja && ja !== en ? " <span class='grp-ja'>" + esc(ja) + "</span>" : "");
+  }
+
   function renderCompany(d) {
     var groups = d.groups || [];
     var nameJa = groups.length && groups[0].issuer_name_raw
@@ -383,7 +394,7 @@
           "</td></tr>";
       }).join("");
       return "<div class='group" + (g.is_current ? " is-current" : "") + "'>" +
-        "<h3>" + esc(displayNameJa(g.filer_name) || MISSING) + "</h3>" +
+        "<h3>" + groupName(g) + "</h3>" +
         "<p class='grp-meta'>" + (g.is_current
             ? "Holds <b>" + pct(g.ratio_pct) + "%</b>"
             : "Exited — latest report shows " + pct(g.ratio_pct) + "%") +
@@ -415,7 +426,7 @@
       reps.map(function (r) {
         return "<tr><td>" + esc(day(r.requirement_date)) +
           "</td><td>" + esc(day(r.filed_date)) +
-          "</td><td>" + nameCell(null, r.filer_name,
+          "</td><td>" + nameCell(r.filer_name_en, r.filer_name,
               r.filer_edinet_code ? "stakes.html?h=" + esc(r.filer_edinet_code) : null) +
           "</td><td>" + esc(REPORT_LABEL[r.report_type] || r.report_type) +
           "</td><td class=r>" + count(r.shares_held) +

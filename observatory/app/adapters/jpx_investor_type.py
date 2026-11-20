@@ -235,6 +235,21 @@ PRESENTATION = {
     "stale_after_days": 21,
     "kinds": {},
     "unit_label": "¥k / k shares",
+    # What the page leads with, for the text served without scripts
+    # (app/readable.py): the same net figures, market and scale as the
+    # page's own sub-heading — not the gross columns, which leave the reader
+    # to subtract two 11-digit numbers to learn who bought.
+    "net": {
+        "code": "two-markets.{investor}.{side}.value",
+        "buy": "purchases", "sell": "sales",
+        "where": "on the Tokyo and Nagoya markets",
+        "what": "Japanese equities",
+        "investors": [["foreigners", "Foreigners"], ["individuals", "Individuals"],
+                      ["trust-banks", "Trust banks"],
+                      ["business-cos", "Business corporations"]],
+        # ¥ thousand as published -> ¥ billion: an exact division by 1e6.
+        "divisor": 1e6, "unit": "¥bn",
+    },
 }
 
 

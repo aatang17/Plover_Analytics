@@ -123,19 +123,24 @@ def build(path, lvh1=False):
     con.execute("CREATE TABLE eq_entities (edinet_code VARCHAR, sec_code VARCHAR, "
                 "name_en VARCHAR)")
 
-    def filing(doc, form, sec, req, filed, ratio):
+    # E1's English name is in the filer registry; GFA (D3) has none there and
+    # writes its own on the form.
+    con.execute("INSERT INTO eq_entities VALUES ('E1', NULL, 'Unyo Asset Management Co., Ltd.')")
+
+    def filing(doc, form, sec, req, filed, ratio, filer="E1"):
         row = dict((c, None) for c in lvh.FILING_COLUMNS)
         row.update({"doc_id": doc, "form": form, "report_type": "change",
                     "issuer_sec_code": sec, "issuer_name_raw": u"発行者" + sec,
                     "requirement_date": req, "filed_date": filed, "ratio_pct": ratio,
-                    "filer_edinet_code": "E1", "holders_rows": 2, "status": "clean",
+                    "filer_edinet_code": filer, "holders_rows": 2, "status": "clean",
                     "parser_version": "lvh-1"})
         con.execute(lvh.FILING_INSERT, [row[c] for c in lvh.FILING_COLUMNS])
 
-    def holder(doc, no, code, name, answer, ratio):
+    def holder(doc, no, code, name, answer, ratio, name_en=None):
         row = dict((c, None) for c in lvh.HOLDER_COLUMNS)
         row.update({"doc_id": doc, "holder_no": no, "holder_edinet_code": code,
-                    "name_raw": name, "name_key": name, "important_proposal_ja": answer,
+                    "name_raw": name, "name_key": name, "name_en": name_en,
+                    "important_proposal_ja": answer,
                     "ratio_pct": ratio, "important_proposal": bool(answer) or None})
         con.execute(lvh.HOLDER_INSERT, [row[c] for c in lvh.HOLDER_COLUMNS])
 
@@ -144,8 +149,8 @@ def build(path, lvh1=False):
     holder("D1", 2, "E2", u"ファンド", None, 12.17)
     filing("D2", "jplvh010000", "7203", "2027-01-01", "2026-02-05", 6.0)
     holder("D2", 1, "E1", u"運用会社", u"重要提案行為等を行う可能性がある。", 6.0)
-    filing("D3", "jplvh010000", "7203", "2026-03-01", "2026-03-04", 7.0)
-    holder("D3", 1, None, u"GFA株式会社", u"該当事項なし", 7.0)
+    filing("D3", "jplvh010000", "7203", "2026-03-01", "2026-03-04", 7.0, filer=None)
+    holder("D3", 1, None, u"GFA株式会社", u"該当事項なし", 7.0, name_en="GFA Co., Ltd.")
     filing("D4", "jplvh030000", "6758", "1984-12-25", "2026-04-04", 5.5)
     holder("D4", 1, "E1", u"運用会社", None, 5.5)
     if lvh1:
@@ -254,6 +259,18 @@ class ApiTest(unittest.TestCase):
                 lvh_api.recent(limit=10, offset=0, activist="", min_ratio=0,
                                min_change=0, report_type="", since=bad, until="")
             self.assertEqual(e.exception.status_code, 400)
+
+    def test_filer_english_name_registry_first_then_as_filed(self):
+        groups = {g["doc_id"]: g for g in lvh_api.company("7203", history=10)["groups"]}
+        self.assertEqual(groups["D2"]["filer_name_en"], "Unyo Asset Management Co., Ltd.")
+        self.assertEqual(groups["D3"]["filer_name_en"], "GFA Co., Ltd.")
+        reports = {r["doc_id"]: r for r in lvh_api.company("7203", history=10)["reports"]}
+        self.assertEqual(reports["D3"]["filer_name_en"], "GFA Co., Ltd.")
+        tape = {r["doc_id"]: r for r in lvh_api.recent(
+            limit=10, offset=0, activist="", min_ratio=0, min_change=0,
+            report_type="", since="", until="")["filings"]}
+        self.assertEqual(tape["D2"]["filer_name_en"], "Unyo Asset Management Co., Ltd.")
+        self.assertEqual(len(tape), 4)       # the name joins add no rows
 
     def test_a_database_written_by_lvh1_still_serves(self):
         self.use("old")

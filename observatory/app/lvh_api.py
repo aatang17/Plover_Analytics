@@ -206,7 +206,10 @@ def _notes(head):
     head["group_note"] = GROUP_NOTE
     head["proposal_note"] = PROPOSAL_NOTE
     head["ratio_note"] = RATIO_NOTE
-    head["names_note"] = NAMES_NOTE
+    head["names_note"] = NAMES_NOTE + (
+        " filer_name_en is the filer's English name: EDINET's filer registry or "
+        "its own annual report where there is one, else the English name the "
+        "filer wrote for itself on the 5% report.")
     head["calc"] = CALC
     head["provenance"] = PROVENANCE
     return head
@@ -232,6 +235,16 @@ _LATEST_STAKE = """
     ),
     current_stakes AS (SELECT * FROM ranked WHERE rn = 1)
 """
+
+
+# The filer's English name. EDINET's filer registry (or the filer's own annual
+# report) first, as every other English company name on the platform; else
+# the English name the filer wrote on this form for itself, the first holder
+# named (the first holder is the filer on every archived report). Null where
+# neither exists; the as-filed Japanese filer_name is always returned too.
+FILER_NAME_EN = "coalesce(fe.name_en, fh.name_en) AS filer_name_en"
+FILER_NAME_EN_JOINS = """LEFT JOIN en_ecode fe ON fe.edinet_code = f.filer_edinet_code
+        LEFT JOIN eq_lvh_holders fh ON fh.doc_id = f.doc_id AND fh.holder_no = 1"""
 
 
 def latest_stake():
@@ -363,10 +376,12 @@ def recent(limit: int = Query(50, ge=1, le=1000),
                         params).fetchone()[0]
     rows = _rows(cur, "WITH x AS (SELECT 1)" + NAME_CTES + """
         SELECT """ + filing_cols(_opt(cur)) + """,
-               coalesce(es.name_en, ee.name_en) AS issuer_name_en
+               coalesce(es.name_en, ee.name_en) AS issuer_name_en,
+               """ + FILER_NAME_EN + """
         FROM eq_lvh_filings f
         LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = f.issuer_edinet_code
+        """ + FILER_NAME_EN_JOINS + """
         WHERE """ + where_sql + """
         ORDER BY f.filed_date DESC, f.requirement_date DESC, f.doc_id DESC
         LIMIT ? OFFSET ?""", params + [limit, offset])
@@ -419,10 +434,12 @@ def company(sec_code: str,
     current = _rows(cur, latest_stake() + NAME_CTES + """
         SELECT f.*, (f.ratio_pct >= ?) AS is_current,
                """ + date_quality("f") + """ AS date_quality,
-               coalesce(es.name_en, ee.name_en) AS issuer_name_en
+               coalesce(es.name_en, ee.name_en) AS issuer_name_en,
+               """ + FILER_NAME_EN + """
         FROM current_stakes f
         LEFT JOIN en_scode es ON es.sec_code = f.issuer_sec_code
         LEFT JOIN en_ecode ee ON ee.edinet_code = f.issuer_edinet_code
+        """ + FILER_NAME_EN_JOINS + """
         WHERE f.issuer_sec_code = ? OR f.issuer_edinet_code = ?
         ORDER BY f.ratio_pct DESC NULLS LAST""", [THRESHOLD_PCT, code, code])
     if not current:
@@ -445,8 +462,10 @@ def company(sec_code: str,
             "combined_current_pct": round(sum(r["ratio_pct"] or 0 for r in current
                                               if r.get("is_current")), 2) or None}
     head["reports"] = jp_enums.annotate_listing(plausibility.lvh_rows(_rows(cur, """
-        SELECT """ + filing_cols(_opt(cur)) + """
+        WITH x AS (SELECT 1)""" + NAME_CTES + """
+        SELECT """ + filing_cols(_opt(cur)) + """, """ + FILER_NAME_EN + """
         FROM eq_lvh_filings f
+        """ + FILER_NAME_EN_JOINS + """
         WHERE (f.issuer_sec_code = ? OR f.issuer_edinet_code = ?)
           AND f.status IN ('clean','partial')""" + asof.clause("filed_date", "f") + """
         ORDER BY """ + event_date("f") + """ DESC, f.doc_id DESC

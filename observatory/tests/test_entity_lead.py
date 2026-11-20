@@ -40,6 +40,27 @@ class WordingTest(unittest.TestCase):
             "Wellington Management Company LLP")
         self.assertEqual(entity_lead._filer_name("株式会社豊田自動織機"), "株式会社豊田自動織機")
 
+    def test_filer_english_name_leads_with_the_japanese_beside_it(self):
+        self.assertEqual(entity_lead._filer_name(u"三井住友信託銀行株式会社",
+                                                 "Sumitomo Mitsui Trust Bank,Limited"),
+                         "Sumitomo Mitsui Trust Bank, Limited")
+        self.assertEqual(entity_lead._filer_cell(u"三井住友信託銀行株式会社",
+                                                 "Sumitomo Mitsui Trust Bank, Limited"),
+                         u"Sumitomo Mitsui Trust Bank, Limited (三井住友信託銀行株式会社)")
+        # Letters inside a Japanese name keep the Japanese.
+        self.assertEqual(entity_lead._filer_cell(u"SMBC日興証券株式会社", "SMBC Nikko Securities Inc."),
+                         u"SMBC Nikko Securities Inc. (SMBC日興証券株式会社)")
+        # Full-width English in brackets is not repeated after the English.
+        self.assertEqual(entity_lead._filer_cell(
+            u"ノムラ　インターナショナル　ピーエルシー（ＮＯＭＵＲＡ　ＩＮＴＥＲＮＡＴＩＯＮＡＬ　ＰＬＣ）",
+            "NOMURA INTERNATIONAL PLC"),
+            u"Nomura International PLC (ノムラ インターナショナル ピーエルシー)")
+        # No English anywhere: the Japanese once, not twice.
+        self.assertEqual(entity_lead._filer_cell(u"株式会社エスグラントコーポレーション", None),
+                         u"株式会社エスグラントコーポレーション")
+        self.assertEqual(entity_lead._filer_cell("Oasis Management Company Ltd.", None),
+                         "Oasis Management Company Ltd.")
+
     def test_yen_keeps_the_scale_of_the_figure(self):
         self.assertEqual(entity_lead._yen(294000000), "¥294mn")
         self.assertEqual(entity_lead._yen(441.4e9), "¥441.4bn")

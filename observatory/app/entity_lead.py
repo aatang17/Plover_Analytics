@@ -121,11 +121,34 @@ def _holder_name(row):
     return display_name_ja(_PROXY.sub("", row.get("name_raw") or "")) or ""
 
 
-def _filer_name(raw):
+def _filer_name(raw, en=None):
+    """A 5% filer's name for an English sentence: its English name where there
+    is one (filer_name_en from the API, else an English name the filer put in
+    brackets after the Japanese), otherwise the Japanese as filed."""
     from .jp_names import display_name, display_name_ja
+    if en and en.strip():
+        return display_name(_SPACE.sub(" ", en).strip())
     raw = _SPACE.sub(" ", raw or "").strip()
     m = _ENGLISH_IN_BRACKETS.search(raw)
     return display_name(m.group(1).strip()) if m else (display_name_ja(raw) or "")
+
+
+def _filer_cell(raw, en=None):
+    """The same name for a table: English, with the Japanese as filed after it
+    in brackets, so a reader can find the name in either language."""
+    from .jp_names import display_name_ja
+    name = _filer_name(raw, en)
+    raw = display_name_ja(_SPACE.sub(" ", raw or "").strip()) or ""  # full-width letters too
+    m = _ENGLISH_IN_BRACKETS.search(raw)
+    ja = (raw[:m.start()] if m else raw).strip()
+    # Japanese only when there is some: "SMBC日興証券" keeps it, a name filed
+    # in letters alone does not repeat itself.
+    if not ja or ja == name or not _JAPANESE.search(ja):
+        return name
+    return "%s (%s)" % (name, ja)
+
+
+_JAPANESE = re.compile(u"[\u3040-\u30ff\u3400-\u9fff]")
 
 
 def _yen(value):
@@ -259,8 +282,8 @@ def _stakes_lead(name, code):
         return ["No holder reports 5% or more in its latest filing."]
     top = max(over, key=lambda g: g.get("ratio_pct") or 0)
     return ["Largest 5%% holder: %s, %s of shares, filed %s." % (
-        _filer_name(top.get("filer_name")), _pct(top.get("ratio_pct")),
-        _day(top.get("filed_date")))]
+        _filer_name(top.get("filer_name"), top.get("filer_name_en")),
+        _pct(top.get("ratio_pct")), _day(top.get("filed_date")))]
 
 
 def _day(value):
@@ -406,7 +429,8 @@ def _stakes_tables(name, code):
                         readable.fmt_int(len(current)), "" if len(current) == 1 else "s",
                         "s" if len(current) == 1 else "", name,
                         "its" if len(current) == 1 else "their",
-                        _filer_name(top.get("filer_name")), _pct(top.get("ratio_pct")),
+                        _filer_name(top.get("filer_name"), top.get("filer_name_en")),
+                        _pct(top.get("ratio_pct")),
                         _day(top.get("filed_date"))))
     else:
         sentence = ("No holder reports 5%% or more of %s in its latest filing; the groups "
@@ -421,7 +445,8 @@ def _stakes_tables(name, code):
         if g.get("proposal_asked") is False:
             return "Not on this form"
         return "Not stated"
-    records = [{"name": _filer_name(g.get("filer_name")), "pct": g.get("ratio_pct"),
+    records = [{"name": _filer_cell(g.get("filer_name"), g.get("filer_name_en")),
+                "pct": g.get("ratio_pct"),
                 "change": g.get("ratio_change_pp"), "filed": g.get("filed_date"),
                 "status": "5% or more" if g.get("is_current") else "Below 5%",
                 "proposal": proposal(g)}
