@@ -12,10 +12,8 @@
    proves the address and creates the session, so there is no second form and
    nothing here says "register".
 
-   There is no password anywhere in this file, and never should be. An account
-   holds the companies a reader follows; everything else on the platform is
-   readable without one — so a failure here costs the reader their list, not
-   the data, and the copy says so rather than pretending the site is locked.
+   There is no password. The page also handles readers who have used their
+   free data page previews and sends them back to the page they opened.
 
    Accounts are a server feature that may not be switched on: when
    /api/v1/account/me is not there at all, the page says so plainly instead of
@@ -39,6 +37,7 @@ const token = (params.get("token") || "").trim();
 const returnTo = safeReturnTo(params.get("returnTo"));
 // Sent by a company page's Follow button (co-head.js): say what the account is for.
 const following = /[?&]follow=1(&|#|$)/.test(returnTo);
+const pagePreview = params.get("reason") === "page-preview";
 
 function render(html) { card.innerHTML = html; }
 
@@ -55,7 +54,9 @@ function field(value, error) {
     (inviteOnly
       ? '<p class="auth-hint">Accounts are by invitation for now. Every answer still shows its ' +
         "start without one.</p>"
-      : following
+      : pagePreview
+        ? '<p class="auth-hint">The link takes you back to the page you opened.</p>'
+        : following
         ? '<p class="auth-hint">A free account keeps a Watchlist of the companies you follow: each ' +
           "one's next results date, its share price this year and recent insider trades. You come " +
           "back to the company page already following it.</p>"
@@ -64,10 +65,13 @@ function field(value, error) {
 }
 
 function askState(value, error) {
-  render('<h1 class="auth-title">' + (inviteOnly ? "Sign In" : "Sign In or Sign Up") + "</h1>" +
+  const preview = pagePreview && !inviteOnly;
+  const title = preview ? "Sign In to Keep Browsing" : (inviteOnly ? "Sign In" : "Sign In or Sign Up");
+  render('<h1 class="auth-title">' + title + "</h1>" +
     '<p class="auth-sub">' + (inviteOnly
       ? "Enter your email and we will send a single-use sign-in link. There is no password."
-      : "Enter your email and we will send a single-use link. It signs you in, and creates your " +
+      : (preview ? "You’ve used your free data page previews. " : "") +
+        "Enter your email and we will send a single-use link. It signs you in and creates your " +
         "free account if you are new. There is no password.") + "</p>" +
     '<form id="form" novalidate>' + field(value, error) + "</form>");
   const form = document.getElementById("form");

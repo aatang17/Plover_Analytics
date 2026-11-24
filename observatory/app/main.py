@@ -13,6 +13,7 @@ from urllib.parse import parse_qs
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import Headers
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -31,7 +32,7 @@ from .research_ai import router as research_ai_router  # noqa: E402
 from .ai_setup_api import router as ai_setup_router  # noqa: E402
 from .research_clips import router as research_clips_router  # noqa: E402
 from .writer_api import router as writer_router  # noqa: E402
-from . import accounts, reddit_ads  # noqa: E402
+from . import accounts, page_preview, reddit_ads  # noqa: E402
 from . import assistant  # noqa: E402
 from .assistant import api as assistant_api  # noqa: E402
 from .assistant import desk_mcp as assistant_desk_mcp  # noqa: E402
@@ -120,6 +121,8 @@ class RevalidatedStatic(StaticFiles):
                 return RedirectResponse("/us-stock.html?" + query, status_code=301)
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache"
+        if response.status_code in (200, 304) and page_preview.applies(path):
+            response = await run_in_threadpool(page_preview.apply, path, scope, response)
         return self._prerendered(response, scope)
 
     @staticmethod
@@ -143,7 +146,9 @@ class RevalidatedStatic(StaticFiles):
             return response
 
         etag = '"%s"' % hashlib.md5(body.encode("utf-8")).hexdigest()
-        headers = {"Cache-Control": "no-cache", "ETag": etag}
+        headers = {"Cache-Control": response.headers["Cache-Control"], "ETag": etag}
+        if "set-cookie" in response.headers:
+            headers["Set-Cookie"] = response.headers["set-cookie"]
         sent = Headers(scope=scope).get("if-none-match", "")
         if etag in [tag.strip() for tag in sent.split(",") if tag.strip()]:
             return Response(status_code=304, headers=headers)
