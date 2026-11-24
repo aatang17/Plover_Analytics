@@ -285,17 +285,25 @@ class TripTest(unittest.TestCase):
         self.assertEqual(row["pages"], 2)
 
     def test_a_company_page_names_the_company(self):
-        places = {"203.0.113.92": ("GB", "Virgin Media Limited")}
-        ip = "203.0.113.92"
-        with self.place(places):
-            visits.observe(scope("/holdings.html", ip, query="c=7203&ref=chatgpt.com"), 200)
-            visits.record_dwell(scope("/api/v1/visit/ping", ip), "/holdings.html", 30, "h7203")
-            visits.observe(scope("/holdings.html", ip, query="q=what+did+he+read"), 200)
-            visits.observe(scope("/us-stock.html", ip, query="t=brk.b"), 200)
+        # Written straight into the log, the way the other trip tests are:
+        # going through observe() ties the row to whatever else this process
+        # has already recorded, and the full suite then cannot find it.
+        now = datetime.datetime.utcnow().replace(microsecond=0)
+        at = (now - datetime.timedelta(seconds=30)).isoformat() + "Z"
+        mid = (now - datetime.timedelta(seconds=20)).isoformat() + "Z"
+        late = now.isoformat() + "Z"
+        base = {"visitor": "co-page", "status": 200, "ref": None, "internal": False,
+                "country": "JP", "network": "Saba Capital Management, L.P.", "bot": False}
+        visits._record(dict(base, at=at, path="/holdings.html", kind="page",
+                            src="chatgpt.com", subject="7203", subject_key="c"))
+        visits._record(dict(base, at=at, kind="dwell", path="/holdings.html", seconds=30, view="h7203"))
+        visits._record(dict(base, at=mid, path="/holdings.html", kind="page"))
+        visits._record(dict(base, at=late, path="/us-stock.html", kind="page",
+                            subject="BRK.B", subject_key="t"))
         with mock.patch.object(visit_trips, "_jp_names", return_value={"7203": "Toyota Motor Corporation"}), \
                 mock.patch.object(visit_trips, "_us_names", return_value={"BRK.B": "Berkshire Hathaway"}):
             row = [r for r in visit_trips.recent()["readers"]
-                   if r["steps"][0].get("subject") == "7203"][0]
+                   if any(s.get("subject") == "7203" for s in r["steps"])][0]
         self.assertEqual([s["path"] for s in row["steps"]],
                          ["/holdings.html", "/holdings.html", "/us-stock.html"])
         self.assertEqual(row["steps"][0]["subject_key"], "c")
