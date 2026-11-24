@@ -92,6 +92,14 @@ LIVE_MAX = 5000
 # is read too, since ad platforms write their own links that way.
 SOURCE_PARAMS = ("ref", "utm_source")
 _SOURCE_TAG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
+# What a shared page address names. A company code (?c=7203, ?t=AAPL) or the
+# dataset on a page that holds several (?dataset=wages-jp on Labour). Only a
+# short code is kept. A chart setting, a question or a click id is not: the
+# address bar is text anyone can type, and changing the chart does not load
+# a new page.
+_PAGE_KEYS = ("c", "code", "t")
+_PAGE_CODE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,11}$")
+_DATASET_CODE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 # The tag on every data address a chart's Copy Code writes (format.js).
 CODE_TAG = "code"
 # Held in memory so a sign-up later the same day can say which tag brought the
@@ -648,6 +656,32 @@ def _client_ip(scope, forwarded):
     return client[0] if client else "unknown"
 
 
+def page_subject(query_string):
+    """("c", "7203") or ("dataset", "wages-jp") when the address names what
+    was opened, else None.
+
+    `c` and `code` are a Japanese security code. `t` is a US ticker.
+    `dataset` is which dataset a shared page was opened on. The first
+    company code present wins, then the dataset. Anything that is not a
+    short code is ignored."""
+    if isinstance(query_string, bytes):
+        query_string = query_string.decode("latin-1")
+    try:
+        params = urllib.parse.parse_qs(query_string or "", keep_blank_values=False)
+    except ValueError:
+        return None
+    for name in _PAGE_KEYS:
+        for value in params.get(name) or ():
+            code = value.strip().upper()
+            if _PAGE_CODE.match(code):
+                return name, code
+    for value in params.get("dataset") or ():
+        slug = value.strip().lower()
+        if _DATASET_CODE.match(slug):
+            return "dataset", slug
+    return None
+
+
 def source_tag(query_string):
     """The tag on a shared link (?ref=yt), lower-cased, or None. Anything that
     does not look like a short tag is ignored rather than stored: the address
@@ -946,6 +980,9 @@ def observe(scope, status, seconds=None):
         if tag:
             event["src"] = tag
             _note_source(visitor, tag, day)
+        subject = page_subject(scope.get("query_string"))
+        if subject:
+            event["subject_key"], event["subject"] = subject
     elif kind == "api":
         # Copy Code tags its addresses (&ref=code); Stata, R and pandas then
         # fetch them, usually looking like scripts, so the tag is kept either way.

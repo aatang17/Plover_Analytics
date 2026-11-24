@@ -744,4 +744,5 @@ tr.openable { cursor: pointer; }
 tr.openable:hover > td { background: var(--obs-surface-subtle); }
 .data.trip { width: auto; min-width: 60%; margin: 0; background: var(--obs-surface); }
 .data.trip td { white-space: nowrap; }
+.data.trip td.trip-page { white-space: normal; }
 .detail-row .source-line { margin: 8px 0 0; }

@@ -185,6 +185,11 @@ def _trip(events):
                 step["from"] = source_name(event["ref"])
             if event.get("src"):
                 step["tag"] = event["src"]
+            # Which company or dataset this page was. Absent on visits recorded
+            # before the address was kept, and on a page that names neither.
+            if event.get("subject"):
+                step["subject"] = event["subject"]
+                step["subject_key"] = event.get("subject_key") or "c"
             steps.append(step)
         elif event.get("path") in ask_log.PATHS and event.get("kind") == "api":
             steps.append({"at": event["at"], "path": event["path"], "asked": True})
@@ -211,6 +216,93 @@ def _trip(events):
             taken.add(i)
             break
     return steps
+
+
+def _jp_names(codes):
+    """Security code -> English name. Empty when the equity file can't be read."""
+    from . import equity_api
+    if not codes or not equity_api.DB_PATH.exists():
+        return {}
+    wanted = list(codes)
+    marks = ",".join(["?"] * len(wanted))
+    rows = equity_api._cur().execute(
+        "SELECT sec_code, name_en FROM eq_entities "
+        "WHERE name_en IS NOT NULL AND (sec_code IN (%s) OR left(sec_code, 4) IN (%s))"
+        % (marks, marks), wanted + wanted).fetchall()
+    from . import jp_names
+    exact, prefix = {}, {}
+    for sec, name in rows:
+        if not sec or not name:
+            continue
+        shown = jp_names.display_name(name)
+        exact[sec] = shown
+        prefix.setdefault(sec[:4], shown)
+    return dict((code, exact.get(code) or prefix.get(code[:4])) for code in wanted)
+
+
+def _us_names(tickers):
+    """Ticker -> company name. Empty when the SEC file can't be read."""
+    from . import sec_api
+    if not tickers or not sec_api.DB_PATH.exists():
+        return {}
+    wanted = list(tickers)
+    from . import us_link
+    # The address writes a class share with a dot (BRK.B). The filing writes
+    # the same share with a hyphen (BRK-B).
+    forms = {}
+    for ticker in wanted:
+        for form in (ticker, ticker.replace(".", "-"), ticker.replace("-", ".")):
+            forms.setdefault(form, []).append(ticker)
+    marks = ",".join(["?"] * len(forms))
+    rows = sec_api._cur().execute(
+        "SELECT upper(ticker), name FROM sec_companies WHERE upper(ticker) IN (%s)"
+        % marks, list(forms)).fetchall()
+    out = {}
+    for ticker, name in rows:
+        if not ticker or not name:
+            continue
+        shown = us_link.display_name(name)
+        for asked in forms.get(ticker, ()):
+            out.setdefault(asked, shown)
+    return out
+
+
+def _name_subjects(readers):
+    """Add the company name to each step that recorded a code. A database
+    that is missing or locked leaves the code on its own: the trip still
+    says which page it was."""
+    jp, us = set(), set()
+    for reader in readers:
+        for step in reader.get("steps") or []:
+            code = step.get("subject")
+            key = step.get("subject_key")
+            if not code:
+                continue
+            if key in ("c", "code"):
+                jp.add(code)
+            elif key == "t":
+                us.add(code)
+    jp_names, us_names = {}, {}
+    try:
+        jp_names = _jp_names(jp) if jp else {}
+    except Exception:
+        jp_names = {}
+    try:
+        us_names = _us_names(us) if us else {}
+    except Exception:
+        us_names = {}
+    for reader in readers:
+        for step in reader.get("steps") or []:
+            code = step.get("subject")
+            key = step.get("subject_key")
+            if key in ("c", "code"):
+                name = jp_names.get(code)
+            elif key == "t":
+                name = us_names.get(code)
+            else:
+                name = None
+            if name:
+                step["subject_name"] = name
 
 
 def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
@@ -326,6 +418,8 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
                 row["last"] = event["at"]
 
     readers.sort(key=lambda r: r["last"], reverse=True)
+    shown = readers[:limit]
+    _name_subjects(shown)
     confirmed_total = sum(1 for r in readers if r["confirmed"])
     machine_rows = []
     for row in machines.values():
@@ -340,7 +434,7 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
         "at": now.isoformat(timespec="seconds") + "Z",
         "hours": hours,
         "from": cutoff,
-        "readers": readers[:limit],
+        "readers": shown,
         "readers_total": confirmed_total,
         "unconfirmed_total": len(readers) - confirmed_total,
         "machines": machine_rows,

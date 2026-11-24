@@ -1699,17 +1699,30 @@ function detailRow(key, cols, inner) {
     cols + '">' + inner + "</td></tr>";
 }
 
-function pageLink(path) {
+function pageLink(path, label) {
   return '<a class="mono" href="' + escapeHtml(path) + '" target="_blank" rel="noopener">' +
-    escapeHtml(path) + "</a>";
+    escapeHtml(label || path) + "</a>";
+}
+
+/* A company page names the company. A shared page names the dataset it was
+   opened on. The link opens that page. Visits recorded before this was kept
+   have the file name only. */
+function tripPage(s) {
+  if (s.asked) return "Asked the question box";
+  var path = s.path || "/";
+  if (!s.subject) return pageLink(path);
+  var href = path + "?" + encodeURIComponent(s.subject_key || "c") + "=" +
+    encodeURIComponent(s.subject);
+  var who = s.subject_name ? s.subject_name + " (" + s.subject + ")" : s.subject;
+  return pageLink(href, path + " · " + who);
 }
 
 /* One reader's trip: every page in the order opened, and how long it was open. */
 function tripTable(steps) {
   var body = (steps || []).map(function (s) {
-    var page = s.asked ? "Asked the question box" : pageLink(s.path);
+    var page = tripPage(s);
     var from = s.from ? escapeHtml(s.from) : s.tag ? "Tagged link (" + escapeHtml(s.tag) + ")" : MISSING;
-    return '<tr><td class="num">' + escapeHtml(fmtClock(s.at)) + "</td><td>" + page + "</td>" +
+    return '<tr><td class="num">' + escapeHtml(fmtClock(s.at)) + '</td><td class="trip-page">' + page + "</td>" +
       "<td>" + from + '</td><td class="num"' +
       (s.asked || s.seconds ? "" : ' title="The page sent no reading time: closed within a ' +
         'second, or still open"') + ">" + (s.asked ? "" : fmtDuration(s.seconds)) + "</td></tr>";
@@ -1793,7 +1806,9 @@ function recentMarkup(r) {
     ", refreshed every 30 seconds</span></div>" + kpis + table +
     '<p class="source-line">A row is one visitor for one day: the identity resets at midnight ' +
     "UTC, so the same person tomorrow is a new row unless they accepted the cookie or are " +
-    "signed in. Network is the operator of the network they came from; when that is an office " +
+    "signed in. A company page names the company, and a shared page names the dataset " +
+    "it was opened on. The link opens that page. Visits already recorded only have " +
+    "the file name. Network is the operator of the network they came from; when that is an office " +
     "or a campus it names the organisation (in bold), on a phone or at home it is only their " +
     "provider. Signed In shows the email domain, never the address. Real readers only, by the " +
     "same test as every figure on this page.</p>" +

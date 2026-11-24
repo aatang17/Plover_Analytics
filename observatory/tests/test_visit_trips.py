@@ -50,14 +50,18 @@ def _forget():
         visits._LIVE.clear()
 
 
-def scope(path, ip, referer=None, cookie=None):
+def scope(path, ip, referer=None, cookie=None, query=""):
     headers = [(b"user-agent", UA.encode()), (b"host", b"ploveranalytics.com")]
     if referer:
         headers.append((b"referer", referer.encode()))
     if cookie:
         headers.append((b"cookie", cookie.encode()))
+    if isinstance(query, bytes):
+        raw = query
+    else:
+        raw = query.encode()
     return {"type": "http", "method": "GET", "path": path, "client": (ip, 1),
-            "headers": headers, "query_string": b""}
+            "headers": headers, "query_string": raw}
 
 
 def _events():
@@ -279,6 +283,27 @@ class TripTest(unittest.TestCase):
         self.assertIsNone(row["steps"][1]["seconds"])
         self.assertEqual(row["organisation"], "Saba Capital Management, L.P.")
         self.assertEqual(row["pages"], 2)
+
+    def test_a_company_page_names_the_company(self):
+        places = {"203.0.113.92": ("GB", "Virgin Media Limited")}
+        ip = "203.0.113.92"
+        with self.place(places):
+            visits.observe(scope("/holdings.html", ip, query="c=7203&ref=chatgpt.com"), 200)
+            visits.record_dwell(scope("/api/v1/visit/ping", ip), "/holdings.html", 30, "h7203")
+            visits.observe(scope("/holdings.html", ip, query="q=what+did+he+read"), 200)
+            visits.observe(scope("/us-stock.html", ip, query="t=brk.b"), 200)
+        with mock.patch.object(visit_trips, "_jp_names", return_value={"7203": "Toyota Motor Corporation"}), \
+                mock.patch.object(visit_trips, "_us_names", return_value={"BRK.B": "Berkshire Hathaway"}):
+            row = [r for r in visit_trips.recent()["readers"]
+                   if r["steps"][0].get("subject") == "7203"][0]
+        self.assertEqual([s["path"] for s in row["steps"]],
+                         ["/holdings.html", "/holdings.html", "/us-stock.html"])
+        self.assertEqual(row["steps"][0]["subject_key"], "c")
+        self.assertEqual(row["steps"][0]["subject_name"], "Toyota Motor Corporation")
+        self.assertEqual(row["steps"][0]["tag"], "chatgpt.com")
+        self.assertNotIn("subject", row["steps"][1], "a question in the address is not a company")
+        self.assertEqual(row["steps"][2]["subject"], "BRK.B")
+        self.assertEqual(row["steps"][2]["subject_name"], "Berkshire Hathaway")
 
     def test_an_unconfirmed_visit_from_a_bank_is_listed_but_not_counted(self):
         # The bank's network stopped the page's report: listed, marked, not counted.

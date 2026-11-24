@@ -565,6 +565,18 @@ class TaggedLinkTest(unittest.TestCase):
         for junk in (b"", b"ref=", b"ref=%3Cscript%3E", b"ref=" + b"x" * 40, b"q=yt"):
             self.assertIsNone(visits.source_tag(junk), junk)
 
+    def test_a_page_keeps_the_company_code_and_nothing_else(self):
+        self.assertEqual(visits.page_subject(b"c=7203"), ("c", "7203"))
+        self.assertEqual(visits.page_subject("code=460a&ref=yt"), ("code", "460A"))
+        self.assertEqual(visits.page_subject(b"t=brk.b"), ("t", "BRK.B"))
+        self.assertEqual(visits.page_subject("q=toyota&c=7203"), ("c", "7203"))
+        self.assertEqual(visits.page_subject(b"dataset=Wages-JP"), ("dataset", "wages-jp"))
+        self.assertEqual(visits.page_subject("dataset=job-openings-jp&measure=yoy"),
+                         ("dataset", "job-openings-jp"))
+        for junk in (b"", b"c=", b"q=7203", b"c=" + b"x" * 20, b"c=%3Cscript%3E", b"ref=yt",
+                     b"measure=yoy", b"dataset=not a slug", b"series=0001"):
+            self.assertIsNone(visits.page_subject(junk), junk)
+
     def test_a_tagged_page_read_is_logged_and_remembered(self):
         client = TestClient(app)
         client.get("/?ref=yt", headers={"user-agent": UA})
