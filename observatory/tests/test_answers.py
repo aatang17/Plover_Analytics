@@ -21,7 +21,7 @@ class AnswerPageTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(app)
+        cls.client = TestClient(app, headers={"User-Agent": "Googlebot"})
         cls.page = cls.client.get("/japan-inflation-rate.html")
         cls.block = answers.answer("japan-inflation-rate.html")
 
