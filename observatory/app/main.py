@@ -10,6 +10,7 @@ import pathlib
 import threading
 from urllib.parse import parse_qs
 
+from anyio import CapacityLimiter, to_thread
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -111,6 +112,12 @@ class RevalidatedStatic(StaticFiles):
     file's own timestamp no longer describes what was sent.
     """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # A cold company page reads the filings database. Limit concurrent
+        # renders separately from the workers that serve API requests.
+        self._render_limiter = CapacityLimiter(2)
+
     async def get_response(self, path, scope):
         # A company's Price and Insiders and holders tabs were the front page
         # with ?t= until 2026-10-28; links already shared land on their own
@@ -123,15 +130,16 @@ class RevalidatedStatic(StaticFiles):
         response.headers["Cache-Control"] = "no-cache"
         if response.status_code in (200, 304) and page_preview.applies(path):
             response = await run_in_threadpool(page_preview.apply, path, scope, response)
-        return self._prerendered(response, scope)
+        source_path = getattr(response, "path", None)
+        if response.status_code != 200 or not source_path or not str(source_path).endswith(".html"):
+            return response
+        # File reads and database queries must leave the event loop free to
+        # answer health checks, even when a render takes several seconds.
+        return await to_thread.run_sync(self._prerendered, response, scope, source_path,
+                                        limiter=self._render_limiter)
 
     @staticmethod
-    def _prerendered(response, scope):
-        source_path = getattr(response, "path", None)
-        if response.status_code != 200 or not source_path:
-            return response
-        if not str(source_path).endswith(".html"):
-            return response
+    def _prerendered(response, scope, source_path):
         try:
             with open(str(source_path), encoding="utf-8") as handle:
                 original = handle.read()
@@ -286,14 +294,15 @@ WARM_KEYS = db.DATA_DIR / "warm-keys.json"
 
 
 @app.get("/healthz", include_in_schema=False)
-def healthz():
+async def healthz():
     # names the container, so deploy.sh can see through Caddy which copy
     # readers are reaching before it stops the other one
     return Response("ok %s\n" % os.environ.get("HOSTNAME", ""), media_type="text/plain")
 
 
 @app.get("/healthz/ready", include_in_schema=False)
-def healthz_ready():
+async def healthz_ready():
+    # These cheap checks must answer even when the request workers are busy.
     held = (os.environ.get("READY_GATE", "").strip().lower() in ("1", "true", "yes", "on")
             and not RELEASE_FLAG.exists())
     if DRAIN_FLAG.exists() or held:
