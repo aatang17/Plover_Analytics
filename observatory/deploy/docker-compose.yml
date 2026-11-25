@@ -40,7 +40,10 @@ x-web: &web
     REFRESH_SUPERVISED: ""         # never restarts itself (start.sh is not used here)
     WARM_PAGES: "1"                # build every page before taking readers
     READY_GATE: "1"                # no readers until deploy.sh has checked and released it
-  mem_limit: 3500m
+  # Keep the serving process's working set resident during overlapping
+  # DuckDB copies and cache rebuilds. Preserve its 3500 MiB swap allowance.
+  mem_limit: 4608m
+  memswap_limit: 8108m
   healthcheck:
     # the slim image has no curl; /healthz is not counted as a visit
     test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5).status == 200 else 1)"]
