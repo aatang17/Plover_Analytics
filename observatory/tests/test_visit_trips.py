@@ -448,11 +448,14 @@ class ReaderEvidenceTest(unittest.TestCase):
         readers = visit_trips.recent()["readers"]
         blocked = [r for r in readers if r["steps"][0]["path"] == "/evidence-blocked.html"][0]
         script = [r for r in readers if r["steps"][0]["path"] == "/evidence-script.html"][0]
-        self.assertFalse(blocked["confirmed"])
+        self.assertTrue(blocked["confirmed"])
         self.assertTrue(blocked["drawn"])
+        self.assertIsNone(blocked["seconds"])
+        self.assertFalse(script["confirmed"])
         self.assertFalse(script["drawn"])
         self.assertEqual([s["path"] for s in blocked["steps"]], ["/evidence-blocked.html"],
                          "the pixel is not a page they read")
+        self.assertIn("/evidence-blocked.html", [p["key"] for p in visits.live()["pages"]])
 
     def test_the_pixel_is_an_uncached_gif(self):
         from fastapi import FastAPI

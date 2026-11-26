@@ -1030,7 +1030,7 @@ function liveMarkup(d) {
         rows + "</tbody></table></div>"
       : '<p class="table-empty">No real reader on the site in the last ' +
         minutes + " minutes.</p>") +
-    '<p class="source-line">Real readers only: the page reported in from their browser, ' +
+    '<p class="source-line">Readers with a browser load or reading report ' +
     "on a home, office or phone network, or signed in to a Plover account on any network. Robots and data centres are left out. A reader " +
     "counts as here for " + minutes + " minutes after their last request; an open page " +
     "reports itself every minute, so somebody sitting still on one page stays counted." +
@@ -1418,8 +1418,7 @@ function leftOutNote(d) {
     "some are scrapers." : "";
   return '<p class="admin-page-sub">Real readers only. Left out of every figure on this ' +
     "page: " + fmtCount(o.robot_requests) + " requests from robots, and " +
-    fmtCount(o.visits) + " visits whose page never reported in from a browser or that " +
-    "came from a data centre — see Show calculation." + cloud + "</p>";
+    fmtCount(o.visits) + " visits that did not pass the reader checks. See Show calculation." + cloud + "</p>";
 }
 
 /* A share of a total, where a real but tiny share must not read as zero. */
@@ -1747,7 +1746,7 @@ function recentMarkup(r) {
     kpi(fmtCount(r.readers_total), "Readers, Last 24 Hours", "") +
     kpi(fmtCount(now), "Reading Now", now ? "ok" : "") +
     kpi(fmtCount(named), "From a Named Organisation", "") + "</div>";
-  // Listed but not counted: organisation networks whose page never reported in.
+  // Unconfirmed organisation visits also appear in the list.
 
   var cols = 9;
   var rows = trafficFold(readers, "recent").map(function (x) {
@@ -1761,11 +1760,10 @@ function recentMarkup(r) {
       "<td>" + escapeHtml(x.arrived) + "</td>" +
       '<td class="num">' + fmtCount(x.pages) + "</td>" +
       (x.confirmed
-        ? '<td class="num">' + fmtDuration(x.seconds) + "</td>"
+        ? '<td class="num"' + (x.seconds == null ? ' title="No reading time was reported"' : '') +
+          '>' + fmtDuration(x.seconds) + "</td>"
         : x.drawn
-        ? '<td class="num muted" title="A browser drew the page, but the page\'s script never ' +
-          'reported in. Most likely a person on an office network that blocks scripts. Listed, ' +
-          'but not counted as a reader anywhere on this page.">Scripts blocked</td>'
+        ? '<td class="num muted" title="Browser assets loaded. This visit did not pass the network check.">Not confirmed</td>'
         : '<td class="num muted" title="Neither the page\'s script nor its styles reported in ' +
           'from a browser: usually a script reading the page, sometimes a browser showing a ' +
           'saved copy. Listed because the network names an organisation, but not counted as a ' +
@@ -1937,30 +1935,27 @@ function trafficOrgs(d) {
     "on a fixed list. Phone networks, home broadband and data centres are never named, and a " +
     "network whose name says neither is left out. It is an estimate read off the name, so a " +
     "small firm on its provider's network cannot be seen. Visitors counts one per day, so " +
-    "one person on three days is three. Confirmed is how many of them passed the reader test " +
-    "(their page reported in from a browser); office networks often block that report, so " +
+    "one person on three days is three. Confirmed is how many passed the browser and network checks. " +
+    "Office networks sometimes block browser signals, so " +
     "organisation visits are listed either way. Email domains are real readers only.</p>";
 }
 
 function trafficCalc(d) {
   return '<details class="calc"><summary>Show calculation</summary><div class="calc-body">' +
-    "<p><strong>Only real readers are counted, everywhere on this page.</strong> A " +
-    "visitor is a reader when three things hold on the same day. Their page reported how " +
-    "long it was open, which only the script in the page can send, so a real browser " +
-    "showed it. Their address was placed on a network. And that network is not a cloud, " +
+    "<p><strong>How readers qualify.</strong> A visitor counts when a reading report arrives " +
+    "or a successful page request and a browser asset load share the same visitor ID that day. " +
+    "Their network must be known and outside a cloud, " +
     "host or CDN — Amazon, Google, Microsoft, DigitalOcean, OVH, Hetzner, Tencent, " +
     "Cloudflare and the like. Each test alone is weak; a scraper rarely passes all three. " +
     "A visitor signed in to a Plover account is a reader on any network, since signing in " +
     "takes a link opened from their own inbox; readers on a VPN or a cloud proxy are counted " +
     "that way (marked from 4 November 2026). " +
-    "Robots that name themselves, Google’s own page renderers and our own machines " +
+    "Known bots, rapid signed-out crawls, Google’s own page renderers and our own machines " +
     "and console browsers are never counted at all. In this window that left out " +
     fmtCount((d.left_out || {}).robot_requests) + " robot requests and " +
     fmtCount((d.left_out || {}).visits) + " visits that failed the test.</p>" +
-    "<p>It is deliberately an undercount. A reader on a phone using iCloud Private Relay " +
-    "leaves through Cloudflare or Akamai and is not counted; nor is a page closed within " +
-    "a second, or opened with scripts blocked. It is still not proof that a person read " +
-    "anything: a scraper can drive a real browser from a home connection.</p>" +
+    "<p>Some browsers prevent both signals from reaching us. A scraper can also drive a browser " +
+    "from a home connection. Reading time comes from the page’s reading report.</p>" +
     "<p>A reader is one address-and-browser combination on one UTC day, identified by a " +
     "salted one-way hash. The salt stays on the data volume, so a day’s readers can be " +
     "counted without being identified and cannot be matched across days. The figure for a " +
@@ -2124,10 +2119,8 @@ function trafficDrawChart(d) {
       "Plover Analytics — internal traffic",
       "Counted by the server from its own request log. Not an official statistic.",
       "Window: " + d.from + " to " + d.to,
-      "Real readers only: a visitor whose page reported a reading time (a script ran in a",
-      "browser), placed on a network that is not a cloud, host or CDN; the strict reading,",
-      "so an undercount: readers behind iCloud Private Relay leave through a CDN and are excluded",
-      "Robots, Google's own renderers, our own machines and console browsers are never counted",
+      "Readers: signed-in accounts or known non-hosting networks with a reading report or HTML and browser assets",
+      "Excluded: known bots, fast signed-out crawls, Google renderers, our machines and console browsers",
       "Readers = distinct address-and-browser hashes on that UTC day that pass the test above",
       "The hash rotates daily by design, so days cannot be summed into a headcount",
       "Page views = successful page requests by those readers; assets and the admin console excluded",

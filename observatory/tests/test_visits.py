@@ -217,9 +217,44 @@ class AIAgentTest(unittest.TestCase):
 
 
 class ReadersOnlyTest(unittest.TestCase):
-    """Every figure is real readers only: a reading time, a placed network,
-    not a data centre. Written straight into the log, so the test is of the
-    summary alone."""
+    """Readership signals, network filtering and crawler exclusion."""
+
+    def test_asset_evidence_recovers_html_only_and_keeps_crawlers_out(self):
+        day = visits._new_day()
+        at = "2026-11-26T02:30:00Z"
+
+        def add(visitor, kind, path=None, status=200, network="Bell Canada", bot=False):
+            visits._fold(day, {"visitor": visitor, "at": at, "kind": kind, "path": path,
+                               "status": status, "network": network, "bot": bot}, at)
+
+        add("reader", "page", "/us-weights.html")
+        add("reader", "page", "/index.html", status=304)
+        add("reader", "page", "/index.md")
+        add("reader", "page", "/old.html", status=301)
+        add("reader", "page", "/broken.html", status=500)
+        add("reader", "browser")
+        add("asset-only", "browser")
+        add("markdown-only", "page", "/index.md")
+        add("markdown-only", "browser")
+        add("html-only", "page", "/holdings.html")
+        for name, network, bot in (("cloud", "DigitalOcean, LLC", False),
+                                   ("google", "Google LLC", False),
+                                   ("bot", "Bell Canada", True)):
+            add(name, "page", "/holdings.html", network=network, bot=bot)
+            add(name, "browser", network=network, bot=bot)
+        for n in range(visits.CRAWL_PAGES):
+            add("crawler", "page", "/company-%d.html" % n)
+        add("crawler", "browser")
+        add("crawler", "dwell", "/company-0.html")
+
+        visits._settle(day, final=True)
+        self.assertEqual(day["settled"], {"reader"})
+        self.assertEqual(day["pageviews"], 2)
+        self.assertEqual(set(day["pages"]), {"/us-weights.html", "/index.html"})
+        self.assertEqual(day["dwell_views"], {})
+        add("reader", "page", "/later.md")
+        add("reader", "page", "/later.html")
+        self.assertEqual(day["pageviews"], 3)
 
     def test_only_a_scripted_visit_off_a_data_centre_is_counted_anywhere(self):
         now = datetime.datetime.utcnow().replace(microsecond=0)
@@ -691,10 +726,10 @@ class PublicationStatsTest(unittest.TestCase):
         got = dict((r["key"], r["views"]) for r in self.stats()["referrers"])
         self.assertEqual(got, {"substack.com": 2, "site": 1, "direct": 1})
 
-    def test_the_traffic_page_is_unchanged_by_all_this(self):
+    def test_a_browser_load_counts_on_both_surfaces(self):
         self.page("/research/a")
         self.assertEqual(self.stats()["views"], 1)
-        self.assertEqual(visits.summary(1)["pageviews"], 0)   # no script report: not a reader there
+        self.assertEqual(visits.summary(1)["pageviews"], 1)
 
     def test_a_day_before_counting_began_is_unknown_not_zero(self):
         self.page("/research/a")

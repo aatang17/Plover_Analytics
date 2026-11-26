@@ -34,9 +34,7 @@ _CHUNK = 256 * 1024
 # Pages no person opens this fast: CRAWL_PAGES reads within CRAWL_SECONDS is a
 # program walking the links. (2026-11-10: 85 pages in 11 seconds from OVH, in
 # the order of the site's menu, looked like a browser and was listed as a reader.)
-CRAWL_PAGES = 10
-CRAWL_SECONDS = 10
-CRAWL_NAME = "Fast crawl: 10 or more pages in 10 seconds"
+CRAWL_NAME = "Fast crawl: %d or more pages in %d seconds" % (visits.CRAWL_PAGES, visits.CRAWL_SECONDS)
 
 # Machines, named by what they are. A link preview is a site fetching the page
 # to draw the card when somebody pastes the link into a post or a message: it
@@ -158,21 +156,11 @@ def _events(cutoff):
 
 
 def _is_read(event):
-    if event.get("kind") != "page":
-        return False
-    status = event.get("status") or 0
-    if status >= 400 or (300 <= status < 400 and status != 304):
-        return False
-    return not (event.get("path") or "").lower().endswith(visits.ASSET_SUFFIXES)
+    return visits._page_read(event)
 
 
 def _crawled(events):
-    """True when any CRAWL_PAGES page reads in a row fall within CRAWL_SECONDS."""
-    times = [visits._epoch(e["at"]) for e in events if _is_read(e)]
-    for i in range(CRAWL_PAGES - 1, len(times)):
-        if times[i] - times[i - CRAWL_PAGES + 1] <= CRAWL_SECONDS:
-            return True
-    return False
+    return visits._rapid_crawl(visits._epoch(e["at"]) for e in events if _is_read(e))
 
 
 def _trip(events):
@@ -319,7 +307,8 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
     rejoin = visits.rejoin_state()
     for event in _events(cutoff):
         if event.get("kind") == "browser":
-            drawn.add(event.get("visitor"))
+            if not event.get("bot") and not visits.is_google_machine(event.get("network")):
+                drawn.add((event.get("visitor"), event["at"][:10]))
             continue
         visitor = event.get("visitor")
         if visitor:
@@ -340,7 +329,9 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
         robot = any(e.get("bot") for e in events) or visits.is_google_machine(network)
         scripted = any(e.get("kind") == "dwell" for e in events)
         member = any(e.get("member") for e in events)
-        confirmed = not robot and visits._is_reader(scripted, network, member)
+        drew_page = any(visits._html_read(e) and (visitor, e["at"][:10]) in drawn
+                        for e in events)
+        confirmed = not robot and visits._is_reader(scripted or drew_page, network, member)
         # A bank's or a fund's network often stops the page's own report, so a
         # visit from a network that names an organisation is listed even
         # unconfirmed, and marked so. Anywhere else an unconfirmed visit is
@@ -351,6 +342,9 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
         # A signed-in account stays listed: it was opened from its own inbox.
         crawl = not member and _crawled(events)
         if not crawl and (confirmed or (not robot and named and opened)):
+            if confirmed and not scripted and not member:
+                events = [e for e in events if e.get("kind") != "page"
+                          or (visits._html_read(e) and (visitor, e["at"][:10]) in drawn)]
             steps = _trip(events)
             reads = [s for s in steps if not s.get("asked")]
             if not reads:
@@ -390,7 +384,7 @@ def recent(hours=DEFAULT_HOURS, limit=MAX_VISITORS):
                 # A browser drew a page (it fetched the page's styles or
                 # pixel); for an unconfirmed visit, a person whose scripts
                 # were blocked rather than a script reading the page.
-                "drawn": visitor in drawn,
+                "drawn": drew_page,
                 "steps": steps[:MAX_STEPS],
             })
             continue
